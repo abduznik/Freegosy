@@ -162,13 +162,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // it over HTTP or at all, fall back to Basic auth silently.
                       try {
                         await RommService.fetchToken(baseUrl, username, password);
-                      } catch (_) {
+                        print('[Settings] fetchToken succeeded');
+                      } catch (e) {
+                        print('[Settings] fetchToken failed ($e), falling back to Basic auth');
                         // Clear any stale token so Basic auth is used instead.
                         final p = await SharedPreferences.getInstance();
                         await p.remove('rommAuthToken');
                       }
 
                       // Save credentials regardless of whether token fetch succeeded.
+                      print('[Settings] saving baseUrl=$baseUrl user=$username passLen=${password.length}');
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);

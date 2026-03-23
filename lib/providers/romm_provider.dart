@@ -13,6 +13,7 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final password = prefs.getString('rommPassword') ?? '';
   final token = prefs.getString('rommAuthToken');
 
+  print('[rommConfigProvider] loaded baseUrl=$baseUrl user=$username passLen=${password.length} hasToken=${token != null && token.isNotEmpty}');
   return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token);
 });
 
