@@ -7,9 +7,12 @@ class RommService {
   final RomMConfig config;
   final Dio _dio;
 
+  static String _normalizeBaseUrl(String url) =>
+      url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+
   RommService(this.config)
       : _dio = Dio(BaseOptions(
-          baseUrl: config.baseUrl,
+          baseUrl: _normalizeBaseUrl(config.baseUrl),
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 15),
         ));
@@ -29,7 +32,7 @@ class RommService {
   /// stores the Bearer token in SharedPreferences, and returns it.
   static Future<String> fetchToken(String baseUrl, String username, String password) async {
     final dio = Dio(BaseOptions(
-      baseUrl: baseUrl,
+      baseUrl: _normalizeBaseUrl(baseUrl),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ));
@@ -66,7 +69,7 @@ class RommService {
   }
 
   String? resolveCoverUrl(Game game) {
-    final host = config.baseUrl;
+    final host = _normalizeBaseUrl(config.baseUrl);
     String? path = game.pathCoverLarge ?? game.pathCoverSmall;
     if (path != null && path.isNotEmpty) {
       return path.startsWith('http') ? path : "$host$path";
