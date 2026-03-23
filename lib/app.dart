@@ -40,7 +40,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
           surface: const Color(0xFF1a1a1a),
         ),
         scaffoldBackgroundColor: const Color(0xFF0f0f0f),
-        cardTheme: const CardTheme(
+        cardTheme: const CardThemeData(
           color: Color(0xFF1a1a1a),
           elevation: 2,
         ),
@@ -52,7 +52,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         ),
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: const Color(0xFF1a1a1a),
-          indicatorColor: Colors.deepPurple.withOpacity(0.3),
+          indicatorColor: Colors.deepPurple.withValues(alpha: 0.3),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -61,7 +61,10 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: Colors.deepPurple.shade800),
           ),
-          enabledBorderSide: BorderSide(color: Colors.deepPurple.shade900),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.deepPurple.shade900),
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(

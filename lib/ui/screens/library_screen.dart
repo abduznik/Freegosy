@@ -127,7 +127,7 @@ class LibraryScreen extends ConsumerWidget {
         return 'Freegosy • $host$gameCountStr';
       },
       loading: () => 'Freegosy',
-      error: (_, __) => 'Freegosy',
+      error: (e, s) => 'Freegosy',
     );
 
     return Scaffold(
