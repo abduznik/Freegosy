@@ -2,43 +2,45 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
-## Features
-
-### ✅ Currently Working
+## Currently Working
 
 - **RomM Integration**: Browse and filter your entire RomM game library
-- **ROM Downloads**: Download games via HTTP from your RomM server
+- **ROM Downloads**: Download games via HTTP from your RomM server (working)
 - **Game Launching**: Launch games directly from the app using:
-  - **RetroArch** — Multi-system emulator
-  - **Dolphin** — GameCube & Wii emulator
-  - **Eden** — SNES/Genesis emulator
+  - RetroArch (multi-system emulator)
+  - Dolphin (GameCube & Wii)
+  - Eden (SNES/Genesis)
 
-### 🚀 Roadmap
+## Roadmap
 
-#### Coming Soon: Multi-Emulator Support
-Expanding launcher support to cover more systems:
-- **Dreamcast** — Full compatibility with download options
-- **RPCS3** — PlayStation 3 emulation
-- **RPCS2** — PlayStation 2 emulation
-- **Duckstation** — PlayStation 1 emulation
-- **MelonDS** — Nintendo DS emulation
-- **Azure (3DS)** — Nintendo 3DS emulation
+### Near Term: Expanded Emulator Support
 
-Each emulator will feature automatic download and setup capabilities.
+Expanding launcher support to cover more systems with download capabilities:
+- Dreamcast
+- RPCS3 (PlayStation 3)
+- RPCS2 (PlayStation 2)
+- Duckstation (PlayStation 1)
+- MelonDS (Nintendo DS)
+- Azure (Nintendo 3DS)
 
-#### Planned: RomM Cloud Save Sync
-A two-way save synchronization strategy to:
-- **Sync saves FROM RomM Cloud** to your device before playing
-- **Sync saves BACK TO RomM Cloud** after you're done
-- Seamlessly manage save files across devices
+### End-Game Features
 
-## Roadmap Timeline
+- Download emulators automatically with one tap
+- Download ROMs from RomM library (currently working)
+- Add custom ROMs for new platforms
+- Double-sided save synchronization: sync saves from RomM Cloud to device before playing, and sync back after you're done
 
-**Stay tuned for releases!** Freegosy is actively under development. We're working on expanding emulator support and cloud save synchronization to make managing your game library even easier.
+### Cross-Platform Vision
+
+Freegosy is designed as a truly cross-platform experience, allowing you to manage your game library seamlessly across desktop, mobile, and tablet devices.
+
+## Status
+
+Stay tuned for releases! Freegosy is actively under development with regular updates coming soon.
 
 ## About RomM
 
-Freegosy is built to complement [RomM](https://github.com/zurdi15/romm), a modern ROM manager. It connects to your RomM instance to provide a lightweight, portable way to access and play your games on the go.
+Freegosy is built to complement [RomM](https://github.com/rommapp/romm), a modern ROM manager. It connects to your RomM instance to provide a lightweight, portable way to access and play your games on the go.
 
 ## Contributing
 
