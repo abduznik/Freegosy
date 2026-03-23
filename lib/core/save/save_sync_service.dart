@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/rendering.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
@@ -6,7 +7,6 @@ import 'save_strategy.dart';
 import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 
 class SaveSyncService {
@@ -34,9 +34,14 @@ class SaveSyncService {
       case 'n64':
       case 'nds':
       case 'psx':
+      case 'ps1':
+      case 'playstation':
       case 'psp':
+      case 'dc':
       case 'dreamcast':
       case 'megadrive':
+      case 'genesis':
+      case 'md':
         return _retroarch;
       case 'ngc':
       case 'gamecube':
@@ -60,13 +65,13 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        print('[SaveSyncService] no strategy for ${game.platformSlug}');
+        debugPrint('[SaveSyncService] no strategy for ${game.platformSlug}');
         return false;
       }
 
       final files = await strategy.getSaveFiles(game, romPath, sessionStart: sessionStart, syncMode: syncMode);
       if (files.isEmpty) {
-        print('[SaveSyncService] no save files found for ${game.name}');
+        debugPrint('[SaveSyncService] no save files found for ${game.name}');
         return false;
       }
 
@@ -95,10 +100,10 @@ class SaveSyncService {
   }
 }
 
-      print('[SaveSyncService] pushed $uploaded/${files.length} saves for ${game.name}');
+      debugPrint('[SaveSyncService] pushed $uploaded/${files.length} saves for ${game.name}');
       return uploaded > 0;
     } catch (e) {
-      print('[SaveSyncService] pushSaves error: $e');
+      debugPrint('[SaveSyncService] pushSaves error: $e');
       return false;
     }
   }
@@ -110,38 +115,38 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        print('[SaveSyncService] no strategy for ${game.platformSlug}');
+        debugPrint('[SaveSyncService] no strategy for ${game.platformSlug}');
         return false;
       }
 
       final save = await _rommService.getLatestSave(game.id);
       if (save == null) {
-        print('[SaveSyncService] no cloud save for ${game.name}');
+        debugPrint('[SaveSyncService] no cloud save for ${game.name}');
         return false;
       }
 
       final downloadUrl = save['download_path'] as String? ?? save['url'] as String?;
       if (downloadUrl == null) {
-        print('[SaveSyncService] save has no download URL');
+        debugPrint('[SaveSyncService] save has no download URL');
         return false;
       }
 
       final bytes = await _rommService.downloadSave(downloadUrl);
       if (bytes == null) {
-        print('[SaveSyncService] failed to download save bytes');
+        debugPrint('[SaveSyncService] failed to download save bytes');
         return false;
       }
 
       final filename = save['file_name'] as String? ??
           downloadUrl.split('/').last;
 
-      print('[SaveSyncService] calling restoreSave: filename=$filename romPath=$romPath bytesLen=${bytes.length}');
+      debugPrint('[SaveSyncService] calling restoreSave: filename=$filename romPath=$romPath bytesLen=${bytes.length}');
       final ok = await strategy.restoreSave(game, romPath, bytes, filename);
-      print('[SaveSyncService] restoreSave returned: $ok');
-      print('[SaveSyncService] pullSave ${ok ? 'ok' : 'failed'} for ${game.name}');
+      debugPrint('[SaveSyncService] restoreSave returned: $ok');
+      debugPrint('[SaveSyncService] pullSave ${ok ? 'ok' : 'failed'} for ${game.name}');
       return ok;
     } catch (e) {
-      print('[SaveSyncService] pullSave error: $e');
+      debugPrint('[SaveSyncService] pullSave error: $e');
       rethrow;
     }
   }

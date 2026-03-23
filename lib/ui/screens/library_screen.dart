@@ -142,11 +142,13 @@ class LibraryScreen extends ConsumerWidget {
     final dir = ref.read(directoryServiceProvider).asData?.value;
     final romPath = dir != null ? await dir.getRomFilePath(game) : '';
 
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Syncing saves for ${game.name}...')),
     );
 
-    final ok = await syncService.pushSaves(game, romPath);
+    final syncMode = ref.read(retroarchSyncModeProvider);
+    final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

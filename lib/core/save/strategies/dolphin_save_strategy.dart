@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/rendering.dart';
+
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -66,10 +68,10 @@ Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionSta
       final targetPath = '$saveDir/$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      print('[DolphinSaveStrategy] restored $filename to $targetPath');
+      debugPrint('[DolphinSaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      print('[DolphinSaveStrategy] restoreSave error: $e');
+      debugPrint('[DolphinSaveStrategy] restoreSave error: $e');
       return false;
     }
   }
