@@ -132,20 +132,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onPressed: () async {
                 // Test Connection Logic
                 if (rommService == null) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('RomM Service not available.'), backgroundColor: Colors.red),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('RomM Service not available.'), backgroundColor: Colors.red),
+                    );
+                  }
                   return;
                 }
                 try {
                   final platforms = await rommService.getPlatforms();
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Connection successful! ${platforms.length} platforms found.'), backgroundColor: Colors.green),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Connection successful! ${platforms.length} platforms found.'), backgroundColor: Colors.green),
+                    );
+                  }
                 } catch (e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Connection failed: $e'), backgroundColor: Colors.red),
-                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Connection failed: $e'), backgroundColor: Colors.red),
+                    );
+                  }
                 }
               },
               child: const Text('Test Connection'),
@@ -165,9 +171,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // ignore: unused_result
                 ref.refresh(rommServiceProvider);
 
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('RomM Server settings saved.'), backgroundColor: Colors.green),
-                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('RomM Server settings saved.'), backgroundColor: Colors.green),
+                  );
+                }
               },
               child: const Text('Save'),
             ),
@@ -272,32 +280,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       onPressed: isInstalled
                           ? null // Disabled if installed
                           : () async {
-                              if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Starting download for $emulatorName...')),
-                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Starting download for $emulatorName...')),
+                                );
+                              }
                               try {
                                 await for (var progress in emulatorDownloadService.downloadEmulator(emulatorId)) {
                                   if (progress.error != null) {
-                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Error downloading $emulatorName: ${progress.error}')),
-                                    );
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error downloading $emulatorName: ${progress.error}')),
+                                      );
+                                    }
                                     break;
                                   }
                                   if (progress.isComplete) {
-                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('$emulatorName downloaded and extracted.')),
-                                    );
-                                    // Refresh the installation status
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('$emulatorName downloaded and extracted.')),
+                                      );
+                                    }
                                     // ignore: unused_result
                                     ref.refresh(directoryServiceProvider);
                                     break;
                                   }
-
                                 }
                               } catch (e) {
-                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('An unexpected error occurred: $e')),
-                                );
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('An unexpected error occurred: $e')),
+                                  );
+                                }
                               }
                             },
                       child: Text(isInstalled ? 'Installed' : 'Download'),

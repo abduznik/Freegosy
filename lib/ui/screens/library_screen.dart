@@ -22,6 +22,7 @@ class LibraryScreen extends ConsumerWidget {
     }
 
     final dir = await ref.read(directoryServiceProvider.future);
+    if (!context.mounted) return;
     if (dir == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Storage service not available')),
@@ -32,6 +33,7 @@ class LibraryScreen extends ConsumerWidget {
     // Use smart file detection
     final existingRomPath = await dir.findExistingRomPath(game);
     final expectedRomPath = await dir.getRomFilePath(game);
+    if (!context.mounted) return;
 
     if (existingRomPath == null) {
       // ROM not found — show dialog with expected location
@@ -73,6 +75,7 @@ class LibraryScreen extends ConsumerWidget {
         ),
       );
 
+      if (!context.mounted) return;
       if (shouldDownload == true) {
         _startDownload(context, ref, game);
       }
@@ -83,6 +86,7 @@ class LibraryScreen extends ConsumerWidget {
     try {
       await strategy.launch(game, existingRomPath);
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Launch failed: $e')),
       );
