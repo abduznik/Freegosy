@@ -24,6 +24,27 @@ class RommService {
       requestBody: true,
       logPrint: (o) => print('[DIO] $o'),
     ));
+    // If the server rejects the Bearer token with 403, retry once with Basic auth.
+    _dio.interceptors.add(InterceptorsWrapper(
+      onError: (DioException e, ErrorInterceptorHandler handler) async {
+        if (e.response?.statusCode == 403 &&
+            e.requestOptions.extra['_basicRetry'] != true &&
+            config.token != null &&
+            config.token!.isNotEmpty) {
+          print('[RommService] Bearer got 403 — retrying with Basic auth');
+          final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
+          final opts = e.requestOptions
+            ..headers['Authorization'] = basic
+            ..extra['_basicRetry'] = true;
+          try {
+            final response = await _dio.fetch(opts);
+            handler.resolve(response);
+            return;
+          } catch (_) {}
+        }
+        handler.next(e);
+      },
+    ));
   }
 
   /// Returns the appropriate auth Options for each request.
