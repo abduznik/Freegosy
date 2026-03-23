@@ -98,7 +98,7 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
     final url = service.getDownloadUrl(game);
-    final headers = <String, String>{'Authorization': service.bearerAuthHeader};
+    final headers = <String, String>{'Authorization': service.authHeader};
     ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Downloading ${game.name}...')),

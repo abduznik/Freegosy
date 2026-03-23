@@ -12,24 +12,21 @@ class RommService {
           baseUrl: config.baseUrl,
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 15),
-        )) {
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        final token = config.token;
-        if (token != null && token.isNotEmpty) {
-          options.headers['Authorization'] = 'Bearer $token';
-        } else {
-          // Fall back to Basic auth when no Bearer token is available
-          final basic = base64Encode(utf8.encode('${config.username}:${config.password}'));
-          options.headers['Authorization'] = 'Basic $basic';
-        }
-        handler.next(options);
-      },
-    ));
+        ));
+
+  /// Returns the appropriate auth Options for each request.
+  /// Uses Bearer token if available, falls back to Basic auth.
+  Options get _authOptions {
+    final token = config.token;
+    if (token != null && token.isNotEmpty) {
+      return Options(headers: {'Authorization': 'Bearer $token'});
+    }
+    final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
+    return Options(headers: {'Authorization': basic});
   }
 
-  /// Calls /api/token with username/password, stores the Bearer token in SharedPreferences.
-  /// Returns the token string on success.
+  /// Calls /api/token with username/password (OAuth2 password flow),
+  /// stores the Bearer token in SharedPreferences, and returns it.
   static Future<String> fetchToken(String baseUrl, String username, String password) async {
     final dio = Dio(BaseOptions(
       baseUrl: baseUrl,
@@ -38,10 +35,8 @@ class RommService {
     ));
     final response = await dio.post(
       '/api/token',
-      data: FormData.fromMap({
-        'username': username,
-        'password': password,
-      }),
+      data: {'username': username, 'password': password, 'grant_type': 'password'},
+      options: Options(contentType: 'application/x-www-form-urlencoded'),
     );
     final token = response.data['access_token'] as String?;
     if (token == null || token.isEmpty) {
@@ -53,7 +48,7 @@ class RommService {
   }
 
   Future<List<Platform>> getPlatforms() async {
-    final response = await _dio.get('/api/platforms');
+    final response = await _dio.get('/api/platforms', options: _authOptions);
     if (response.statusCode == 200) {
       final List<dynamic> items;
       if (response.data is Map && response.data.containsKey('items')) {
@@ -106,6 +101,7 @@ class RommService {
           'limit': limit,
           'offset': offset,
         },
+        options: _authOptions,
       );
 
       if (response.statusCode == 200) {
@@ -130,6 +126,7 @@ class RommService {
     final response = await _dio.get(
       '/api/saves',
       queryParameters: {'game_id': gameId},
+      options: _authOptions,
     );
     if (response.statusCode == 200) {
       final List<dynamic> items;
@@ -155,10 +152,9 @@ class RommService {
   }
 
   /// Returns the Authorization header value for downloads (Bearer if available, else Basic).
-  String get bearerAuthHeader {
+  String get authHeader {
     final token = config.token;
     if (token != null && token.isNotEmpty) return 'Bearer $token';
-    final basic = base64Encode(utf8.encode('${config.username}:${config.password}'));
-    return 'Basic $basic';
+    return 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
   }
 }
