@@ -1,0 +1,124 @@
+import 'dart:io';
+import '../romm/romm_models.dart';
+import '../romm/romm_service.dart';
+import '../storage/directory_service.dart';
+import 'save_strategy.dart';
+import 'strategies/retroarch_save_strategy.dart';
+import 'strategies/dolphin_save_strategy.dart';
+import 'strategies/eden_save_strategy.dart';
+
+class SaveSyncService {
+  final RommService _rommService;
+  final DirectoryService _directoryService;
+
+  late final RetroArchSaveStrategy _retroarch;
+  late final DolphinSaveStrategy _dolphin;
+  late final EdenSaveStrategy _eden;
+
+  SaveSyncService(this._rommService, this._directoryService) {
+    _retroarch = RetroArchSaveStrategy(_directoryService);
+    _dolphin = DolphinSaveStrategy(_directoryService);
+    _eden = EdenSaveStrategy();
+  }
+
+  /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
+  SaveStrategy? getStrategyForSlug(String? platformSlug) {
+    switch (platformSlug?.toLowerCase()) {
+      case 'gba':
+      case 'gbc':
+      case 'gb':
+      case 'snes':
+      case 'nes':
+      case 'n64':
+      case 'nds':
+      case 'psx':
+      case 'psp':
+      case 'dreamcast':
+      case 'megadrive':
+        return _retroarch;
+      case 'gc':
+      case 'gamecube':
+      case 'wii':
+        return _dolphin;
+      case 'switch':
+      case 'nintendo-switch':
+      case 'ns':
+        return _eden;
+      default:
+        return null;
+    }
+  }
+
+  /// Uploads all local save files for [game] to RomM.
+  ///
+  /// If [sessionStart] is provided, only files modified after that time are uploaded.
+  /// Returns true if at least one file was uploaded successfully.
+  Future<bool> pushSaves(Game game, String romPath, {DateTime? sessionStart}) async {
+    try {
+      final strategy = getStrategyForSlug(game.platformSlug);
+      if (strategy == null) {
+        print('[SaveSyncService] no strategy for ${game.platformSlug}');
+        return false;
+      }
+
+      final files = await strategy.getSaveFiles(game, romPath, sessionStart: sessionStart);
+      if (files.isEmpty) {
+        print('[SaveSyncService] no save files found for ${game.name}');
+        return false;
+      }
+
+      int uploaded = 0;
+      for (final file in files) {
+        final ok = await _rommService.uploadSave(game.id, file);
+        if (ok) uploaded++;
+      }
+
+      print('[SaveSyncService] pushed $uploaded/${files.length} saves for ${game.name}');
+      return uploaded > 0;
+    } catch (e) {
+      print('[SaveSyncService] pushSaves error: $e');
+      return false;
+    }
+  }
+
+  /// Downloads the latest save for [game] from RomM and restores it locally.
+  ///
+  /// Returns true on success.
+  Future<bool> pullSave(Game game, String romPath) async {
+    try {
+      final strategy = getStrategyForSlug(game.platformSlug);
+      if (strategy == null) {
+        print('[SaveSyncService] no strategy for ${game.platformSlug}');
+        return false;
+      }
+
+      final save = await _rommService.getLatestSave(game.id);
+      if (save == null) {
+        print('[SaveSyncService] no cloud save for ${game.name}');
+        return false;
+      }
+
+      final downloadUrl = save['download_path'] as String? ?? save['url'] as String?;
+      if (downloadUrl == null) {
+        print('[SaveSyncService] save has no download URL');
+        return false;
+      }
+
+      final bytes = await _rommService.downloadSave(downloadUrl);
+      if (bytes == null) {
+        print('[SaveSyncService] failed to download save bytes');
+        return false;
+      }
+
+      final filename = save['file_name'] as String? ??
+          downloadUrl.split('/').last;
+
+      final ok = await strategy.restoreSave(game, romPath, bytes, filename);
+      print('[SaveSyncService] pullSave ${ok ? 'ok' : 'failed'} for ${game.name}');
+      return ok;
+    } catch (e) {
+      print('[SaveSyncService] pullSave error: $e');
+      return false;
+    }
+  }
+}

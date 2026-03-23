@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
@@ -196,5 +198,92 @@ class RommService {
     final token = config.token;
     if (token != null && token.isNotEmpty) return 'Bearer $token';
     return 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
+  }
+
+  // ─── Save sync ─────────────────────────────────────────────────────────────
+
+  /// Uploads [saveFile] for [gameId] to RomM via POST /api/saves.
+  Future<bool> uploadSave(String gameId, File saveFile, {String slot = 'freegosy'}) async {
+    try {
+      final fileName = saveFile.uri.pathSegments.last;
+      final formData = FormData.fromMap({
+        'rom_id': gameId,
+        'emulator': 'freegosy',
+        'slot': slot,
+        'saveFile': await MultipartFile.fromFile(saveFile.path, filename: fileName),
+      });
+      final response = await _dio.post(
+        '/api/saves',
+        data: formData,
+        options: _authOptions,
+      );
+      final ok = response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300;
+      print('[RommService] uploadSave ${ok ? 'ok' : 'failed'} status=${response.statusCode} file=$fileName');
+      return ok;
+    } catch (e) {
+      print('[RommService] uploadSave error: $e');
+      return false;
+    }
+  }
+
+  /// Returns the most recently updated save object for [gameId], or null.
+  Future<Map<String, dynamic>?> getLatestSave(String gameId) async {
+    try {
+      final response = await _dio.get(
+        '/api/saves',
+        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy'},
+        options: _authOptions,
+      );
+      if (response.statusCode != 200) return null;
+
+      final List<dynamic> items;
+      if (response.data is Map && response.data.containsKey('items')) {
+        items = response.data['items'] as List<dynamic>;
+      } else if (response.data is List) {
+        items = response.data as List<dynamic>;
+      } else {
+        return null;
+      }
+
+      if (items.isEmpty) return null;
+
+      // Sort by updated_at descending, return the most recent
+      final sorted = List<Map<String, dynamic>>.from(
+        items.whereType<Map<String, dynamic>>(),
+      );
+      sorted.sort((a, b) {
+        final ta = DateTime.tryParse(a['updated_at']?.toString() ?? '') ?? DateTime(0);
+        final tb = DateTime.tryParse(b['updated_at']?.toString() ?? '') ?? DateTime(0);
+        return tb.compareTo(ta);
+      });
+      return sorted.first;
+    } catch (e) {
+      print('[RommService] getLatestSave error: $e');
+      return null;
+    }
+  }
+
+  /// Downloads save bytes from [saveUrl]. Returns null on failure.
+  Future<Uint8List?> downloadSave(String saveUrl) async {
+    try {
+      // Resolve relative paths against the base URL
+      final url = saveUrl.startsWith('http')
+          ? saveUrl
+          : '${_normalizeBaseUrl(config.baseUrl)}$saveUrl';
+
+      final response = await _dio.get<List<int>>(
+        url,
+        options: _authOptions.copyWith(responseType: ResponseType.bytes),
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return Uint8List.fromList(response.data!);
+      }
+      return null;
+    } catch (e) {
+      print('[RommService] downloadSave error: $e');
+      return null;
+    }
   }
 }

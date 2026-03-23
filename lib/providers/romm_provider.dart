@@ -4,6 +4,7 @@ import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
+import 'package:freegosy/core/save/save_sync_service.dart';
 
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
@@ -48,6 +49,14 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
     }
   }
   return null;
+});
+
+// SaveSyncService provider
+final saveSyncServiceProvider = Provider<SaveSyncService?>((ref) {
+  final rommService = ref.watch(rommServiceProvider);
+  final directoryService = ref.watch(directoryServiceProvider).asData?.value;
+  if (rommService == null || directoryService == null) return null;
+  return SaveSyncService(rommService, directoryService);
 });
 
 // Simplified RommService provider

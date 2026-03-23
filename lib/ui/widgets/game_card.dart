@@ -7,6 +7,7 @@ class GameCard extends ConsumerWidget {
   final Game game;
   final VoidCallback onDownload;
   final VoidCallback onLaunch;
+  final VoidCallback? onSyncSaves;
   final bool isDownloaded;
 
   const GameCard({
@@ -14,6 +15,7 @@ class GameCard extends ConsumerWidget {
     required this.game,
     required this.onDownload,
     required this.onLaunch,
+    this.onSyncSaves,
     this.isDownloaded = false,
   });
 
@@ -100,6 +102,16 @@ class GameCard extends ConsumerWidget {
                         onPressed: onLaunch,
                         tooltip: 'Launch',
                       ),
+                      if (onSyncSaves != null)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 24,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.cloud_upload),
+                          onPressed: onSyncSaves,
+                          tooltip: 'Sync saves',
+                        ),
                     ],
                   ),
                 ),

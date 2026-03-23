@@ -21,8 +21,15 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/app.dart` — MaterialApp setup, theme, initial route, navigation shell.
 
 ### Core — RomM
-- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getSaves(). Returns typed models.
+- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getSaves(), uploadSave(), getLatestSave(), downloadSave(). Returns typed models.
 - `lib/core/romm/romm_models.dart` — Data models: Game, Platform, SaveFile, RomMConfig.
+
+### Core — Save Sync
+- `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() (3-version rotation), getRomStem().
+- `lib/core/save/save_sync_service.dart` — SaveSyncService. Methods: pushSaves(), pullSave(), getStrategyForSlug(). Wires strategies to RommService.
+- `lib/core/save/strategies/retroarch_save_strategy.dart` — RetroArch save strategy (GBA/GBC/GB/SNES/NES/N64/NDS/PSX/PSP/Dreamcast/Megadrive). Reads saves/{coreName}/{stem}.srm and .state.auto.
+- `lib/core/save/strategies/dolphin_save_strategy.dart` — Dolphin save strategy (GC/Wii). Reads User/GC/{region}/Card A/*.gci.
+- `lib/core/save/strategies/eden_save_strategy.dart` — Eden/Switch save strategy. Resolves title ID via filename regex, XCI header parse, or save folder scan.
 
 ### Core — Emulator
 - `lib/core/emulator/emulator_strategy.dart` — Abstract base class. Fields: name, emulatorId, supportedSlugs, windowsExecutable, linuxExecutable. Methods: launch(Game, romPath), resolveSavePath(Game), getExecutableForPlatform().
@@ -43,7 +50,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/updater/updater_service.dart` — Checks GitHub Releases API for new version. Downloads new binary to temp, swaps, relaunches.
 
 ### Providers
-- `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, and EmulatorDownloadService.
+- `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, EmulatorDownloadService, and SaveSyncService.
 - `lib/providers/library_provider.dart` — Riverpod providers for platforms list and games list. Includes search and filtering logic.
 - `lib/providers/download_provider.dart` — Riverpod providers for active downloads and progress.
 

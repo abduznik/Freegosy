@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../core/romm/romm_models.dart';
 import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
 
@@ -79,6 +80,21 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
 
+    // Pull latest cloud save before launching
+    final syncService = ref.read(saveSyncServiceProvider);
+    if (syncService != null) {
+      final pulled = await syncService.pullSave(game, existingRomPath);
+      if (!context.mounted) return;
+      if (pulled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cloud save restored'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+
     try {
       await strategy.launch(game, existingRomPath);
     } catch (e) {
@@ -87,6 +103,33 @@ class LibraryScreen extends ConsumerWidget {
         SnackBar(content: Text('Launch failed: $e')),
       );
     }
+  }
+
+  Future<void> _handleSyncSaves(BuildContext context, WidgetRef ref, Game game) async {
+    final syncService = ref.read(saveSyncServiceProvider);
+    if (syncService == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Save sync not available')),
+      );
+      return;
+    }
+
+    final dir = ref.read(directoryServiceProvider).asData?.value;
+    final romPath = dir != null ? await dir.getRomFilePath(game) : '';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Syncing saves for ${game.name}...')),
+    );
+
+    final ok = await syncService.pushSaves(game, romPath);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Saves uploaded for ${game.name}'
+            : 'No saves found for ${game.name}'),
+      ),
+    );
   }
 
   void _startDownload(BuildContext context, WidgetRef ref, game) {
@@ -210,6 +253,7 @@ class LibraryScreen extends ConsumerWidget {
                                     game: game,
                                     onDownload: () => _startDownload(context, ref, game),
                                     onLaunch: () => _handleLaunch(context, ref, game),
+                                    onSyncSaves: () => _handleSyncSaves(context, ref, game),
                                   );
                                 }
                                 return FutureBuilder<bool>(
@@ -220,6 +264,7 @@ class LibraryScreen extends ConsumerWidget {
                                       isDownloaded: snapshot.data ?? false,
                                       onDownload: () => _startDownload(context, ref, game),
                                       onLaunch: () => _handleLaunch(context, ref, game),
+                                      onSyncSaves: () => _handleSyncSaves(context, ref, game),
                                     );
                                   },
                                 );
