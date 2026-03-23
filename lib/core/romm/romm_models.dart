@@ -89,11 +89,13 @@ class RomMConfig {
   final String baseUrl;
   final String username;
   final String password;
+  final String? token;
 
   RomMConfig({
     required this.baseUrl,
     required this.username,
     required this.password,
+    this.token,
   });
 
   factory RomMConfig.fromJson(Map<String, dynamic> json) {
@@ -101,6 +103,7 @@ class RomMConfig {
       baseUrl: json['baseUrl']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
       password: json['password']?.toString() ?? '',
+      token: json['token']?.toString(),
     );
   }
 
@@ -109,6 +112,7 @@ class RomMConfig {
       'baseUrl': baseUrl,
       'username': username,
       'password': password,
+      if (token != null) 'token': token,
     };
   }
 }

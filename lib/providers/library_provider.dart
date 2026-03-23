@@ -1,10 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
 
 final searchQueryProvider = StateProvider<String>((ref) => '');
 final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
-final cardAspectRatioProvider = StateProvider<double>((ref) => 0.75);
+
+final cardAspectRatioProvider = StateProvider<double>((ref) {
+  // Synchronous init — actual persisted value is loaded in _loadCardAspectRatio
+  // and set via the notifier. Default is 0.72 (square).
+  return 0.72;
+});
+
+// Loads persisted card aspect ratio into the provider on startup.
+final cardAspectRatioLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getDouble('card_aspect_ratio');
+  if (saved != null) {
+    ref.read(cardAspectRatioProvider.notifier).state = saved;
+  }
+});
 
 final platformsProvider = FutureProvider<List<Platform>>((ref) async {
   final service = ref.watch(rommServiceProvider);
