@@ -158,20 +158,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       final username = _usernameController.text.trim();
                       final password = _passwordController.text;
 
+                      // Try Bearer token (OAuth2). If the server doesn't support
+                      // it over HTTP or at all, fall back to Basic auth silently.
                       try {
-                        // Attempt login to get Bearer token
                         await RommService.fetchToken(baseUrl, username, password);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Login failed: $e'), backgroundColor: Colors.red),
-                          );
-                        }
-                        setState(() => _isSaving = false);
-                        return;
+                      } catch (_) {
+                        // Clear any stale token so Basic auth is used instead.
+                        final p = await SharedPreferences.getInstance();
+                        await p.remove('rommAuthToken');
                       }
 
-                      // Login succeeded — save credentials and refresh providers
+                      // Save credentials regardless of whether token fetch succeeded.
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);
