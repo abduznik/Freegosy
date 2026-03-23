@@ -1,7 +1,7 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/romm/romm_models.dart'; // Assuming Game model is needed for getRomFilePath
 
 class DirectoryService {
   static const String _romsRootPathKey = 'romsRootPath';
@@ -9,39 +9,16 @@ class DirectoryService {
   static const String _defaultRomsPath = 'Documents/Freegosy/ROMs';
   static const String _defaultEmulatorsPath = 'Documents/Freegosy/Emulators';
 
-  // Known extensions per platform slug
-  static const Map<String, List<String>> _platformExtensions = {
-    'switch': ['.nsp', '.xci', '.nsz', '.xcz'],
-    'nintendo-switch': ['.nsp', '.xci', '.nsz', '.xcz'],
-    'ns': ['.nsp', '.xci', '.nsz', '.xcz'],
-    'gba': ['.gba', '.zip'],
-    'gbc': ['.gbc', '.gb', '.zip'],
-    'gb': ['.gb', '.gbc', '.zip'],
-    'nds': ['.nds', '.zip'],
-    'n64': ['.z64', '.n64', '.v64', '.zip'],
-    'snes': ['.sfc', '.smc', '.zip'],
-    'nes': ['.nes', '.zip'],
-    'psx': ['.bin', '.cue', '.iso', '.img', '.chd'],
-    'ps2': ['.iso', '.bin', '.chd'],
-    'ps3': ['.pkg', '.iso'],
-    'psp': ['.iso', '.cso', '.pbp'],
-    'gc': ['.iso', '.gcm', '.rvz', '.wbfs'],
-    'gamecube': ['.iso', '.gcm', '.rvz', '.wbfs'],
-    'wii': ['.iso', '.wbfs', '.rvz'],
-    'dreamcast': ['.chd', '.gdi', '.cdi', '.iso'],
-    'megadrive': ['.md', '.bin', '.gen', '.zip'],
-    'genesis': ['.md', '.bin', '.gen', '.zip'],
-  };
-
   late String romsRootPath;
   late String emulatorsRootPath;
 
-  DirectoryService();
+  DirectoryService(); // Constructor takes no args
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     romsRootPath = prefs.getString(_romsRootPathKey) ?? _defaultRomsPath;
     emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? _defaultEmulatorsPath;
+
     await _ensureDirectoryExists(romsRootPath);
     await _ensureDirectoryExists(emulatorsRootPath);
   }
@@ -68,6 +45,7 @@ class DirectoryService {
   }
 
   Future<String> getRomDirectory(Game game) async {
+    // Ensure platformSlug is not null or empty for directory creation
     final platformSlug = game.platformSlug ?? 'unknown';
     final dirPath = '$romsRootPath/$platformSlug';
     await _ensureDirectoryExists(dirPath);
@@ -76,49 +54,11 @@ class DirectoryService {
 
   Future<String> getRomFilePath(Game game) async {
     final romDir = await getRomDirectory(game);
-    final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    return '$romDir/$fileName';
-  }
-
-  /// Tries to find the actual ROM file on disk.
-  /// First checks the exact path, then tries common extensions for the platform.
-  /// Returns the found path or null if not found.
-  Future<String?> findExistingRomPath(Game game) async {
-    final romDir = await getRomDirectory(game);
-    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final exactPath = '$romDir/$baseName';
-
-    // Check exact path first (file or directory)
-    if (await File(exactPath).exists()) return exactPath;
-    if (await Directory(exactPath).exists()) return exactPath;
-
-    // If baseName has no extension, try known extensions for this platform
-    if (!baseName.contains('.')) {
-      final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
-      for (final ext in extensions) {
-        final candidate = '$romDir/$baseName$ext';
-        if (await File(candidate).exists()) {
-          print('ROM found with extension: $candidate');
-          return candidate;
-        }
-      }
-
-      // Also scan the directory for any file starting with baseName
-      final dir = Directory(romDir);
-      if (await dir.exists()) {
-        await for (final entity in dir.list()) {
-          if (entity is File) {
-            final fname = entity.uri.pathSegments.last;
-            if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
-              print('ROM found by scan: ${entity.path}');
-              return entity.path;
-            }
-          }
-        }
-      }
-    }
-
-    return null;
+    // Sanitize illegal characters for file names
+    final fileName = game.name.replaceAll(RegExp(r'[<>:"/\|?*]'), '_');
+    // Use game.fileName if available, otherwise sanitized game.name
+    // For now, assuming game.fileName is not directly available or needed, using sanitized name
+    return '$romDir/$fileName.rom'; // Assuming .rom extension, or derive from game data if possible
   }
 
   Future<String> getEmulatorDirectory(String emulatorId) async {
@@ -159,7 +99,85 @@ class DirectoryService {
   }
 
   Future<bool> isRomDownloaded(Game game) async {
-    final found = await findExistingRomPath(game);
-    return found != null;
+    final romPath = await getRomFilePath(game);
+    return File(romPath).exists();
+  }
+}
+import 'package:dio/dio.dart';
+import 'dart:async';
+import 'dart:io';
+import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/romm/romm_models.dart';
+
+class DownloadProgress {
+  final String id;
+  final double percent;
+  final int bytesReceived;
+  final int totalBytes;
+  final bool isComplete;
+  final String? error;
+
+  DownloadProgress({
+    required this.id,
+    this.percent = 0.0,
+    this.bytesReceived = 0,
+    this.totalBytes = 0,
+    this.isComplete = false,
+    this.error,
+  });
+}
+
+class DownloadService {
+  final Dio dio;
+  final DirectoryService directoryService;
+
+  DownloadService({required this.dio, required this.directoryService});
+
+  // Modified signature to accept downloadUrl
+  Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers}) async* {
+    if (await directoryService.isRomDownloaded(game)) {
+      yield DownloadProgress(id: game.id, percent: 1.0, isComplete: true);
+      return;
+    }
+
+    final savePath = await directoryService.getRomFilePath(game);
+    final saveFile = File(savePath);
+    await saveFile.parent.create(recursive: true);
+
+    final controller = StreamController<DownloadProgress>();
+
+    try {
+      dio.download(
+        downloadUrl,
+        savePath,
+        options: Options(headers: headers),
+        onReceiveProgress: (received, total) {
+          if (total > 0) {
+            controller.add(DownloadProgress(
+              id: game.id,
+              percent: received / total,
+              bytesReceived: received,
+              totalBytes: total,
+            ));
+          }
+        },
+        deleteOnError: true,
+      ).then((_) {
+        controller.add(DownloadProgress(
+          id: game.id,
+          percent: 1.0,
+          isComplete: true,
+        ));
+        controller.close();
+      }).catchError((e) {
+        controller.add(DownloadProgress(id: game.id, error: 'Download failed: $e'));
+        controller.close();
+      });
+
+      yield* controller.stream;
+    } catch (e) {
+      yield DownloadProgress(id: game.id, error: 'Error: $e');
+      if (await saveFile.exists()) await saveFile.delete();
+    }
   }
 }
