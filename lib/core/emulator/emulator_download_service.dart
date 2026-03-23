@@ -22,16 +22,17 @@ class EmulatorDownloadService {
     );
 
     if (definition.isEmpty) {
-      yield DownloadProgress(id: emulatorId, error: 'Emulator definition not found');
+      yield DownloadProgress(id: emulatorId, gameName: emulatorId, error: 'Emulator definition not found');
       return;
     }
 
+    final String emulatorName = definition['name'] as String? ?? emulatorId;
     final String? downloadUrl = Platform.isWindows
         ? definition['windows_url'] as String?
         : definition['linux_url'] as String?;
 
     if (downloadUrl == null) {
-      yield DownloadProgress(id: emulatorId, error: 'No download URL for this platform');
+      yield DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'No download URL for this platform');
       return;
     }
 
@@ -50,6 +51,7 @@ class EmulatorDownloadService {
           if (total > 0) {
             controller.add(DownloadProgress(
               id: emulatorId,
+              gameName: emulatorName,
               percent: received / total,
               bytesReceived: received,
               totalBytes: total,
@@ -62,24 +64,25 @@ class EmulatorDownloadService {
           await _extractArchive(tempFilePath, emulatorDir);
           controller.add(DownloadProgress(
             id: emulatorId,
+            gameName: emulatorName,
             percent: 1.0,
             isComplete: true,
           ));
         } catch (e) {
-          controller.add(DownloadProgress(id: emulatorId, error: 'Extraction failed: $e'));
+          controller.add(DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'Extraction failed: $e'));
         } finally {
           controller.close();
           final f = File(tempFilePath);
           if (await f.exists()) await f.delete();
         }
       }).catchError((e) {
-        controller.add(DownloadProgress(id: emulatorId, error: 'Download failed: $e'));
+        controller.add(DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'Download failed: $e'));
         controller.close();
       });
 
       yield* controller.stream;
     } catch (e) {
-      yield DownloadProgress(id: emulatorId, error: 'Error: $e');
+      yield DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'Error: $e');
     }
   }
 

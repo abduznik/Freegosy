@@ -290,7 +290,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     ref.refresh(directoryServiceProvider); // Refresh to update icon
                                     break;
                                   }
-                                  print('Downloading $emulatorId: ${progress.percent * 100}%');
+
                                 }
                               } catch (e) {
                                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(

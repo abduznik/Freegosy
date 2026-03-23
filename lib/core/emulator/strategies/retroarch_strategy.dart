@@ -60,7 +60,6 @@ class RetroArchStrategy extends EmulatorStrategy {
     final coreName = _getCoreForSlug(game.platformSlug);
 
     if (coreName == null) {
-      print('No core mapping for ${game.platformSlug}, launching without core');
       await Process.start(
         normalizedExe,
         [normalizedRom],
@@ -76,7 +75,6 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('Core $coreName not found at $corePath. Please download it in RetroArch first.');
     }
 
-    print('LAUNCHING: $normalizedExe -L $corePath $normalizedRom');
     await Process.start(
       normalizedExe,
       ['-L', corePath, normalizedRom],

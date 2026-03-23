@@ -121,8 +121,6 @@ class RommService {
     final encoded = Uri.encodeComponent(name);
     final baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl.substring(0, config.baseUrl.length - 1) : config.baseUrl;
     final url = '$baseUrl/api/roms/${game.id}/content/$encoded';
-    print('DOWNLOAD URL: $url');
-    print('GAME: id=${game.id} fileName=${game.fileName} fsName=${game.fsName} name=${game.name}');
     return url;
   }
 }

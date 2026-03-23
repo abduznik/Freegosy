@@ -31,7 +31,6 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
     await service.initialize();
     return service;
   } catch (e) {
-    print("Error initializing DirectoryService: $e"); // Log error
     return null; // Return null on error
   }
 });
@@ -45,7 +44,6 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
     try {
       return StrategyRegistry(directoryService);
     } catch (e) {
-      print("Error creating StrategyRegistry: $e"); // Log error
       return null; // Return null on error
     }
   }
@@ -68,7 +66,6 @@ final rommServiceProvider = Provider<RommService?>((ref) {
       // RommService constructor is RommService(this.config) and creates its own Dio instance.
       return RommService(config);
     } catch (e) {
-      print("Error creating RommService: $e"); // Log error
       return null; // Return null on error during instantiation
     }
   }

@@ -20,7 +20,7 @@ class DownloadScreen extends ConsumerWidget {
                 final gameId = downloads.keys.elementAt(index);
                 final progress = downloads[gameId]!;
                 return DownloadProgressCard(
-                  gameName: progress.id, // Changed from progress.gameName to progress.id
+                  gameName: progress.gameName,
                   progress: progress,
                   onCancel: () {
                     ref.read(downloadProvider.notifier).removeDownload(gameId);
