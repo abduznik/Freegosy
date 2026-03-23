@@ -1,0 +1,281 @@
+import 'package:dio/dio.dart';
+import 'dart:async';
+import 'dart:io';
+import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/romm/romm_models.dart';
+
+class DownloadProgress {
+  final String id;
+  final double percent;
+  final int bytesReceived;
+  final int totalBytes;
+  final bool isComplete;
+  final String? error;
+
+  DownloadProgress({
+    required this.id,
+    this.percent = 0.0,
+    this.bytesReceived = 0,
+    this.totalBytes = 0,
+    this.isComplete = false,
+    this.error,
+  });
+}
+
+class DownloadService {
+  final Dio dio;
+  final DirectoryService directoryService;
+
+  DownloadService({required this.dio, required this.directoryService});
+
+  // Modified signature to accept downloadUrl
+  Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers}) async* {
+    if (await directoryService.isRomDownloaded(game)) {
+      yield DownloadProgress(id: game.id, percent: 1.0, isComplete: true);
+      return;
+    }
+
+    final savePath = await directoryService.getRomFilePath(game);
+    final saveFile = File(savePath);
+    await saveFile.parent.create(recursive: true);
+
+    final controller = StreamController<DownloadProgress>();
+
+    try {
+      dio.download(
+        downloadUrl,
+        savePath,
+        options: Options(headers: headers),
+        onReceiveProgress: (received, total) {
+          if (total > 0) {
+            controller.add(DownloadProgress(
+              id: game.id,
+              percent: received / total,
+              bytesReceived: received,
+              totalBytes: total,
+            ));
+          }
+        },
+        deleteOnError: true,
+      ).then((_) {
+        controller.add(DownloadProgress(
+          id: game.id,
+          percent: 1.0,
+          isComplete: true,
+        ));
+        controller.close();
+      }).catchError((e) {
+        controller.add(DownloadProgress(id: game.id, error: 'Download failed: $e'));
+        controller.close();
+      });
+
+      yield* controller.stream;
+    } catch (e) {
+      yield DownloadProgress(id: game.id, error: 'Error: $e');
+      if (await saveFile.exists()) await saveFile.delete();
+    }
+  }
+}
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
+import 'dart:async';
+import '../core/downloader/download_service.dart';
+import '../core/romm/romm_models.dart';
+import 'romm_provider.dart';
+
+final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
+  final directoryService = await ref.watch(directoryServiceProvider.future);
+  if (directoryService == null) return null;
+  return DownloadService(dio: Dio(), directoryService: directoryService);
+});
+
+final downloadProvider =
+    StateNotifierProvider<DownloadNotifier, Map<String, DownloadProgress>>((ref) {
+  final downloadService = ref.watch(downloadServiceProvider).asData?.value;
+  if (downloadService == null) return DownloadNotifier(null);
+  return DownloadNotifier(downloadService);
+});
+
+class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
+  final DownloadService? _service;
+
+  DownloadNotifier(this._service) : super({});
+
+  Future<void> startDownload(Game game, String downloadUrl, {Map<String, String>? headers}) async {
+    if (_service == null) return;
+    _service!.download(game, downloadUrl, headers: headers).listen((progress) {
+      state = {...state, game.id: progress};
+    });
+  }
+
+  void removeDownload(String gameId) {
+    final newState = Map<String, DownloadProgress>.from(state);
+    newState.remove(gameId);
+    state = newState;
+  }
+}
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/library_provider.dart'; // Ensure this import is correct
+import '../../providers/download_provider.dart';
+import '../../providers/romm_provider.dart';
+import '../widgets/game_card.dart';
+import '../widgets/platform_filter_bar.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+
+class LibraryScreen extends ConsumerWidget {
+  const LibraryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch platforms to populate the filter bar
+    final platformsAsync = ref.watch(platformsProvider);
+    // Watch the selected platform ID
+    final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
+    // Watch the search query
+    final searchQuery = ref.watch(searchQueryProvider);
+
+    // Watch allGamesProvider for the overall loading/error state of the initial fetch
+    final gamesAsync = ref.watch(allGamesProvider);
+    // Watch filteredGamesProvider for the actual list of games to display
+    final filteredGames = ref.watch(filteredGamesProvider);
+
+    // Get card aspect ratio from provider
+    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Library')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search games...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+              onChanged: (value) {
+                ref.read(searchQueryProvider.notifier).state = value;
+              },
+            ),
+          ),
+          platformsAsync.when(
+            data: (platforms) => PlatformFilterBar(
+              platforms: platforms,
+              selectedPlatformId: selectedPlatformId,
+              onSelected: (platform) {
+                ref.read(selectedPlatformIdProvider.notifier).state = platform?.id;
+              },
+            ),
+            loading: () => const LinearProgressIndicator(),
+            error: (e, s) => Text('Error loading platforms: $e'),
+          ),
+          Expanded(
+            child: gamesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'Error loading games: $e',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              ),
+              data: (_) {
+                final gamesCount = filteredGames.length;
+                String countDisplayText;
+                if (selectedPlatformId == null && searchQuery.isEmpty) {
+                  countDisplayText = 'Showing all $gamesCount games';
+                } else {
+                  countDisplayText = 'Showing $gamesCount games';
+                }
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          countDisplayText,
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: filteredGames.isEmpty
+                          ? const Center(child: Text('No games found'))
+                          : GridView.builder(
+                              padding: const EdgeInsets.all(12),
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 4,
+                                childAspectRatio: cardAspectRatio,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                              itemCount: filteredGames.length,
+                              itemBuilder: (context, index) {
+                                final game = filteredGames[index];
+                                return GameCard(
+                                  game: game,
+                                  onDownload: () async {
+                                    try {
+                                      final dir = await getApplicationDocumentsDirectory();
+                                      final savePath = '${dir.path}/${game.name.replaceAll(RegExp(r'[^\w]+'), '_')}.rom';
+                                      final url = ref.read(rommServiceProvider)?.getDownloadUrl(game) ?? '';
+                                      ref.read(downloadProvider.notifier).startDownload(game, url);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Starting download: ${game.name}')),
+                                      );
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Download failed: $e')),
+                                      );
+                                    }
+                                  },
+                                  onLaunch: () async { // Make callback async
+                                    final registry = ref.read(strategyRegistryProvider);
+                                    final strategy = registry?.getStrategyForSlug(game.platformSlug ?? '');
+                                    if (strategy == null) {
+                                      ScaffoldMessenger.of(context).showSnackBar( // Removed if (mounted)
+                                        SnackBar(content: Text('No emulator configured for ${game.platformDisplayName ?? game.platformSlug}')),
+                                      );
+                                      return;
+                                    }
+                                    final dir = await ref.read(directoryServiceProvider.future);
+                                    final romPath = await dir?.getRomFilePath(game) ?? '';
+                                    if (romPath.isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar( // Removed if (mounted)
+                                        const SnackBar(content: Text('Could not determine ROM path')),
+                                      );
+                                      return;
+                                    }
+                                    try {
+                                      await strategy.launch(game, romPath);
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar( // Removed if (mounted)
+                                        SnackBar(content: Text('Launch failed: $e')),
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
