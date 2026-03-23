@@ -7,12 +7,14 @@ class GameCard extends ConsumerWidget {
   final Game game;
   final VoidCallback onDownload;
   final VoidCallback onLaunch;
+  final bool isDownloaded;
 
   const GameCard({
     super.key,
     required this.game,
     required this.onDownload,
     required this.onLaunch,
+    this.isDownloaded = false,
   });
 
   @override
@@ -30,15 +32,34 @@ class GameCard extends ConsumerWidget {
           // Cover image - 75% height approximately
           Expanded(
             flex: 75,
-            child: (finalCoverUrl == null || finalCoverUrl.isEmpty)
-                ? const Center(child: Icon(Icons.sports_esports, size: 48))
-                : Image.network(
-                    finalCoverUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Center(
-                      child: Icon(Icons.sports_esports, size: 48),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                (finalCoverUrl == null || finalCoverUrl.isEmpty)
+                    ? const Center(child: Icon(Icons.sports_esports, size: 48))
+                    : Image.network(
+                        finalCoverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Center(
+                          child: Icon(Icons.sports_esports, size: 48),
+                        ),
+                      ),
+                if (isDownloaded)
+                  Positioned(
+                    top: 4,
+                    left: 4,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check, size: 14, color: Colors.white),
                     ),
                   ),
+              ],
+            ),
           ),
           // Content - 25% height approximately
           Expanded(

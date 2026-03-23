@@ -5,19 +5,25 @@ import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 
-// Provider for loading RomMConfig (e.g., from SharedPreferences)
+// Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
-  // Placeholder for actual configuration loading.
-  // In a real app, you'd load this from SharedPreferences, a config file, or API.
-  // For demonstration, using placeholder values.
   final prefs = await SharedPreferences.getInstance();
   final baseUrl = prefs.getString('rommBaseUrl') ?? 'https://api.romm.example.com';
   final username = prefs.getString('rommUsername') ?? 'guest';
   final password = prefs.getString('rommPassword') ?? '';
+  final token = prefs.getString('rommAuthToken');
 
-  return RomMConfig(baseUrl: baseUrl, username: username, password: password);
+  return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token);
 });
 
+// Exposes a login function that fetches a Bearer token and refreshes the config/service providers.
+final loginProvider = Provider<Future<void> Function(String baseUrl, String username, String password)>((ref) {
+  return (baseUrl, username, password) async {
+    await RommService.fetchToken(baseUrl, username, password);
+    ref.invalidate(rommConfigProvider);
+    ref.invalidate(rommServiceProvider);
+  };
+});
 
 // Simplified DirectoryService provider
 final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
@@ -26,46 +32,37 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
     await service.initialize();
     return service;
   } catch (e) {
-    return null; // Return null on error
+    return null;
   }
 });
 
 // Provider for StrategyRegistry
 final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
-  final directoryService = ref.watch(directoryServiceProvider).value; // Get the value from AsyncValue
-
-  // Only create StrategyRegistry if DirectoryService is available
+  final directoryService = ref.watch(directoryServiceProvider).value;
   if (directoryService != null) {
     try {
       return StrategyRegistry(directoryService);
     } catch (e) {
-      return null; // Return null on error
+      return null;
     }
   }
-  return null; // Return null if DirectoryService is not ready
+  return null;
 });
-
 
 // Simplified RommService provider
 final rommServiceProvider = Provider<RommService?>((ref) {
   final rommConfigAsync = ref.watch(rommConfigProvider);
   final directoryServiceAsync = ref.watch(directoryServiceProvider);
 
-  // Get actual values, handle null/error states from AsyncValue
   final config = rommConfigAsync.asData?.value;
   final directoryService = directoryServiceAsync.asData?.value;
 
-  // Only create RommService if config and directoryService are available
   if (config != null && directoryService != null) {
     try {
-      // RommService constructor is RommService(this.config) and creates its own Dio instance.
       return RommService(config);
     } catch (e) {
-      return null; // Return null on error during instantiation
+      return null;
     }
   }
-  return null; // Return null if dependencies are not ready
+  return null;
 });
-
-// Removed RommService class definition as it's imported.
-// Removed RommServiceExtension as it's no longer needed with the simplified provider.

@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
 
 class RommService {
@@ -11,15 +11,44 @@ class RommService {
           baseUrl: config.baseUrl,
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 15),
-        ));
+        )) {
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        final token = config.token;
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        handler.next(options);
+      },
+    ));
+  }
 
-  Options get _authOptions {
-    final basicAuth = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
-    return Options(headers: {'authorization': basicAuth});
+  /// Calls /api/token with username/password, stores the Bearer token in SharedPreferences.
+  /// Returns the token string on success.
+  static Future<String> fetchToken(String baseUrl, String username, String password) async {
+    final dio = Dio(BaseOptions(
+      baseUrl: baseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 15),
+    ));
+    final response = await dio.post(
+      '/api/token',
+      data: FormData.fromMap({
+        'username': username,
+        'password': password,
+      }),
+    );
+    final token = response.data['access_token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('Login failed: no access_token in response');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('rommAuthToken', token);
+    return token;
   }
 
   Future<List<Platform>> getPlatforms() async {
-    final response = await _dio.get('/api/platforms', options: _authOptions);
+    final response = await _dio.get('/api/platforms');
     if (response.statusCode == 200) {
       final List<dynamic> items;
       if (response.data is Map && response.data.containsKey('items')) {
@@ -72,7 +101,6 @@ class RommService {
           'limit': limit,
           'offset': offset,
         },
-        options: _authOptions,
       );
 
       if (response.statusCode == 200) {
@@ -97,7 +125,6 @@ class RommService {
     final response = await _dio.get(
       '/api/saves',
       queryParameters: {'game_id': gameId},
-      options: _authOptions,
     );
     if (response.statusCode == 200) {
       final List<dynamic> items;
@@ -115,12 +142,17 @@ class RommService {
     );
   }
 
-  // --- New method added ---
   String getDownloadUrl(Game game) {
     final name = game.fileName ?? game.fsName ?? game.name;
     final encoded = Uri.encodeComponent(name);
     final baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl.substring(0, config.baseUrl.length - 1) : config.baseUrl;
-    final url = '$baseUrl/api/roms/${game.id}/content/$encoded';
-    return url;
+    return '$baseUrl/api/roms/${game.id}/content/$encoded';
+  }
+
+  /// Returns the Bearer token Authorization header value for downloads.
+  String? get bearerAuthHeader {
+    final token = config.token;
+    if (token != null && token.isNotEmpty) return 'Bearer $token';
+    return null;
   }
 }

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/library_provider.dart';
@@ -30,13 +29,11 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
 
-    // Use smart file detection
     final existingRomPath = await dir.findExistingRomPath(game);
     final expectedRomPath = await dir.getRomFilePath(game);
     if (!context.mounted) return;
 
     if (existingRomPath == null) {
-      // ROM not found — show dialog with expected location
       final shouldDownload = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -82,7 +79,6 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
 
-    // ROM found — launch it
     try {
       await strategy.launch(game, existingRomPath);
     } catch (e) {
@@ -102,10 +98,8 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
     final url = service.getDownloadUrl(game);
-    final u = service.config.username;
-    final p = service.config.password;
-    final token = 'Basic ${base64Encode(utf8.encode('$u:$p'))}';
-    final headers = <String, String>{'Authorization': token};
+    final authHeader = service.bearerAuthHeader;
+    final headers = authHeader != null ? <String, String>{'Authorization': authHeader} : <String, String>{};
     ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Downloading ${game.name}...')),
@@ -120,9 +114,24 @@ class LibraryScreen extends ConsumerWidget {
     final gamesAsync = ref.watch(allGamesProvider);
     final filteredGames = ref.watch(filteredGamesProvider);
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+    final rommConfigAsync = ref.watch(rommConfigProvider);
+    final directoryServiceAsync = ref.watch(directoryServiceProvider);
+
+    // Build AppBar title: "Freegosy • hostname • N games"
+    final appBarTitle = rommConfigAsync.when(
+      data: (config) {
+        final uri = Uri.tryParse(config.baseUrl);
+        final host = uri?.host ?? config.baseUrl;
+        final totalGames = gamesAsync.asData?.value.length;
+        final gameCountStr = totalGames != null ? ' • $totalGames games' : '';
+        return 'Freegosy • $host$gameCountStr';
+      },
+      loading: () => 'Freegosy',
+      error: (_, __) => 'Freegosy',
+    );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Library')),
+      appBar: AppBar(title: Text(appBarTitle)),
       body: Column(
         children: [
           Padding(
@@ -196,10 +205,24 @@ class LibraryScreen extends ConsumerWidget {
                               itemCount: filteredGames.length,
                               itemBuilder: (context, index) {
                                 final game = filteredGames[index];
-                                return GameCard(
-                                  game: game,
-                                  onDownload: () => _startDownload(context, ref, game),
-                                  onLaunch: () => _handleLaunch(context, ref, game),
+                                final dirService = directoryServiceAsync.asData?.value;
+                                if (dirService == null) {
+                                  return GameCard(
+                                    game: game,
+                                    onDownload: () => _startDownload(context, ref, game),
+                                    onLaunch: () => _handleLaunch(context, ref, game),
+                                  );
+                                }
+                                return FutureBuilder<bool>(
+                                  future: dirService.isRomDownloaded(game),
+                                  builder: (context, snapshot) {
+                                    return GameCard(
+                                      game: game,
+                                      isDownloaded: snapshot.data ?? false,
+                                      onDownload: () => _startDownload(context, ref, game),
+                                      onLaunch: () => _handleLaunch(context, ref, game),
+                                    );
+                                  },
                                 );
                               },
                             ),

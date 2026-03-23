@@ -8,6 +8,7 @@ import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/emulator_download_service.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/library_provider.dart';
 import '../../core/romm/romm_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -21,11 +22,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _baseUrlController;
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize controllers here, will be updated when rommConfigProvider loads
     _baseUrlController = TextEditingController();
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
@@ -41,40 +42,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch DirectoryService (FutureProvider<DirectoryService?>)
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
-    // Watch RommService (Provider<RommService?>)
     final rommService = ref.watch(rommServiceProvider);
-    // Watch RommConfig (FutureProvider<RomMConfig>) to pre-fill fields
     final rommConfigAsync = ref.watch(rommConfigProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: rommConfigAsync.when(
         data: (rommConfig) {
-          // Pre-fill controllers with loaded config values
           _baseUrlController.text = rommConfig.baseUrl;
           _usernameController.text = rommConfig.username;
           _passwordController.text = rommConfig.password;
 
           return directoryServiceAsync.when(
             data: (directoryService) {
-              // Handle the case where DirectoryService is null (e.g., due to an error during initialization)
               if (directoryService == null) {
                 return const Center(child: Text('Storage service not available.'));
               }
-
-              // Now check RommService. If it's null, it means it's still loading or encountered an error.
-              // This check might be redundant if rommService is already being watched above, but kept for clarity.
               if (rommService == null) {
-                return const Center(child: CircularProgressIndicator()); // Show loading if RommService is null
+                return const Center(child: CircularProgressIndicator());
               }
-
-              // Both services are available and not null, render the UI
               return ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  _buildRommServerSection(context, ref, rommService), // Pass context and ref
+                  _buildRommServerSection(context, ref, rommService),
+                  const SizedBox(height: 24),
+                  _buildCardAspectRatioSection(context, ref),
                   const SizedBox(height: 24),
                   _buildStorageSection(directoryService),
                   const SizedBox(height: 24),
@@ -92,7 +85,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildRommServerSection(BuildContext context, WidgetRef ref, RommService? rommService) {
+  Widget _buildRommServerSection(BuildContext context, WidgetRef ref, rommService) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -130,7 +123,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             ElevatedButton(
               onPressed: () async {
-                // Test Connection Logic
                 if (rommService == null) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -158,28 +150,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(width: 12),
             ElevatedButton(
-              onPressed: () async {
-                // Save Logic
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('rommBaseUrl', _baseUrlController.text);
-                await prefs.setString('rommUsername', _usernameController.text);
-                await prefs.setString('rommPassword', _passwordController.text);
+              onPressed: _isSaving
+                  ? null
+                  : () async {
+                      setState(() => _isSaving = true);
+                      final baseUrl = _baseUrlController.text.trim();
+                      final username = _usernameController.text.trim();
+                      final password = _passwordController.text;
 
-                // Refresh providers
-                // ignore: unused_result
-                ref.refresh(rommConfigProvider);
-                // ignore: unused_result
-                ref.refresh(rommServiceProvider);
+                      try {
+                        // Attempt login to get Bearer token
+                        await RommService.fetchToken(baseUrl, username, password);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Login failed: $e'), backgroundColor: Colors.red),
+                          );
+                        }
+                        setState(() => _isSaving = false);
+                        return;
+                      }
 
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('RomM Server settings saved.'), backgroundColor: Colors.green),
-                  );
-                }
-              },
-              child: const Text('Save'),
+                      // Login succeeded — save credentials and refresh providers
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('rommBaseUrl', baseUrl);
+                      await prefs.setString('rommUsername', username);
+                      await prefs.setString('rommPassword', password);
+
+                      // ignore: unused_result
+                      ref.invalidate(rommConfigProvider);
+                      // ignore: unused_result
+                      ref.invalidate(rommServiceProvider);
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Logged in and settings saved.'), backgroundColor: Colors.green),
+                        );
+                      }
+                      setState(() => _isSaving = false);
+                    },
+              child: _isSaving
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save'),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCardAspectRatioSection(BuildContext context, WidgetRef ref) {
+    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Library Display', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        const Text('Card Aspect Ratio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        SegmentedButton<double>(
+          segments: const [
+            ButtonSegment(value: 0.72, label: Text('Square')),
+            ButtonSegment(value: 0.56, label: Text('Portrait')),
+          ],
+          selected: {cardAspectRatio},
+          onSelectionChanged: (selection) async {
+            final value = selection.first;
+            ref.read(cardAspectRatioProvider.notifier).state = value;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setDouble('card_aspect_ratio', value);
+          },
         ),
       ],
     );
@@ -194,7 +234,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildPathRow(
           label: 'ROMs Directory',
           currentPath: directoryService.romsRootPath,
-          onChanged: (newPath) async { // Make onChanged async
+          onChanged: (newPath) async {
             if (newPath != null) {
               await directoryService.setRomsRoot(newPath);
               // ignore: unused_result
@@ -206,7 +246,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _buildPathRow(
           label: 'Emulators Directory',
           currentPath: directoryService.emulatorsRootPath,
-          onChanged: (newPath) async { // Make onChanged async
+          onChanged: (newPath) async {
             if (newPath != null) {
               await directoryService.setEmulatorsRoot(newPath);
               // ignore: unused_result
@@ -248,8 +288,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildEmulatorsSection(DirectoryService directoryService) {
-    // Instantiate EmulatorDownloadService here, as it needs Dio and DirectoryService.
-    // RommService is no longer passed as an argument.
     final emulatorDownloadService = EmulatorDownloadService(Dio(), directoryService);
 
     return Column(
@@ -278,7 +316,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Expanded(child: Text(emulatorName)),
                     ElevatedButton(
                       onPressed: isInstalled
-                          ? null // Disabled if installed
+                          ? null
                           : () async {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
