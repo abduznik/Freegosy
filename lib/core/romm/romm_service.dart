@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
@@ -17,6 +18,10 @@ class RommService {
         final token = config.token;
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
+        } else {
+          // Fall back to Basic auth when no Bearer token is available
+          final basic = base64Encode(utf8.encode('${config.username}:${config.password}'));
+          options.headers['Authorization'] = 'Basic $basic';
         }
         handler.next(options);
       },
@@ -149,10 +154,11 @@ class RommService {
     return '$baseUrl/api/roms/${game.id}/content/$encoded';
   }
 
-  /// Returns the Bearer token Authorization header value for downloads.
-  String? get bearerAuthHeader {
+  /// Returns the Authorization header value for downloads (Bearer if available, else Basic).
+  String get bearerAuthHeader {
     final token = config.token;
     if (token != null && token.isNotEmpty) return 'Bearer $token';
-    return null;
+    final basic = base64Encode(utf8.encode('${config.username}:${config.password}'));
+    return 'Basic $basic';
   }
 }
