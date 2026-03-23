@@ -30,9 +30,10 @@ class RommService {
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
         if (e.response?.statusCode == 403 &&
-            e.requestOptions.extra['_basicRetry'] != true &&
-            config.token != null &&
-            config.token!.isNotEmpty) {
+          e.requestOptions.extra['_basicRetry'] != true &&
+          e.requestOptions.data is! FormData &&
+          config.token != null &&
+          config.token!.isNotEmpty) {
           print('[RommService] Bearer got 403 — retrying with Basic auth');
           final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
           final opts = e.requestOptions
@@ -75,7 +76,12 @@ class RommService {
     dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true, logPrint: (o) => print('[DIO/token] $o')));
     final response = await dio.post(
       '/api/token',
-      data: {'username': username, 'password': password, 'grant_type': 'password'},
+      data: {
+        'username': username,
+        'password': password,
+        'grant_type': 'password',
+        'scope': 'me.read me.write platforms.read roms.read assets.read assets.write roms.user.read roms.user.write',
+      },
       options: Options(contentType: 'application/x-www-form-urlencoded'),
     );
     print('[fetchToken] response status=${response.statusCode} data=${response.data}');
@@ -207,13 +213,11 @@ class RommService {
     try {
       final fileName = saveFile.uri.pathSegments.last;
       final formData = FormData.fromMap({
-        'rom_id': gameId,
-        'emulator': 'freegosy',
-        'slot': slot,
         'saveFile': await MultipartFile.fromFile(saveFile.path, filename: fileName),
       });
       final response = await _dio.post(
         '/api/saves',
+        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': slot},
         data: formData,
         options: _authOptions,
       );
@@ -233,7 +237,7 @@ class RommService {
     try {
       final response = await _dio.get(
         '/api/saves',
-        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy'},
+        queryParameters: {'rom_id': gameId},
         options: _authOptions,
       );
       if (response.statusCode != 200) return null;

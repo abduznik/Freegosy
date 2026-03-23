@@ -84,15 +84,38 @@ class LibraryScreen extends ConsumerWidget {
     // Pull latest cloud save before launching
     final syncService = ref.read(saveSyncServiceProvider);
     if (syncService != null) {
-      final pulled = await syncService.pullSave(game, existingRomPath);
+      // Push local saves first so nothing is lost, then pull cloud save
+      await syncService.pushSaves(game, existingRomPath);
       if (!context.mounted) return;
-      if (pulled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cloud save restored'),
-            duration: Duration(seconds: 2),
+      try {
+        final pulled = await syncService.pullSave(game, existingRomPath);
+        if (!context.mounted) return;
+        if (pulled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cloud save restored'), duration: Duration(seconds: 2)),
+          );
+        }
+      } catch (e) {
+        if (!context.mounted) return;
+        final shouldContinue = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Save Sync Warning'),
+            content: Text('${e.toString().replaceAll('Exception: ', '')}\n\nYou can still play, but your cloud save will not be restored. After playing once, exit the game and sync saves manually.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Play Anyway'),
+              ),
+            ],
           ),
         );
+        if (!context.mounted) return;
+        if (shouldContinue != true) return;
       }
     }
 

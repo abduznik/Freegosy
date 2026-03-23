@@ -105,6 +105,33 @@ class EdenSaveStrategy extends SaveStrategy {
     }
   }
 
+  Future<String?> _getSaveDirForTitleId(String titleId) async {
+    final saveRoot = await _getEdenSaveRoot();
+    if (saveRoot == null) return null;
+
+    final rootDir = Directory(saveRoot);
+    if (!await rootDir.exists()) await rootDir.create(recursive: true);
+
+    try {
+      await for (final entry in rootDir.list()) {
+        if (entry is! Directory) continue;
+        final titleDir = Directory('${entry.path}/$titleId');
+        if (await titleDir.exists()) return titleDir.path;
+      }
+
+      final profiles = await rootDir.list().where((e) => e is Directory).toList();
+      if (profiles.isNotEmpty) {
+        final path = '${profiles.first.path}/$titleId';
+        await Directory(path).create(recursive: true);
+        return path;
+      }
+
+      throw Exception('Launch the game in Eden at least once before syncing saves');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final titleId = await _resolveTitleId(romPath);
@@ -138,56 +165,56 @@ class EdenSaveStrategy extends SaveStrategy {
   Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart}) async {
     final saveDir = await getSaveDir(game, romPath);
     if (saveDir == null) return [];
-
     final dir = Directory(saveDir);
     if (!await dir.exists()) return [];
+    // Return a dummy File pointing to the directory
+    // SaveSyncService will detect it's a directory and zip it
+    return [File(saveDir)];
+  }
 
-    final result = <File>[];
-    try {
-      await for (final entity in dir.list(recursive: true)) {
-        if (entity is! File) continue;
-        if (sessionStart != null) {
-          final stat = await entity.stat();
-          if (stat.modified.isBefore(sessionStart)) continue;
+
+
+    @override
+    Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
+      try {
+        print('[EdenSaveStrategy] restoreSave called: filename=$filename destPath=$destPath');
+        final titleMatch = _titleIdRegex.firstMatch(filename.toUpperCase());
+        print('[EdenSaveStrategy] titleMatch from filename: ${titleMatch?.group(0)}');
+        final saveDir = titleMatch != null
+            ? await _getSaveDirForTitleId(titleMatch.group(0)!)
+            : await getSaveDir(game, destPath);
+        print('[EdenSaveStrategy] saveDir resolved: $saveDir');
+        if (saveDir == null) return false;
+
+        final dir = Directory(saveDir);
+        if (!await dir.exists()) await dir.create(recursive: true);
+
+        // RomM packages saves as zips — extract into the title directory.
+        if (filename.toLowerCase().endsWith('.zip')) {
+          return await _extractZipSave(data, saveDir);
         }
-        result.add(entity);
+
+        final targetPath = '$saveDir/$filename';
+        await backupSave(targetPath);
+        await File(targetPath).writeAsBytes(data);
+        print('[EdenSaveStrategy] restored $filename to $targetPath');
+        return true;
+      } catch (e) {
+        print('[EdenSaveStrategy] restoreSave error: $e');
+        rethrow;
       }
-    } catch (e) {
-      print('[EdenSaveStrategy] getSaveFiles error: $e');
     }
-    return result;
-  }
-
-  @override
-  Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
-    try {
-      final saveDir = await getSaveDir(game, destPath);
-      if (saveDir == null) return false;
-
-      final dir = Directory(saveDir);
-      if (!await dir.exists()) await dir.create(recursive: true);
-
-      // RomM packages saves as zips — extract into the title directory.
-      if (filename.toLowerCase().endsWith('.zip')) {
-        return await _extractZipSave(data, saveDir);
-      }
-
-      final targetPath = '$saveDir/$filename';
-      await backupSave(targetPath);
-      await File(targetPath).writeAsBytes(data);
-      print('[EdenSaveStrategy] restored $filename to $targetPath');
-      return true;
-    } catch (e) {
-      print('[EdenSaveStrategy] restoreSave error: $e');
-      return false;
-    }
-  }
 
   Future<bool> _extractZipSave(Uint8List data, String destDir) async {
     try {
       final archive = ZipDecoder().decodeBytes(data);
       for (final entry in archive) {
-        final outPath = '$destDir/${entry.name}';
+        // Strip the leading titleId folder from zip entry names
+      final entryName = entry.name.contains('/')
+          ? entry.name.substring(entry.name.indexOf('/') + 1)
+          : entry.name;
+      if (entryName.isEmpty) continue;
+      final outPath = '$destDir/$entryName';
         if (entry.isFile) {
           await backupSave(outPath);
           final outFile = File(outPath);

@@ -6,6 +6,8 @@ import 'save_strategy.dart';
 import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
+import 'dart:typed_data';
+import 'package:archive/archive_io.dart';
 
 class SaveSyncService {
   final RommService _rommService;
@@ -69,9 +71,28 @@ class SaveSyncService {
 
       int uploaded = 0;
       for (final file in files) {
-        final ok = await _rommService.uploadSave(game.id, file);
-        if (ok) uploaded++;
-      }
+        File uploadFile = file;
+        bool isTempZip = false;
+
+        // If it's a directory, zip it first
+        if (await FileSystemEntity.isDirectory(file.path)) {
+          final zipPath = '${file.path}.zip';
+          final encoder = ZipFileEncoder();
+          encoder.create(zipPath);
+          await encoder.addDirectory(Directory(file.path));
+          encoder.close();
+          uploadFile = File(zipPath);
+          isTempZip = true;
+        }
+
+  final ok = await _rommService.uploadSave(game.id, uploadFile);
+  if (ok) uploaded++;
+
+  // Clean up temp zip
+  if (isTempZip && await uploadFile.exists()) {
+    await uploadFile.delete();
+  }
+}
 
       print('[SaveSyncService] pushed $uploaded/${files.length} saves for ${game.name}');
       return uploaded > 0;
@@ -113,12 +134,14 @@ class SaveSyncService {
       final filename = save['file_name'] as String? ??
           downloadUrl.split('/').last;
 
+      print('[SaveSyncService] calling restoreSave: filename=$filename romPath=$romPath bytesLen=${bytes.length}');
       final ok = await strategy.restoreSave(game, romPath, bytes, filename);
+      print('[SaveSyncService] restoreSave returned: $ok');
       print('[SaveSyncService] pullSave ${ok ? 'ok' : 'failed'} for ${game.name}');
       return ok;
     } catch (e) {
       print('[SaveSyncService] pullSave error: $e');
-      return false;
+      rethrow;
     }
   }
 }
