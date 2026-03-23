@@ -132,7 +132,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onPressed: () async {
                 // Test Connection Logic
                 if (rommService == null) {
-                  if (mounted) {
+                  if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('RomM Service not available.'), backgroundColor: Colors.red),
                     );
@@ -141,13 +141,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 }
                 try {
                   final platforms = await rommService.getPlatforms();
-                  if (mounted) {
+                  if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Connection successful! ${platforms.length} platforms found.'), backgroundColor: Colors.green),
                     );
                   }
                 } catch (e) {
-                  if (mounted) {
+                  if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Connection failed: $e'), backgroundColor: Colors.red),
                     );
@@ -171,7 +171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 // ignore: unused_result
                 ref.refresh(rommServiceProvider);
 
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('RomM Server settings saved.'), backgroundColor: Colors.green),
                   );
