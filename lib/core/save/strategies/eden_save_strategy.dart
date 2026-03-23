@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:archive/archive.dart';
 import '../../romm/romm_models.dart';
 import '../save_strategy.dart';
 
@@ -166,6 +167,11 @@ class EdenSaveStrategy extends SaveStrategy {
       final dir = Directory(saveDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
+      // RomM packages saves as zips — extract into the title directory.
+      if (filename.toLowerCase().endsWith('.zip')) {
+        return await _extractZipSave(data, saveDir);
+      }
+
       final targetPath = '$saveDir/$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
@@ -173,6 +179,28 @@ class EdenSaveStrategy extends SaveStrategy {
       return true;
     } catch (e) {
       print('[EdenSaveStrategy] restoreSave error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _extractZipSave(Uint8List data, String destDir) async {
+    try {
+      final archive = ZipDecoder().decodeBytes(data);
+      for (final entry in archive) {
+        final outPath = '$destDir/${entry.name}';
+        if (entry.isFile) {
+          await backupSave(outPath);
+          final outFile = File(outPath);
+          await outFile.parent.create(recursive: true);
+          await outFile.writeAsBytes(entry.content as List<int>);
+        } else {
+          await Directory(outPath).create(recursive: true);
+        }
+      }
+      print('[EdenSaveStrategy] extracted ${archive.length} entries to $destDir');
+      return true;
+    } catch (e) {
+      print('[EdenSaveStrategy] zip extraction error: $e');
       return false;
     }
   }
