@@ -6,6 +6,7 @@ import '../../providers/romm_provider.dart';
 import '../../core/romm/romm_models.dart';
 import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
+import 'dart:convert';
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -141,7 +142,8 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
     final url = service.getDownloadUrl(game);
-    final headers = <String, String>{'Authorization': service.authHeader};
+    final basicAuth = 'Basic ${base64Encode(utf8.encode('${service.config.username}:${service.config.password}'))}';
+    final headers = <String, String>{'Authorization': basicAuth};
     ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Downloading ${game.name}...')),
