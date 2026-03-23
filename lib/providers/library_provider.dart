@@ -52,3 +52,11 @@ final filteredGamesProvider = Provider<List<Game>>((ref) {
   filtered.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   return filtered;
 });
+
+final retroarchSyncModeProvider = StateProvider<String>((ref) => 'both');
+
+final retroarchSyncModeLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString('retroarch_sync_mode') ?? 'both';
+  ref.read(retroarchSyncModeProvider.notifier).state = saved;
+});

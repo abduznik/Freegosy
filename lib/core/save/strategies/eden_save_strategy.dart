@@ -162,7 +162,7 @@ class EdenSaveStrategy extends SaveStrategy {
   }
 
   @override
-  Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart}) async {
+Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
     final saveDir = await getSaveDir(game, romPath);
     if (saveDir == null) return [];
     final dir = Directory(saveDir);

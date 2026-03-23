@@ -38,9 +38,10 @@ class SaveSyncService {
       case 'dreamcast':
       case 'megadrive':
         return _retroarch;
-      case 'gc':
+      case 'ngc':
       case 'gamecube':
       case 'wii':
+      case 'gc':
         return _dolphin;
       case 'switch':
       case 'nintendo-switch':
@@ -55,7 +56,7 @@ class SaveSyncService {
   ///
   /// If [sessionStart] is provided, only files modified after that time are uploaded.
   /// Returns true if at least one file was uploaded successfully.
-  Future<bool> pushSaves(Game game, String romPath, {DateTime? sessionStart}) async {
+  Future<bool> pushSaves(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
@@ -63,7 +64,7 @@ class SaveSyncService {
         return false;
       }
 
-      final files = await strategy.getSaveFiles(game, romPath, sessionStart: sessionStart);
+      final files = await strategy.getSaveFiles(game, romPath, sessionStart: sessionStart, syncMode: syncMode);
       if (files.isEmpty) {
         print('[SaveSyncService] no save files found for ${game.name}');
         return false;

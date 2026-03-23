@@ -85,7 +85,8 @@ class LibraryScreen extends ConsumerWidget {
     final syncService = ref.read(saveSyncServiceProvider);
     if (syncService != null) {
       // Push local saves first so nothing is lost, then pull cloud save
-      await syncService.pushSaves(game, existingRomPath);
+      final syncMode = ref.read(retroarchSyncModeProvider);
+      await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
       if (!context.mounted) return;
       try {
         final pulled = await syncService.pullSave(game, existingRomPath);

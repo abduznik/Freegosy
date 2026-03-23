@@ -11,7 +11,7 @@ abstract class SaveStrategy {
 
   /// Returns all save files associated with [game].
   /// If [sessionStart] is provided, only files modified after that time are returned.
-  Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart});
+  Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'});
 
   /// Restores save [data] named [filename] for [game] at [destPath].
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename);

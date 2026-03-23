@@ -26,6 +26,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
     super.initState();
     // Eagerly load persisted card aspect ratio
     ref.read(cardAspectRatioLoaderProvider);
+    ref.read(retroarchSyncModeLoaderProvider);
   }
 
   @override

@@ -16,19 +16,23 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'retroarch';
 
-  // Maps platform slug → (core dll stem, saves subfolder)
   static const Map<String, _CoreInfo> _coreMap = {
-    'gba':       _CoreInfo('mgba_libretro',          'mGBA'),
-    'gbc':       _CoreInfo('mgba_libretro',          'mGBA'),
-    'gb':        _CoreInfo('mgba_libretro',          'mGBA'),
-    'snes':      _CoreInfo('snes9x_libretro',        'Snes9X'),
-    'nes':       _CoreInfo('fceumm_libretro',        'FCEUmm'),
-    'n64':       _CoreInfo('mupen64plus_next_libretro', 'Mupen64Plus-Next'),
-    'nds':       _CoreInfo('desmume2015_libretro',   'DeSmuME 2015'),
-    'psx':       _CoreInfo('pcsx_rearmed_libretro',  'PCSX-ReARMed'),
-    'psp':       _CoreInfo('ppsspp_libretro',        'PPSSPP/PSP/SAVEDATA'),
-    'dreamcast': _CoreInfo('flycast_libretro',       'Flycast'),
-    'megadrive': _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX'),
+    'gba':       _CoreInfo('mgba_libretro',            'mGBA',                'mGBA'),
+    'gbc':       _CoreInfo('mgba_libretro',            'mGBA',                'mGBA'),
+    'gb':        _CoreInfo('mgba_libretro',            'mGBA',                'mGBA'),
+    'snes':      _CoreInfo('snes9x_libretro',          'Snes9X',              'Snes9X'),
+    'nes':       _CoreInfo('fceumm_libretro',          'FCEUmm',              'FCEUmm'),
+    'n64':       _CoreInfo('mupen64plus_next_libretro', 'Mupen64Plus-Next',   'Mupen64Plus-Next'),
+    'nds':       _CoreInfo('desmume2015_libretro',     'DeSmuME 2015',        'DeSmuME 2015'),
+    'psx':       _CoreInfo('pcsx_rearmed_libretro',    'PCSX-ReARMed',        'PCSX-ReARMed'),
+    'psp':       _CoreInfo('ppsspp_libretro',          'PPSSPP/PSP/SAVEDATA', 'PPSSPP'),
+    'dreamcast': _CoreInfo('flycast_libretro',         'Flycast',             'Flycast'),
+    'megadrive': _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX',    'Genesis Plus GX'),
+    'dc':        _CoreInfo('flycast_libretro', 'Flycast', 'Flycast'),
+    'ps1':       _CoreInfo('pcsx_rearmed_libretro', 'PCSX-ReARMed', 'PCSX-ReARMed'),
+    'playstation': _CoreInfo('pcsx_rearmed_libretro', 'PCSX-ReARMed', 'PCSX-ReARMed'),
+    'md':        _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX', 'Genesis Plus GX'),
+    'genesis':   _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX', 'Genesis Plus GX'),
   };
 
   @override
@@ -45,18 +49,30 @@ class RetroArchSaveStrategy extends SaveStrategy {
   }
 
   @override
-  Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart}) async {
-    final saveDir = await getSaveDir(game, romPath);
-    if (saveDir == null) return [];
+  Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
+    final slug = game.platformSlug?.toLowerCase() ?? '';
+    final coreInfo = _coreMap[slug];
+    if (coreInfo == null) return [];
 
-    final dir = Directory(saveDir);
-    if (!await dir.exists()) return [];
+    final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+    if (exePath == null) return [];
+    final exeDir = File(exePath).parent.path;
 
     final stem = getRomStem(game);
-    final candidates = [
-      File('$saveDir/$stem.srm'),
-      File('$saveDir/$stem.state.auto'),
-    ];
+    final candidates = <File>[];
+
+    if (syncMode == 'saves' || syncMode == 'both') {
+      final savesDir = '$exeDir/saves/${coreInfo.saveFolder}';
+      candidates.add(File('$savesDir/$stem.srm'));
+    }
+
+    if (syncMode == 'states' || syncMode == 'both') {
+      final statesDir = '$exeDir/states/${coreInfo.statesFolder}';
+      candidates.add(File('$statesDir/$stem.state.auto'));
+      for (int i = 0; i <= 9; i++) {
+        candidates.add(File('$statesDir/$stem.state$i'));
+      }
+    }
 
     final result = <File>[];
     for (final f in candidates) {
@@ -73,13 +89,23 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final saveDir = await getSaveDir(game, destPath);
-      if (saveDir == null) return false;
+      final slug = game.platformSlug?.toLowerCase() ?? '';
+      final coreInfo = _coreMap[slug];
+      if (coreInfo == null) return false;
 
-      final dir = Directory(saveDir);
+      final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+      if (exePath == null) return false;
+      final exeDir = File(exePath).parent.path;
+
+      final isState = filename.contains('.state');
+      final targetDir = isState
+          ? '$exeDir/states/${coreInfo.statesFolder}'
+          : '$exeDir/saves/${coreInfo.saveFolder}';
+
+      final dir = Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      final targetPath = '$saveDir/$filename';
+      final targetPath = '$targetDir/$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       print('[RetroArchSaveStrategy] restored $filename to $targetPath');
@@ -94,5 +120,6 @@ class RetroArchSaveStrategy extends SaveStrategy {
 class _CoreInfo {
   final String coreName;
   final String saveFolder;
-  const _CoreInfo(this.coreName, this.saveFolder);
+  final String statesFolder;
+  const _CoreInfo(this.coreName, this.saveFolder, this.statesFolder);
 }
