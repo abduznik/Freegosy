@@ -6,6 +6,7 @@ import 'package:freegosy/core/romm/romm_models.dart';
 
 class DownloadProgress {
   final String id;
+  final String gameName;
   final double percent;
   final int bytesReceived;
   final int totalBytes;
@@ -14,6 +15,7 @@ class DownloadProgress {
 
   DownloadProgress({
     required this.id,
+    required this.gameName,
     this.percent = 0.0,
     this.bytesReceived = 0,
     this.totalBytes = 0,
@@ -31,7 +33,7 @@ class DownloadService {
   // Modified signature to accept downloadUrl
   Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers}) async* {
     if (await directoryService.isRomDownloaded(game)) {
-      yield DownloadProgress(id: game.id, percent: 1.0, isComplete: true);
+      yield DownloadProgress(id: game.id, gameName: game.name, percent: 1.0, isComplete: true);
       return;
     }
 
@@ -50,6 +52,7 @@ class DownloadService {
           if (total > 0) {
             controller.add(DownloadProgress(
               id: game.id,
+              gameName: game.name,
               percent: received / total,
               bytesReceived: received,
               totalBytes: total,
@@ -60,18 +63,19 @@ class DownloadService {
       ).then((_) {
         controller.add(DownloadProgress(
           id: game.id,
+          gameName: game.name,
           percent: 1.0,
           isComplete: true,
         ));
         controller.close();
       }).catchError((e) {
-        controller.add(DownloadProgress(id: game.id, error: 'Download failed: $e'));
+        controller.add(DownloadProgress(id: game.id, gameName: game.name, error: 'Download failed: $e'));
         controller.close();
       });
 
       yield* controller.stream;
     } catch (e) {
-      yield DownloadProgress(id: game.id, error: 'Error: $e');
+      yield DownloadProgress(id: game.id, gameName: game.name, error: 'Error: $e');
       if (await saveFile.exists()) await saveFile.delete();
     }
   }

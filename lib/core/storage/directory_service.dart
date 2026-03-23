@@ -1,5 +1,4 @@
 ﻿import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
@@ -98,7 +97,6 @@ class DirectoryService {
       for (final ext in extensions) {
         final candidate = '$romDir/$baseName$ext';
         if (await File(candidate).exists()) {
-          print('ROM found with extension: $candidate');
           return candidate;
         }
       }
@@ -110,7 +108,6 @@ class DirectoryService {
           if (entity is File) {
             final fname = entity.uri.pathSegments.last;
             if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
-              print('ROM found by scan: ${entity.path}');
               return entity.path;
             }
           }

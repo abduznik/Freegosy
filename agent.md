@@ -78,6 +78,7 @@ abstract class EmulatorStrategy {
 ```dart
 class DownloadProgress {
   final String id; // e.g., game ID or emulator ID
+  final String gameName; // display name (game.name or emulator name)
   final double percent;
   final int bytesReceived;
   final int totalBytes;

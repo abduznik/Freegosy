@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'dart:async';
 import '../core/downloader/download_service.dart';
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
@@ -13,19 +12,18 @@ final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
 
 final downloadProvider =
     StateNotifierProvider<DownloadNotifier, Map<String, DownloadProgress>>((ref) {
-  final downloadService = ref.watch(downloadServiceProvider).asData?.value;
-  if (downloadService == null) return DownloadNotifier(null);
-  return DownloadNotifier(downloadService);
+  return DownloadNotifier(ref);
 });
 
 class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
-  final DownloadService? _service;
+  final Ref _ref;
 
-  DownloadNotifier(this._service) : super({});
+  DownloadNotifier(this._ref) : super({});
 
   Future<void> startDownload(Game game, String downloadUrl, {Map<String, String>? headers}) async {
-    if (_service == null) return;
-    _service!.download(game, downloadUrl, headers: headers).listen((progress) {
+    final service = await _ref.read(downloadServiceProvider.future);
+    if (service == null) return;
+    service.download(game, downloadUrl, headers: headers).listen((progress) {
       state = {...state, game.id: progress};
     });
   }

@@ -1,14 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Assuming SharedPreferences for config loading
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
-import 'package:freegosy/core/emulator/emulator_download_service.dart';
-import 'package:freegosy/core/emulator/emulator_registry_data.dart';
-import 'package:freegosy/core/downloader/download_service.dart';
-import 'package:freegosy/core/romm/romm_models.dart'; // For RomMConfig
-import 'package:freegosy/core/romm/romm_service.dart'; // Import the actual RommService
-import 'package:freegosy/core/emulator/strategy_registry.dart'; // Import StrategyRegistry
+import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/romm/romm_service.dart';
+import 'package:freegosy/core/emulator/strategy_registry.dart';
 
 // Provider for loading RomMConfig (e.g., from SharedPreferences)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
@@ -31,7 +26,6 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
     await service.initialize();
     return service;
   } catch (e) {
-    print("Error initializing DirectoryService: $e"); // Log error
     return null; // Return null on error
   }
 });
@@ -45,7 +39,6 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
     try {
       return StrategyRegistry(directoryService);
     } catch (e) {
-      print("Error creating StrategyRegistry: $e"); // Log error
       return null; // Return null on error
     }
   }
@@ -68,7 +61,6 @@ final rommServiceProvider = Provider<RommService?>((ref) {
       // RommService constructor is RommService(this.config) and creates its own Dio instance.
       return RommService(config);
     } catch (e) {
-      print("Error creating RommService: $e"); // Log error
       return null; // Return null on error during instantiation
     }
   }
