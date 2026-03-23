@@ -19,7 +19,7 @@ class EdenSaveStrategy extends SaveStrategy {
   /// 3. Scan eden save folders for the most recently modified folder
   Future<String?> _resolveTitleId(String romPath, {DateTime? sessionStart}) async {
     // Method 1: regex in filename
-    final fileName = romPath.split(Platform.pathSeparator).last;
+    final fileName = romPath.replaceAll('\\', '/').split('/').last;
     final match = _titleIdRegex.firstMatch(fileName.toUpperCase());
     if (match != null) return match.group(0)!.toUpperCase();
 
@@ -56,7 +56,7 @@ class EdenSaveStrategy extends SaveStrategy {
   }
 
   Future<String?> _scanEdenSaveFolders(DateTime? sessionStart) async {
-    final edenSaveRoot = _getEdenSaveRoot();
+    final edenSaveRoot = await _getEdenSaveRoot();
     if (edenSaveRoot == null) return null;
 
     final rootDir = Directory(edenSaveRoot);
@@ -89,12 +89,17 @@ class EdenSaveStrategy extends SaveStrategy {
     return bestTitleId;
   }
 
-  String? _getEdenSaveRoot() {
+  Future<String?> _getEdenSaveRoot() async {
     try {
-      final appData = Platform.environment['APPDATA'];
-      if (appData == null) return null;
+      final result = await Process.run(
+        'cmd', ['/c', 'echo %APPDATA%'],
+        runInShell: false,
+      );
+      final appData = result.stdout.toString().trim();
+      if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
       return '$appData/eden/nand/user/save/0000000000000000';
-    } catch (_) {
+    } catch (e) {
+      print('[EdenSaveStrategy] APPDATA lookup error: $e');
       return null;
     }
   }
@@ -104,7 +109,7 @@ class EdenSaveStrategy extends SaveStrategy {
     final titleId = await _resolveTitleId(romPath);
     if (titleId == null) return null;
 
-    final saveRoot = _getEdenSaveRoot();
+    final saveRoot = await _getEdenSaveRoot();
     if (saveRoot == null) return null;
 
     // Find the first profile directory that contains this title
