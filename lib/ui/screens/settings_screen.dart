@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart'; // For directory picking
-import 'package:flutter/services.dart'; // For rootBundle if needed for assets
-import 'package:dio/dio.dart'; // For EmulatorDownloadService
-import 'package:path_provider/path_provider.dart'; // For temporary directory
-import 'package:shared_preferences/shared_preferences.dart'; // For SharedPreferences
+import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/emulator_download_service.dart';
-import '../../providers/romm_provider.dart'; // For directoryServiceProvider and rommServiceProvider
-import '../../providers/download_provider.dart'; // For downloadServiceProvider
-import '../../core/romm/romm_service.dart'; // Import RommService
+import '../../providers/romm_provider.dart';
+import '../../core/romm/romm_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -56,9 +53,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: rommConfigAsync.when(
         data: (rommConfig) {
           // Pre-fill controllers with loaded config values
-          _baseUrlController.text = rommConfig.baseUrl ?? '';
-          _usernameController.text = rommConfig.username ?? '';
-          _passwordController.text = rommConfig.password ?? '';
+          _baseUrlController.text = rommConfig.baseUrl;
+          _usernameController.text = rommConfig.username;
+          _passwordController.text = rommConfig.password;
 
           return directoryServiceAsync.when(
             data: (directoryService) {
@@ -163,7 +160,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 await prefs.setString('rommPassword', _passwordController.text);
 
                 // Refresh providers
+                // ignore: unused_result
                 ref.refresh(rommConfigProvider);
+                // ignore: unused_result
                 ref.refresh(rommServiceProvider);
 
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -190,7 +189,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (newPath) async { // Make onChanged async
             if (newPath != null) {
               await directoryService.setRomsRoot(newPath);
-              ref.refresh(directoryServiceProvider); // Refresh to show updated path
+              // ignore: unused_result
+              ref.refresh(directoryServiceProvider);
             }
           },
         ),
@@ -201,7 +201,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (newPath) async { // Make onChanged async
             if (newPath != null) {
               await directoryService.setEmulatorsRoot(newPath);
-              ref.refresh(directoryServiceProvider); // Refresh to show updated path
+              // ignore: unused_result
+              ref.refresh(directoryServiceProvider);
             }
           },
         ),
@@ -248,7 +249,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         const Text('Emulators', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
-        ...kEmulatorDefinitions.map((def) {
+        ...kEmulatorDefinitions.map<Widget>((def) {
           final emulatorId = def['id'] as String;
           final emulatorName = def['name'] as String;
           final windowsExecutable = def['windows_executable'] as String;
@@ -287,7 +288,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       SnackBar(content: Text('$emulatorName downloaded and extracted.')),
                                     );
                                     // Refresh the installation status
-                                    ref.refresh(directoryServiceProvider); // Refresh to update icon
+                                    // ignore: unused_result
+                                    ref.refresh(directoryServiceProvider);
                                     break;
                                   }
 
@@ -305,7 +307,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               );
             },
           );
-        }).toList(),
+        }),
       ],
     );
   }

@@ -45,7 +45,7 @@ class PlatformFilterBar extends StatelessWidget {
                 labelStyle: TextStyle(
                   color: isAllSelected ? Colors.white : colorScheme.onSurface,
                 ),
-                side: isAllSelected ? null : BorderSide(color: colorScheme.outline.withOpacity(0.5)),
+                side: isAllSelected ? null : BorderSide(color: colorScheme.outline.withValues(alpha: 0.5)),
               ),
             ),
             ...platforms.map((platform) {
@@ -63,7 +63,7 @@ class PlatformFilterBar extends StatelessWidget {
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : colorScheme.onSurface,
                   ),
-                  side: isSelected ? null : BorderSide(color: colorScheme.outline.withOpacity(0.5)),
+                  side: isSelected ? null : BorderSide(color: colorScheme.outline.withValues(alpha: 0.5)),
                 ),
               );
             }),

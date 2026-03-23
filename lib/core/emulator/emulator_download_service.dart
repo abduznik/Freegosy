@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
 import '../downloader/download_service.dart';
 import '../storage/directory_service.dart';
