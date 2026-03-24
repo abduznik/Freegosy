@@ -1,12 +1,13 @@
 import 'dart:io';
+import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
 
 /// Save strategy for PCSX2 (PlayStation 2).
-/// Memcards: {emulatorDir}/memcards/Mcd001.ps2, Mcd002.ps2
-/// States:   {emulatorDir}/sstates/{stem}.000 etc.
+/// Memcards: {emulatorDir}\memcards\*.ps2
+/// States:   {emulatorDir}\sstates\{stem}.*.
 class Pcsx2SaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
 
@@ -15,48 +16,61 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'pcsx2';
 
-  @override
-  Future<String?> getSaveDir(Game game, String romPath) async {
+  Future<String?> _getExeDir() async {
     final exePath = await _directoryService.findEmulatorExecutable(
         'pcsx2', 'pcsx2-qt.exe');
     if (exePath == null) return null;
-    return '${File(exePath).parent.path}/memcards';
+    return File(exePath).parent.path.replaceAll('/', '\\');
+  }
+
+  @override
+  Future<String?> getSaveDir(Game game, String romPath) async {
+    final exeDir = await _getExeDir();
+    if (exeDir == null) return null;
+    return '$exeDir\\memcards';
   }
 
   @override
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final exePath = await _directoryService.findEmulatorExecutable(
-        'pcsx2', 'pcsx2-qt.exe');
-    if (exePath == null) return [];
-    final exeDir = File(exePath).parent.path;
+    final exeDir = await _getExeDir();
+    if (exeDir == null) return [];
 
-    final candidates = <File>[];
+    final result = <File>[];
 
-    // Memory cards — shared across all PS2 games
+    // Memory cards — scan all .ps2 files in memcards folder
     if (syncMode == 'saves' || syncMode == 'both') {
-      candidates.add(File('$exeDir/memcards/Mcd001.ps2'));
-      candidates.add(File('$exeDir/memcards/Mcd002.ps2'));
+      final memcardsDir = Directory('$exeDir\\memcards');
+      if (await memcardsDir.exists()) {
+        await for (final entity in memcardsDir.list()) {
+          if (entity is! File) continue;
+          if (!entity.path.toLowerCase().endsWith('.ps2')) continue;
+          if (sessionStart != null) {
+            final stat = await entity.stat();
+            if (stat.modified.isBefore(sessionStart)) continue;
+          }
+          result.add(entity);
+        }
+      }
     }
 
     // Save states — named after ROM stem
     if (syncMode == 'states' || syncMode == 'both') {
       final stem = getRomStem(game);
-      final statesDir = '$exeDir/sstates';
-      for (int i = 0; i <= 9; i++) {
-        candidates.add(File('$statesDir/$stem.${'$i'.padLeft(3, '0')}'));
+      final statesDir = Directory('$exeDir\\sstates');
+      if (await statesDir.exists()) {
+        await for (final entity in statesDir.list()) {
+          if (entity is! File) continue;
+          if (!entity.path.contains(stem)) continue;
+          if (sessionStart != null) {
+            final stat = await entity.stat();
+            if (stat.modified.isBefore(sessionStart)) continue;
+          }
+          result.add(entity);
+        }
       }
     }
 
-    final result = <File>[];
-    for (final f in candidates) {
-      if (!await f.exists()) continue;
-      if (sessionStart != null) {
-        final stat = await f.stat();
-        if (stat.modified.isBefore(sessionStart)) continue;
-      }
-      result.add(f);
-    }
     return result;
   }
 
@@ -64,19 +78,37 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final exePath = await _directoryService.findEmulatorExecutable(
-          'pcsx2', 'pcsx2-qt.exe');
-      if (exePath == null) return false;
-      final exeDir = File(exePath).parent.path;
+      final exeDir = await _getExeDir();
+      if (exeDir == null) return false;
 
+      // Cloud saves come as zips — extract into the appropriate directory
+      if (filename.toLowerCase().endsWith('.zip')) {
+        final archive = ZipDecoder().decodeBytes(data);
+        for (final entry in archive) {
+          // Determine target dir by file extension
+          final entryLower = entry.name.toLowerCase();
+          final targetDir = entryLower.endsWith('.ps2')
+              ? '$exeDir\\memcards'
+              : '$exeDir\\sstates';
+
+          if (entry.isFile) {
+            final targetPath = '$targetDir\\${entry.name}';
+            await backupSave(targetPath);
+            final outFile = File(targetPath);
+            await outFile.parent.create(recursive: true);
+            await outFile.writeAsBytes(entry.content as List<int>);
+            debugPrint('[Pcsx2SaveStrategy] restored ${entry.name} to $targetPath');
+          }
+        }
+        return true;
+      }
+
+      // Single file fallback
       final isState = filename.contains('.') &&
           int.tryParse(filename.split('.').last) != null;
-      final targetDir = isState ? '$exeDir/sstates' : '$exeDir/memcards';
-
-      final dir = Directory(targetDir);
-      if (!await dir.exists()) await dir.create(recursive: true);
-
-      final targetPath = '$targetDir/$filename';
+      final targetDir = isState ? '$exeDir\\sstates' : '$exeDir\\memcards';
+      await Directory(targetDir).create(recursive: true);
+      final targetPath = '$targetDir\\$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       debugPrint('[Pcsx2SaveStrategy] restored $filename to $targetPath');

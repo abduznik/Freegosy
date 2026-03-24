@@ -32,7 +32,9 @@ class Pcsx2Strategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    final normalizedRom = romPath.replaceAll('/', '\\');
+    final normalizedExe = exePath.replaceAll('/', '\\');
+    await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.detached);
   }
 
   @override
