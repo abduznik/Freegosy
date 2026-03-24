@@ -12,6 +12,7 @@ import 'package:freegosy/core/emulator/strategies/xemu_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/xenia_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 
 class StrategyRegistry {
   final DirectoryService _directoryService;
@@ -29,6 +30,7 @@ class StrategyRegistry {
       DuckstationStrategy(_directoryService),
       XemuStrategy(_directoryService),
       XeniaStrategy(_directoryService),
+      WindowsStrategy(_directoryService),
     ];
   }
 

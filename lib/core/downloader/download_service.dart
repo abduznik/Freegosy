@@ -65,7 +65,10 @@ class DownloadService {
         deleteOnError: true,
       ).then((_) async {
         try {
-          if (game.isMultiFile) {
+          final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+          final isArchive = savePath.toLowerCase().endsWith('.zip') ||
+              savePath.toLowerCase().endsWith('.7z');
+          if (game.isMultiFile || (isWindowsGame && isArchive)) {
             controller.add(DownloadProgress(
               id: game.id,
               gameName: game.name,
@@ -112,11 +115,25 @@ class DownloadService {
 
     await Directory(extractDir).create(recursive: true);
 
-    final bytes = await File(zipPath).readAsBytes();
-    final archive = ZipDecoder().decodeBytes(bytes);
-    extractArchiveToDisk(archive, extractDir);
+    if (zipPath.toLowerCase().endsWith('.7z')) {
+      final sevenZipExe = await directoryService.resolveSevenZipPath();
+      if (sevenZipExe == null) {
+        throw Exception('7zr.exe could not be initialized. Try reinstalling Freegosy.');
+      }
+      final result = await Process.run(
+        sevenZipExe, ['x', zipPath, '-o$extractDir', '-y'],
+        runInShell: false,
+      );
+      if (result.exitCode != 0) {
+        throw Exception('7z extraction failed: ${result.stderr}');
+      }
+    } else {
+      final bytes = await File(zipPath).readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      extractArchiveToDisk(archive, extractDir);
+    }
 
-    // Delete the zip after extraction
+    // Delete the archive after extraction
     await File(zipPath).delete();
 
     // Log the largest file found (main ROM)

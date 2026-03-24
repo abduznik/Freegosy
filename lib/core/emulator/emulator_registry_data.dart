@@ -108,4 +108,12 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'linux_executable': 'duckstation-qt',
     'platform_slugs': ['ps1', 'playstation', 'psx'],
   },
+  {
+    'id': 'windows_native',
+    'name': 'Windows (Native)',
+    'type': 'none',
+    'windows_executable': '',
+    'linux_executable': '',
+    'platform_slugs': ['windows', 'pc', 'win'],
+  },
 ];

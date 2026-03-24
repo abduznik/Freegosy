@@ -6,6 +6,8 @@ import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
+import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
+
 
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
@@ -44,7 +46,13 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
   final directoryService = ref.watch(directoryServiceProvider).value;
   if (directoryService != null) {
     try {
-      return StrategyRegistry(directoryService);
+      final registry = StrategyRegistry(directoryService);
+      // Load persisted Windows exe overrides
+      final winStrategy = registry.getStrategyForSlug('windows');
+      if (winStrategy is WindowsStrategy) {
+        winStrategy.loadPersistedOverrides();
+      }
+      return registry;
     } catch (e) {
       return null;
     }
@@ -57,7 +65,10 @@ final saveSyncServiceProvider = Provider<SaveSyncService?>((ref) {
   final rommService = ref.watch(rommServiceProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
   if (rommService == null || directoryService == null) return null;
-  return SaveSyncService(rommService, directoryService);
+  final service = SaveSyncService(rommService, directoryService);
+  // Load persisted Windows save path overrides
+  service.windowsSaveStrategy.loadPersistedOverrides();
+  return service;
 });
 
 // Simplified RommService provider
