@@ -3,6 +3,37 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
 
+const Map<String, Map<String, dynamic>> kDisplayPresets = {
+  'windows_best': {
+    'columnCount': 5,
+    'cardAspectRatio': 0.56,
+    'cardSpacing': 8.0,
+    'showTitle': true,
+    'showButtonsOnHover': false,
+  },
+  'steamdeck_best': {
+    'columnCount': 3,
+    'cardAspectRatio': 0.56,
+    'cardSpacing': 12.0,
+    'showTitle': true,
+    'showButtonsOnHover': false,
+  },
+  'cozy': {
+    'columnCount': 4,
+    'cardAspectRatio': 0.72,
+    'cardSpacing': 8.0,
+    'showTitle': true,
+    'showButtonsOnHover': false,
+  },
+  'compact': {
+    'columnCount': 7,
+    'cardAspectRatio': 0.56,
+    'cardSpacing': 4.0,
+    'showTitle': false,
+    'showButtonsOnHover': true,
+  },
+};
+
 final searchQueryProvider = StateProvider<String>((ref) => '');
 final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
 
@@ -19,6 +50,59 @@ final cardAspectRatioLoaderProvider = FutureProvider<void>((ref) async {
   if (saved != null) {
     ref.read(cardAspectRatioProvider.notifier).state = saved;
   }
+});
+
+// Display Settings Providers
+final columnCountProvider = StateProvider<int>((ref) {
+  return 4;
+});
+
+final columnCountLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getInt('column_count');
+  if (saved != null) {
+    ref.read(columnCountProvider.notifier).state = saved;
+  }
+});
+
+final cardSpacingProvider = StateProvider<double>((ref) {
+  return 8.0;
+});
+
+final cardSpacingLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getDouble('card_spacing');
+  if (saved != null) {
+    ref.read(cardSpacingProvider.notifier).state = saved;
+  }
+});
+
+final showTitleProvider = StateProvider<bool>((ref) {
+  return true;
+});
+
+final showTitleLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getBool('show_title');
+  if (saved != null) {
+    ref.read(showTitleProvider.notifier).state = saved;
+  }
+});
+
+final showButtonsOnHoverProvider = StateProvider<bool>((ref) {
+  return false;
+});
+
+final showButtonsOnHoverLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getBool('show_buttons_on_hover');
+  if (saved != null) {
+    ref.read(showButtonsOnHoverProvider.notifier).state = saved;
+  }
+});
+
+final activePresetProvider = StateProvider<String>((ref) {
+  return 'custom';
 });
 
 final platformsProvider = FutureProvider<List<Platform>>((ref) async {
