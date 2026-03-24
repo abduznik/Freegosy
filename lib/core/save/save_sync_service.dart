@@ -43,15 +43,36 @@ class SaveSyncService {
       case 'genesis':
       case 'md':
         return _retroarch;
+      case 'gc':
       case 'ngc':
       case 'gamecube':
       case 'wii':
-      case 'gc':
         return _dolphin;
       case 'switch':
       case 'nintendo-switch':
       case 'ns':
         return _eden;
+      // These emulators don't have save sync yet
+      case 'ps3':
+      case 'playstation-3':
+      case 'playstation3':
+      case 'ps2':
+      case 'playstation-2':
+      case 'playstation2':
+      case '3ds':
+      case 'n3ds':
+      case 'nintendo-3ds':
+      case 'nintendo3ds':
+      case 'new-nintendo-3ds':
+      case 'new-nintendo-3ds-xl':
+      case 'wiiu':
+      case 'wii-u':
+      case 'nintendo-wii-u':
+      case 'nintendo-wiiu':
+      case 'xbox':
+      case 'xbox360':
+      case 'xbla':
+        return null;
       default:
         return null;
     }
