@@ -91,17 +91,34 @@ class DirectoryService {
     if (await File(exactPath).exists()) return exactPath;
     if (await Directory(exactPath).exists()) return exactPath;
 
+    // Check multi-file folder named after game name
+    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+    final multiFileDir = Directory('$romDir/$folderName');
+    if (await multiFileDir.exists()) {
+      // Find largest file inside — that's the main ROM
+      File? largestFile;
+      int largestSize = 0;
+      await for (final entity in multiFileDir.list(recursive: true)) {
+        if (entity is File) {
+          final size = await entity.length();
+          if (size > largestSize) {
+            largestSize = size;
+            largestFile = entity;
+          }
+        }
+      }
+      if (largestFile != null) return largestFile.path;
+    }
+
     // If baseName has no extension, try known extensions for this platform
     if (!baseName.contains('.')) {
       final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
       for (final ext in extensions) {
         final candidate = '$romDir/$baseName$ext';
-        if (await File(candidate).exists()) {
-          return candidate;
-        }
+        if (await File(candidate).exists()) return candidate;
       }
 
-      // Also scan the directory for any file starting with baseName
+      // Scan directory for any file starting with baseName
       final dir = Directory(romDir);
       if (await dir.exists()) {
         await for (final entity in dir.list()) {

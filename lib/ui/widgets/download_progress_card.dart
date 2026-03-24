@@ -24,7 +24,7 @@ class DownloadProgressCard extends StatelessWidget {
           LinearProgressIndicator(value: progress.percent),
           const SizedBox(height: 4),
           Text(
-            '${(progress.percent * 100).toStringAsFixed(1)}% - '
+            '${progress.status} — ${(progress.percent * 100).toStringAsFixed(1)}% - '
             '${(progress.bytesReceived / 1024 / 1024).toStringAsFixed(1)} MB / '
             '${(progress.totalBytes / 1024 / 1024).toStringAsFixed(1)} MB',
             style: Theme.of(context).textTheme.bodySmall,

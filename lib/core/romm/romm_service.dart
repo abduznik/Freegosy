@@ -20,13 +20,13 @@ class RommService {
           receiveTimeout: const Duration(seconds: 15),
         )) {
     debugPrint('[RommService] created — baseUrl=${_normalizeBaseUrl(config.baseUrl)} user=${config.username} hasToken=${config.token != null && config.token!.isNotEmpty}');
-    _dio.interceptors.add(LogInterceptor(
-      requestHeader: true,
-      responseHeader: false,
-      responseBody: true,
-      requestBody: true,
-      logPrint: (o) => debugPrint('[DIO] $o'),
-    ));
+    // _dio.interceptors.add(LogInterceptor(
+    //   requestHeader: true,
+    //   responseHeader: false,
+    //   responseBody: true,
+    //   requestBody: true,
+    //   logPrint: (o) => debugPrint('[DIO] $o'),
+    // ));
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
@@ -157,6 +157,9 @@ class RommService {
         final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
         final List<dynamic> items = data['items'] ?? [];
         total = data['total'] ?? items.length;
+        if (offset == 0 && items.isNotEmpty) {
+        debugPrint('[RommService] sample raw game: ${items.first}');
+        }
         allGames.addAll(items.map((item) => Game.fromJson(item)).toList());
         offset += limit;
       } else {
@@ -194,9 +197,14 @@ class RommService {
   }
 
   String getDownloadUrl(Game game) {
+    final baseUrl = config.baseUrl.endsWith('/') 
+        ? config.baseUrl.substring(0, config.baseUrl.length - 1) 
+        : config.baseUrl;
+    
+    debugPrint('[RommService] getDownloadUrl: name=${game.name} fileName=${game.fileName} fsName=${game.fsName} isMultiFile=${game.isMultiFile}');
+
     final name = game.fileName ?? game.fsName ?? game.name;
     final encoded = Uri.encodeComponent(name);
-    final baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl.substring(0, config.baseUrl.length - 1) : config.baseUrl;
     return '$baseUrl/api/roms/${game.id}/content/$encoded';
   }
 
