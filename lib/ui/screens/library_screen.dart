@@ -6,6 +6,8 @@ import '../../providers/romm_provider.dart';
 import '../../core/romm/romm_models.dart';
 import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
+import '../widgets/windows_game_config_dialog.dart';
+import '../../core/emulator/strategies/windows_strategy.dart';
 import 'dart:convert';
 
 class LibraryScreen extends ConsumerWidget {
@@ -124,17 +126,52 @@ class LibraryScreen extends ConsumerWidget {
       await strategy.launch(game, existingRomPath);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Launch failed: $e')),
-      );
+      final isWindows = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+      final isMissingExe = e.toString().contains('No executable') || e.toString().contains('not found');
+      if (isWindows && isMissingExe) {
+        await _handleWindowsConfig(context, ref, game);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Launch failed: $e'),
+            duration: const Duration(seconds: 8),
+            ),
+        );
+      }
     }
+  }
+
+  Future<void> _handleWindowsConfig(BuildContext context, WidgetRef ref, Game game) async {
+    final registry = ref.read(strategyRegistryProvider);
+    final windowsStrategy = registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
+    final syncService = ref.read(saveSyncServiceProvider);
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => WindowsGameConfigDialog(
+        game: game,
+        currentExePath: windowsStrategy?.getExeOverride(game.id),
+        currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id),
+      ),
+    );
+    if (result == null) return; // user cancelled
+
+    final exe = result['exe'] ?? '';
+    final save = result['save'] ?? '';
+
+    if (exe.isNotEmpty) await windowsStrategy?.setExeOverride(game.id, exe);
+    if (save.isNotEmpty) await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
+
+    if (!context.mounted) return;
+    await _handleLaunch(context, ref, game);
   }
 
   Future<void> _handleSyncSaves(BuildContext context, WidgetRef ref, Game game) async {
     final syncService = ref.read(saveSyncServiceProvider);
     if (syncService == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Save sync not available')),
+        const SnackBar(
+          content: Text('Save sync not available')),
       );
       return;
     }
@@ -276,23 +313,30 @@ class LibraryScreen extends ConsumerWidget {
                               itemBuilder: (context, index) {
                                 final game = filteredGames[index];
                                 final dirService = directoryServiceAsync.asData?.value;
+                                final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
                                 if (dirService == null) {
-                                  return GameCard(
-                                    game: game,
-                                    onDownload: () => _startDownload(context, ref, game),
-                                    onLaunch: () => _handleLaunch(context, ref, game),
-                                    onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                  return GestureDetector(
+                                    onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
+                                    child: GameCard(
+                                      game: game,
+                                      onDownload: () => _startDownload(context, ref, game),
+                                      onLaunch: () => _handleLaunch(context, ref, game),
+                                      onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                    ),
                                   );
                                 }
                                 return FutureBuilder<bool>(
                                   future: dirService.isRomDownloaded(game),
                                   builder: (context, snapshot) {
-                                    return GameCard(
-                                      game: game,
-                                      isDownloaded: snapshot.data ?? false,
-                                      onDownload: () => _startDownload(context, ref, game),
-                                      onLaunch: () => _handleLaunch(context, ref, game),
-                                      onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                    return GestureDetector(
+                                      onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
+                                      child: GameCard(
+                                        game: game,
+                                        isDownloaded: snapshot.data ?? false,
+                                        onDownload: () => _startDownload(context, ref, game),
+                                        onLaunch: () => _handleLaunch(context, ref, game),
+                                        onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                      ),
                                     );
                                   },
                                 );

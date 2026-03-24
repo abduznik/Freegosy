@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
@@ -8,6 +8,10 @@ import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
 import 'package:archive/archive_io.dart';
+import 'strategies/windows_save_strategy.dart';
+import 'strategies/pcsx2_save_strategy.dart';
+import 'strategies/rpcs3_save_strategy.dart';
+import 'strategies/xenia_save_strategy.dart';
 
 class SaveSyncService {
   final RommService _rommService;
@@ -16,11 +20,18 @@ class SaveSyncService {
   late final RetroArchSaveStrategy _retroarch;
   late final DolphinSaveStrategy _dolphin;
   late final EdenSaveStrategy _eden;
+  late final WindowsSaveStrategy _windows;
+  late final Pcsx2SaveStrategy _pcsx2;
+  late final Rpcs3SaveStrategy _rpcs3;
+  late final XeniaSaveStrategy _xenia;
 
   SaveSyncService(this._rommService, this._directoryService) {
     _retroarch = RetroArchSaveStrategy(_directoryService);
     _dolphin = DolphinSaveStrategy(_directoryService);
     _eden = EdenSaveStrategy();
+    _windows = WindowsSaveStrategy();
+    _pcsx2 = Pcsx2SaveStrategy(_directoryService);
+    _rpcs3 = Rpcs3SaveStrategy();
   }
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
@@ -43,15 +54,43 @@ class SaveSyncService {
       case 'genesis':
       case 'md':
         return _retroarch;
+      case 'gc':
       case 'ngc':
       case 'gamecube':
       case 'wii':
-      case 'gc':
         return _dolphin;
       case 'switch':
       case 'nintendo-switch':
       case 'ns':
         return _eden;
+      case 'windows':
+      case 'pc':
+      case 'win':
+        return _windows;
+      // These emulators don't have save sync yet
+      case 'ps2':
+      case 'playstation-2':
+      case 'playstation2':
+        return _pcsx2;
+      case 'ps3':
+      case 'playstation-3':
+      case 'playstation3':
+        return _rpcs3;
+      case 'xbox360':
+      case 'xbla':
+        return _xenia;
+      case '3ds':
+      case 'n3ds':
+      case 'nintendo-3ds':
+      case 'nintendo3ds':
+      case 'new-nintendo-3ds':
+      case 'new-nintendo-3ds-xl':
+      case 'wiiu':
+      case 'wii-u':
+      case 'nintendo-wii-u':
+      case 'nintendo-wiiu':
+      case 'xbox':
+        return null;
       default:
         return null;
     }
@@ -150,4 +189,6 @@ class SaveSyncService {
       rethrow;
     }
   }
+
+  WindowsSaveStrategy get windowsSaveStrategy => _windows;
 }

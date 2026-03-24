@@ -1,4 +1,6 @@
 ﻿import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
@@ -95,7 +97,11 @@ class DirectoryService {
     final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     final multiFileDir = Directory('$romDir/$folderName');
     if (await multiFileDir.exists()) {
-      // Find largest file inside — that's the main ROM
+      // Windows games: return the folder itself so WindowsStrategy can find the exe
+      final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+      if (isWindowsGame) return multiFileDir.path;
+
+      // Other platforms: find largest file inside — that's the main ROM
       File? largestFile;
       int largestSize = 0;
       await for (final entity in multiFileDir.list(recursive: true)) {
@@ -133,6 +139,40 @@ class DirectoryService {
     }
 
     return null;
+  }
+
+  Future<String?> resolveSevenZipPath() async {
+    String appData = '';
+
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
+        appData = result.stdout.toString().trim();
+      } catch (e) {
+        debugPrint('[DirectoryService] failed to get APPDATA: $e');
+        return null;
+      }
+      if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
+    } else {
+      // macOS/Linux: no 7zr needed, system 7z is installable via package managers
+      // Return null for now — future: resolve via `which 7z`
+      return null;
+    }
+
+    final dest = File('$appData\\Freegosy\\thirdparty\\7zr.exe');
+
+    if (await dest.exists()) return dest.path;
+
+    try {
+      await dest.parent.create(recursive: true);
+      final byteData = await rootBundle.load('thirdparty/7zr.exe');
+      await dest.writeAsBytes(byteData.buffer.asUint8List());
+      debugPrint('[DirectoryService] 7zr.exe extracted to ${dest.path}');
+      return dest.path;
+    } catch (e) {
+      debugPrint('[DirectoryService] failed to extract 7zr.exe: $e');
+      return null;
+    }
   }
 
   Future<String> getEmulatorDirectory(String emulatorId) async {
