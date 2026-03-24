@@ -31,7 +31,7 @@ class SaveSyncService {
     _eden = EdenSaveStrategy();
     _windows = WindowsSaveStrategy();
     _pcsx2 = Pcsx2SaveStrategy(_directoryService);
-    _rpcs3 = Rpcs3SaveStrategy();
+    _rpcs3 = Rpcs3SaveStrategy(_directoryService);
   }
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.

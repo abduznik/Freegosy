@@ -163,6 +163,7 @@ class LibraryScreen extends ConsumerWidget {
     if (save.isNotEmpty) await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
 
     if (!context.mounted) return;
+    debugPrint('[Launch] game=${game.name} slug=${game.platformSlug} fsName=${game.fsName} fileName=${game.fileName}');
     await _handleLaunch(context, ref, game);
   }
 
