@@ -71,6 +71,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 24),
                   _buildStorageSection(directoryService),
                   const SizedBox(height: 24),
+                  _buildRetroArchSyncModeSection(context, ref),
+                  const SizedBox(height: 24),
                   _buildEmulatorsSection(directoryService),
                 ],
               );
@@ -82,6 +84,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text('Error loading RomM config: $e')),
       ),
+    );
+  }
+
+  Widget _buildRetroArchSyncModeSection(BuildContext context, WidgetRef ref) {
+    final syncMode = ref.watch(retroarchSyncModeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('RetroArch Save Sync', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text('What to sync with RomM cloud', style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 12),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'saves', label: Text('Saves only')),
+            ButtonSegment(value: 'states', label: Text('States only')),
+            ButtonSegment(value: 'both', label: Text('Both')),
+          ],
+          selected: {syncMode},
+          onSelectionChanged: (selection) async {
+            final value = selection.first;
+            ref.read(retroarchSyncModeProvider.notifier).state = value;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('retroarch_sync_mode', value);
+          },
+        ),
+      ],
     );
   }
 
@@ -162,16 +191,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // it over HTTP or at all, fall back to Basic auth silently.
                       try {
                         await RommService.fetchToken(baseUrl, username, password);
-                        print('[Settings] fetchToken succeeded');
+                        debugPrint('[Settings] fetchToken succeeded');
                       } catch (e) {
-                        print('[Settings] fetchToken failed ($e), falling back to Basic auth');
+                        debugPrint('[Settings] fetchToken failed ($e), falling back to Basic auth');
                         // Clear any stale token so Basic auth is used instead.
                         final p = await SharedPreferences.getInstance();
                         await p.remove('rommAuthToken');
                       }
 
                       // Save credentials regardless of whether token fetch succeeded.
-                      print('[Settings] saving baseUrl=$baseUrl user=$username passLen=${password.length}');
+                      debugPrint('[Settings] saving baseUrl=$baseUrl user=$username passLen=${password.length}');
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);

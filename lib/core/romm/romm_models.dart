@@ -11,6 +11,10 @@ class Game {
   final String? fileName; // Added: maps to 'file_name' in JSON
   final String? fsName; // Added: maps to 'fs_name' in JSON
   final int fileSize; // Kept
+  final String? multiFilePath; // maps to 'multi_file_path' in JSON
+  final bool hasMultipleFiles;
+
+  bool get isMultiFile => hasMultipleFiles;
 
   Game({
     required this.id,
@@ -25,6 +29,8 @@ class Game {
     this.fileName, // Added
     this.fsName, // Added
     required this.fileSize, // Kept
+    this.multiFilePath,
+    this.hasMultipleFiles = false,
   });
 
   factory Game.fromJson(Map<String, dynamic> json) {
@@ -41,6 +47,8 @@ class Game {
       fileName: json['file_name']?.toString(), // Mapped from JSON
       fsName: json['fs_name']?.toString(), // Mapped from JSON
       fileSize: json['file_size_bytes'] is int ? json['file_size_bytes'] : 0,
+      multiFilePath: json['multi_file_path']?.toString(),
+      hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
     );
   }
 }

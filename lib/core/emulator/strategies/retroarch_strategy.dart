@@ -16,11 +16,15 @@ class RetroArchStrategy extends EmulatorStrategy {
 
   @override
   List<String> get supportedSlugs => [
-        'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds', 'psx', 'psp',
-        'segacd', 'saturn', 'dreamcast', 'megadrive', 'genesis', 'gamegear',
-        'atari2600', 'atari7800', 'lynx', 'neogeo', 'arcade', 'mame',
-        'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos'
-      ];
+      'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds', 
+      'psx', 'ps1', 'playstation',
+      'psp',
+      'segacd', 'saturn', 
+      'dc', 'dreamcast',
+      'megadrive', 'genesis', 'md',
+      'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo', 
+      'arcade', 'mame', 'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos'
+    ];
 
   @override
   String get windowsExecutable => 'RetroArch.exe';
@@ -40,6 +44,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     'n64': 'mupen64plus_next_libretro.dll',
     'psx': 'pcsx_rearmed_libretro.dll',
     'psp': 'ppsspp_libretro.dll',
+    'dc': 'flycast_libretro.dll',
   };
 
   String? _getCoreForSlug(String? slug) {
