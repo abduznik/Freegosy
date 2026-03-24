@@ -154,7 +154,6 @@ class LibraryScreen extends ConsumerWidget {
         currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id),
       ),
     );
-    if (!context.mounted) return;
     if (result == null) return; // user cancelled
 
     final exe = result['exe'] ?? '';
@@ -163,7 +162,7 @@ class LibraryScreen extends ConsumerWidget {
     if (exe.isNotEmpty) await windowsStrategy?.setExeOverride(game.id, exe);
     if (save.isNotEmpty) await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
 
-    // Retry launch now that the exe is set
+    if (!context.mounted) return;
     await _handleLaunch(context, ref, game);
   }
 

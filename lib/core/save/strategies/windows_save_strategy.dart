@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,7 +117,7 @@ class WindowsSaveStrategy extends SaveStrategy {
             await Directory(entryPath).create(recursive: true);
           }
         }
-        debugPrint('[WindowsSaveStrategy] extracted ${filename} to $saveDir');
+        debugPrint('[WindowsSaveStrategy] extracted $filename to $saveDir');
         return true;
       }
 
