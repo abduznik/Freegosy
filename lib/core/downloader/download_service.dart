@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:archive/archive_io.dart';
+import 'package:flutter/rendering.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
@@ -130,6 +131,6 @@ class DownloadService {
         }
       }
     }
-    print('[DownloadService] multi-file extracted to $extractDir, main ROM: ${largestFile?.path}');
+    debugPrint('[DownloadService] multi-file extracted to $extractDir, main ROM: ${largestFile?.path}');
   }
 }
