@@ -26,13 +26,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Future<void> _loadDownloadStates(
       DirectoryService dirService, List<Game> games) async {
     if (_downloadStatesLoaded) return;
-    final states = <String, bool>{};
-    for (final game in games) {
-      states[game.id] = await dirService.isRomDownloaded(game);
-    }
+    
+    final results = await Future.wait(
+      games.map((game) async {
+        final isDownloaded = 
+          await dirService.isRomDownloaded(game);
+        return MapEntry(game.id, isDownloaded);
+      }),
+    );
+    
     if (mounted) {
       setState(() {
-        _downloadedStates = states;
+        _downloadedStates = Map.fromEntries(results);
         _downloadStatesLoaded = true;
       });
     }
