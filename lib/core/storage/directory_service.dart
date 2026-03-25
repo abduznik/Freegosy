@@ -152,9 +152,19 @@ class DirectoryService {
         return null;
       }
       if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
+    } else if (defaultTargetPlatform == TargetPlatform.linux) {
+      // Linux: Try to find system 7z
+      try {
+        final result = await Process.run('which', ['7z']);
+        if (result.exitCode == 0) {
+          return result.stdout.toString().trim();
+        }
+      } catch (e) {
+        // ignore
+      }
+      return null;
     } else {
-      // macOS/Linux: no 7zr needed, system 7z is installable via package managers
-      // Return null for now — future: resolve via `which 7z`
+      // macOS: no 7zr needed
       return null;
     }
 

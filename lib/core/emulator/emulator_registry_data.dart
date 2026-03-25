@@ -12,6 +12,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
       'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo', 'arcade', 'mame',
       'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos'
     ],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'dolphin',
@@ -21,6 +22,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'Dolphin.exe',
     'linux_executable': 'dolphin-emu',
     'platform_slugs': ['gc', 'gamecube', 'wii', 'ngc'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'eden',
@@ -30,6 +32,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'eden.exe',
     'linux_executable': 'eden',
     'platform_slugs': ['switch', 'nintendo-switch', 'ns'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'rpcs3',
@@ -41,6 +44,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'rpcs3.exe',
     'linux_executable': 'rpcs3',
     'platform_slugs': ['ps3', 'playstation-3', 'playstation3'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'pcsx2',
@@ -52,6 +56,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'pcsx2-qt.exe',
     'linux_executable': 'pcsx2-qt',
     'platform_slugs': ['ps2', 'playstation-2', 'playstation2'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'azahar',
@@ -63,6 +68,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'azahar.exe',
     'linux_executable': 'azahar',
     'platform_slugs': ['3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'cemu',
@@ -74,6 +80,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'Cemu.exe',
     'linux_executable': 'cemu',
     'platform_slugs': ['wiiu', 'wii-u', 'nintendo-wii-u', 'nintendo-wiiu'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'xemu',
@@ -85,6 +92,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'xemu.exe',
     'linux_executable': 'xemu',
     'platform_slugs': ['xbox'],
+    'supported_platforms': ['windows'],
   },
   {
     'id': 'xenia_canary',
@@ -96,6 +104,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'xenia_canary.exe',
     'linux_executable': 'xenia_canary',
     'platform_slugs': ['xbox360', 'xbla'],
+    'supported_platforms': ['windows'],
   },
   {
     'id': 'duckstation',
@@ -107,6 +116,31 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': 'duckstation-qt-x64-ReleaseLTCG.exe',
     'linux_executable': 'duckstation-qt',
     'platform_slugs': ['ps1', 'playstation', 'psx'],
+    'supported_platforms': ['windows', 'linux'],
+  },
+  {
+    'id': 'flycast',
+    'name': 'Flycast (Dreamcast)',
+    'type': 'github',
+    'github_repo': 'flyinghead/flycast',
+    'github_asset_required': ['win', 'x64', '.zip'],
+    'github_asset_excluded': ['debug', 'symbols'],
+    'windows_executable': 'flycast.exe',
+    'linux_executable': 'flycast',
+    'platform_slugs': ['dc', 'dreamcast', 'naomi', 'atomiswave'],
+    'supported_platforms': ['windows', 'linux'],
+  },
+  {
+    'id': 'melonds',
+    'name': 'melonDS',
+    'type': 'github',
+    'github_repo': 'melonDS-emu/melonDS',
+    'github_asset_required': ['win', '.zip'],
+    'github_asset_excluded': ['source', 'debug'],
+    'windows_executable': 'melonDS.exe',
+    'linux_executable': 'melonDS',
+    'platform_slugs': ['nds', 'nintendo-ds', 'ds'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'windows_native',
@@ -115,5 +149,6 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': '',
     'linux_executable': '',
     'platform_slugs': ['windows', 'pc', 'win'],
+    'supported_platforms': ['windows'],
   },
 ];

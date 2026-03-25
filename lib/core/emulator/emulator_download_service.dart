@@ -71,7 +71,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        error: 'No download URL for this platform',
+        error: 'This emulator is not available for your platform',
       );
       return;
     }

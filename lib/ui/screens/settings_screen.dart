@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
+import '../../core/emulator/strategy_registry.dart';
 import '../../core/extraction/extraction_service.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
@@ -25,6 +26,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isSaving = false;
   Map<String, bool> _emulatorInstallStates = {};
   bool _emulatorsLoaded = false;
+  bool _preferencesLoaded = false;
 
   @override
   void initState() {
@@ -32,6 +34,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _baseUrlController = TextEditingController();
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final registry = ref.read(strategyRegistryProvider);
+      if (registry != null) {
+        registry.loadPreferences().then((_) {
+          if (mounted) setState(() => _preferencesLoaded = true);
+        });
+      }
+    });
   }
 
   @override
@@ -67,6 +78,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final rommService = ref.watch(rommServiceProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
+    final strategyRegistry = ref.watch(strategyRegistryProvider);
 
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
     final columnCount = ref.watch(columnCountProvider);
@@ -74,6 +86,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final showTitle = ref.watch(showTitleProvider);
     final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final activePreset = ref.watch(activePresetProvider);
+
+    if (strategyRegistry != null && !_preferencesLoaded) {
+      strategyRegistry.loadPreferences().then((_) {
+        if (mounted) setState(() => _preferencesLoaded = true);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -115,6 +133,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _buildRetroArchSyncModeSection(context, ref),
                     const SizedBox(height: 24),
                     _buildEmulatorsSection(directoryService),
+                    if (strategyRegistry != null) ...[
+                      const SizedBox(height: 24),
+                      _buildConflictsSection(strategyRegistry),
+                    ],
                   ],
                 ),
               );
@@ -126,6 +148,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text('Error loading RomM config: $e')),
       ),
+    );
+  }
+
+  Widget _buildConflictsSection(StrategyRegistry registry) {
+    final conflicts = registry.detectConflicts();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Emulator Conflicts',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        if (conflicts.isEmpty)
+          const Text('No conflicts detected')
+        else
+          ...conflicts.entries.map((entry) {
+            final slug = entry.key;
+            final strategies = entry.value;
+            final currentStrategy = registry.getStrategyForSlug(slug);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(slug, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        const Text('Multiple emulators support this platform',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                  DropdownButton<String>(
+                    value: currentStrategy?.emulatorId,
+                    items: strategies.map((s) {
+                      return DropdownMenuItem(
+                        value: s.emulatorId,
+                        child: Text(s.name),
+                      );
+                    }).toList(),
+                    onChanged: (value) async {
+                      if (value != null) {
+                        await registry.setPreference(slug, value);
+                        setState(() {});
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
     );
   }
 
