@@ -1,7 +1,25 @@
 ﻿import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/extraction/extraction_service.dart';
+
+class MissingRetroArchCoreException implements Exception {
+  final String coreName;
+  final String corePath;
+  final String exePath;
+
+  MissingRetroArchCoreException({
+    required this.coreName,
+    required this.corePath,
+    required this.exePath,
+  });
+
+  @override
+  String toString() => 'Missing RetroArch Core: $coreName at $corePath';
+}
 
 class RetroArchStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
@@ -77,7 +95,11 @@ class RetroArchStrategy extends EmulatorStrategy {
     final corePath = '$exeDir\\cores\\$coreName';
 
     if (!await File(corePath).exists()) {
-      throw Exception('Core $coreName not found at $corePath. Please download it in RetroArch first.');
+      throw MissingRetroArchCoreException(
+        coreName: coreName,
+        corePath: corePath,
+        exePath: normalizedExe,
+      );
     }
 
     await Process.start(
@@ -85,6 +107,25 @@ class RetroArchStrategy extends EmulatorStrategy {
       ['-L', corePath, normalizedRom],
       mode: ProcessStartMode.detached,
     );
+  }
+
+  Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
+    final baseUrl = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/';
+    final zipName = '${coreName.replaceAll('.dll', '')}.zip';
+    final url = '$baseUrl$zipName';
+    
+    final tempDir = await _directoryService.getEmulatorDirectory('temp_cores');
+    await Directory(tempDir).create(recursive: true);
+    final zipPath = p.join(tempDir, zipName);
+
+    try {
+      await dio.download(url, zipPath);
+      final extractionService = ExtractionService(_directoryService);
+      await extractionService.extract(zipPath, coresDir);
+    } finally {
+      final f = File(zipPath);
+      if (await f.exists()) await f.delete();
+    }
   }
 
   @override

@@ -27,6 +27,21 @@ class ExtractionService {
       if (result.exitCode != 0) {
         throw Exception('7z extraction failed: ${result.stderr}');
       }
+    } else if (pathLower.endsWith('.exe')) {
+      // Self-extracting archive
+      var result = await Process.run(
+        archivePath,
+        ['-o$destDir', '-y'],
+        runInShell: false,
+      );
+      if (result.exitCode != 0) {
+        // Try as a plain self-extractor with no arguments
+        result = await Process.run(
+          archivePath,
+          [],
+          workingDirectory: destDir,
+        );
+      }
     } else {
       throw Exception('Unsupported archive format: $archivePath');
     }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +11,9 @@ import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
 import '../widgets/windows_game_config_dialog.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
+import '../../core/emulator/strategies/retroarch_strategy.dart';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -172,6 +175,55 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       await strategy.launch(game, existingRomPath);
     } catch (e) {
       if (!context.mounted) return;
+
+      if (e is MissingRetroArchCoreException) {
+        final shouldDownload = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('RetroArch Core Missing'),
+            content: Text(
+                'The core ${e.coreName} is required for this game but is not installed. Would you like Freegosy to download and install it automatically?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Install'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldDownload == true && context.mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => const Center(child: CircularProgressIndicator()),
+          );
+
+          try {
+            final raStrategy = strategy as RetroArchStrategy;
+            final coresDir = File(e.corePath).parent.path;
+            await raStrategy.downloadCore(e.coreName, coresDir, Dio());
+            
+            if (context.mounted) {
+              Navigator.of(context).pop(); // remove loading
+              await _handleLaunch(context, ref, game); // retry
+            }
+          } catch (err) {
+            if (context.mounted) {
+              Navigator.of(context).pop(); // remove loading
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to download core: $err')),
+              );
+            }
+          }
+        }
+        return;
+      }
+
       final isWindows =
           ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
       final isMissingExe =

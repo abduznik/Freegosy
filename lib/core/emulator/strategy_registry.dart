@@ -12,6 +12,9 @@ import 'package:freegosy/core/emulator/strategies/cemu_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/duckstation_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/flycast_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/melonds_strategy.dart';
+import 'package:freegosy/core/emulator/strategies/mgba_strategy.dart';
+import 'package:freegosy/core/emulator/strategies/mame_strategy.dart';
+import 'package:freegosy/core/emulator/strategies/ppsspp_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/xemu_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/xenia_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
@@ -35,6 +38,9 @@ class StrategyRegistry {
       DuckstationStrategy(_directoryService),
       FlycastStrategy(_directoryService),
       MelonDSStrategy(_directoryService),
+      PPSSPPStrategy(_directoryService),
+      MGBAStrategy(_directoryService),
+      MAMEStrategy(_directoryService),
       XemuStrategy(_directoryService),
       XeniaStrategy(_directoryService),
       WindowsStrategy(_directoryService),
