@@ -176,8 +176,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(slug, style: const TextStyle(fontWeight: FontWeight.w500)),
-                        const Text('Multiple emulators support this platform',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text(strategies.map((s) => s.name).join(' vs '),
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
                       ],
                     ),
                   ),
