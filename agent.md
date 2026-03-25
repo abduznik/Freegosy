@@ -39,11 +39,11 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 
 ### Core — Emulator
 - `lib/core/emulator/emulator_strategy.dart` — Abstract base class. Fields: name, emulatorId, supportedSlugs, windowsExecutable, linuxExecutable. Methods: launch(Game, romPath), resolveSavePath(Game), getExecutableForPlatform().
-- `lib/core/emulator/emulator_registry_data.dart` — Static data for emulator definitions.
-- `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies. Methods: getStrategyForSlug(), getDefinition().
-- `lib/core/emulator/emulator_download_service.dart` — Service for downloading and extracting emulators. Supports direct URL and GitHub release types. Handles .zip and .7z extraction.
+- `lib/core/emulator/emulator_registry_data.dart` — Static data for emulator definitions. Includes RetroArch, Dolphin, Eden, RPCS3, PCSX2, Azahar, Cemu, Xemu, Xenia, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME.
+- `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies. Includes conflict detection via detectConflicts() returning Map<String, List<EmulatorStrategy>> grouped by canonical platform name. setPreference(slug, emulatorId) and loadPreferences() persist user preferences under SharedPreferences key prefix 'emulator_pref_'.
+- `lib/core/emulator/emulator_download_service.dart` — Service for downloading emulators. Supports direct URL and GitHub release types. Uses ExtractionService for all extraction.
 - `lib/core/emulator/github_release_service.dart` — Fetches latest release asset URL from GitHub API with required/excluded name filters.
-- `lib/core/emulator/strategies/retroarch_strategy.dart` — RetroArch strategy. Slugs: gba/gbc/gb/nes/snes/n64/nds/psx/ps1/psp/dc/dreamcast/megadrive/genesis/md etc.
+- `lib/core/emulator/strategies/retroarch_strategy.dart` — RetroArch strategy. Slugs: gba/gbc/gb/nes/snes/n64/nds/psx/ps1/psp/dc/dreamcast/megadrive/genesis/md etc. Throws MissingRetroArchCoreException when a core .dll is missing. Has downloadCore() method to fetch from RetroArch buildbot.
 - `lib/core/emulator/strategies/dolphin_strategy.dart` — Dolphin strategy. Slugs: gc/gamecube/wii/ngc.
 - `lib/core/emulator/strategies/eden_strategy.dart` — Eden strategy. Slugs: switch/nintendo-switch/ns.
 - `lib/core/emulator/strategies/rpcs3_strategy.dart` — RPCS3 strategy. Slugs: ps3/playstation-3/playstation3.
@@ -51,38 +51,46 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/emulator/strategies/azahar_strategy.dart` — Azahar strategy. Slugs: 3ds/n3ds/nintendo-3ds/nintendo3ds/new-nintendo-3ds/new-nintendo-3ds-xl.
 - `lib/core/emulator/strategies/cemu_strategy.dart` — Cemu strategy. Slugs: wiiu/wii-u/nintendo-wii-u/nintendo-wiiu.
 - `lib/core/emulator/strategies/duckstation_strategy.dart` — DuckStation strategy. Slugs: ps1/playstation/psx.
+- `lib/core/emulator/strategies/flycast_strategy.dart` — Flycast strategy. Slugs: dc/dreamcast/naomi/naomi2/atomiswave/cave/hikaru.
+- `lib/core/emulator/strategies/melonds_strategy.dart` — melonDS strategy. Slugs: nds/nintendo-ds/ds.
+- `lib/core/emulator/strategies/ppsspp_strategy.dart` — PPSSPP strategy. Slugs: psp/playstation-portable.
+- `lib/core/emulator/strategies/mgba_strategy.dart` — mGBA strategy. Slugs: gba/gbc/gb/game-boy-advance/game-boy-color/game-boy.
+- `lib/core/emulator/strategies/mame_strategy.dart` — MAME strategy. Slugs: arcade/mame. Handles self-extracting .exe downloads.
 - `lib/core/emulator/strategies/xemu_strategy.dart` — Xemu strategy. Slugs: xbox.
 - `lib/core/emulator/strategies/xenia_strategy.dart` — Xenia Canary strategy. Slugs: xbox360/xbla.
 - `lib/core/emulator/strategies/windows_strategy.dart` — Windows native game strategy. Auto-detects exe in game folder, validates stored override exists on disk before using. Launches via Process.start. Monitors exit code for 5s — throws if crashed. Persists overrides via SharedPreferences (prefix `win_exe_`).
 
+### Core — Extraction
+- `lib/core/extraction/extraction_service.dart` — Unified extraction service. Handles .zip via archive package, .7z via bundled 7zr.exe, and self-extracting .exe files.
+
 ### Core — Downloader
-- `lib/core/downloader/download_service.dart` — HTTP ROM download via Dio. Stream<DownloadProgress> for UI. Handles .zip extraction via archive package and .7z via bundled 7zr.exe (resolved via DirectoryService.resolveSevenZipPath()). Windows games (.zip/.7z) always extracted regardless of isMultiFile flag.
+- `lib/core/downloader/download_service.dart` — HTTP ROM download via Dio. Stream<DownloadProgress> for UI. Uses ExtractionService for all extraction.
 
 ### Core — Storage
-- `lib/core/storage/directory_service.dart` — Manages ROMs and emulator directories. Persists paths via SharedPreferences. resolveSevenZipPath() extracts bundled 7zr.exe from Flutter assets to %APPDATA%\Freegosy\thirdparty\ on first run. Uses defaultTargetPlatform for Windows check, Process.run for APPDATA resolution.
+- `lib/core/storage/directory_service.dart` — Manages ROMs and emulator directories. Persists paths via SharedPreferences. resolveSevenZipPath() extracts bundled 7zr.exe from Flutter assets.
 
 ### Core — Windows
-- `lib/core/windows/windows_game_service.dart` — Finds main exe in game folder (hint match then largest). Skips uninstall/setup/redist/etc. Launches via Process.start detached.
-- `lib/core/windows/pcgamingwiki_service.dart` — Queries PCGamingWiki API for Windows game save locations. Parses MediaWiki markup, expands environment variables (APPDATA, LOCALAPPDATA etc), returns resolved paths.
+- `lib/core/windows/windows_game_service.dart` — Finds main exe in game folder. Launches via Process.start detached.
+- `lib/core/windows/pcgamingwiki_service.dart` — Queries PCGamingWiki API for Windows game save locations.
 
 ### Core — Updater
-- `lib/core/updater/updater_service.dart` — Checks GitHub Releases API for new version. Downloads new binary to temp, swaps, relaunches.
+- `lib/core/updater/updater_service.dart` — Checks GitHub Releases API for new version. Downloads and relaunch.
 
 ### Providers
-- `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, StrategyRegistry (loads WindowsStrategy persisted overrides on init), SaveSyncService (loads WindowsSaveStrategy persisted overrides on init).
-- `lib/providers/library_provider.dart` — Riverpod providers for platforms list and games list. Includes search, filtering, card aspect ratio, and RetroArch sync mode persistence.
-- `lib/providers/download_provider.dart` — Riverpod providers for active downloads and progress.
+- `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, StrategyRegistry, SaveSyncService.
+- `lib/providers/library_provider.dart` — Riverpod providers for platforms and games. Search, filtering, and display settings persistence. Background refresh silently updates cache.
+- `lib/providers/download_provider.dart` — Riverpod providers for active downloads (games and emulators) and progress.
 
 ### UI — Screens
-- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, download, launch, save sync. Windows games support long-press to open config dialog and auto-show config on missing exe. Launch errors show for 8 seconds.
-- `lib/ui/screens/download_screen.dart` — Active downloads list with progress bars.
-- `lib/ui/screens/settings_screen.dart` — RomM server config, card aspect ratio, storage paths, RetroArch sync mode, emulator download/install status.
+- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Catches MissingRetroArchCoreException to offer auto-download. Cache invalidation on pull-to-refresh.
+- `lib/ui/screens/download_screen.dart` — Active downloads list.
+- `lib/ui/screens/settings_screen.dart` — Server config, display settings (presets, column count, card shape, spacing, title/hover toggles), storage paths, RetroArch sync mode, emulator download/install status, and Emulator Conflicts section.
 
 ### UI — Widgets
-- `lib/ui/widgets/game_card.dart` — Single game tile. Shows cover, name, download/launch/sync buttons. Green dot when downloaded.
-- `lib/ui/widgets/download_progress_card.dart` — Single download row with progress bar and cancel button.
-- `lib/ui/widgets/platform_filter_bar.dart` — Horizontal scrollable platform chip row with distinct styling for selected/unselected states.
-- `lib/ui/widgets/windows_game_config_dialog.dart` — Dialog for configuring Windows game exe path and save directory. Browse buttons for both. Returns `Map<String, String>` with keys `exe` and `save`. Only shown for Windows platform games.
+- `lib/ui/widgets/game_card.dart` — StatefulWidget (not Consumer). Accepts pre-resolved coverUrl. Uses CachedNetworkImage (memCache: 300x400).
+- `lib/ui/widgets/download_progress_card.dart` — Single download row with progress bar.
+- `lib/ui/widgets/platform_filter_bar.dart` — Platform chip row.
+- `lib/ui/widgets/windows_game_config_dialog.dart` — Dialog for configuring Windows game overrides.
 
 ## Key Contracts
 
@@ -127,9 +135,10 @@ class RomMConfig {
 - `flutter_riverpod` — state management
 - `dio` — HTTP client for API calls and downloads
 - `path_provider` — platform-safe file paths
-- `shared_preferences` — persist RomM config, card ratio, sync mode, Windows exe/save overrides
-- `package_info_plus` — read current app version for updater
-- `archive` — zip extraction and creation (ZipDecoder, ZipFileEncoder)
+- `shared_preferences` — persist RomM config, display settings, overrides
+- `package_info_plus` — read current app version
+- `archive` — zip extraction and creation
+- `cached_network_image` — disk and memory cache for network images
 - `file_picker` — directory and file selection
 - `path` — path manipulation utilities
 - `thirdparty/7zr.exe` — bundled 7-Zip console executable for .7z extraction (Flutter asset)
