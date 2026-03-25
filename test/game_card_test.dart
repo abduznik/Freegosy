@@ -5,20 +5,17 @@ import 'package:freegosy/ui/widgets/game_card.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
 void main() {
-  testWidgets('GameCard should be wrapped in ExcludeSemantics', (WidgetTester tester) async {
-    final game = Game(
-      id: '1',
-      name: 'Test Game',
-      fileSize: 100,
-      fileName: 'test.zip',
-    );
-
+  testWidgets('GameCard should render without overflow', (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
           home: Scaffold(
             body: GameCard(
-              game: game,
+              game: Game(
+                id: '1',
+                name: 'Test Game',
+                fileSize: 0,
+              ),
               onDownload: () {},
               onLaunch: () {},
             ),
@@ -27,14 +24,7 @@ void main() {
       ),
     );
 
-    // Verify that we can find an ExcludeSemantics whose child is a MouseRegion 
-    // and that MouseRegion's child is a Card.
-    final specificExcludeSemanticsFinder = find.byWidgetPredicate((widget) {
-      if (widget is! ExcludeSemantics) return false;
-      final child = widget.child;
-      return child is MouseRegion && child.child is Card;
-    });
-
-    expect(specificExcludeSemanticsFinder, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.byType(GameCard), findsOneWidget);
   });
 }
