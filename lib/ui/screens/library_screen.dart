@@ -193,9 +193,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     final exe = result['exe'] ?? '';
     final save = result['save'] ?? '';
 
-    if (exe.isNotEmpty) await windowsStrategy?.setExeOverride(game.id, exe);
-    if (save.isNotEmpty)
+    if (exe.isNotEmpty) {
+      await windowsStrategy?.setExeOverride(game.id, exe);
+    }
+    if (save.isNotEmpty) {
       await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
+    }
 
     if (!context.mounted) return;
     await _handleLaunch(context, ref, game);
