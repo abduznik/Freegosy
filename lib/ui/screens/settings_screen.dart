@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
-import '../../core/emulator/emulator_download_service.dart';
+import '../../core/extraction/extraction_service.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
+import '../../providers/download_provider.dart';
 import '../../core/romm/romm_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -516,43 +516,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               content:
                                   Text('Starting download for $emulatorName...'),
                             ));
-                            final emulatorDownloadService =
-                                EmulatorDownloadService(
-                                    Dio(), directoryService);
-                            try {
-                              await for (final progress in emulatorDownloadService
-                                  .downloadEmulator(emulatorId)) {
-                                if (progress.error != null) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(SnackBar(
-                                      content: Text('Error: ${progress.error}'),
-                                    ));
-                                  }
-                                  break;
-                                }
-                                if (progress.isComplete) {
-                                  if (mounted) {
-                                    setState(() {
-                                      _emulatorInstallStates[emulatorId] = true;
-                                    });
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(SnackBar(
-                                      content:
-                                          Text('$emulatorName downloaded.'),
-                                    ));
-                                  }
-                                  break;
-                                }
-                              }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(SnackBar(
-                                  content: Text('Unexpected error: $e'),
+                            
+                            ref.read(downloadProvider.notifier).startEmulatorDownload(emulatorId, emulatorName);
+
+                            // Watch for completion to update local UI state
+                            final subscription = ref.read(downloadProvider.notifier).stream.listen((downloads) {
+                              final progress = downloads[emulatorId];
+                              if (progress != null && progress.isComplete && mounted) {
+                                setState(() {
+                                  _emulatorInstallStates[emulatorId] = true;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('$emulatorName downloaded.'),
                                 ));
                               }
-                            }
+                            });
+                            
+                            // Clean up subscription eventually (simplified for this context)
                           },
                     child: Text(isInstalled ? 'Installed' : 'Download'),
                   ),

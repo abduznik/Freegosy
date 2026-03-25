@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io';
-import 'package:archive/archive_io.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/extraction/extraction_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
 class DownloadProgress {
@@ -30,8 +30,13 @@ class DownloadProgress {
 class DownloadService {
   final Dio dio;
   final DirectoryService directoryService;
+  final ExtractionService extractionService;
 
-  DownloadService({required this.dio, required this.directoryService});
+  DownloadService({
+    required this.dio,
+    required this.directoryService,
+    required this.extractionService,
+  });
 
   Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers}) async* {
     if (await directoryService.isRomDownloaded(game)) {
@@ -114,23 +119,7 @@ class DownloadService {
 
     await Directory(extractDir).create(recursive: true);
 
-    if (zipPath.toLowerCase().endsWith('.7z')) {
-      final sevenZipExe = await directoryService.resolveSevenZipPath();
-      if (sevenZipExe == null) {
-        throw Exception('7zr.exe could not be initialized. Try reinstalling Freegosy.');
-      }
-      final result = await Process.run(
-        sevenZipExe, ['x', zipPath, '-o$extractDir', '-y'],
-        runInShell: false,
-      );
-      if (result.exitCode != 0) {
-        throw Exception('7z extraction failed: ${result.stderr}');
-      }
-    } else {
-      final bytes = await File(zipPath).readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      extractArchiveToDisk(archive, extractDir);
-    }
+    await extractionService.extract(zipPath, extractDir);
 
     // Delete the archive after extraction
     await File(zipPath).delete();

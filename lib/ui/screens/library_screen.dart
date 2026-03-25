@@ -434,6 +434,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                               )
                             : GridView.builder(
                                 padding: const EdgeInsets.all(12),
+                                cacheExtent: 800,
                                 gridDelegate:
                                     SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: columnCount,
@@ -456,6 +457,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                     'win'
                                   ].contains(
                                       game.platformSlug?.toLowerCase() ?? '');
+                                  
+                                  final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+
                                   if (dirService == null) {
                                     return GestureDetector(
                                       onLongPress: isWindowsGame
@@ -464,6 +468,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                           : null,
                                       child: GameCard(
                                         game: game,
+                                        coverUrl: coverUrl,
                                         showTitle: showTitle,
                                         showButtonsOnHover: showButtonsOnHover,
                                         onDownload: () =>
@@ -483,6 +488,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                         : null,
                                     child: GameCard(
                                       game: game,
+                                      coverUrl: coverUrl,
                                       isDownloaded: _downloadedStates[game.id] ?? false,
                                       showTitle: showTitle,
                                       showButtonsOnHover: showButtonsOnHover,
@@ -526,11 +532,21 @@ class _SkeletonCardState extends State<_SkeletonCard>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
+    );
     _animation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (TickerMode.of(context)) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.stop();
+    }
   }
 
   @override
