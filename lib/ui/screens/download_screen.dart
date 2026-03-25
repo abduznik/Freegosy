@@ -12,22 +12,24 @@ class DownloadScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Downloads')),
-      body: downloads.isEmpty
-          ? const Center(child: Text('No active downloads'))
-          : ListView.builder(
-              itemCount: downloads.length,
-              itemBuilder: (context, index) {
-                final gameId = downloads.keys.elementAt(index);
-                final progress = downloads[gameId]!;
-                return DownloadProgressCard(
-                  gameName: progress.gameName,
-                  progress: progress,
-                  onCancel: () {
-                    ref.read(downloadProvider.notifier).removeDownload(gameId);
-                  },
-                );
-              },
-            ),
+      body: ExcludeSemantics(
+        child: downloads.isEmpty
+            ? const Center(child: Text('No active downloads'))
+            : ListView.builder(
+                itemCount: downloads.length,
+                itemBuilder: (context, index) {
+                  final gameId = downloads.keys.elementAt(index);
+                  final progress = downloads[gameId]!;
+                  return DownloadProgressCard(
+                    gameName: progress.gameName,
+                    progress: progress,
+                    onCancel: () {
+                      ref.read(downloadProvider.notifier).removeDownload(gameId);
+                    },
+                  );
+                },
+              ),
+      ),
     );
   }
 }

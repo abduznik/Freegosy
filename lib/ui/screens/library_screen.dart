@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
@@ -17,23 +19,33 @@ class LibraryScreen extends ConsumerStatefulWidget {
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends ConsumerState<LibraryScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _shimmerController;
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  Map<String, bool> _downloadedStates = {};
+  bool _downloadStatesLoaded = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
+  Future<void> _loadDownloadStates(
+      DirectoryService dirService, List<Game> games) async {
+    if (_downloadStatesLoaded) return;
+    final states = <String, bool>{};
+    for (final game in games) {
+      states[game.id] = await dirService.isRomDownloaded(game);
+    }
+    if (mounted) {
+      setState(() {
+        _downloadedStates = states;
+        _downloadStatesLoaded = true;
+      });
+    }
   }
 
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
+  Future<void> _refreshDownloadState(
+      DirectoryService dirService, Game game) async {
+    final isDownloaded = await dirService.isRomDownloaded(game);
+    if (mounted) {
+      setState(() {
+        _downloadedStates[game.id] = isDownloaded;
+      });
+    }
   }
 
   Future<void> _handleLaunch(BuildContext context, WidgetRef ref, game) async {
@@ -252,6 +264,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Downloading ${game.name}...')),
     );
+
+    final dirService = ref.read(directoryServiceProvider).asData?.value;
+    if (dirService != null) {
+      Future.delayed(const Duration(seconds: 2), () {
+        _refreshDownloadState(dirService, game);
+      });
+    }
   }
 
   double _calculateCardHeight(int columnCount, double cardSpacing,
@@ -268,42 +287,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
   Widget _buildSkeletonGrid(
       double cardAspectRatio, int columnCount, double cardSpacing) {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        final shimmerGradient = LinearGradient(
-          colors: const [
-            Color(0xFF1a1a1a),
-            Color(0xFF2a2a2a),
-            Color(0xFF1a1a1a),
-          ],
-          stops: [
-            (_shimmerController.value - 0.3).clamp(0.0, 1.0),
-            _shimmerController.value.clamp(0.0, 1.0),
-            (_shimmerController.value + 0.3).clamp(0.0, 1.0),
-          ],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        );
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columnCount,
-            crossAxisSpacing: cardSpacing,
-            mainAxisSpacing: cardSpacing,
-            mainAxisExtent: _calculateCardHeight(
-                columnCount, cardSpacing, cardAspectRatio, context),
-          ),
-          itemCount: 20,
-          itemBuilder: (context, index) {
-            return Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                gradient: shimmerGradient,
-              ),
-            );
-          },
-        );
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columnCount,
+        crossAxisSpacing: cardSpacing,
+        mainAxisSpacing: cardSpacing,
+        mainAxisExtent: _calculateCardHeight(
+            columnCount, cardSpacing, cardAspectRatio, context),
+      ),
+      itemCount: 20,
+      itemBuilder: (context, index) {
+        return _SkeletonCard();
       },
     );
   }
@@ -338,8 +333,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
 
     return Scaffold(
       appBar: AppBar(title: Text(appBarTitle)),
-      body: Column(
-        children: [
+      body: ExcludeSemantics(
+        child: Column(
+          children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: TextField(
@@ -387,6 +383,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                         ? 'Showing all $gamesCount games'
                         : 'Showing $gamesCount games';
 
+                final dirService = directoryServiceAsync.asData?.value;
+                if (dirService != null && !_downloadStatesLoaded) {
+                  final games = ref.read(allGamesProvider).asData?.value ?? [];
+                  _loadDownloadStates(dirService, games);
+                }
+
                 return Column(
                   children: [
                     Padding(
@@ -402,6 +404,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: () async {
+                          setState(() {
+                            _downloadStatesLoaded = false;
+                            _downloadedStates = {};
+                          });
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.remove('cached_games');
+                          await prefs.remove('cached_platforms');
+                          await prefs.remove('cached_games_time');
+                          await prefs.remove('cached_platforms_time');
+                          await prefs.remove('cache_size_exceeded'); // Added this line
                           ref.invalidate(allGamesProvider);
                           ref.invalidate(platformsProvider);
                           await ref.read(allGamesProvider.future);
@@ -458,28 +470,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                                       ),
                                     );
                                   }
-                                  return FutureBuilder<bool>(
-                                    future: dirService.isRomDownloaded(game),
-                                    builder: (context, snapshot) {
-                                      return GestureDetector(
-                                        onLongPress: isWindowsGame
-                                            ? () => _handleWindowsConfig(
-                                                context, ref, game)
-                                            : null,
-                                        child: GameCard(
-                                          game: game,
-                                          isDownloaded: snapshot.data ?? false,
-                                          showTitle: showTitle,
-                                          showButtonsOnHover: showButtonsOnHover,
-                                          onDownload: () => _startDownload(
-                                              context, ref, game),
-                                          onLaunch: () =>
-                                              _handleLaunch(context, ref, game),
-                                          onSyncSaves: () => _handleSyncSaves(
-                                              context, ref, game),
-                                        ),
-                                      );
-                                    },
+                                  
+                                  return GestureDetector(
+                                    onLongPress: isWindowsGame
+                                        ? () => _handleWindowsConfig(
+                                            context, ref, game)
+                                        : null,
+                                    child: GameCard(
+                                      game: game,
+                                      isDownloaded: _downloadedStates[game.id] ?? false,
+                                      showTitle: showTitle,
+                                      showButtonsOnHover: showButtonsOnHover,
+                                      onDownload: () => _startDownload(
+                                          context, ref, game),
+                                      onLaunch: () =>
+                                          _handleLaunch(context, ref, game),
+                                      onSyncSaves: () => _handleSyncSaves(
+                                          context, ref, game),
+                                    ),
                                   );
                                 },
                               ),
@@ -492,6 +500,56 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           ),
         ],
       ),
+      ),
+    );
+  }
+}
+
+class _SkeletonCard extends StatefulWidget {
+  @override
+  State<_SkeletonCard> createState() => _SkeletonCardState();
+}
+
+class _SkeletonCardState extends State<_SkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: Color.lerp(
+              const Color(0xFF1a1a1a),
+              const Color(0xFF2a2a2a),
+              _animation.value,
+            ),
+          ),
+        );
+      },
     );
   }
 }

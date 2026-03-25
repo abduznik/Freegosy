@@ -23,6 +23,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
   bool _isSaving = false;
+  Map<String, bool> _emulatorInstallStates = {};
+  bool _emulatorsLoaded = false;
 
   @override
   void initState() {
@@ -40,11 +42,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
+  Future<void> _loadEmulatorStates(DirectoryService directoryService) async {
+    if (_emulatorsLoaded) return;
+    final states = <String, bool>{};
+    for (final def in kEmulatorDefinitions) {
+      final id = def['id'] as String;
+      final exe = def['windows_executable'] as String;
+      if (exe.isEmpty) {
+        states[id] = true;
+        continue;
+      }
+      states[id] = await directoryService.isEmulatorInstalled(id, exe);
+    }
+    if (mounted) {
+      setState(() {
+        _emulatorInstallStates = states;
+        _emulatorsLoaded = true;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final rommService = ref.watch(rommServiceProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
+
+    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+    final columnCount = ref.watch(columnCountProvider);
+    final cardSpacing = ref.watch(cardSpacingProvider);
+    final showTitle = ref.watch(showTitleProvider);
+    final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
+    final activePreset = ref.watch(activePresetProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -62,19 +91,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (rommService == null) {
                 return const Center(child: CircularProgressIndicator());
               }
-              return ListView(
-                padding: const EdgeInsets.all(16.0),
-                children: [
-                  _buildRommServerSection(context, ref, rommService),
-                  const SizedBox(height: 24),
-                  _buildDisplaySection(context),
-                  const SizedBox(height: 24),
-                  _buildStorageSection(directoryService),
-                  const SizedBox(height: 24),
-                  _buildRetroArchSyncModeSection(context, ref),
-                  const SizedBox(height: 24),
-                  _buildEmulatorsSection(directoryService),
-                ],
+              
+              _loadEmulatorStates(directoryService);
+
+              return ExcludeSemantics(
+                child: ListView(
+                  padding: const EdgeInsets.all(16.0),
+                  children: [
+                    _buildRommServerSection(context, ref, rommService),
+                    const SizedBox(height: 24),
+                    _buildDisplaySection(
+                      context,
+                      cardAspectRatio,
+                      columnCount,
+                      cardSpacing,
+                      showTitle,
+                      showButtonsOnHover,
+                      activePreset,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildStorageSection(directoryService),
+                    const SizedBox(height: 24),
+                    _buildRetroArchSyncModeSection(context, ref),
+                    const SizedBox(height: 24),
+                    _buildEmulatorsSection(directoryService),
+                  ],
+                ),
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -87,14 +129,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildDisplaySection(BuildContext context) {
-    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
-    final columnCount = ref.watch(columnCountProvider);
-    final cardSpacing = ref.watch(cardSpacingProvider);
-    final showTitle = ref.watch(showTitleProvider);
-    final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
-    final activePreset = ref.watch(activePresetProvider);
-
+  Widget _buildDisplaySection(
+    BuildContext context,
+    double cardAspectRatio,
+    int columnCount,
+    double cardSpacing,
+    bool showTitle,
+    bool showButtonsOnHover,
+    String activePreset,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -442,78 +485,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildEmulatorsSection(DirectoryService directoryService) {
-    final emulatorDownloadService = EmulatorDownloadService(Dio(), directoryService);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Emulators', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text('Emulators',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
-        ...kEmulatorDefinitions.map<Widget>((def) {
-          final emulatorId = def['id'] as String;
-          final emulatorName = def['name'] as String;
-          final windowsExecutable = def['windows_executable'] as String;
-
-          return FutureBuilder<bool>(
-            future: directoryService.isEmulatorInstalled(emulatorId, windowsExecutable),
-            builder: (context, snapshot) {
-              final isInstalled = snapshot.data ?? false;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      isInstalled ? Icons.check_circle : Icons.cancel,
-                      color: isInstalled ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(emulatorName)),
-                    ElevatedButton(
-                      onPressed: isInstalled
-                          ? null
-                          : () async {
+        if (!_emulatorsLoaded)
+          const Center(child: CircularProgressIndicator())
+        else
+          ...kEmulatorDefinitions.map<Widget>((def) {
+            final emulatorId = def['id'] as String;
+            final emulatorName = def['name'] as String;
+            final isInstalled = _emulatorInstallStates[emulatorId] ?? false;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Row(
+                children: [
+                  Icon(
+                    isInstalled ? Icons.check_circle : Icons.cancel,
+                    color: isInstalled ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(emulatorName)),
+                  ElevatedButton(
+                    onPressed: isInstalled
+                        ? null
+                        : () async {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content:
+                                  Text('Starting download for $emulatorName...'),
+                            ));
+                            final emulatorDownloadService =
+                                EmulatorDownloadService(
+                                    Dio(), directoryService);
+                            try {
+                              await for (final progress in emulatorDownloadService
+                                  .downloadEmulator(emulatorId)) {
+                                if (progress.error != null) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content: Text('Error: ${progress.error}'),
+                                    ));
+                                  }
+                                  break;
+                                }
+                                if (progress.isComplete) {
+                                  if (mounted) {
+                                    setState(() {
+                                      _emulatorInstallStates[emulatorId] = true;
+                                    });
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content:
+                                          Text('$emulatorName downloaded.'),
+                                    ));
+                                  }
+                                  break;
+                                }
+                              }
+                            } catch (e) {
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Starting download for $emulatorName...')),
-                                );
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(SnackBar(
+                                  content: Text('Unexpected error: $e'),
+                                ));
                               }
-                              try {
-                                await for (var progress in emulatorDownloadService.downloadEmulator(emulatorId)) {
-                                  if (progress.error != null) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error downloading $emulatorName: ${progress.error}')),
-                                      );
-                                    }
-                                    break;
-                                  }
-                                  if (progress.isComplete) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('$emulatorName downloaded and extracted.')),
-                                      );
-                                    }
-                                    // ignore: unused_result
-                                    ref.refresh(directoryServiceProvider);
-                                    break;
-                                  }
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('An unexpected error occurred: $e')),
-                                  );
-                                }
-                              }
-                            },
-                      child: Text(isInstalled ? 'Installed' : 'Download'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        }),
+                            }
+                          },
+                    child: Text(isInstalled ? 'Installed' : 'Download'),
+                  ),
+                ],
+              ),
+            );
+          }),
       ],
     );
   }

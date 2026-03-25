@@ -54,8 +54,9 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         ),
       );
     }
-    return MaterialApp(
-      title: 'Freegosy',
+    return ExcludeSemantics(
+      child: MaterialApp(
+        title: 'Freegosy',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -121,6 +122,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
