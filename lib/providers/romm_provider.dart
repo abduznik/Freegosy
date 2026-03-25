@@ -62,8 +62,9 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
 final saveSyncServiceProvider = Provider<SaveSyncService?>((ref) {
   final rommService = ref.watch(rommServiceProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
-  if (rommService == null || directoryService == null) return null;
-  final service = SaveSyncService(rommService, directoryService);
+  final strategyRegistry = ref.watch(strategyRegistryProvider);
+  if (rommService == null || directoryService == null || strategyRegistry == null) return null;
+  final service = SaveSyncService(rommService, directoryService, strategyRegistry);
   // Load persisted Windows save path overrides
   service.windowsSaveStrategy.loadPersistedOverrides();
   return service;

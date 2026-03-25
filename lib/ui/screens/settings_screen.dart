@@ -573,6 +573,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             final emulatorId = def['id'] as String;
             final emulatorName = def['name'] as String;
             final isInstalled = _emulatorInstallStates[emulatorId] ?? false;
+            final overridePath = directoryService.getEmulatorPathOverride(emulatorId);
+
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: Row(
@@ -582,7 +584,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: isInstalled ? Colors.green : Colors.red,
                   ),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(emulatorName)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(emulatorName),
+                        if (overridePath != null)
+                          Text(
+                            overridePath,
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.folder_open, size: 20),
+                    tooltip: 'Set custom directory',
+                    onPressed: () async {
+                      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+                      if (selectedDirectory != null) {
+                        await directoryService.setEmulatorPathOverride(emulatorId, selectedDirectory);
+                        setState(() {});
+                      }
+                    },
+                  ),
                   ElevatedButton(
                     onPressed: isInstalled
                         ? null

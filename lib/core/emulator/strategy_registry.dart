@@ -93,6 +93,8 @@ class StrategyRegistry {
     return canonicalConflicts;
   }
 
+  String? getPreferredEmulatorId(String slug) => _slugPreferences[slug];
+
   Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     for (final key in prefs.getKeys()) {

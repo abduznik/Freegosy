@@ -39,35 +39,31 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     final result = <File>[];
 
     // Memory cards — scan all .ps2 files in memcards folder
-    if (syncMode == 'saves' || syncMode == 'both') {
-      final memcardsDir = Directory('$exeDir\\memcards');
-      if (await memcardsDir.exists()) {
-        await for (final entity in memcardsDir.list()) {
-          if (entity is! File) continue;
-          if (!entity.path.toLowerCase().endsWith('.ps2')) continue;
-          if (sessionStart != null) {
-            final stat = await entity.stat();
-            if (stat.modified.isBefore(sessionStart)) continue;
-          }
-          result.add(entity);
+    final memcardsDir = Directory('$exeDir\\memcards');
+    if (await memcardsDir.exists()) {
+      await for (final entity in memcardsDir.list()) {
+        if (entity is! File) continue;
+        if (!entity.path.toLowerCase().endsWith('.ps2')) continue;
+        if (sessionStart != null) {
+          final stat = await entity.stat();
+          if (stat.modified.isBefore(sessionStart)) continue;
         }
+        result.add(entity);
       }
     }
 
     // Save states — named after ROM stem
-    if (syncMode == 'states' || syncMode == 'both') {
-      final stem = getRomStem(game);
-      final statesDir = Directory('$exeDir\\sstates');
-      if (await statesDir.exists()) {
-        await for (final entity in statesDir.list()) {
-          if (entity is! File) continue;
-          if (!entity.path.contains(stem)) continue;
-          if (sessionStart != null) {
-            final stat = await entity.stat();
-            if (stat.modified.isBefore(sessionStart)) continue;
-          }
-          result.add(entity);
+    final stem = getRomStem(game);
+    final statesDir = Directory('$exeDir\\sstates');
+    if (await statesDir.exists()) {
+      await for (final entity in statesDir.list()) {
+        if (entity is! File) continue;
+        if (!entity.path.contains(stem)) continue;
+        if (sessionStart != null) {
+          final stat = await entity.stat();
+          if (stat.modified.isBefore(sessionStart)) continue;
         }
+        result.add(entity);
       }
     }
 
