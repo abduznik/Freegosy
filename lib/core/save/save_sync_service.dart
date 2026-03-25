@@ -53,10 +53,10 @@ class SaveSyncService {
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
   SaveStrategy? getStrategyForSlug(String? platformSlug) {
-    print('[SaveSync] getStrategyForSlug called with: $platformSlug');
+    // print('[SaveSync] getStrategyForSlug called with: $platformSlug');
     if (platformSlug != null) {
       final preferredId = _strategyRegistry.getPreferredEmulatorId(platformSlug);
-      print('[SaveSync] preferredId for $platformSlug: $preferredId');
+      // print('[SaveSync] preferredId for $platformSlug: $preferredId');
       if (preferredId != null) {
         final id = preferredId.toLowerCase();
         if (id == 'melonds') return _melonds;
@@ -188,6 +188,7 @@ class SaveSyncService {
 
       return uploaded > 0;
     } catch (e) {
+      // print('[Push] error: $e'); // Removed print statement
       return false;
     }
   }
@@ -206,6 +207,7 @@ class SaveSyncService {
       if (save == null) {
         return false;
       }
+      // print('[Pull] getLatestSave result: $save');
 
       final downloadUrl = save['download_path'] as String? ?? save['url'] as String?;
       if (downloadUrl == null) {
@@ -216,13 +218,16 @@ class SaveSyncService {
       if (bytes == null) {
         return false;
       }
+      // print('[Pull] downloaded bytes: ${bytes?.length}');
 
       final filename = save['file_name'] as String? ??
           downloadUrl.split('/').last;
 
       final ok = await strategy.restoreSave(game, romPath, bytes, filename);
+      // print('[Pull] restoreSave result: $ok');
       return ok;
     } catch (e) {
+      // print('[Pull] error: $e'); // Removed print statement
       rethrow;
     }
   }

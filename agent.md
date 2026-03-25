@@ -27,20 +27,25 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/romm/romm_models.dart` — Data models: Game, Platform, SaveFile, RomMConfig.
 
 ### Core — Save Sync
-- `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() (3-version rotation), getRomStem().
-- `lib/core/save/save_sync_service.dart` — SaveSyncService. Methods: pushSaves(), pullSave(), getStrategyForSlug(). Wires all strategies to RommService. Exposes windowsSaveStrategy for external access.
+- `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() keeps max 3 clean versions (.bak, .bak1, .bak2) — never creates chained .bak.bak files., getRomStem().
+- `lib/core/save/save_sync_service.dart` — SaveSyncService. Methods: pushSaves(), pullSave(), getStrategyForSlug(). getStrategyForSlug() checks StrategyRegistry user preferences first before falling back to platform slug defaults. Accepts StrategyRegistry as constructor parameter. Wires all strategies to RommService. Exposes windowsSaveStrategy for external access.
 - `lib/core/save/strategies/retroarch_save_strategy.dart` — RetroArch save strategy (GBA/GBC/GB/SNES/NES/N64/NDS/PSX/PSP/Dreamcast/Megadrive). Reads saves/{coreName}/{stem}.srm and .state.auto.
 - `lib/core/save/strategies/dolphin_save_strategy.dart` — Dolphin save strategy (GC/Wii). Reads User/GC/{region}/Card A/*.gci.
 - `lib/core/save/strategies/eden_save_strategy.dart` — Eden/Switch save strategy. Resolves title ID via filename regex, XCI header parse, or save folder scan. Zips save folder for upload.
 - `lib/core/save/strategies/windows_save_strategy.dart` — Windows native game save strategy. Uses PCGamingWiki API for auto-detection, supports manual override. Zips entire save directory for upload, extracts on restore. Persists overrides via SharedPreferences (prefix `win_save_`).
 - `lib/core/save/strategies/pcsx2_save_strategy.dart` — PCSX2 save strategy (PS2). Memcards: {emulatorDir}/memcards/Mcd001.ps2, Mcd002.ps2. States: {emulatorDir}/sstates/{stem}.000 etc.
-- `lib/core/save/strategies/rpcs3_save_strategy.dart` — RPCS3 save strategy (PS3). Saves at %APPDATA%\rpcs3\dev_hdd0\home\00000001\savedata\{titleId}\. Extracts title ID via regex [A-Z]{4}\d{5}. Zips save folder for upload. Uses Process.run for APPDATA resolution.
+- `lib/core/save/strategies/rpcs3_save_strategy.dart` — RPCS3 save strategy (PS3). Saves at %APPDATA%pcs3\dev_hdd0\home\00000001\savedata\{titleId}\. Extracts title ID via regex [A-Z]{4}\d{5}. Zips save folder for upload. Uses Process.run for APPDATA resolution.
 - `lib/core/save/strategies/xenia_save_strategy.dart` — Xenia Canary save strategy (Xbox 360). Saves at {emulatorDir}\content\{titleId}\00000001\. Extracts title ID via 8-char hex regex. Zips save folder for upload.
+- `lib/core/save/strategies/duckstation_save_strategy.dart` — DuckStation save strategy (PS1). Checks for portable.txt in emulator dir — if present uses {emulatorDir}/memcards/{stem}.mcd, otherwise falls back to %LOCALAPPDATA%\DuckStation\memcards\{stem}.mcd.
+- `lib/core/save/strategies/melonds_save_strategy.dart` — melonDS save strategy (NDS). Saves .sav file next to ROM, derived from actual romPath filename not game name.
+- `lib/core/save/strategies/mgba_save_strategy.dart` — mGBA save strategy (GBA/GBC/GB). Saves .sav file next to ROM, derived from actual romPath filename.
+- `lib/core/save/strategies/ppsspp_save_strategy.dart` — PPSSPP save strategy (PSP). Saves at {emulatorDir}/memstick/PSP/SAVEDATA/, states at PPSSPP_STATE/.
+- `lib/core/save/strategies/cemu_save_strategy.dart` — Cemu save strategy (Wii U). Zips {emulatorDir}/mlc01/usr/save/00050000/ for upload. Restore extracts zip directly into mlc01/usr/save/ skipping .bak entries.
 
 ### Core — Emulator
 - `lib/core/emulator/emulator_strategy.dart` — Abstract base class. Fields: name, emulatorId, supportedSlugs, windowsExecutable, linuxExecutable. Methods: launch(Game, romPath), resolveSavePath(Game), getExecutableForPlatform().
 - `lib/core/emulator/emulator_registry_data.dart` — Static data for emulator definitions. Includes RetroArch, Dolphin, Eden, RPCS3, PCSX2, Azahar, Cemu, Xemu, Xenia, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME.
-- `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies. Includes conflict detection via detectConflicts() returning Map<String, List<EmulatorStrategy>> grouped by canonical platform name. setPreference(slug, emulatorId) and loadPreferences() persist user preferences under SharedPreferences key prefix 'emulator_pref_'.
+- `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies. Includes conflict detection via detectConflicts() returning Map<String, List<EmulatorStrategy>> grouped by canonical platform name. setPreference(slug, emulatorId) and loadPreferences() persist user preferences under SharedPreferences key prefix 'emulator_pref_'. loadPreferences() is called on startup in romm_provider.dart to ensure conflict preferences are available before first launch.
 - `lib/core/emulator/emulator_download_service.dart` — Service for downloading emulators. Supports direct URL and GitHub release types. Uses ExtractionService for all extraction.
 - `lib/core/emulator/github_release_service.dart` — Fetches latest release asset URL from GitHub API with required/excluded name filters.
 - `lib/core/emulator/strategies/retroarch_strategy.dart` — RetroArch strategy. Slugs: gba/gbc/gb/nes/snes/n64/nds/psx/ps1/psp/dc/dreamcast/megadrive/genesis/md etc. Throws MissingRetroArchCoreException when a core .dll is missing. Has downloadCore() method to fetch from RetroArch buildbot.
@@ -67,7 +72,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/downloader/download_service.dart` — HTTP ROM download via Dio. Stream<DownloadProgress> for UI. Uses ExtractionService for all extraction.
 
 ### Core — Storage
-- `lib/core/storage/directory_service.dart` — Manages ROMs and emulator directories. Persists paths via SharedPreferences. resolveSevenZipPath() extracts bundled 7zr.exe from Flutter assets.
+- `lib/core/storage/directory_service.dart` — Manages ROMs and emulator directories. Persists paths via SharedPreferences. setEmulatorPathOverride()/getEmulatorPathOverride()/loadEmulatorPathOverrides() allow users to point any emulator to a custom installation directory, persisted under SharedPreferences key prefix 'emu_path_'. resolveSevenZipPath() extracts bundled 7zr.exe from Flutter assets.
 
 ### Core — Windows
 - `lib/core/windows/windows_game_service.dart` — Finds main exe in game folder. Launches via Process.start detached.
@@ -82,9 +87,9 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/providers/download_provider.dart` — Riverpod providers for active downloads (games and emulators) and progress.
 
 ### UI — Screens
-- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Catches MissingRetroArchCoreException to offer auto-download. Cache invalidation on pull-to-refresh.
+- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Launch flow shows status snackbars at each stage. Catches MissingRetroArchCoreException to offer auto-download of missing core then re-launches. Cache invalidation on pull-to-refresh.
 - `lib/ui/screens/download_screen.dart` — Active downloads list.
-- `lib/ui/screens/settings_screen.dart` — Server config, display settings (presets, column count, card shape, spacing, title/hover toggles), storage paths, RetroArch sync mode, emulator download/install status, and Emulator Conflicts section.
+- `lib/ui/screens/settings_screen.dart` — Server config, display settings (presets, column count, card shape, spacing, title/hover toggles), storage paths, RetroArch sync mode, emulator download/install status, and Emulator Conflicts section. folder icon button per emulator for setting custom directory override. Launch flow shows status snackbars (pushing saves, syncing saves, launching).
 
 ### UI — Widgets
 - `lib/ui/widgets/game_card.dart` — StatefulWidget (not Consumer). Accepts pre-resolved coverUrl. Uses CachedNetworkImage (memCache: 300x400).

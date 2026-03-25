@@ -45,6 +45,7 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
   if (directoryService != null) {
     try {
       final registry = StrategyRegistry(directoryService);
+      registry.loadPreferences(); // Load preferences after creating the registry
       // Load persisted Windows exe overrides
       final winStrategy = registry.getStrategyForSlug('windows');
       if (winStrategy is WindowsStrategy) {

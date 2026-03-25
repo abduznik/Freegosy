@@ -32,7 +32,7 @@ abstract class SaveStrategy {
       if (await bak.exists()) await bak.rename('$path.bak1');
       await file.copy('$path.bak');
     } catch (e) {
-      // Error handled silently
+      // silent
     }
   }
 

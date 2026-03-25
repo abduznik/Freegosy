@@ -32,25 +32,27 @@ class CemuSaveStrategy extends SaveStrategy {
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final emuDir = await _getEmulatorDir();
     if (emuDir == null) return [];
-    final saveRoot = Directory('$emuDir\\mlc01\\usr\\save');
+    final saveRoot = Directory('$emuDir\\mlc01\\usr\\save\\00050000');
     if (!await saveRoot.exists()) return [];
-    return [File(saveRoot.path)];
+    return [File(saveRoot.path)]; // Return the directory as a single item
   }
 
   @override
-  Future<bool> restoreSave(
-      Game game, String destPath, Uint8List data, String filename) async {
+  Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
       final emuDir = await _getEmulatorDir();
       if (emuDir == null) return false;
-
+      final saveRoot = '$emuDir\\mlc01\\usr\\save';
+      await Directory(saveRoot).create(recursive: true);
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
-        final folderName = filename.replaceAll('.zip', '');
-        final targetBaseDir = '$emuDir\\mlc01\\usr\\save\\00050000\\$folderName';
-
         for (final entry in archive) {
-          final targetPath = '$targetBaseDir\\${entry.name}';
+          if (entry.name.contains('.bak')) continue;
+          final entryPath = entry.name.replaceAll('/', '\\');
+          final segments = entryPath.split('\\');
+          final strippedPath = segments.length > 1 ? segments.skip(1).join('\\') : entryPath;
+          if (strippedPath.isEmpty) continue;
+          final targetPath = '$saveRoot\\$strippedPath';
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = File(targetPath);

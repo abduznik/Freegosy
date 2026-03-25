@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/strategy_registry.dart';
-import '../../core/extraction/extraction_service.dart';
+// import '../../core/extraction/extraction_service.dart'; // Removed unused import
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
@@ -621,7 +621,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ref.read(downloadProvider.notifier).startEmulatorDownload(emulatorId, emulatorName);
 
                             // Watch for completion to update local UI state
-                            final subscription = ref.read(downloadProvider.notifier).stream.listen((downloads) {
+                            ref.read(downloadProvider.notifier).stream.listen((downloads) { // Removed 'final subscription =' as 'subscription' is unused.
                               final progress = downloads[emulatorId];
                               if (progress != null && progress.isComplete && mounted) {
                                 setState(() {

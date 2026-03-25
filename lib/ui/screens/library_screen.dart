@@ -130,14 +130,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
 
     // Pull latest cloud save before launching
-    final syncService = ref.read(saveSyncServiceProvider);
-    if (syncService != null) {
+    if (ref.read(saveSyncServiceProvider) != null) {
       // Push local saves first so nothing is lost, then pull cloud save
       final syncMode = ref.read(retroarchSyncModeProvider);
-      await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Pushing saves for ${game.name}...'),
+          duration: Duration(seconds: 30),
+        ),
+      );
+      // Removed 'final pushed =' as 'pushed' is unused.
+      await ref.read(saveSyncServiceProvider)!.pushSaves(game, existingRomPath, syncMode: syncMode);
       if (!context.mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars(); // Clear push saves snackbar
       try {
-        final pulled = await syncService.pullSave(game, existingRomPath);
+        final pulled = await ref.read(saveSyncServiceProvider)!.pullSave(game, existingRomPath);
         if (!context.mounted) return;
         if (pulled) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -172,7 +180,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
 
     try {
-      await strategy.launch(game, existingRomPath);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Launching ${game.name}...'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      await strategy.launch(game, existingRomPath); // Removed unnecessary '!'
     } catch (e) {
       if (!context.mounted) return;
 
@@ -246,7 +260,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final registry = ref.read(strategyRegistryProvider);
     final windowsStrategy =
         registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
-    final syncService = ref.read(saveSyncServiceProvider);
 
     final result = await showDialog<Map<String, String>>(
       context: context,
@@ -254,7 +267,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         game: game,
         currentExePath: windowsStrategy?.getExeOverride(game.id),
         currentSavePath:
-            syncService?.windowsSaveStrategy.getManualOverride(game.id),
+            ref.read(saveSyncServiceProvider)?.windowsSaveStrategy.getManualOverride(game.id),
       ),
     );
     if (result == null) return; // user cancelled
@@ -266,7 +279,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       await windowsStrategy?.setExeOverride(game.id, exe);
     }
     if (save.isNotEmpty) {
-      await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
+      await ref.read(saveSyncServiceProvider)?.windowsSaveStrategy.setManualOverride(game.id, save);
     }
 
     if (!context.mounted) return;
@@ -594,7 +607,7 @@ class _SkeletonCardState extends State<_SkeletonCard>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (TickerMode.of(context)) {
+    if (TickerMode.valuesOf(context).enabled) {
       _controller.repeat(reverse: true);
     } else {
       _controller.stop();
