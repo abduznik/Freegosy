@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 class GithubReleaseService {
   final Dio _dio;
@@ -22,7 +21,6 @@ class GithubReleaseService {
       if (response.statusCode != 200) return null;
 
       final assets = response.data['assets'] as List<dynamic>;
-      debugPrint('[GithubReleaseService] $repo — ${assets.length} assets found');
 
       for (final asset in assets) {
         final name = (asset['name'] as String).toLowerCase();
@@ -36,14 +34,11 @@ class GithubReleaseService {
         final matchesExcluded = excluded.any((f) => name.contains(f.toLowerCase()));
         if (matchesExcluded) continue;
 
-        debugPrint('[GithubReleaseService] matched asset: $name');
         return url;
       }
 
-      debugPrint('[GithubReleaseService] no matching asset found for $repo');
       return null;
     } catch (e) {
-      debugPrint('[GithubReleaseService] error fetching $repo: $e');
       return null;
     }
   }

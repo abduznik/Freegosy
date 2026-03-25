@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -60,7 +59,6 @@ class WindowsStrategy extends EmulatorStrategy {
 
     // If stored override no longer exists on disk, discard and auto-detect
     if (exePath != null && exePath.isNotEmpty && !await File(exePath).exists()) {
-      debugPrint('[WindowsStrategy] override exe not found at $exePath, falling back to auto-detect');
       exePath = null;
     }
 
@@ -81,7 +79,6 @@ class WindowsStrategy extends EmulatorStrategy {
       );
     }
 
-    debugPrint('[WindowsStrategy] launching: $exePath');
     final process = await Process.start(
       exePath,
       [],
@@ -94,14 +91,11 @@ class WindowsStrategy extends EmulatorStrategy {
         .catchError((_) => -99999); // timeout = still running = fine
 
     if (exitCode != -99999 && exitCode != 0) {
-      debugPrint('[WindowsStrategy] ${game.name} exited with code $exitCode');
       throw Exception(
         '${game.name} crashed immediately (exit code $exitCode). '
         'This is likely due to missing DirectX, Visual C++ redistributables, or other dependencies.',
       );
     }
-
-    debugPrint('[WindowsStrategy] ${game.name} still running after 5s — OK');
   }
 
   @override

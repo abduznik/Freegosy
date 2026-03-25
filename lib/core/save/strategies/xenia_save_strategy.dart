@@ -66,7 +66,6 @@ class XeniaSaveStrategy extends SaveStrategy {
     await encoder.addDirectory(dir);
     encoder.close();
 
-    debugPrint('[XeniaSaveStrategy] packaged saves to $zipPath');
     return [File(zipPath)];
   }
 
@@ -92,17 +91,14 @@ class XeniaSaveStrategy extends SaveStrategy {
             await Directory(entryPath).create(recursive: true);
           }
         }
-        debugPrint('[XeniaSaveStrategy] extracted $filename to $saveDir');
         return true;
       }
 
       final targetPath = '$saveDir\\$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      debugPrint('[XeniaSaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      debugPrint('[XeniaSaveStrategy] restoreSave error: $e');
       return false;
     }
   }

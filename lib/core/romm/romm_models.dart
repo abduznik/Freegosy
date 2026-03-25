@@ -16,6 +16,27 @@ class Game {
 
   bool get isMultiFile => hasMultipleFiles;
 
+  String get displayName {
+    String cleaned = name;
+
+    // Remove leading hex IDs like 00040000000EC400
+    cleaned = cleaned.replaceAll(RegExp(r'^[0-9A-Fa-f]{16}\s*'), '');
+
+    // Remove region/version codes in parentheses like (CTR-P-BZLP) (v0.0.0) (En)
+    cleaned = cleaned.replaceAll(RegExp(r'\([^)]*\)'), '');
+
+    // Remove region/version codes in brackets like [!] [b] [T+Eng]
+    cleaned = cleaned.replaceAll(RegExp(r'\[[^\]]*\]'), '');
+
+    // Remove trailing dots, dashes, underscores and whitespace
+    cleaned = cleaned.replaceAll(RegExp(r'[\s._-]+$'), '');
+
+    // Collapse multiple spaces into one
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+
+    return cleaned.trim().isEmpty ? name : cleaned.trim();
+  }
+
   Game({
     required this.id,
     required this.name,

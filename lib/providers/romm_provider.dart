@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -17,7 +16,6 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final password = prefs.getString('rommPassword') ?? '';
   final token = prefs.getString('rommAuthToken');
 
-  debugPrint('[rommConfigProvider] loaded baseUrl=$baseUrl user=$username passLen=${password.length} hasToken=${token != null && token.isNotEmpty}');
   return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token);
 });
 

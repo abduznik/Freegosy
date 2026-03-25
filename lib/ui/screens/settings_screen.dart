@@ -23,6 +23,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
   bool _isSaving = false;
+  Map<String, bool> _emulatorInstallStates = {};
+  bool _emulatorsLoaded = false;
 
   @override
   void initState() {
@@ -40,11 +42,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
+  Future<void> _loadEmulatorStates(DirectoryService directoryService) async {
+    if (_emulatorsLoaded) return;
+    final states = <String, bool>{};
+    for (final def in kEmulatorDefinitions) {
+      final id = def['id'] as String;
+      final exe = def['windows_executable'] as String;
+      if (exe.isEmpty) {
+        states[id] = true;
+        continue;
+      }
+      states[id] = await directoryService.isEmulatorInstalled(id, exe);
+    }
+    if (mounted) {
+      setState(() {
+        _emulatorInstallStates = states;
+        _emulatorsLoaded = true;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final rommService = ref.watch(rommServiceProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
+
+    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+    final columnCount = ref.watch(columnCountProvider);
+    final cardSpacing = ref.watch(cardSpacingProvider);
+    final showTitle = ref.watch(showTitleProvider);
+    final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
+    final activePreset = ref.watch(activePresetProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -62,19 +91,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (rommService == null) {
                 return const Center(child: CircularProgressIndicator());
               }
-              return ListView(
-                padding: const EdgeInsets.all(16.0),
-                children: [
-                  _buildRommServerSection(context, ref, rommService),
-                  const SizedBox(height: 24),
-                  _buildCardAspectRatioSection(context, ref),
-                  const SizedBox(height: 24),
-                  _buildStorageSection(directoryService),
-                  const SizedBox(height: 24),
-                  _buildRetroArchSyncModeSection(context, ref),
-                  const SizedBox(height: 24),
-                  _buildEmulatorsSection(directoryService),
-                ],
+              
+              _loadEmulatorStates(directoryService);
+
+              return ExcludeSemantics(
+                child: ListView(
+                  padding: const EdgeInsets.all(16.0),
+                  children: [
+                    _buildRommServerSection(context, ref, rommService),
+                    const SizedBox(height: 24),
+                    _buildDisplaySection(
+                      context,
+                      cardAspectRatio,
+                      columnCount,
+                      cardSpacing,
+                      showTitle,
+                      showButtonsOnHover,
+                      activePreset,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildStorageSection(directoryService),
+                    const SizedBox(height: 24),
+                    _buildRetroArchSyncModeSection(context, ref),
+                    const SizedBox(height: 24),
+                    _buildEmulatorsSection(directoryService),
+                  ],
+                ),
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -84,6 +126,161 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text('Error loading RomM config: $e')),
       ),
+    );
+  }
+
+  Widget _buildDisplaySection(
+    BuildContext context,
+    double cardAspectRatio,
+    int columnCount,
+    double cardSpacing,
+    bool showTitle,
+    bool showButtonsOnHover,
+    String activePreset,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Library Display', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        const Text('Presets', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            _presetChip('Windows', 'windows_best', activePreset),
+            _presetChip('Steam Deck', 'steamdeck_best', activePreset),
+            _presetChip('Cozy', 'cozy', activePreset),
+            _presetChip('Compact', 'compact', activePreset),
+            _presetChip('Custom', 'custom', activePreset),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Columns per row', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            Text('$columnCount', style: const TextStyle(fontSize: 16, color: Colors.deepPurple)),
+          ],
+        ),
+        Slider(
+          value: columnCount.toDouble(),
+          min: 2,
+          max: 8,
+          divisions: 6,
+          label: '$columnCount',
+          onChanged: (value) async {
+            ref.read(activePresetProvider.notifier).state = 'custom';
+            ref.read(columnCountProvider.notifier).state = value.toInt();
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setInt('column_count', value.toInt());
+            await prefs.setString('active_preset', 'custom');
+          },
+        ),
+        const SizedBox(height: 16),
+        const Text('Card Shape', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        SegmentedButton<double>(
+          segments: const [
+            ButtonSegment(value: 1.0, label: Text('Square')),
+            ButtonSegment(value: 0.72, label: Text('Portrait')),
+            ButtonSegment(value: 0.58, label: Text('Tall')),
+          ],
+          selected: {
+            [1.0, 0.72, 0.58].reduce((a, b) =>
+                (a - cardAspectRatio).abs() < (b - cardAspectRatio).abs()
+                    ? a
+                    : b)
+          },
+          onSelectionChanged: (selection) async {
+            ref.read(activePresetProvider.notifier).state = 'custom';
+            ref.read(cardAspectRatioProvider.notifier).state = selection.first;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setDouble('card_aspect_ratio', selection.first);
+            await prefs.setString('active_preset', 'custom');
+          },
+        ),
+        const SizedBox(height: 16),
+        const Text('Card Spacing', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        SegmentedButton<double>(
+          segments: const [
+            ButtonSegment(value: 4.0, label: Text('Tight')),
+            ButtonSegment(value: 8.0, label: Text('Normal')),
+            ButtonSegment(value: 12.0, label: Text('Airy')),
+          ],
+          selected: {
+            [4.0, 8.0, 12.0].reduce((a, b) =>
+                (a - cardSpacing).abs() < (b - cardSpacing).abs() ? a : b)
+          },
+          onSelectionChanged: (selection) async {
+            ref.read(activePresetProvider.notifier).state = 'custom';
+            ref.read(cardSpacingProvider.notifier).state = selection.first;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setDouble('card_spacing', selection.first);
+            await prefs.setString('active_preset', 'custom');
+          },
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text('Show game title'),
+          subtitle: const Text('Display title text below cover art'),
+          value: showTitle,
+          contentPadding: EdgeInsets.zero,
+          onChanged: (value) async {
+            ref.read(activePresetProvider.notifier).state = 'custom';
+            ref.read(showTitleProvider.notifier).state = value;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('show_title', value);
+            await prefs.setString('active_preset', 'custom');
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Show buttons on hover only'),
+          subtitle: const Text('Buttons appear when hovering over a card'),
+          value: showButtonsOnHover,
+          contentPadding: EdgeInsets.zero,
+          onChanged: (value) async {
+            ref.read(activePresetProvider.notifier).state = 'custom';
+            ref.read(showButtonsOnHoverProvider.notifier).state = value;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('show_buttons_on_hover', value);
+            await prefs.setString('active_preset', 'custom');
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _presetChip(String label, String presetKey, String activePreset) {
+    final isSelected = activePreset == presetKey;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) async {
+        if (!selected) return;
+        ref.read(activePresetProvider.notifier).state = presetKey;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('active_preset', presetKey);
+        if (presetKey == 'custom') return;
+        final preset = kDisplayPresets[presetKey];
+        if (preset == null) return;
+        final cols = preset['columnCount'] as int;
+        final ratio = preset['cardAspectRatio'] as double;
+        final spacing = preset['cardSpacing'] as double;
+        final title = preset['showTitle'] as bool;
+        final hover = preset['showButtonsOnHover'] as bool;
+        ref.read(columnCountProvider.notifier).state = cols;
+        ref.read(cardAspectRatioProvider.notifier).state = ratio;
+        ref.read(cardSpacingProvider.notifier).state = spacing;
+        ref.read(showTitleProvider.notifier).state = title;
+        ref.read(showButtonsOnHoverProvider.notifier).state = hover;
+        await prefs.setInt('column_count', cols);
+        await prefs.setDouble('card_aspect_ratio', ratio);
+        await prefs.setDouble('card_spacing', spacing);
+        await prefs.setBool('show_title', title);
+        await prefs.setBool('show_buttons_on_hover', hover);
+      },
     );
   }
 
@@ -191,16 +388,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // it over HTTP or at all, fall back to Basic auth silently.
                       try {
                         await RommService.fetchToken(baseUrl, username, password);
-                        debugPrint('[Settings] fetchToken succeeded');
                       } catch (e) {
-                        debugPrint('[Settings] fetchToken failed ($e), falling back to Basic auth');
                         // Clear any stale token so Basic auth is used instead.
                         final p = await SharedPreferences.getInstance();
                         await p.remove('rommAuthToken');
                       }
 
                       // Save credentials regardless of whether token fetch succeeded.
-                      debugPrint('[Settings] saving baseUrl=$baseUrl user=$username passLen=${password.length}');
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);
@@ -223,32 +417,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   : const Text('Save'),
             ),
           ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCardAspectRatioSection(BuildContext context, WidgetRef ref) {
-    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Library Display', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        const Text('Card Aspect Ratio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 8),
-        SegmentedButton<double>(
-          segments: const [
-            ButtonSegment(value: 0.72, label: Text('Square')),
-            ButtonSegment(value: 0.56, label: Text('Portrait')),
-          ],
-          selected: {cardAspectRatio},
-          onSelectionChanged: (selection) async {
-            final value = selection.first;
-            ref.read(cardAspectRatioProvider.notifier).state = value;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setDouble('card_aspect_ratio', value);
-          },
         ),
       ],
     );
@@ -317,78 +485,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildEmulatorsSection(DirectoryService directoryService) {
-    final emulatorDownloadService = EmulatorDownloadService(Dio(), directoryService);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Emulators', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text('Emulators',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
-        ...kEmulatorDefinitions.map<Widget>((def) {
-          final emulatorId = def['id'] as String;
-          final emulatorName = def['name'] as String;
-          final windowsExecutable = def['windows_executable'] as String;
-
-          return FutureBuilder<bool>(
-            future: directoryService.isEmulatorInstalled(emulatorId, windowsExecutable),
-            builder: (context, snapshot) {
-              final isInstalled = snapshot.data ?? false;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      isInstalled ? Icons.check_circle : Icons.cancel,
-                      color: isInstalled ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(emulatorName)),
-                    ElevatedButton(
-                      onPressed: isInstalled
-                          ? null
-                          : () async {
+        if (!_emulatorsLoaded)
+          const Center(child: CircularProgressIndicator())
+        else
+          ...kEmulatorDefinitions.map<Widget>((def) {
+            final emulatorId = def['id'] as String;
+            final emulatorName = def['name'] as String;
+            final isInstalled = _emulatorInstallStates[emulatorId] ?? false;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Row(
+                children: [
+                  Icon(
+                    isInstalled ? Icons.check_circle : Icons.cancel,
+                    color: isInstalled ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(emulatorName)),
+                  ElevatedButton(
+                    onPressed: isInstalled
+                        ? null
+                        : () async {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content:
+                                  Text('Starting download for $emulatorName...'),
+                            ));
+                            final emulatorDownloadService =
+                                EmulatorDownloadService(
+                                    Dio(), directoryService);
+                            try {
+                              await for (final progress in emulatorDownloadService
+                                  .downloadEmulator(emulatorId)) {
+                                if (progress.error != null) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content: Text('Error: ${progress.error}'),
+                                    ));
+                                  }
+                                  break;
+                                }
+                                if (progress.isComplete) {
+                                  if (mounted) {
+                                    setState(() {
+                                      _emulatorInstallStates[emulatorId] = true;
+                                    });
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content:
+                                          Text('$emulatorName downloaded.'),
+                                    ));
+                                  }
+                                  break;
+                                }
+                              }
+                            } catch (e) {
                               if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Starting download for $emulatorName...')),
-                                );
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(SnackBar(
+                                  content: Text('Unexpected error: $e'),
+                                ));
                               }
-                              try {
-                                await for (var progress in emulatorDownloadService.downloadEmulator(emulatorId)) {
-                                  if (progress.error != null) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error downloading $emulatorName: ${progress.error}')),
-                                      );
-                                    }
-                                    break;
-                                  }
-                                  if (progress.isComplete) {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('$emulatorName downloaded and extracted.')),
-                                      );
-                                    }
-                                    // ignore: unused_result
-                                    ref.refresh(directoryServiceProvider);
-                                    break;
-                                  }
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('An unexpected error occurred: $e')),
-                                  );
-                                }
-                              }
-                            },
-                      child: Text(isInstalled ? 'Installed' : 'Download'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        }),
+                            }
+                          },
+                    child: Text(isInstalled ? 'Installed' : 'Download'),
+                  ),
+                ],
+              ),
+            );
+          }),
       ],
     );
   }

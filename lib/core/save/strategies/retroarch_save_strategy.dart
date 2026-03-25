@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/rendering.dart';
 
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
@@ -110,10 +109,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
       final targetPath = '$targetDir/$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      debugPrint('[RetroArchSaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      debugPrint('[RetroArchSaveStrategy] restoreSave error: $e');
       return false;
     }
   }

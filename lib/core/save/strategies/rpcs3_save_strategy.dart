@@ -48,7 +48,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
         return folderName.startsWith(titleId);
       }).toList();
       if (byTitleId.isNotEmpty) {
-        debugPrint('[Rpcs3SaveStrategy] matched by title ID $titleId');
         return byTitleId;
       }
     }
@@ -67,11 +66,9 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }).toList();
 
     if (byName.isNotEmpty) {
-      debugPrint('[Rpcs3SaveStrategy] matched by name: ${byName.map((d) => d.path.split('\\').last).toList()}');
       return byName;
     }
 
-    debugPrint('[Rpcs3SaveStrategy] no save dirs found for ${game.name} in $saveRoot');
     return [];
   }
 
@@ -91,7 +88,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
 
     final saveDirs = await _findSaveDirs(saveRoot, game);
     if (saveDirs.isEmpty) {
-      debugPrint('[Rpcs3SaveStrategy] no save dirs found for ${game.name}');
       return [];
     }
 
@@ -119,7 +115,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }
     encoder.close();
 
-    debugPrint('[Rpcs3SaveStrategy] packaged saves to $zipPath');
     return [File(zipPath)];
   }
 
@@ -143,7 +138,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
             await Directory(entryPath).create(recursive: true);
           }
         }
-        debugPrint('[Rpcs3SaveStrategy] extracted $filename to $saveRoot');
         return true;
       }
 
@@ -153,10 +147,8 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       final targetPath = '$saveDir\\$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      debugPrint('[Rpcs3SaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      debugPrint('[Rpcs3SaveStrategy] restoreSave error: $e');
       return false;
     }
   }

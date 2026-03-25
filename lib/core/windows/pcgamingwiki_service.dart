@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:io';
 
 class PcGamingWikiService {
@@ -39,7 +38,7 @@ class PcGamingWikiService {
         if (results.isNotEmpty) return results.first['title'] as String;
       }
     } catch (e) {
-      debugPrint('[PcGamingWiki] findPageTitle error: $e');
+      //
     }
     return null;
   }
@@ -57,7 +56,7 @@ class PcGamingWikiService {
         return response.data['parse']['wikitext']['*'] as String?;
       }
     } catch (e) {
-      debugPrint('[PcGamingWiki] getWikitext error: $e');
+      //
     }
     return null;
   }
@@ -73,7 +72,6 @@ class PcGamingWikiService {
 
       return _parseSaveLocations(wikitext, gameTitle, gameDir);
     } catch (e) {
-      debugPrint('[PcGamingWiki] getSaveLocations error: $e');
       return [];
     }
   }
@@ -111,7 +109,7 @@ class PcGamingWikiService {
           });
         }
       } catch (e) {
-        debugPrint('[PcGamingWiki] parse error on line: $e');
+        //
       }
     }
     return results;
