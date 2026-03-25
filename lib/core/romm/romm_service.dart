@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
 
@@ -19,14 +18,6 @@ class RommService {
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 15),
         )) {
-    debugPrint('[RommService] created — baseUrl=${_normalizeBaseUrl(config.baseUrl)} user=${config.username} hasToken=${config.token != null && config.token!.isNotEmpty}');
-    // _dio.interceptors.add(LogInterceptor(
-    //   requestHeader: true,
-    //   responseHeader: false,
-    //   responseBody: true,
-    //   requestBody: true,
-    //   logPrint: (o) => debugPrint('[DIO] $o'),
-    // ));
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
@@ -35,7 +26,6 @@ class RommService {
           e.requestOptions.data is! FormData &&
           config.token != null &&
           config.token!.isNotEmpty) {
-          debugPrint('[RommService] Bearer got 403 — retrying with Basic auth');
           final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
           final opts = e.requestOptions
             ..headers['Authorization'] = basic
@@ -56,10 +46,8 @@ class RommService {
   Options get _authOptions {
     final token = config.token;
     if (token != null && token.isNotEmpty) {
-      debugPrint('[RommService] _authOptions using Bearer token');
       return Options(headers: {'Authorization': 'Bearer $token'});
     }
-    debugPrint('[RommService] _authOptions using Basic auth user=${config.username} passLen=${config.password.length}');
     final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
     return Options(headers: {'Authorization': basic});
   }
@@ -68,13 +56,11 @@ class RommService {
   /// stores the Bearer token in SharedPreferences, and returns it.
   static Future<String> fetchToken(String baseUrl, String username, String password) async {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
-    debugPrint('[fetchToken] POST $normalizedUrl/api/token user=$username');
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 15),
     ));
-    dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true, logPrint: (o) => debugPrint('[DIO/token] $o')));
     final response = await dio.post(
       '/api/token',
       data: {
@@ -85,14 +71,12 @@ class RommService {
       },
       options: Options(contentType: 'application/x-www-form-urlencoded'),
     );
-    debugPrint('[fetchToken] response status=${response.statusCode} data=${response.data}');
     final token = response.data['access_token'] as String?;
     if (token == null || token.isEmpty) {
       throw Exception('Login failed: no access_token in response');
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rommAuthToken', token);
-    debugPrint('[fetchToken] token stored OK');
     return token;
   }
 
@@ -157,9 +141,6 @@ class RommService {
         final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
         final List<dynamic> items = data['items'] ?? [];
         total = data['total'] ?? items.length;
-        if (offset == 0 && items.isNotEmpty) {
-        debugPrint('[RommService] sample raw game: ${items.first}');
-        }
         allGames.addAll(items.map((item) => Game.fromJson(item)).toList());
         offset += limit;
       } else {
@@ -201,8 +182,6 @@ class RommService {
         ? config.baseUrl.substring(0, config.baseUrl.length - 1) 
         : config.baseUrl;
     
-    debugPrint('[RommService] getDownloadUrl: name=${game.name} fileName=${game.fileName} fsName=${game.fsName} isMultiFile=${game.isMultiFile}');
-
     final name = game.fileName ?? game.fsName ?? game.name;
     final encoded = Uri.encodeComponent(name);
     return '$baseUrl/api/roms/${game.id}/content/$encoded';
@@ -233,10 +212,8 @@ class RommService {
       final ok = response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300;
-      debugPrint('[RommService] uploadSave ${ok ? 'ok' : 'failed'} status=${response.statusCode} file=$fileName');
       return ok;
     } catch (e) {
-      debugPrint('[RommService] uploadSave error: $e');
       return false;
     }
   }
@@ -273,7 +250,6 @@ class RommService {
       });
       return sorted.first;
     } catch (e) {
-      debugPrint('[RommService] getLatestSave error: $e');
       return null;
     }
   }
@@ -295,7 +271,6 @@ class RommService {
       }
       return null;
     } catch (e) {
-      debugPrint('[RommService] downloadSave error: $e');
       return null;
     }
   }

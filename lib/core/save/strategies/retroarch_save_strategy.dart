@@ -110,10 +110,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
       final targetPath = '$targetDir/$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      debugPrint('[RetroArchSaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      debugPrint('[RetroArchSaveStrategy] restoreSave error: $e');
       return false;
     }
   }

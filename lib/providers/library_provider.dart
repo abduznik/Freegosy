@@ -6,14 +6,14 @@ import 'romm_provider.dart';
 const Map<String, Map<String, dynamic>> kDisplayPresets = {
   'windows_best': {
     'columnCount': 5,
-    'cardAspectRatio': 0.56,
+    'cardAspectRatio': 0.72,
     'cardSpacing': 8.0,
     'showTitle': true,
     'showButtonsOnHover': false,
   },
   'steamdeck_best': {
     'columnCount': 3,
-    'cardAspectRatio': 0.56,
+    'cardAspectRatio': 0.72,
     'cardSpacing': 12.0,
     'showTitle': true,
     'showButtonsOnHover': false,
@@ -27,7 +27,7 @@ const Map<String, Map<String, dynamic>> kDisplayPresets = {
   },
   'compact': {
     'columnCount': 7,
-    'cardAspectRatio': 0.56,
+    'cardAspectRatio': 1.0,
     'cardSpacing': 4.0,
     'showTitle': false,
     'showButtonsOnHover': true,
@@ -39,7 +39,7 @@ final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
 
 final cardAspectRatioProvider = StateProvider<double>((ref) {
   // Synchronous init — actual persisted value is loaded in _loadCardAspectRatio
-  // and set via the notifier. Default is 0.72 (square).
+  // and set via the notifier. Default is 0.72 (portrait).
   return 0.72;
 });
 
@@ -105,6 +105,14 @@ final activePresetProvider = StateProvider<String>((ref) {
   return 'custom';
 });
 
+final activePresetLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString('active_preset');
+  if (saved != null) {
+    ref.read(activePresetProvider.notifier).state = saved;
+  }
+});
+
 final platformsProvider = FutureProvider<List<Platform>>((ref) async {
   final service = ref.watch(rommServiceProvider);
   if (service == null) return [];
@@ -129,11 +137,14 @@ final filteredGamesProvider = Provider<List<Game>>((ref) {
 
   if (searchQuery.isNotEmpty) {
     filtered = filtered
-        .where((g) => g.name.toLowerCase().contains(searchQuery.toLowerCase()))
+        .where((g) =>
+            g.displayName.toLowerCase().contains(searchQuery.toLowerCase()) ||
+            g.name.toLowerCase().contains(searchQuery.toLowerCase()))
         .toList();
   }
 
-  filtered.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  filtered.sort((a, b) =>
+      a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
   return filtered;
 });
 

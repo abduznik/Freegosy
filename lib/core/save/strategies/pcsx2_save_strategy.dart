@@ -97,7 +97,6 @@ class Pcsx2SaveStrategy extends SaveStrategy {
             final outFile = File(targetPath);
             await outFile.parent.create(recursive: true);
             await outFile.writeAsBytes(entry.content as List<int>);
-            debugPrint('[Pcsx2SaveStrategy] restored ${entry.name} to $targetPath');
           }
         }
         return true;
@@ -111,10 +110,8 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       final targetPath = '$targetDir\\$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      debugPrint('[Pcsx2SaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      debugPrint('[Pcsx2SaveStrategy] restoreSave error: $e');
       return false;
     }
   }

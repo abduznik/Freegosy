@@ -29,7 +29,6 @@ class WindowsGameService {
             .toLowerCase()
             .replaceAll(RegExp(r'[^a-z0-9]'), '');
         if (exeName.contains(hintLower) || hintLower.contains(exeName)) {
-          debugPrint('[WindowsGameService] matched exe by hint: ${exe.path}');
           return exe.path;
         }
       }
@@ -46,7 +45,6 @@ class WindowsGameService {
       }
     }
 
-    debugPrint('[WindowsGameService] largest exe: ${largest?.path}');
     return largest?.path;
   }
 

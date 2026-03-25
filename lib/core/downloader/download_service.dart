@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:archive/archive_io.dart';
-import 'package:flutter/rendering.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
@@ -135,19 +134,5 @@ class DownloadService {
 
     // Delete the archive after extraction
     await File(zipPath).delete();
-
-    // Log the largest file found (main ROM)
-    File? largestFile;
-    int largestSize = 0;
-    await for (final entity in Directory(extractDir).list(recursive: true)) {
-      if (entity is File) {
-        final size = await entity.length();
-        if (size > largestSize) {
-          largestSize = size;
-          largestFile = entity;
-        }
-      }
-    }
-    debugPrint('[DownloadService] multi-file extracted to $extractDir, main ROM: ${largestFile?.path}');
   }
 }

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
@@ -104,13 +103,11 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        debugPrint('[SaveSyncService] no strategy for ${game.platformSlug}');
         return false;
       }
 
       final files = await strategy.getSaveFiles(game, romPath, sessionStart: sessionStart, syncMode: syncMode);
       if (files.isEmpty) {
-        debugPrint('[SaveSyncService] no save files found for ${game.name}');
         return false;
       }
 
@@ -139,10 +136,8 @@ class SaveSyncService {
   }
 }
 
-      debugPrint('[SaveSyncService] pushed $uploaded/${files.length} saves for ${game.name}');
       return uploaded > 0;
     } catch (e) {
-      debugPrint('[SaveSyncService] pushSaves error: $e');
       return false;
     }
   }
@@ -154,38 +149,30 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        debugPrint('[SaveSyncService] no strategy for ${game.platformSlug}');
         return false;
       }
 
       final save = await _rommService.getLatestSave(game.id);
       if (save == null) {
-        debugPrint('[SaveSyncService] no cloud save for ${game.name}');
         return false;
       }
 
       final downloadUrl = save['download_path'] as String? ?? save['url'] as String?;
       if (downloadUrl == null) {
-        debugPrint('[SaveSyncService] save has no download URL');
         return false;
       }
 
       final bytes = await _rommService.downloadSave(downloadUrl);
       if (bytes == null) {
-        debugPrint('[SaveSyncService] failed to download save bytes');
         return false;
       }
 
       final filename = save['file_name'] as String? ??
           downloadUrl.split('/').last;
 
-      debugPrint('[SaveSyncService] calling restoreSave: filename=$filename romPath=$romPath bytesLen=${bytes.length}');
       final ok = await strategy.restoreSave(game, romPath, bytes, filename);
-      debugPrint('[SaveSyncService] restoreSave returned: $ok');
-      debugPrint('[SaveSyncService] pullSave ${ok ? 'ok' : 'failed'} for ${game.name}');
       return ok;
     } catch (e) {
-      debugPrint('[SaveSyncService] pullSave error: $e');
       rethrow;
     }
   }

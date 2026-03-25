@@ -50,11 +50,10 @@ class WindowsSaveStrategy extends SaveStrategy {
     try {
       final locations = await _wikiService.getSaveLocations(game.name);
       if (locations.isNotEmpty) {
-        debugPrint('[WindowsSaveStrategy] wiki found ${locations.length} locations for ${game.name}');
         return locations.first['path'];
       }
     } catch (e) {
-      debugPrint('[WindowsSaveStrategy] wiki lookup failed: $e');
+      //
     }
 
     return null;
@@ -88,7 +87,6 @@ class WindowsSaveStrategy extends SaveStrategy {
     await encoder.addDirectory(dir);
     encoder.close();
 
-    debugPrint('[WindowsSaveStrategy] packaged saves to $zipPath');
     return [File(zipPath)];
   }
 
@@ -117,7 +115,6 @@ class WindowsSaveStrategy extends SaveStrategy {
             await Directory(entryPath).create(recursive: true);
           }
         }
-        debugPrint('[WindowsSaveStrategy] extracted $filename to $saveDir');
         return true;
       }
 
@@ -125,10 +122,8 @@ class WindowsSaveStrategy extends SaveStrategy {
       final targetPath = '$saveDir/$filename';
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
-      debugPrint('[WindowsSaveStrategy] restored $filename to $targetPath');
       return true;
     } catch (e) {
-      debugPrint('[WindowsSaveStrategy] restoreSave error: $e');
       rethrow;
     }
   }

@@ -14,6 +14,7 @@ class FreegosyApp extends ConsumerStatefulWidget {
 
 class _FreegosyAppState extends ConsumerState<FreegosyApp> {
   int _currentIndex = 0;
+  bool _settingsLoaded = false;
 
   final List<Widget> _screens = const [
     LibraryScreen(),
@@ -24,17 +25,35 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
   @override
   void initState() {
     super.initState();
-    // Eagerly load persisted card aspect ratio
-    ref.read(cardAspectRatioLoaderProvider);
-    ref.read(retroarchSyncModeLoaderProvider);
-    ref.read(columnCountLoaderProvider);
-    ref.read(cardSpacingLoaderProvider);
-    ref.read(showTitleLoaderProvider);
-    ref.read(showButtonsOnHoverLoaderProvider);
+    Future.wait([
+      ref.read(cardAspectRatioLoaderProvider.future),
+      ref.read(retroarchSyncModeLoaderProvider.future),
+      ref.read(columnCountLoaderProvider.future),
+      ref.read(cardSpacingLoaderProvider.future),
+      ref.read(showTitleLoaderProvider.future),
+      ref.read(showButtonsOnHoverLoaderProvider.future),
+      ref.read(activePresetLoaderProvider.future),
+    ]).then((_) {
+      if (mounted) {
+        setState(() => _settingsLoaded = true);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_settingsLoaded) {
+      return const MaterialApp(
+        home: Scaffold(
+          backgroundColor: Color(0xFF0f0f0f),
+          body: Center(
+            child: CircularProgressIndicator(
+              color: Colors.deepPurple,
+            ),
+          ),
+        ),
+      );
+    }
     return MaterialApp(
       title: 'Freegosy',
       theme: ThemeData(

@@ -10,8 +10,31 @@ import '../widgets/windows_game_config_dialog.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
 import 'dart:convert';
 
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
+
+  @override
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleLaunch(BuildContext context, WidgetRef ref, game) async {
     final registry = ref.read(strategyRegistryProvider);
@@ -19,7 +42,9 @@ class LibraryScreen extends ConsumerWidget {
 
     if (strategy == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No emulator configured for ${game.platformDisplayName ?? game.platformSlug ?? 'this platform'}')),
+        SnackBar(
+            content: Text(
+                'No emulator configured for ${game.platformDisplayName ?? game.platformSlug ?? 'this platform'}')),
       );
       return;
     }
@@ -48,7 +73,8 @@ class LibraryScreen extends ConsumerWidget {
             children: [
               Text('${game.name} is not downloaded yet.'),
               const SizedBox(height: 8),
-              const Text('Expected location:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Expected location:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               SelectableText(
                 expectedRomPath,
@@ -95,7 +121,9 @@ class LibraryScreen extends ConsumerWidget {
         if (!context.mounted) return;
         if (pulled) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cloud save restored'), duration: Duration(seconds: 2)),
+            const SnackBar(
+                content: Text('Cloud save restored'),
+                duration: Duration(seconds: 2)),
           );
         }
       } catch (e) {
@@ -104,7 +132,8 @@ class LibraryScreen extends ConsumerWidget {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Save Sync Warning'),
-            content: Text('${e.toString().replaceAll('Exception: ', '')}\n\nYou can still play, but your cloud save will not be restored. After playing once, exit the game and sync saves manually.'),
+            content: Text(
+                '${e.toString().replaceAll('Exception: ', '')}\n\nYou can still play, but your cloud save will not be restored. After playing once, exit the game and sync saves manually.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -126,8 +155,10 @@ class LibraryScreen extends ConsumerWidget {
       await strategy.launch(game, existingRomPath);
     } catch (e) {
       if (!context.mounted) return;
-      final isWindows = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-      final isMissingExe = e.toString().contains('No executable') || e.toString().contains('not found');
+      final isWindows =
+          ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+      final isMissingExe =
+          e.toString().contains('No executable') || e.toString().contains('not found');
       if (isWindows && isMissingExe) {
         await _handleWindowsConfig(context, ref, game);
       } else {
@@ -135,15 +166,17 @@ class LibraryScreen extends ConsumerWidget {
           SnackBar(
             content: Text('Launch failed: $e'),
             duration: const Duration(seconds: 8),
-            ),
+          ),
         );
       }
     }
   }
 
-  Future<void> _handleWindowsConfig(BuildContext context, WidgetRef ref, Game game) async {
+  Future<void> _handleWindowsConfig(
+      BuildContext context, WidgetRef ref, Game game) async {
     final registry = ref.read(strategyRegistryProvider);
-    final windowsStrategy = registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
+    final windowsStrategy =
+        registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
     final syncService = ref.read(saveSyncServiceProvider);
 
     final result = await showDialog<Map<String, String>>(
@@ -151,7 +184,8 @@ class LibraryScreen extends ConsumerWidget {
       builder: (ctx) => WindowsGameConfigDialog(
         game: game,
         currentExePath: windowsStrategy?.getExeOverride(game.id),
-        currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id),
+        currentSavePath:
+            syncService?.windowsSaveStrategy.getManualOverride(game.id),
       ),
     );
     if (result == null) return; // user cancelled
@@ -160,19 +194,19 @@ class LibraryScreen extends ConsumerWidget {
     final save = result['save'] ?? '';
 
     if (exe.isNotEmpty) await windowsStrategy?.setExeOverride(game.id, exe);
-    if (save.isNotEmpty) await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
+    if (save.isNotEmpty)
+      await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
 
     if (!context.mounted) return;
-    debugPrint('[Launch] game=${game.name} slug=${game.platformSlug} fsName=${game.fsName} fileName=${game.fileName}');
     await _handleLaunch(context, ref, game);
   }
 
-  Future<void> _handleSyncSaves(BuildContext context, WidgetRef ref, Game game) async {
+  Future<void> _handleSyncSaves(
+      BuildContext context, WidgetRef ref, Game game) async {
     final syncService = ref.read(saveSyncServiceProvider);
     if (syncService == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Save sync not available')),
+        const SnackBar(content: Text('Save sync not available')),
       );
       return;
     }
@@ -206,22 +240,83 @@ class LibraryScreen extends ConsumerWidget {
       return;
     }
     final url = service.getDownloadUrl(game);
-    final basicAuth = 'Basic ${base64Encode(utf8.encode('${service.config.username}:${service.config.password}'))}';
+    final basicAuth =
+        'Basic ${base64Encode(utf8.encode('${service.config.username}:${service.config.password}'))}';
     final headers = <String, String>{'Authorization': basicAuth};
-    ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
+    ref
+        .read(downloadProvider.notifier)
+        .startDownload(game, url, headers: headers);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Downloading ${game.name}...')),
     );
   }
 
+  double _calculateCardHeight(int columnCount, double cardSpacing,
+      double cardAspectRatio, BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    const padding = 24.0;
+    final totalSpacing = cardSpacing * (columnCount - 1);
+    final cardWidth = (screenWidth - padding - totalSpacing) / columnCount;
+    final safeRatio = cardAspectRatio <= 0 ? 0.56 : cardAspectRatio;
+    final coverHeight = cardWidth / safeRatio;
+    final totalHeight = coverHeight + 90.0;
+    return totalHeight.clamp(100.0, 900.0);
+  }
+
+  Widget _buildSkeletonGrid(
+      double cardAspectRatio, int columnCount, double cardSpacing) {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        final shimmerGradient = LinearGradient(
+          colors: const [
+            Color(0xFF1a1a1a),
+            Color(0xFF2a2a2a),
+            Color(0xFF1a1a1a),
+          ],
+          stops: [
+            (_shimmerController.value - 0.3).clamp(0.0, 1.0),
+            _shimmerController.value.clamp(0.0, 1.0),
+            (_shimmerController.value + 0.3).clamp(0.0, 1.0),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        );
+        return GridView.builder(
+          padding: const EdgeInsets.all(12),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columnCount,
+            crossAxisSpacing: cardSpacing,
+            mainAxisSpacing: cardSpacing,
+            mainAxisExtent: _calculateCardHeight(
+                columnCount, cardSpacing, cardAspectRatio, context),
+          ),
+          itemCount: 20,
+          itemBuilder: (context, index) {
+            return Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: shimmerGradient,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final platformsAsync = ref.watch(platformsProvider);
     final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
     final searchQuery = ref.watch(searchQueryProvider);
     final gamesAsync = ref.watch(allGamesProvider);
     final filteredGames = ref.watch(filteredGamesProvider);
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+    final columnCount = ref.watch(columnCountProvider);
+    final cardSpacing = ref.watch(cardSpacingProvider);
+    final showTitle = ref.watch(showTitleProvider);
+    final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
 
@@ -270,7 +365,8 @@ class LibraryScreen extends ConsumerWidget {
           ),
           Expanded(
             child: gamesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () =>
+                  _buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing),
               error: (e, s) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -283,14 +379,15 @@ class LibraryScreen extends ConsumerWidget {
               ),
               data: (_) {
                 final gamesCount = filteredGames.length;
-                final countDisplayText = (selectedPlatformId == null && searchQuery.isEmpty)
-                    ? 'Showing all $gamesCount games'
-                    : 'Showing $gamesCount games';
+                final countDisplayText =
+                    (selectedPlatformId == null && searchQuery.isEmpty)
+                        ? 'Showing all $gamesCount games'
+                        : 'Showing $gamesCount games';
 
                 return Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: Text(
@@ -300,49 +397,90 @@ class LibraryScreen extends ConsumerWidget {
                       ),
                     ),
                     Expanded(
-                      child: filteredGames.isEmpty
-                          ? const Center(child: Text('No games found'))
-                          : GridView.builder(
-                              padding: const EdgeInsets.all(12),
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 4,
-                                childAspectRatio: cardAspectRatio,
-                                crossAxisSpacing: 8,
-                                mainAxisSpacing: 8,
-                              ),
-                              itemCount: filteredGames.length,
-                              itemBuilder: (context, index) {
-                                final game = filteredGames[index];
-                                final dirService = directoryServiceAsync.asData?.value;
-                                final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-                                if (dirService == null) {
-                                  return GestureDetector(
-                                    onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
-                                    child: GameCard(
-                                      game: game,
-                                      onDownload: () => _startDownload(context, ref, game),
-                                      onLaunch: () => _handleLaunch(context, ref, game),
-                                      onSyncSaves: () => _handleSyncSaves(context, ref, game),
-                                    ),
-                                  );
-                                }
-                                return FutureBuilder<bool>(
-                                  future: dirService.isRomDownloaded(game),
-                                  builder: (context, snapshot) {
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(allGamesProvider);
+                          ref.invalidate(platformsProvider);
+                          await ref.read(allGamesProvider.future);
+                        },
+                        child: filteredGames.isEmpty
+                            ? const CustomScrollView(
+                                slivers: [
+                                  SliverFillRemaining(
+                                    child:
+                                        Center(child: Text('No games found')),
+                                  ),
+                                ],
+                              )
+                            : GridView.builder(
+                                padding: const EdgeInsets.all(12),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columnCount,
+                                  crossAxisSpacing: cardSpacing,
+                                  mainAxisSpacing: cardSpacing,
+                                  mainAxisExtent: _calculateCardHeight(
+                                      columnCount,
+                                      cardSpacing,
+                                      cardAspectRatio,
+                                      context),
+                                ),
+                                itemCount: filteredGames.length,
+                                itemBuilder: (context, index) {
+                                  final game = filteredGames[index];
+                                  final dirService =
+                                      directoryServiceAsync.asData?.value;
+                                  final isWindowsGame = [
+                                    'windows',
+                                    'pc',
+                                    'win'
+                                  ].contains(
+                                      game.platformSlug?.toLowerCase() ?? '');
+                                  if (dirService == null) {
                                     return GestureDetector(
-                                      onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
+                                      onLongPress: isWindowsGame
+                                          ? () => _handleWindowsConfig(
+                                              context, ref, game)
+                                          : null,
                                       child: GameCard(
                                         game: game,
-                                        isDownloaded: snapshot.data ?? false,
-                                        onDownload: () => _startDownload(context, ref, game),
-                                        onLaunch: () => _handleLaunch(context, ref, game),
-                                        onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                        showTitle: showTitle,
+                                        showButtonsOnHover: showButtonsOnHover,
+                                        onDownload: () =>
+                                            _startDownload(context, ref, game),
+                                        onLaunch: () =>
+                                            _handleLaunch(context, ref, game),
+                                        onSyncSaves: () =>
+                                            _handleSyncSaves(context, ref, game),
                                       ),
                                     );
-                                  },
-                                );
-                              },
-                            ),
+                                  }
+                                  return FutureBuilder<bool>(
+                                    future: dirService.isRomDownloaded(game),
+                                    builder: (context, snapshot) {
+                                      return GestureDetector(
+                                        onLongPress: isWindowsGame
+                                            ? () => _handleWindowsConfig(
+                                                context, ref, game)
+                                            : null,
+                                        child: GameCard(
+                                          game: game,
+                                          isDownloaded: snapshot.data ?? false,
+                                          showTitle: showTitle,
+                                          showButtonsOnHover: showButtonsOnHover,
+                                          onDownload: () => _startDownload(
+                                              context, ref, game),
+                                          onLaunch: () =>
+                                              _handleLaunch(context, ref, game),
+                                          onSyncSaves: () => _handleSyncSaves(
+                                              context, ref, game),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
                     ),
                   ],
                 );

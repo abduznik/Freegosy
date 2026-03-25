@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/widgets.dart';
 
 import '../romm/romm_models.dart';
 
@@ -33,7 +32,7 @@ abstract class SaveStrategy {
       if (await bak.exists()) await bak.rename('$path.bak1');
       await file.copy('$path.bak');
     } catch (e) {
-      debugPrint('[SaveStrategy] backupSave error for $path: $e');
+      // Error handled silently
     }
   }
 

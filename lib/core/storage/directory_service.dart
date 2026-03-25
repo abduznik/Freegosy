@@ -149,7 +149,6 @@ class DirectoryService {
         final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
         appData = result.stdout.toString().trim();
       } catch (e) {
-        debugPrint('[DirectoryService] failed to get APPDATA: $e');
         return null;
       }
       if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
@@ -167,10 +166,8 @@ class DirectoryService {
       await dest.parent.create(recursive: true);
       final byteData = await rootBundle.load('thirdparty/7zr.exe');
       await dest.writeAsBytes(byteData.buffer.asUint8List());
-      debugPrint('[DirectoryService] 7zr.exe extracted to ${dest.path}');
       return dest.path;
     } catch (e) {
-      debugPrint('[DirectoryService] failed to extract 7zr.exe: $e');
       return null;
     }
   }

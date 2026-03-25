@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
-import 'package:flutter/widgets.dart';
 import '../../romm/romm_models.dart';
 import '../save_strategy.dart';
 
@@ -52,7 +51,6 @@ class EdenSaveStrategy extends SaveStrategy {
         await raf.close();
       }
     } catch (e) {
-      debugPrint('[EdenSaveStrategy] XCI parse error: $e');
       return null;
     }
   }
@@ -85,7 +83,7 @@ class EdenSaveStrategy extends SaveStrategy {
         }
       }
     } catch (e) {
-      debugPrint('[EdenSaveStrategy] scan error: $e');
+      // Error handled silently
     }
 
     return bestTitleId;
@@ -101,7 +99,6 @@ class EdenSaveStrategy extends SaveStrategy {
       if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
       return '$appData/eden/nand/user/save/0000000000000000';
     } catch (e) {
-      debugPrint('[EdenSaveStrategy] APPDATA lookup error: $e');
       return null;
     }
   }
@@ -157,7 +154,7 @@ class EdenSaveStrategy extends SaveStrategy {
         return '${profileDirs.first.path}/$titleId';
       }
     } catch (e) {
-      debugPrint('[EdenSaveStrategy] getSaveDir error: $e');
+      // Error handled silently
     }
     return null;
   }
@@ -178,13 +175,10 @@ Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionSta
     @override
     Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
       try {
-        debugPrint('[EdenSaveStrategy] restoreSave called: filename=$filename destPath=$destPath');
         final titleMatch = _titleIdRegex.firstMatch(filename.toUpperCase());
-        debugPrint('[EdenSaveStrategy] titleMatch from filename: ${titleMatch?.group(0)}');
         final saveDir = titleMatch != null
             ? await _getSaveDirForTitleId(titleMatch.group(0)!)
             : await getSaveDir(game, destPath);
-        debugPrint('[EdenSaveStrategy] saveDir resolved: $saveDir');
         if (saveDir == null) return false;
 
         final dir = Directory(saveDir);
@@ -198,10 +192,8 @@ Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionSta
         final targetPath = '$saveDir/$filename';
         await backupSave(targetPath);
         await File(targetPath).writeAsBytes(data);
-        debugPrint('[EdenSaveStrategy] restored $filename to $targetPath');
         return true;
       } catch (e) {
-        debugPrint('[EdenSaveStrategy] restoreSave error: $e');
         rethrow;
       }
     }
@@ -225,10 +217,8 @@ Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionSta
           await Directory(outPath).create(recursive: true);
         }
       }
-      debugPrint('[EdenSaveStrategy] extracted ${archive.length} entries to $destDir');
       return true;
     } catch (e) {
-      debugPrint('[EdenSaveStrategy] zip extraction error: $e');
       return false;
     }
   }
