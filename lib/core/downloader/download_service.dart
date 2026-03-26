@@ -72,7 +72,8 @@ class DownloadService {
           final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
           final isArchive = savePath.toLowerCase().endsWith('.zip') ||
               savePath.toLowerCase().endsWith('.7z');
-          if (game.isMultiFile || (isWindowsGame && isArchive)) {
+          final shouldExtract = game.isMultiFile || (isWindowsGame && isArchive);
+          if (shouldExtract) {
             controller.add(DownloadProgress(
               id: game.id,
               gameName: game.name,
@@ -119,9 +120,16 @@ class DownloadService {
 
     await Directory(extractDir).create(recursive: true);
 
-    await extractionService.extract(zipPath, extractDir);
-
-    // Delete the archive after extraction
-    await File(zipPath).delete();
+    try {
+      await extractionService.extract(zipPath, extractDir);
+      await File(zipPath).delete();
+    } catch (e) {
+      if (e.toString().contains('Unsupported archive format')) {
+        // File is not an archive - leave it as downloaded
+        await Directory(extractDir).delete();
+        return;
+      }
+      rethrow;
+    }
   }
 }
