@@ -49,11 +49,8 @@ class CemuSaveStrategy extends SaveStrategy {
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
           final entryPath = entry.name.replaceAll('/', '\\');
-          final segments = entryPath.split('\\');
-          final strippedPath = segments.length > 1 ? segments.skip(1).join('\\') : entryPath;
-          if (strippedPath.isEmpty) continue;
-          final targetPath = '$saveRoot\\$strippedPath';
-          if (entry.isFile) {
+          if (entryPath.isEmpty || entryPath.endsWith('\\')) continue;
+          final targetPath = '$saveRoot\\$entryPath';          if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = File(targetPath);
             await outFile.parent.create(recursive: true);
