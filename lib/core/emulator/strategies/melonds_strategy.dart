@@ -30,14 +30,19 @@ class MelonDSStrategy extends EmulatorStrategy {
   Future<void> launch(Game game, String romPath) async {
     final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.run(exePath, [romPath]);
+    final workingDir = File(exePath).parent.path;
+    await Process.start(exePath, [romPath], workingDirectory: workingDir, mode: ProcessStartMode.detached);
   }
 
   @override
   Future<Process?> launchWithHandle(Game game, String romPath) async {
     final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    final workingDir = File(exePath).parent.path;
+    final process = await Process.start(exePath, [romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
+    process.stdout.drain();
+    process.stderr.drain();
+    return process;
   }
 
   @override

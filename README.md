@@ -2,32 +2,46 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
-## What's New in 0.0.2
+## What's New in 0.1.0
 
-### Full Windows Native Game Support
-- Download Windows games (.zip and .7z) with automatic extraction
-- Auto-detection of game executables in extracted folders
-- Manual exe and save path configuration via long-press on any Windows game card
-- Crash detection on launch — if a game exits immediately, a clear error message explains likely causes (missing DirectX, Visual C++ redistributables, etc.)
-- Save sync for Windows games via PCGamingWiki automatic save path detection, with manual override support
-- All exe and save path overrides persist across app restarts
+### New Emulator Support
+- **Flycast** (Dreamcast, Naomi, Atomiswave)
+- **melonDS** (Nintendo DS)
+- **PPSSPP** standalone (PlayStation Portable)
+- **mGBA** standalone (Game Boy Advance, GBC, GB)
+- **MAME** (Arcade)
 
 ### Expanded Save Sync
-- **PCSX2 (PS2)**: Syncs memory cards (Mcd001.ps2, Mcd002.ps2) and save states
-- **RPCS3 (PS3)**: Syncs save data folders by title ID
-- **Xenia Canary (Xbox 360)**: Syncs content save folders by title ID
-- **Windows games**: Full save directory packaging into zip for upload, auto-extraction on restore
-- All multi-file save strategies package saves as a single zip for clean cloud storage
+- **DuckStation** (PS1): Memory card save sync
+- **melonDS** (NDS): Save file sync
+- **mGBA** (GBA/GBC/GB): Save file sync
+- **PPSSPP** (PSP): Entire SAVEDATA directory with automatic folder structure restoration
+- **Cemu** (Wii U): Full mlc01/usr/save/ directory packaging and restore
+- All new strategies support both push (upload) and pull (download) operations
 
-### 7-Zip Support
-- Bundled 7zr.exe for .7z extraction — no manual installation required
-- Automatically extracted to AppData on first run
-- Full .7z support for Windows game downloads
+### Auto-Sync on Game Close
+- Saves automatically push to cloud when you close the emulator
+- Available for all supported emulators via `launchWithHandle()`
+- Seamless background operation—no manual intervention needed
+- Works alongside pre-launch save push and manual sync
 
-### Quality of Life
-- Launch error messages now display for 8 seconds for better readability
-- Stale exe overrides (pointing to moved/deleted files) are automatically discarded and re-detected
-- ROM detection improved for Windows games — returns game folder instead of individual file
+### Smart Emulator Management
+- **Conflict Resolver**: When multiple emulators support the same platform, choose which one to use in Settings
+- **Path Overrides**: Point Freegosy to existing emulator installations via Settings folder icon (no need to re-download)
+- **Preference Persistence**: Your emulator choices and custom paths are saved across app restarts
+
+### RetroArch Core Auto-Download
+- Missing cores are detected at launch time
+- User is offered to auto-download and install the required core
+- Full core list support via RetroArch buildbot
+
+### Performance & UX Enhancements
+- Library grid renders without blocking—0% CPU while idle
+- Cached images (memCache) for fast card rendering
+- Optimized grid with extended cache extent and dual-stem state file matching for RetroArch
+- **Library Display Presets**: Windows, Steam Deck, Cozy, Compact—quick-switch your layout
+- **Launch Status Snackbars**: Real-time feedback showing "Pushing saves / Syncing saves / Launching / Auto-syncing" at each stage
+- **Downloads Tab**: Emulator downloads now show alongside game downloads with progress tracking
 
 ## Currently Working
 
@@ -45,39 +59,47 @@ A cross-platform Flutter app for browsing your RomM library, downloading ROMs, a
   - Cemu (Wii U)
   - Xemu (Xbox)
   - Xenia Canary (Xbox 360)
+  - Flycast (Dreamcast, Naomi, Atomiswave)
+  - melonDS (Nintendo DS)
+  - PPSSPP (PlayStation Portable)
+  - mGBA (Game Boy Advance/Color/Game Boy)
+  - MAME (Arcade)
   - Windows Native (PC games)
 - **Emulator Downloads**: One-tap emulator download and installation from Settings
-- **Save Sync**: Two-way save synchronization with RomM cloud for:
+- **Save Sync**: Bidirectional save synchronization with RomM cloud for:
   - RetroArch (all supported platforms)
   - Dolphin (GameCube/Wii)
   - Eden (Switch)
   - PCSX2 (PS2)
   - RPCS3 (PS3)
+  - DuckStation (PS1)
+  - melonDS (NDS)
+  - mGBA (GBA/GBC/GB)
+  - PPSSPP (PSP)
+  - Cemu (Wii U)
   - Xenia Canary (Xbox 360)
   - Windows native games (via PCGamingWiki auto-detection)
 
 ## Roadmap
 
-### Near Term
+### In Progress
+- **Linux/macOS support** — Platform detection and path resolution already structured; adding platform-specific executable paths and environment variable resolution
 
-- **Cemu save sync** — Wii U saves at mlc01/usr/save/
-- **Azahar save sync** — 3DS saves via SDMC folder
-- **MelonDS support** — better NDS emulation alternative
-- **macOS & Linux support** — platform detection and path resolution already structured for future expansion
+### Near Term
+- **Auto-update emulators** — Keep emulators fresh without manual downloads
+- **Android support** — Deep links to app stores for Play Store/Epic Games/etc.
+- **Recently played / play time tracking** — See your gaming stats at a glance
 
 ### End-Game Features
-
-- Automatic emulator updates
 - Custom ROM platform tagging
 - Mobile companion app for on-the-go library browsing
 
 ### Cross-Platform Vision
-
-Freegosy is designed as a truly cross-platform experience. The codebase is structured to support Windows, macOS, and Linux with platform-specific code isolated behind strategy patterns and service abstractions.
+Freegosy is designed as a truly cross-platform experience. The codebase is structured to support Windows, macOS, Linux, and Android with platform-specific code isolated behind strategy patterns and service abstractions.
 
 ## Status
 
-Actively under development. Release 0.0.2 focuses on Windows game support and expanded save sync coverage.
+Actively under development. Release 0.1.0 brings major emulator expansion, comprehensive save sync, and auto-sync on game close.
 
 ## About RomM
 

@@ -29,7 +29,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Core — Save Sync
 - `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() keeps max 3 clean versions (.bak, .bak1, .bak2) — never creates chained .bak.bak files., getRomStem().
 - `lib/core/save/save_sync_service.dart` — SaveSyncService. Methods: pushSaves(), pullSave(), getStrategyForSlug(). getStrategyForSlug() checks StrategyRegistry user preferences first before falling back to platform slug defaults. Accepts StrategyRegistry as constructor parameter. Wires all strategies to RommService. Exposes windowsSaveStrategy for external access.
-- `lib/core/save/strategies/retroarch_save_strategy.dart` — RetroArch save strategy (GBA/GBC/GB/SNES/NES/N64/NDS/PSX/PSP/Dreamcast/Megadrive). Reads saves/{coreName}/{stem}.srm and .state.auto.
+- `lib/core/save/strategies/retroarch_save_strategy.dart` — RetroArch save strategy (GBA/GBC/GB/SNES/NES/N64/NDS/PSX/PSP/Dreamcast/Megadrive). Reads saves/{coreName}/{stem}.srm and .state.auto. PSP special case returns entire saves/PPSSPP/PSP directory as zip. All platforms use dual-stem (getRomStem + romPath filename) for state file matching. Directory existence check handles both File and Directory types.
 - `lib/core/save/strategies/dolphin_save_strategy.dart` — Dolphin save strategy (GC/Wii). Reads User/GC/{region}/Card A/*.gci.
 - `lib/core/save/strategies/eden_save_strategy.dart` — Eden/Switch save strategy. Resolves title ID via filename regex, XCI header parse, or save folder scan. Zips save folder for upload.
 - `lib/core/save/strategies/windows_save_strategy.dart` — Windows native game save strategy. Uses PCGamingWiki API for auto-detection, supports manual override. Zips entire save directory for upload, extracts on restore. Persists overrides via SharedPreferences (prefix `win_save_`).
@@ -39,11 +39,11 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/save/strategies/duckstation_save_strategy.dart` — DuckStation save strategy (PS1). Checks for portable.txt in emulator dir — if present uses {emulatorDir}/memcards/{stem}.mcd, otherwise falls back to %LOCALAPPDATA%\DuckStation\memcards\{stem}.mcd.
 - `lib/core/save/strategies/melonds_save_strategy.dart` — melonDS save strategy (NDS). Saves .sav file next to ROM, derived from actual romPath filename not game name.
 - `lib/core/save/strategies/mgba_save_strategy.dart` — mGBA save strategy (GBA/GBC/GB). Saves .sav file next to ROM, derived from actual romPath filename.
-- `lib/core/save/strategies/ppsspp_save_strategy.dart` — PPSSPP save strategy (PSP). Saves at {emulatorDir}/memstick/PSP/SAVEDATA/, states at PPSSPP_STATE/.
+- `lib/core/save/strategies/ppsspp_save_strategy.dart` — PPSSPP save strategy (PSP). Saves at {emulatorDir}/memstick/PSP/SAVEDATA/, states at PPSSPP_STATE/. Returns entire PSP/SAVEDATA directory as zip. Restore strips top-level SAVEDATA folder to extract directly into memstick/PSP/SAVEDATA/.
 - `lib/core/save/strategies/cemu_save_strategy.dart` — Cemu save strategy (Wii U). Zips {emulatorDir}/mlc01/usr/save/00050000/ for upload. Restore extracts zip directly into mlc01/usr/save/ skipping .bak entries.
 
 ### Core — Emulator
-- `lib/core/emulator/emulator_strategy.dart` — Abstract base class. Fields: name, emulatorId, supportedSlugs, windowsExecutable, linuxExecutable. Methods: launch(Game, romPath), resolveSavePath(Game), getExecutableForPlatform().
+- `lib/core/emulator/emulator_strategy.dart` — Abstract base class. Fields: name, emulatorId, supportedSlugs, windowsExecutable, linuxExecutable. Methods: launch(Game, romPath), resolveSavePath(Game), getExecutableForPlatform(). Optional launchWithHandle(Game, romPath) method returns Process handle for auto-sync tracking. Default returns null.
 - `lib/core/emulator/emulator_registry_data.dart` — Static data for emulator definitions. Includes RetroArch, Dolphin, Eden, RPCS3, PCSX2, Azahar, Cemu, Xemu, Xenia, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME.
 - `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies. Includes conflict detection via detectConflicts() returning Map<String, List<EmulatorStrategy>> grouped by canonical platform name. setPreference(slug, emulatorId) and loadPreferences() persist user preferences under SharedPreferences key prefix 'emulator_pref_'. loadPreferences() is called on startup in romm_provider.dart to ensure conflict preferences are available before first launch.
 - `lib/core/emulator/emulator_download_service.dart` — Service for downloading emulators. Supports direct URL and GitHub release types. Uses ExtractionService for all extraction.
@@ -58,7 +58,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/emulator/strategies/duckstation_strategy.dart` — DuckStation strategy. Slugs: ps1/playstation/psx.
 - `lib/core/emulator/strategies/flycast_strategy.dart` — Flycast strategy. Slugs: dc/dreamcast/naomi/naomi2/atomiswave/cave/hikaru.
 - `lib/core/emulator/strategies/melonds_strategy.dart` — melonDS strategy. Slugs: nds/nintendo-ds/ds.
-- `lib/core/emulator/strategies/ppsspp_strategy.dart` — PPSSPP strategy. Slugs: psp/playstation-portable.
+- `lib/core/emulator/strategies/ppsspp_strategy.dart` — PPSSPP strategy. Slugs: psp/playstation-portable. Implements launchWithHandle() returning Process with ProcessStartMode.normal for auto-sync on game close.
 - `lib/core/emulator/strategies/mgba_strategy.dart` — mGBA strategy. Slugs: gba/gbc/gb/game-boy-advance/game-boy-color/game-boy.
 - `lib/core/emulator/strategies/mame_strategy.dart` — MAME strategy. Slugs: arcade/mame. Handles self-extracting .exe downloads.
 - `lib/core/emulator/strategies/xemu_strategy.dart` — Xemu strategy. Slugs: xbox.
@@ -82,12 +82,12 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/updater/updater_service.dart` — Checks GitHub Releases API for new version. Downloads and relaunch.
 
 ### Providers
-- `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, StrategyRegistry, SaveSyncService.
+- `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, StrategyRegistry, SaveSyncService. strategyRegistryProvider and saveSyncServiceProvider are FutureProviders that must be awaited with .future to ensure preferences are loaded before use.
 - `lib/providers/library_provider.dart` — Riverpod providers for platforms and games. Search, filtering, and display settings persistence. Background refresh silently updates cache.
 - `lib/providers/download_provider.dart` — Riverpod providers for active downloads (games and emulators) and progress.
 
 ### UI — Screens
-- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Launch flow shows status snackbars at each stage. Catches MissingRetroArchCoreException to offer auto-download of missing core then re-launches. Cache invalidation on pull-to-refresh.
+- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Launch flow shows status snackbars at each stage. Catches MissingRetroArchCoreException to offer auto-download of missing core then re-launches. Cache invalidation on pull-to-refresh. Auto-syncs saves when game process exits via launchWithHandle(). Awaits strategyRegistryProvider.future and saveSyncServiceProvider.future on launch to ensure preferences are loaded before strategy lookup.
 - `lib/ui/screens/library_skeleton.dart` — Skeleton loading grid and _SkeletonCard widget. Contains top-level functions buildSkeletonGrid() and calculateCardHeight().
 - `lib/ui/screens/download_screen.dart` — Active downloads list.
 - `lib/ui/screens/settings_screen.dart` — Server config, storage paths, RetroArch sync mode.
