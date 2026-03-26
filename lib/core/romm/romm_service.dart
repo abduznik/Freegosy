@@ -116,8 +116,12 @@ class RommService {
     return _fetchPaginatedGames({'platform_id': int.parse(platformId)});
   }
 
-  Future<List<Game>> getAllGames() async {
-    return _fetchPaginatedGames({});
+  Future<List<Game>> getAllGames({String? platformId}) async {
+    final params = <String, dynamic>{};
+    if (platformId != null) {
+      params['platform_id'] = int.parse(platformId);
+    }
+    return _fetchPaginatedGames(params);
   }
 
   Future<List<Game>> _fetchPaginatedGames(Map<String, dynamic> params) async {

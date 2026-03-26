@@ -249,7 +249,15 @@ final platformsProvider = FutureProvider<List<Platform>>((ref) async {
 
 final allGamesProvider = FutureProvider<List<Game>>((ref) async {
   final service = ref.watch(rommServiceProvider);
+  final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
   if (service == null) return [];
+
+  final platformIdStr = selectedPlatformId?.toString();
+
+  if (platformIdStr != null) {
+    // Platform filtered — skip cache, fetch fresh directly
+    return await service.getAllGames(platformId: platformIdStr);
+  }
 
   // Try cache first — return instantly if valid
   final cached = await _loadGamesCache();
@@ -257,7 +265,7 @@ final allGamesProvider = FutureProvider<List<Game>>((ref) async {
     // Refresh in background without blocking UI
     Future.microtask(() async {
       try {
-        final fresh = await service.getAllGames();
+        final fresh = await service.getAllGames(platformId: platformIdStr);
         if (fresh.isNotEmpty) {
           await _saveGamesCache(fresh);
         }
@@ -267,7 +275,7 @@ final allGamesProvider = FutureProvider<List<Game>>((ref) async {
   }
 
   // No valid cache — fetch fresh and cache result
-  final games = await service.getAllGames();
+  final games = await service.getAllGames(platformId: platformIdStr);
   if (games.isNotEmpty) {
     await _saveGamesCache(games);
   }
