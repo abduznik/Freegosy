@@ -1,10 +1,11 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:archive/archive_io.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
-import 'package:freegosy/core/extraction/extraction_service.dart';
 
 class MissingRetroArchCoreException implements Exception {
   final String coreName;
@@ -34,13 +35,13 @@ class RetroArchStrategy extends EmulatorStrategy {
 
   @override
   List<String> get supportedSlugs => [
-      'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds', 
+      'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds',
       'psx', 'ps1', 'playstation',
       'psp',
-      'segacd', 'saturn', 
+      'segacd', 'saturn',
       'dc', 'dreamcast',
       'megadrive', 'genesis', 'md',
-      'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo', 
+      'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo',
       'arcade', 'mame', 'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos'
     ];
 
@@ -110,18 +111,21 @@ class RetroArchStrategy extends EmulatorStrategy {
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
-    final baseUrl = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/';
-    final zipName = '${coreName.replaceAll('.dll', '')}.zip';
-    final url = '$baseUrl$zipName';
-    
-    final tempDir = await _directoryService.getEmulatorDirectory('temp_cores');
-    await Directory(tempDir).create(recursive: true);
-    final zipPath = p.join(tempDir, zipName);
+    final url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreName.zip';
+    final tempDir = await getTemporaryDirectory();
+    final zipPath = p.join(tempDir.path, '$coreName.zip');
 
     try {
       await dio.download(url, zipPath);
-      final extractionService = ExtractionService(_directoryService);
-      await extractionService.extract(zipPath, coresDir);
+      final bytes = await File(zipPath).readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      for (final entry in archive) {
+        if (entry.isFile && entry.name.endsWith('.dll')) {
+          final outFile = File('$coresDir\\${entry.name}');
+          await outFile.parent.create(recursive: true);
+          await outFile.writeAsBytes(entry.content as List<int>);
+        }
+      }
     } finally {
       final f = File(zipPath);
       if (await f.exists()) await f.delete();

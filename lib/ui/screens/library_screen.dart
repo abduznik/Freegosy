@@ -218,9 +218,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           );
 
           try {
-            final raStrategy = strategy as RetroArchStrategy;
-            final coresDir = File(e.corePath).parent.path;
-            await raStrategy.downloadCore(e.coreName, coresDir, Dio());
+            final retroarchStrategy = strategy as RetroArchStrategy;
+            final coresDir = '${File(e.exePath).parent.path}\\cores';
+            await retroarchStrategy.downloadCore(e.coreName, coresDir, Dio());
             
             if (context.mounted) {
               Navigator.of(context).pop(); // remove loading
