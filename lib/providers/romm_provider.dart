@@ -40,12 +40,12 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
 });
 
 // Provider for StrategyRegistry
-final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
+final strategyRegistryProvider = FutureProvider<StrategyRegistry?>((ref) async {
   final directoryService = ref.watch(directoryServiceProvider).value;
   if (directoryService != null) {
     try {
       final registry = StrategyRegistry(directoryService);
-      registry.loadPreferences(); // Load preferences after creating the registry
+      await registry.loadPreferences(); // Await preferences loading
       // Load persisted Windows exe overrides
       final winStrategy = registry.getStrategyForSlug('windows');
       if (winStrategy is WindowsStrategy) {
@@ -60,13 +60,12 @@ final strategyRegistryProvider = Provider<StrategyRegistry?>((ref) {
 });
 
 // SaveSyncService provider
-final saveSyncServiceProvider = Provider<SaveSyncService?>((ref) {
+final saveSyncServiceProvider = FutureProvider<SaveSyncService?>((ref) async {
   final rommService = ref.watch(rommServiceProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
-  final strategyRegistry = ref.watch(strategyRegistryProvider);
+  final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
   if (rommService == null || directoryService == null || strategyRegistry == null) return null;
   final service = SaveSyncService(rommService, directoryService, strategyRegistry);
-  // Load persisted Windows save path overrides
   service.windowsSaveStrategy.loadPersistedOverrides();
   return service;
 });

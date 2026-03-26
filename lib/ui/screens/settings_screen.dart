@@ -34,13 +34,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
 
-    // Load preferences when the widget is initialized
+    // Mark preferences as loaded (they are now awaited by the provider)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final registry = ref.read(strategyRegistryProvider);
+      final registry = ref.read(strategyRegistryProvider).asData?.value;
       if (registry != null && !_preferencesLoaded) {
-        registry.loadPreferences().then((_) {
-          if (mounted) setState(() => _preferencesLoaded = true);
-        });
+        if (mounted) setState(() => _preferencesLoaded = true);
       }
     });
   }
@@ -80,7 +78,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final rommService = ref.watch(rommServiceProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
-    final strategyRegistry = ref.watch(strategyRegistryProvider);
+    final strategyRegistry = ref.watch(strategyRegistryProvider).asData?.value;
 
     // Display section providers
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
@@ -90,12 +88,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final activePreset = ref.watch(activePresetProvider);
 
-    // Ensure preferences are loaded if registry is available
+    // Mark preferences as loaded (they are awaited by the provider)
     if (strategyRegistry != null && !_preferencesLoaded) {
-      // This block might be redundant if initState handles it, but ensures it's loaded.
-      strategyRegistry.loadPreferences().then((_) {
-        if (mounted) setState(() => _preferencesLoaded = true);
-      });
+      if (mounted) setState(() => _preferencesLoaded = true);
     }
 
     return Scaffold(

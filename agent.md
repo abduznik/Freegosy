@@ -88,8 +88,11 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 
 ### UI — Screens
 - `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Launch flow shows status snackbars at each stage. Catches MissingRetroArchCoreException to offer auto-download of missing core then re-launches. Cache invalidation on pull-to-refresh.
+- `lib/ui/screens/library_skeleton.dart` — Skeleton loading grid and _SkeletonCard widget. Contains top-level functions buildSkeletonGrid() and calculateCardHeight().
 - `lib/ui/screens/download_screen.dart` — Active downloads list.
-- `lib/ui/screens/settings_screen.dart` — Server config, display settings (presets, column count, card shape, spacing, title/hover toggles), storage paths, RetroArch sync mode, emulator download/install status, and Emulator Conflicts section. folder icon button per emulator for setting custom directory override. Launch flow shows status snackbars (pushing saves, syncing saves, launching).
+- `lib/ui/screens/settings_screen.dart` — Server config, storage paths, RetroArch sync mode.
+- `lib/ui/screens/settings_display_section.dart` — Extracted display settings section. Contains buildDisplaySection() function with preset chips, column count, card shape, spacing, title and hover toggles.
+- `lib/ui/screens/settings_emulators_section.dart` — Extracted emulators section. Contains buildEmulatorsSection() and buildConflictsSection() functions. Handles emulator download, custom path overrides, and conflict resolution UI.
 
 ### UI — Widgets
 - `lib/ui/widgets/game_card.dart` — StatefulWidget (not Consumer). Accepts pre-resolved coverUrl. Uses CachedNetworkImage (memCache: 300x400).

@@ -79,7 +79,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   Future<void> _handleLaunch(BuildContext context, WidgetRef ref, Game game) async {
-    final registry = ref.read(strategyRegistryProvider);
+    final registry = ref.read(strategyRegistryProvider).asData?.value;
     final strategy = registry?.getStrategyForSlug(game.platformSlug ?? '');
 
     if (strategy == null) {
@@ -150,7 +150,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       return;
     }
 
-    if (ref.read(saveSyncServiceProvider) != null) {
+    final syncService = await ref.read(saveSyncServiceProvider.future);
+    if (syncService != null) {
       final syncMode = ref.read(retroarchSyncModeProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -158,11 +159,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           duration: const Duration(seconds: 30),
         ),
       );
-      await ref.read(saveSyncServiceProvider)!.pushSaves(game, existingRomPath, syncMode: syncMode);
+      await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
       try {
-        final pulled = await ref.read(saveSyncServiceProvider)!.pullSave(game, existingRomPath);
+        final pulled = await syncService.pullSave(game, existingRomPath);
         if (!context.mounted) return;
         if (pulled) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -271,16 +272,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   Future<void> _handleWindowsConfig(
       BuildContext context, WidgetRef ref, Game game) async {
-    final registry = ref.read(strategyRegistryProvider);
+    final registry = ref.read(strategyRegistryProvider).asData?.value;
     final windowsStrategy =
         registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
+    final syncService = await ref.read(saveSyncServiceProvider.future);
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (ctx) => WindowsGameConfigDialog(
         game: game,
         currentExePath: windowsStrategy?.getExeOverride(game.id),
         currentSavePath:
-            ref.read(saveSyncServiceProvider)?.windowsSaveStrategy.getManualOverride(game.id),
+            syncService?.windowsSaveStrategy.getManualOverride(game.id),
       ),
     );
     if (result == null) return;
@@ -290,7 +292,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       await windowsStrategy?.setExeOverride(game.id, exe);
     }
     if (save.isNotEmpty) {
-      await ref.read(saveSyncServiceProvider)?.windowsSaveStrategy.setManualOverride(game.id, save);
+      await syncService?.windowsSaveStrategy.setManualOverride(game.id, save);
     }
     if (!context.mounted) return;
     await _handleLaunch(context, ref, game);
@@ -298,7 +300,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   Future<void> _handleSyncSaves(
       BuildContext context, WidgetRef ref, Game game) async {
-    final syncService = ref.read(saveSyncServiceProvider);
+    final syncService = await ref.read(saveSyncServiceProvider.future);
     if (syncService == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Save sync not available')),
