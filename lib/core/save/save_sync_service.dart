@@ -188,7 +188,6 @@ class SaveSyncService {
 
       return uploaded > 0;
     } catch (e) {
-      // print('[Push] error: $e'); // Removed print statement
       return false;
     }
   }

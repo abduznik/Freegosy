@@ -69,9 +69,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
     // Special case for PSP saves
     if (slug == 'psp' || slug == 'playstation-portable') {
       if (syncMode == 'saves' || syncMode == 'both') {
-        final savedataDir = Directory('$exeDir/saves/PPSSPP/PSP/SAVEDATA');
-        if (await savedataDir.exists()) {
-          filesToReturn.add(File(savedataDir.path));
+        final pspPath = '$exeDir\\saves\\PPSSPP\\PSP'.replaceAll('/', '\\');
+        final pspDir = Directory(pspPath);
+        if (await pspDir.exists()) {
+          filesToReturn.add(File(pspPath));
         }
       }
     } else {
@@ -101,8 +102,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
     // Filter out non-existent files and apply sessionStart filter
     final finalResult = <File>[];
     for (final f in filesToReturn) {
-      if (!await f.exists()) continue;
-      if (sessionStart != null) {
+      final existsAsFile = await f.exists();
+      final existsAsDir = await Directory(f.path).exists();
+      if (!existsAsFile && !existsAsDir) continue;
+      if (sessionStart != null && existsAsFile) {
         final stat = await f.stat();
         if (stat.modified.isBefore(sessionStart)) continue;
       }
