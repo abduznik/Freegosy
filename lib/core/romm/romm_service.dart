@@ -15,8 +15,8 @@ class RommService {
   RommService(this.config)
       : _dio = Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(config.baseUrl),
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 15),
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(minutes: 2),
         )) {
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
@@ -58,8 +58,8 @@ class RommService {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(minutes: 2),
     ));
     final response = await dio.post(
       '/api/token',
