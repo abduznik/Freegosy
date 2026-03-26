@@ -255,8 +255,11 @@ final allGamesProvider = FutureProvider<List<Game>>((ref) async {
   final platformIdStr = selectedPlatformId?.toString();
 
   if (platformIdStr != null) {
-    // Platform filtered — skip cache, fetch fresh directly
-    return await service.getAllGames(platformId: platformIdStr);
+    try {
+      return await service.getAllGames(platformId: platformIdStr);
+    } catch (e) {
+      return await service.getAllGames();
+    }
   }
 
   // Try cache first — return instantly if valid
