@@ -3,41 +3,46 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
-class DolphinStrategy extends EmulatorStrategy {
+class MelonDSStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  DolphinStrategy(this._directoryService);
+  MelonDSStrategy(this._directoryService);
 
   @override
-  String get name => 'Dolphin';
+  String get name => 'melonDS';
 
   @override
-  String get emulatorId => 'dolphin';
+  String get emulatorId => 'melonds';
 
   @override
-  List<String> get supportedSlugs => ['gc', 'gamecube', 'wii', 'ngc'];
+  List<String> get supportedSlugs => ['nds', 'nintendo-ds', 'ds'];
 
   @override
-  String get windowsExecutable => 'Dolphin.exe';
+  String get windowsExecutable => 'melonDS.exe';
 
   @override
-  String get linuxExecutable => 'dolphin-emu';
+  String get linuxExecutable => 'melonDS';
 
   @override
-  bool get supportsSaveSync => true;
+  bool get supportsSaveSync => false;
 
   @override
   Future<void> launch(Game game, String romPath) async {
     final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.run(exePath, ['-e', romPath]);
+    final workingDir = File(exePath).parent.path;
+    await Process.start(exePath, [romPath], workingDirectory: workingDir, mode: ProcessStartMode.detached);
   }
 
   @override
   Future<Process?> launchWithHandle(Game game, String romPath) async {
     final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    return await Process.start(exePath, ['-e', romPath], mode: ProcessStartMode.normal);
+    final workingDir = File(exePath).parent.path;
+    final process = await Process.start(exePath, [romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
+    process.stdout.drain();
+    process.stderr.drain();
+    return process;
   }
 
   @override

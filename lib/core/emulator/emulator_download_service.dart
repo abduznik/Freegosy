@@ -3,18 +3,19 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:archive/archive_io.dart';
 import '../downloader/download_service.dart';
 import '../storage/directory_service.dart';
+import '../extraction/extraction_service.dart';
 import 'emulator_registry_data.dart';
 import 'github_release_service.dart';
 
 class EmulatorDownloadService {
   final Dio _dio;
   final DirectoryService _directoryService;
+  final ExtractionService _extractionService;
   late final GithubReleaseService _githubService;
 
-  EmulatorDownloadService(this._dio, this._directoryService) {
+  EmulatorDownloadService(this._dio, this._directoryService, this._extractionService) {
     _githubService = GithubReleaseService(_dio);
   }
 
@@ -70,7 +71,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        error: 'No download URL for this platform',
+        error: 'This emulator is not available for your platform',
       );
       return;
     }
@@ -107,7 +108,7 @@ class EmulatorDownloadService {
             percent: 1.0,
             status: 'Extracting...',
           ));
-          await _extractArchive(tempFilePath, emulatorDir);
+          await _extractionService.extract(tempFilePath, emulatorDir);
           controller.add(DownloadProgress(
             id: emulatorId,
             gameName: emulatorName,
@@ -142,24 +143,6 @@ class EmulatorDownloadService {
         gameName: emulatorName,
         error: 'Error: $e',
       );
-    }
-  }
-
-  Future<void> _extractArchive(String archivePath, String destDir) async {
-    if (archivePath.endsWith('.zip')) {
-      final bytes = await File(archivePath).readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      extractArchiveToDisk(archive, destDir);
-    } else if (archivePath.endsWith('.7z')) {
-      final result = await Process.run(
-        '7z', ['x', archivePath, '-o$destDir', '-y'],
-        runInShell: true,
-      );
-      if (result.exitCode != 0) {
-        throw Exception('7z extraction failed: ${result.stderr}');
-      }
-    } else {
-      throw Exception('Unsupported archive format: $archivePath');
     }
   }
 }

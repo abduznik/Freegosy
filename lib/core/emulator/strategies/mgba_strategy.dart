@@ -3,25 +3,25 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
-class XemuStrategy extends EmulatorStrategy {
+class MGBAStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  XemuStrategy(this._directoryService);
+  MGBAStrategy(this._directoryService);
 
   @override
-  String get name => 'Xemu';
+  String get name => 'mGBA';
 
   @override
-  String get emulatorId => 'xemu';
+  String get emulatorId => 'mgba';
 
   @override
-  List<String> get supportedSlugs => ['xbox'];
+  List<String> get supportedSlugs => ['gba', 'gbc', 'gb', 'game-boy-advance', 'game-boy-color', 'game-boy'];
 
   @override
-  String get windowsExecutable => 'xemu.exe';
+  String get windowsExecutable => 'mGBA.exe';
 
   @override
-  String get linuxExecutable => 'xemu';
+  String get linuxExecutable => 'mgba';
 
   @override
   bool get supportsSaveSync => false;
@@ -32,7 +32,7 @@ class XemuStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.start(exePath, ['-dvd_path', romPath], mode: ProcessStartMode.detached);
+    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
   }
 
   @override
@@ -41,7 +41,7 @@ class XemuStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    return await Process.start(exePath, ['-dvd_path', romPath], mode: ProcessStartMode.normal);
+    return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
   }
 
   @override

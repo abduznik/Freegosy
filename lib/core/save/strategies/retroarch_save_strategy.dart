@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
+import 'package:path/path.dart' as p; // Import path package
 
 /// Save strategy for RetroArch emulator.
 ///
@@ -17,23 +18,24 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'retroarch';
 
+  // _CoreInfo maps platform slugs to RetroArch core info, including save and state directories.
   static const Map<String, _CoreInfo> _coreMap = {
-    'gba':       _CoreInfo('mgba_libretro',            'mGBA',                'mGBA'),
-    'gbc':       _CoreInfo('mgba_libretro',            'mGBA',                'mGBA'),
-    'gb':        _CoreInfo('mgba_libretro',            'mGBA',                'mGBA'),
-    'snes':      _CoreInfo('snes9x_libretro',          'Snes9X',              'Snes9X'),
-    'nes':       _CoreInfo('fceumm_libretro',          'FCEUmm',              'FCEUmm'),
-    'n64':       _CoreInfo('mupen64plus_next_libretro', 'Mupen64Plus-Next',   'Mupen64Plus-Next'),
-    'nds':       _CoreInfo('desmume2015_libretro',     'DeSmuME 2015',        'DeSmuME 2015'),
-    'psx':       _CoreInfo('pcsx_rearmed_libretro',    'PCSX-ReARMed',        'PCSX-ReARMed'),
-    'psp':       _CoreInfo('ppsspp_libretro',          'PPSSPP/PSP/SAVEDATA', 'PPSSPP'),
-    'dreamcast': _CoreInfo('flycast_libretro',         'Flycast',             'Flycast'),
-    'megadrive': _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX',    'Genesis Plus GX'),
-    'dc':        _CoreInfo('flycast_libretro', 'Flycast', 'Flycast'),
-    'ps1':       _CoreInfo('pcsx_rearmed_libretro', 'PCSX-ReARMed', 'PCSX-ReARMed'),
-    'playstation': _CoreInfo('pcsx_rearmed_libretro', 'PCSX-ReARMed', 'PCSX-ReARMed'),
-    'md':        _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX', 'Genesis Plus GX'),
-    'genesis':   _CoreInfo('genesis_plus_gx_libretro', 'Genesis Plus GX', 'Genesis Plus GX'),
+    'gba':       _CoreInfo('mgba_libretro',            'GBA',                'States/GBA'),
+    'gbc':       _CoreInfo('mgba_libretro',            'GBA',                'States/GBA'), // mGBA uses the same save folder for GBA/GBC/GB
+    'gb':        _CoreInfo('mgba_libretro',            'GBA',                'States/GBA'),
+    'snes':      _CoreInfo('snes9x_libretro',          'SNES',               'States/SNES'),
+    'nes':       _CoreInfo('fceumm_libretro',          'NES',                'States/NES'),
+    'n64':       _CoreInfo('mupen64plus_next_libretro', 'N64',                'States/N64'),
+    'nds':       _CoreInfo('desmume2015_libretro',     'NDS',                'States/NDS'),
+    'psx':       _CoreInfo('pcsx_rearmed_libretro',    'PSX',                'States/PSX'),
+    'psp':       _CoreInfo('ppsspp_libretro',          'PPSSPP/PSP/SAVEDATA', 'PPSSPP'), // Note: saveFolder is 'PPSSPP/PSP/SAVEDATA', statesFolder is 'PPSSPP'
+    'playstation': _CoreInfo('pcsx_rearmed_libretro', 'PCSX-ReARMed', 'PCSX-ReARMed'), // Assuming this is also PSX and needs save/state dir logic
+    'playstation-portable': _CoreInfo('ppsspp_libretro', 'PPSSPP/PSP/SAVEDATA', 'PPSSPP'), // Alias for PSP
+    'dreamcast': _CoreInfo('flycast_libretro',         'Dreamcast',          'States/Dreamcast'),
+    'dc':        _CoreInfo('flycast_libretro',         'Dreamcast',          'States/Dreamcast'), // Alias for Dreamcast
+    'megadrive': _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'),
+    'genesis':   _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
+    'md':        _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
   };
 
   @override
@@ -46,7 +48,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
     if (exePath == null) return null;
 
     final exeDir = File(exePath).parent.path;
-    return '$exeDir/saves/${coreInfo.saveFolder}';
+    // The saveFolder in _coreMap is relative to the RetroArch installation directory.
+    return p.join(exeDir, 'saves', coreInfo.saveFolder);
   }
 
   @override
@@ -59,32 +62,63 @@ class RetroArchSaveStrategy extends SaveStrategy {
     if (exePath == null) return [];
     final exeDir = File(exePath).parent.path;
 
-    final stem = getRomStem(game);
-    final candidates = <File>[];
+    final stem = getRomStem(game); // Assuming getRomStem is available and correct for generating base filename
 
-    if (syncMode == 'saves' || syncMode == 'both') {
-      final savesDir = '$exeDir/saves/${coreInfo.saveFolder}';
-      candidates.add(File('$savesDir/$stem.srm'));
-    }
+    final List<File> filesToReturn = [];
 
-    if (syncMode == 'states' || syncMode == 'both') {
-      final statesDir = '$exeDir/states/${coreInfo.statesFolder}';
-      candidates.add(File('$statesDir/$stem.state.auto'));
-      for (int i = 0; i <= 9; i++) {
-        candidates.add(File('$statesDir/$stem.state$i'));
+    // Special case for PSP saves
+    if (slug == 'psp' || slug == 'playstation-portable') {
+      if (syncMode == 'saves' || syncMode == 'both') {
+        final pspPath = '$exeDir\\saves\\PPSSPP\\PSP'.replaceAll('/', '\\');
+        final pspDir = Directory(pspPath);
+        if (await pspDir.exists()) {
+          bool hasFiles = false;
+          await for (final _ in pspDir.list(recursive: true)) {
+            hasFiles = true;
+            break;
+          }
+          if (hasFiles) {
+            filesToReturn.add(File(pspPath));
+          }
+        }
+      }
+    } else {
+      // Existing logic for non-PSP saves (e.g., SRM files)
+      if (syncMode == 'saves' || syncMode == 'both') {
+        final savesDir = p.join(exeDir, 'saves', coreInfo.saveFolder);
+        filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
       }
     }
 
-    final result = <File>[];
-    for (final f in candidates) {
-      if (!await f.exists()) continue;
-      if (sessionStart != null) {
+    // Handle States (regardless of platform)
+    if (syncMode == 'states' || syncMode == 'both') {
+      final statesDir = p.join(exeDir, 'states', coreInfo.statesFolder);
+
+      // Derive stem from romPath as fallback
+      final romStem = File(romPath).uri.pathSegments.last.replaceAll(RegExp(r'\.[^.]+$'), '');
+
+      // Check state files for both stems
+      for (final checkStem in [stem, romStem]) {
+        filesToReturn.add(File('$statesDir/$checkStem.state.auto'));
+        for (int i = 0; i <= 9; i++) {
+          filesToReturn.add(File('$statesDir/$checkStem.state$i'));
+        }
+      }
+    }
+
+    // Filter out non-existent files and apply sessionStart filter
+    final finalResult = <File>[];
+    for (final f in filesToReturn) {
+      final existsAsFile = await f.exists();
+      final existsAsDir = await Directory(f.path).exists();
+      if (!existsAsFile && !existsAsDir) continue;
+      if (sessionStart != null && existsAsFile) {
         final stat = await f.stat();
         if (stat.modified.isBefore(sessionStart)) continue;
       }
-      result.add(f);
+      finalResult.add(f);
     }
-    return result;
+    return finalResult;
   }
 
   @override
@@ -100,14 +134,14 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
       final isState = filename.contains('.state');
       final targetDir = isState
-          ? '$exeDir/states/${coreInfo.statesFolder}'
-          : '$exeDir/saves/${coreInfo.saveFolder}';
+          ? p.join(exeDir, 'states', coreInfo.statesFolder)
+          : p.join(exeDir, 'saves', coreInfo.saveFolder);
 
       final dir = Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      final targetPath = '$targetDir/$filename';
-      await backupSave(targetPath);
+      final targetPath = p.join(targetDir, filename);
+      await backupSave(targetPath); // Backup existing file
       await File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {

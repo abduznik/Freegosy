@@ -36,6 +36,7 @@ class DirectoryService {
 
   late String romsRootPath;
   late String emulatorsRootPath;
+  final Map<String, String> _emulatorPathOverrides = {};
 
   DirectoryService();
 
@@ -45,7 +46,29 @@ class DirectoryService {
     emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? _defaultEmulatorsPath;
     await _ensureDirectoryExists(romsRootPath);
     await _ensureDirectoryExists(emulatorsRootPath);
+    await loadEmulatorPathOverrides();
   }
+
+  Future<void> loadEmulatorPathOverrides() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in prefs.getKeys()) {
+      if (key.startsWith('emu_path_')) {
+        final emuId = key.replaceFirst('emu_path_', '');
+        final path = prefs.getString(key);
+        if (path != null) {
+          _emulatorPathOverrides[emuId] = path;
+        }
+      }
+    }
+  }
+
+  Future<void> setEmulatorPathOverride(String emulatorId, String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('emu_path_$emulatorId', path);
+    _emulatorPathOverrides[emulatorId] = path;
+  }
+
+  String? getEmulatorPathOverride(String emulatorId) => _emulatorPathOverrides[emulatorId];
 
   Future<void> _ensureDirectoryExists(String path) async {
     final directory = Directory(path);
@@ -152,9 +175,19 @@ class DirectoryService {
         return null;
       }
       if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
+    } else if (defaultTargetPlatform == TargetPlatform.linux) {
+      // Linux: Try to find system 7z
+      try {
+        final result = await Process.run('which', ['7z']);
+        if (result.exitCode == 0) {
+          return result.stdout.toString().trim();
+        }
+      } catch (e) {
+        // ignore
+      }
+      return null;
     } else {
-      // macOS/Linux: no 7zr needed, system 7z is installable via package managers
-      // Return null for now — future: resolve via `which 7z`
+      // macOS: no 7zr needed
       return null;
     }
 
@@ -173,6 +206,9 @@ class DirectoryService {
   }
 
   Future<String> getEmulatorDirectory(String emulatorId) async {
+    final override = getEmulatorPathOverride(emulatorId);
+    if (override != null) return override;
+
     final dirPath = '$emulatorsRootPath/$emulatorId';
     await _ensureDirectoryExists(dirPath);
     return dirPath;

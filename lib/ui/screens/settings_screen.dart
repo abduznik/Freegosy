@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
-import '../../core/emulator/emulator_download_service.dart';
+// import '../../core/extraction/extraction_service.dart'; // Removed unused import
 import '../../providers/romm_provider.dart';
-import '../../providers/library_provider.dart';
+import '../../providers/library_provider.dart'; // Assuming this file contains the display providers and kDisplayPresets
 import '../../core/romm/romm_service.dart';
+import 'settings_emulators_section.dart';
+import 'settings_display_section.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -24,7 +24,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _passwordController;
   bool _isSaving = false;
   Map<String, bool> _emulatorInstallStates = {};
-  bool _emulatorsLoaded = false;
+  bool _emulatorsLoaded = false; // This state is managed here
+  bool _preferencesLoaded = false;
 
   @override
   void initState() {
@@ -32,6 +33,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _baseUrlController = TextEditingController();
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
+
+    // Mark preferences as loaded (they are now awaited by the provider)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final registry = ref.read(strategyRegistryProvider).asData?.value;
+      if (registry != null && !_preferencesLoaded) {
+        if (mounted) setState(() => _preferencesLoaded = true);
+      }
+    });
   }
 
   @override
@@ -42,6 +51,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
+  // This method should remain in the state class to manage its own state.
   Future<void> _loadEmulatorStates(DirectoryService directoryService) async {
     if (_emulatorsLoaded) return;
     final states = <String, bool>{};
@@ -49,9 +59,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final id = def['id'] as String;
       final exe = def['windows_executable'] as String;
       if (exe.isEmpty) {
-        states[id] = true;
+        states[id] = true; // Assume installed if no executable is defined
         continue;
       }
+      // Check if emulator is installed using the directory service
       states[id] = await directoryService.isEmulatorInstalled(id, exe);
     }
     if (mounted) {
@@ -67,7 +78,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final rommService = ref.watch(rommServiceProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
+    final strategyRegistry = ref.watch(strategyRegistryProvider).asData?.value;
 
+    // Display section providers
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
     final columnCount = ref.watch(columnCountProvider);
     final cardSpacing = ref.watch(cardSpacingProvider);
@@ -75,10 +88,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final activePreset = ref.watch(activePresetProvider);
 
+    // Mark preferences as loaded (they are awaited by the provider)
+    if (strategyRegistry != null && !_preferencesLoaded) {
+      if (mounted) setState(() => _preferencesLoaded = true);
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: rommConfigAsync.when(
         data: (rommConfig) {
+          // Update controllers with loaded config
           _baseUrlController.text = rommConfig.baseUrl;
           _usernameController.text = rommConfig.username;
           _passwordController.text = rommConfig.password;
@@ -92,6 +111,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               
+              // Load emulator states if directory service is available
               _loadEmulatorStates(directoryService);
 
               return ExcludeSemantics(
@@ -100,7 +120,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     _buildRommServerSection(context, ref, rommService),
                     const SizedBox(height: 24),
-                    _buildDisplaySection(
+                    // Call the extracted display section function
+                    buildDisplaySection(
                       context,
                       cardAspectRatio,
                       columnCount,
@@ -108,13 +129,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       showTitle,
                       showButtonsOnHover,
                       activePreset,
+                      ref, // Pass ref
                     ),
                     const SizedBox(height: 24),
                     _buildStorageSection(directoryService),
                     const SizedBox(height: 24),
                     _buildRetroArchSyncModeSection(context, ref),
                     const SizedBox(height: 24),
-                    _buildEmulatorsSection(directoryService),
+                    // Call the extracted emulators section function
+                    buildEmulatorsSection(
+                      context, // Pass context
+                      directoryService,
+                      _emulatorsLoaded, // Pass loaded state
+                      _emulatorInstallStates, // Pass the states map
+                      setState, // Pass the setState callback
+                      ref, // Pass ref
+                    ),
+                    if (strategyRegistry != null) ...[
+                      const SizedBox(height: 24),
+                      // Call the extracted conflicts section function
+                      buildConflictsSection(
+                        strategyRegistry,
+                        setState, // Pass the setState callback
+                      ),
+                    ],
                   ],
                 ),
               );
@@ -129,188 +167,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildDisplaySection(
-    BuildContext context,
-    double cardAspectRatio,
-    int columnCount,
-    double cardSpacing,
-    bool showTitle,
-    bool showButtonsOnHover,
-    String activePreset,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Library Display', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        const Text('Presets', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: [
-            _presetChip('Windows', 'windows_best', activePreset),
-            _presetChip('Steam Deck', 'steamdeck_best', activePreset),
-            _presetChip('Cozy', 'cozy', activePreset),
-            _presetChip('Compact', 'compact', activePreset),
-            _presetChip('Custom', 'custom', activePreset),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Columns per row', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-            Text('$columnCount', style: const TextStyle(fontSize: 16, color: Colors.deepPurple)),
-          ],
-        ),
-        Slider(
-          value: columnCount.toDouble(),
-          min: 2,
-          max: 8,
-          divisions: 6,
-          label: '$columnCount',
-          onChanged: (value) async {
-            ref.read(activePresetProvider.notifier).state = 'custom';
-            ref.read(columnCountProvider.notifier).state = value.toInt();
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setInt('column_count', value.toInt());
-            await prefs.setString('active_preset', 'custom');
-          },
-        ),
-        const SizedBox(height: 16),
-        const Text('Card Shape', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 8),
-        SegmentedButton<double>(
-          segments: const [
-            ButtonSegment(value: 1.0, label: Text('Square')),
-            ButtonSegment(value: 0.72, label: Text('Portrait')),
-            ButtonSegment(value: 0.58, label: Text('Tall')),
-          ],
-          selected: {
-            [1.0, 0.72, 0.58].reduce((a, b) =>
-                (a - cardAspectRatio).abs() < (b - cardAspectRatio).abs()
-                    ? a
-                    : b)
-          },
-          onSelectionChanged: (selection) async {
-            ref.read(activePresetProvider.notifier).state = 'custom';
-            ref.read(cardAspectRatioProvider.notifier).state = selection.first;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setDouble('card_aspect_ratio', selection.first);
-            await prefs.setString('active_preset', 'custom');
-          },
-        ),
-        const SizedBox(height: 16),
-        const Text('Card Spacing', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 8),
-        SegmentedButton<double>(
-          segments: const [
-            ButtonSegment(value: 4.0, label: Text('Tight')),
-            ButtonSegment(value: 8.0, label: Text('Normal')),
-            ButtonSegment(value: 12.0, label: Text('Airy')),
-          ],
-          selected: {
-            [4.0, 8.0, 12.0].reduce((a, b) =>
-                (a - cardSpacing).abs() < (b - cardSpacing).abs() ? a : b)
-          },
-          onSelectionChanged: (selection) async {
-            ref.read(activePresetProvider.notifier).state = 'custom';
-            ref.read(cardSpacingProvider.notifier).state = selection.first;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setDouble('card_spacing', selection.first);
-            await prefs.setString('active_preset', 'custom');
-          },
-        ),
-        const SizedBox(height: 16),
-        SwitchListTile(
-          title: const Text('Show game title'),
-          subtitle: const Text('Display title text below cover art'),
-          value: showTitle,
-          contentPadding: EdgeInsets.zero,
-          onChanged: (value) async {
-            ref.read(activePresetProvider.notifier).state = 'custom';
-            ref.read(showTitleProvider.notifier).state = value;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool('show_title', value);
-            await prefs.setString('active_preset', 'custom');
-          },
-        ),
-        SwitchListTile(
-          title: const Text('Show buttons on hover only'),
-          subtitle: const Text('Buttons appear when hovering over a card'),
-          value: showButtonsOnHover,
-          contentPadding: EdgeInsets.zero,
-          onChanged: (value) async {
-            ref.read(activePresetProvider.notifier).state = 'custom';
-            ref.read(showButtonsOnHoverProvider.notifier).state = value;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool('show_buttons_on_hover', value);
-            await prefs.setString('active_preset', 'custom');
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _presetChip(String label, String presetKey, String activePreset) {
-    final isSelected = activePreset == presetKey;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) async {
-        if (!selected) return;
-        ref.read(activePresetProvider.notifier).state = presetKey;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('active_preset', presetKey);
-        if (presetKey == 'custom') return;
-        final preset = kDisplayPresets[presetKey];
-        if (preset == null) return;
-        final cols = preset['columnCount'] as int;
-        final ratio = preset['cardAspectRatio'] as double;
-        final spacing = preset['cardSpacing'] as double;
-        final title = preset['showTitle'] as bool;
-        final hover = preset['showButtonsOnHover'] as bool;
-        ref.read(columnCountProvider.notifier).state = cols;
-        ref.read(cardAspectRatioProvider.notifier).state = ratio;
-        ref.read(cardSpacingProvider.notifier).state = spacing;
-        ref.read(showTitleProvider.notifier).state = title;
-        ref.read(showButtonsOnHoverProvider.notifier).state = hover;
-        await prefs.setInt('column_count', cols);
-        await prefs.setDouble('card_aspect_ratio', ratio);
-        await prefs.setDouble('card_spacing', spacing);
-        await prefs.setBool('show_title', title);
-        await prefs.setBool('show_buttons_on_hover', hover);
-      },
-    );
-  }
-
-  Widget _buildRetroArchSyncModeSection(BuildContext context, WidgetRef ref) {
-    final syncMode = ref.watch(retroarchSyncModeProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('RetroArch Save Sync', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        const Text('What to sync with RomM cloud', style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 12),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'saves', label: Text('Saves only')),
-            ButtonSegment(value: 'states', label: Text('States only')),
-            ButtonSegment(value: 'both', label: Text('Both')),
-          ],
-          selected: {syncMode},
-          onSelectionChanged: (selection) async {
-            final value = selection.first;
-            ref.read(retroarchSyncModeProvider.notifier).state = value;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('retroarch_sync_mode', value);
-          },
-        ),
-      ],
-    );
-  }
-
+  // --- RomM Server Section ---
   Widget _buildRommServerSection(BuildContext context, WidgetRef ref, rommService) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,6 +215,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   return;
                 }
                 try {
+                  // Test connection by fetching platforms
                   final platforms = await rommService.getPlatforms();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -400,9 +258,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       await prefs.setString('rommUsername', username);
                       await prefs.setString('rommPassword', password);
 
-                      // ignore: unused_result
+                      // Invalidate providers to refresh RomM service and config
                       ref.invalidate(rommConfigProvider);
-                      // ignore: unused_result
                       ref.invalidate(rommServiceProvider);
 
                       if (context.mounted) {
@@ -422,6 +279,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  // --- Storage Section ---
   Widget _buildStorageSection(DirectoryService directoryService) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,8 +292,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (newPath) async {
             if (newPath != null) {
               await directoryService.setRomsRoot(newPath);
-              // ignore: unused_result
-              ref.refresh(directoryServiceProvider);
+              // Fix: Replace ref.refresh with ref.invalidate
+              ref.invalidate(directoryServiceProvider);
             }
           },
         ),
@@ -446,8 +304,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onChanged: (newPath) async {
             if (newPath != null) {
               await directoryService.setEmulatorsRoot(newPath);
-              // ignore: unused_result
-              ref.refresh(directoryServiceProvider);
+              // Fix: Replace ref.refresh with ref.invalidate
+              ref.invalidate(directoryServiceProvider);
             }
           },
         ),
@@ -484,82 +342,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildEmulatorsSection(DirectoryService directoryService) {
+  // --- RetroArch Sync Mode Section ---
+  Widget _buildRetroArchSyncModeSection(BuildContext context, WidgetRef ref) {
+    final syncMode = ref.watch(retroarchSyncModeProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Emulators',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        if (!_emulatorsLoaded)
-          const Center(child: CircularProgressIndicator())
-        else
-          ...kEmulatorDefinitions.map<Widget>((def) {
-            final emulatorId = def['id'] as String;
-            final emulatorName = def['name'] as String;
-            final isInstalled = _emulatorInstallStates[emulatorId] ?? false;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                children: [
-                  Icon(
-                    isInstalled ? Icons.check_circle : Icons.cancel,
-                    color: isInstalled ? Colors.green : Colors.red,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(emulatorName)),
-                  ElevatedButton(
-                    onPressed: isInstalled
-                        ? null
-                        : () async {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content:
-                                  Text('Starting download for $emulatorName...'),
-                            ));
-                            final emulatorDownloadService =
-                                EmulatorDownloadService(
-                                    Dio(), directoryService);
-                            try {
-                              await for (final progress in emulatorDownloadService
-                                  .downloadEmulator(emulatorId)) {
-                                if (progress.error != null) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(SnackBar(
-                                      content: Text('Error: ${progress.error}'),
-                                    ));
-                                  }
-                                  break;
-                                }
-                                if (progress.isComplete) {
-                                  if (mounted) {
-                                    setState(() {
-                                      _emulatorInstallStates[emulatorId] = true;
-                                    });
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(SnackBar(
-                                      content:
-                                          Text('$emulatorName downloaded.'),
-                                    ));
-                                  }
-                                  break;
-                                }
-                              }
-                            } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(SnackBar(
-                                  content: Text('Unexpected error: $e'),
-                                ));
-                              }
-                            }
-                          },
-                    child: Text(isInstalled ? 'Installed' : 'Download'),
-                  ),
-                ],
-              ),
-            );
-          }),
+        const Text('RetroArch Save Sync', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text('What to sync with RomM cloud', style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 12),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'saves', label: Text('Saves only')),
+            ButtonSegment(value: 'states', label: Text('States only')),
+            ButtonSegment(value: 'both', label: Text('Both')),
+          ],
+          selected: {syncMode},
+          onSelectionChanged: (selection) async {
+            final value = selection.first;
+            ref.read(retroarchSyncModeProvider.notifier).state = value;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('retroarch_sync_mode', value);
+          },
+        ),
       ],
     );
   }

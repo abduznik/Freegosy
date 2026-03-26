@@ -1,4 +1,5 @@
-﻿import 'dart:io' as io;
+﻿import 'dart:io';
+import 'dart:io' as io;
 import 'package:freegosy/core/romm/romm_models.dart';
 
 abstract class EmulatorStrategy {
@@ -16,5 +17,6 @@ abstract class EmulatorStrategy {
   }
 
   Future<void> launch(Game game, String romPath);
+  Future<Process?> launchWithHandle(Game game, String romPath) async => null;
   String resolveSavePath(Game game);
 }

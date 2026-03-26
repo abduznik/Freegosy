@@ -233,7 +233,6 @@ final platformsProvider = FutureProvider<List<Platform>>((ref) async {
         final fresh = await service.getPlatforms();
         if (fresh.isNotEmpty) {
           await _savePlatformsCache(fresh);
-          ref.invalidateSelf();
         }
       } catch (_) {}
     });
@@ -261,7 +260,6 @@ final allGamesProvider = FutureProvider<List<Game>>((ref) async {
         final fresh = await service.getAllGames();
         if (fresh.isNotEmpty) {
           await _saveGamesCache(fresh);
-          ref.invalidateSelf();
         }
       } catch (_) {}
     });
