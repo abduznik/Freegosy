@@ -80,13 +80,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   Future<void> _handleLaunch(BuildContext context, WidgetRef ref, Game game) async {
+    final messenger = ScaffoldMessenger.of(context);
+
     // Ensure strategy registry preferences are loaded
     final registryReady = await ref.read(strategyRegistryProvider.future);
     if (registryReady == null) return;
     final strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
 
     if (strategy == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
             content: Text(
                 'No emulator configured for ${game.platformDisplayName ?? game.platformSlug ?? 'this platform'}')),
@@ -100,7 +102,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final dir = await ref.read(directoryServiceProvider.future);
     if (!context.mounted) return;
     if (dir == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Storage service not available')),
       );
       return;
@@ -158,7 +160,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
     if (syncService != null) {
       final syncMode = ref.read(retroarchSyncModeProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Pushing saves for ${game.name}...'),
           duration: const Duration(seconds: 30),
@@ -166,12 +168,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       );
       await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
+      messenger.clearSnackBars();
       try {
         final pulled = await syncService.pullSave(game, existingRomPath);
         if (!context.mounted) return;
         if (pulled) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             const SnackBar(
                 content: Text('Cloud save restored'),
                 duration: Duration(seconds: 2)),
@@ -203,7 +205,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
 
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Launching ${game.name}...'),
           duration: const Duration(seconds: 3),
@@ -222,7 +224,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             await process.exitCode;
             if (!context.mounted) return;
 
-            ScaffoldMessenger.of(context).showSnackBar(
+            messenger.showSnackBar(
               const SnackBar(
                 content: Text('Auto-syncing saves...'),
                 duration: Duration(seconds: 2),
@@ -235,7 +237,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             }
 
             if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
+            messenger.showSnackBar(
               const SnackBar(
                 content: Text('Saves synced'),
                 duration: Duration(seconds: 2),
@@ -285,7 +287,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           } catch (err) {
             if (context.mounted) {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(content: Text('Failed to download core: $err')),
               );
             }
@@ -301,7 +303,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       if (isWindows && isMissingExe) {
         await _handleWindowsConfig(context, ref, game);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Launch failed: $e'),
             duration: const Duration(seconds: 8),
@@ -317,8 +319,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final windowsStrategy =
         registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
     final syncService = await ref.read(saveSyncServiceProvider.future);
-    final result = await showDialog<Map<String, String>>(
-      context: context,
+      if (!context.mounted) return;
+      final result = await showDialog<Map<String, String>>(
+        context: context,
       builder: (ctx) => WindowsGameConfigDialog(
         game: game,
         currentExePath: windowsStrategy?.getExeOverride(game.id),
@@ -341,9 +344,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   Future<void> _handleSyncSaves(
       BuildContext context, WidgetRef ref, Game game) async {
+    final messenger = ScaffoldMessenger.of(context);
+
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (syncService == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Save sync not available')),
       );
       return;
@@ -351,13 +356,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final dir = ref.read(directoryServiceProvider).asData?.value;
     final romPath = dir != null ? await dir.getRomFilePath(game) : '';
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(content: Text('Syncing saves for ${game.name}...')),
     );
     final syncMode = ref.read(retroarchSyncModeProvider);
     final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
         content: Text(ok
             ? 'Saves uploaded for ${game.name}'
