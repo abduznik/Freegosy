@@ -40,19 +40,13 @@ class PpssppSaveStrategy extends SaveStrategy {
 
     final saveDataDir = Directory('$emuDir\\memstick\\PSP\\SAVEDATA');
     if (await saveDataDir.exists()) {
-      await for (final entity in saveDataDir.list()) {
-        if (entity is Directory) {
-          final folderName = entity.path.split(p.separator).last;
-          // Simple match by stem
-          if (folderName.toLowerCase().contains(stem.toLowerCase()) || 
-              stem.toLowerCase().contains(folderName.toLowerCase())) {
-            if (sessionStart != null) {
-              final stat = await entity.stat();
-              if (stat.modified.isBefore(sessionStart)) continue;
-            }
-            result.add(File(entity.path));
-          }
-        }
+      bool hasFiles = false;
+      await for (final _ in saveDataDir.list(recursive: true)) {
+        hasFiles = true;
+        break;
+      }
+      if (hasFiles) {
+        result.add(File(saveDataDir.path));
       }
     }
 
@@ -78,11 +72,14 @@ class PpssppSaveStrategy extends SaveStrategy {
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
-        final folderName = filename.replaceAll('.zip', '');
-        final targetBaseDir = '$emuDir\\memstick\\PSP\\SAVEDATA\\$folderName';
-
+        final targetBaseDir = '$emuDir\\memstick\\PSP\\SAVEDATA';
         for (final entry in archive) {
-          final targetPath = '$targetBaseDir\\${entry.name}';
+          if (entry.name.contains('.bak')) continue;
+          final entryPath = entry.name.replaceAll('/', '\\');
+          final segments = entryPath.split('\\');
+          final strippedPath = segments.length > 1 ? segments.skip(1).join('\\') : entryPath;
+          if (strippedPath.isEmpty) continue;
+          final targetPath = '$targetBaseDir\\$strippedPath';
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = File(targetPath);

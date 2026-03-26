@@ -72,7 +72,14 @@ class RetroArchSaveStrategy extends SaveStrategy {
         final pspPath = '$exeDir\\saves\\PPSSPP\\PSP'.replaceAll('/', '\\');
         final pspDir = Directory(pspPath);
         if (await pspDir.exists()) {
-          filesToReturn.add(File(pspPath));
+          bool hasFiles = false;
+          await for (final _ in pspDir.list(recursive: true)) {
+            hasFiles = true;
+            break;
+          }
+          if (hasFiles) {
+            filesToReturn.add(File(pspPath));
+          }
         }
       }
     } else {

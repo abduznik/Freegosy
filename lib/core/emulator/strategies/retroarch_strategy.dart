@@ -110,6 +110,44 @@ class RetroArchStrategy extends EmulatorStrategy {
     );
   }
 
+  @override
+  Future<Process?> launchWithHandle(Game game, String romPath) async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+        emulatorId, getExecutableForPlatform());
+    if (exePath == null) {
+      throw Exception('$name not found. Please download it first.');
+    }
+
+    final normalizedExe = exePath.replaceAll('/', r'\');
+    final normalizedRom = romPath.replaceAll('/', r'\');
+    final coreName = _getCoreForSlug(game.platformSlug);
+
+    if (coreName == null) {
+      return await Process.start(
+        normalizedExe,
+        [normalizedRom],
+        mode: ProcessStartMode.normal,
+      );
+    }
+
+    final exeDir = File(normalizedExe).parent.path;
+    final corePath = '$exeDir\\cores\\$coreName';
+
+    if (!await File(corePath).exists()) {
+      throw MissingRetroArchCoreException(
+        coreName: coreName,
+        corePath: corePath,
+        exePath: normalizedExe,
+      );
+    }
+
+    return await Process.start(
+      normalizedExe,
+      ['-L', corePath, normalizedRom],
+      mode: ProcessStartMode.normal,
+    );
+  }
+
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
     final url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreName.zip';
     final tempDir = await getTemporaryDirectory();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
@@ -79,8 +80,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   Future<void> _handleLaunch(BuildContext context, WidgetRef ref, Game game) async {
-    final registry = ref.read(strategyRegistryProvider).asData?.value;
-    final strategy = registry?.getStrategyForSlug(game.platformSlug ?? '');
+    // Ensure strategy registry preferences are loaded
+    final registryReady = await ref.read(strategyRegistryProvider.future);
+    if (registryReady == null) return;
+    final strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
 
     if (strategy == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +93,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       );
       return;
     }
+
+    // Wait for save sync service to be ready (FutureProvider chain)
+    final syncService = await ref.read(saveSyncServiceProvider.future);
 
     final dir = await ref.read(directoryServiceProvider.future);
     if (!context.mounted) return;
@@ -150,7 +156,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       return;
     }
 
-    final syncService = await ref.read(saveSyncServiceProvider.future);
     if (syncService != null) {
       final syncMode = ref.read(retroarchSyncModeProvider);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -204,7 +209,43 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
-      await strategy.launch(game, existingRomPath);
+
+      // Try to get process handle for auto-sync when game closes
+      Process? process = await strategy.launchWithHandle(game, existingRomPath);
+      if (process == null) {
+        // Fall back to regular launch if no process handle available
+        await strategy.launch(game, existingRomPath);
+      } else {
+        // Start background Future to handle process exit
+        unawaited(Future.delayed(Duration.zero, () async {
+          try {
+            await process.exitCode;
+            if (!context.mounted) return;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Auto-syncing saves...'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+
+            if (syncService != null) {
+              final syncMode = ref.read(retroarchSyncModeProvider);
+              await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+            }
+
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Saves synced'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } catch (e) {
+            // Silently ignore errors in auto-sync
+          }
+        }));
+      }
     } catch (e) {
       if (!context.mounted) return;
 
