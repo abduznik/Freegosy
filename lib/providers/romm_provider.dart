@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
@@ -7,17 +8,18 @@ import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 
+final _secureStorage = const FlutterSecureStorage();
 
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   final baseUrl = prefs.getString('rommBaseUrl') ?? 'https://api.romm.example.com';
   final username = prefs.getString('rommUsername') ?? 'guest';
-  final password = prefs.getString('rommPassword') ?? '';
-  final token = prefs.getString('rommAuthToken');
-  final apiKey = prefs.getString('rommApiKey') ?? ''; // Read apiKey from SharedPreferences
+  final password = await _secureStorage.read(key: 'rommPassword') ?? '';
+  final token = await _secureStorage.read(key: 'rommAuthToken');
+  final apiKey = await _secureStorage.read(key: 'rommApiKey') ?? '';
 
-  return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token, apiKey: apiKey); // Pass apiKey
+  return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token, apiKey: apiKey);
 });
 
 // Exposes a login function that fetches a Bearer token and refreshes the config/service providers.
