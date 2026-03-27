@@ -217,6 +217,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             helperMaxLines: 2,
           ),
           keyboardType: TextInputType.text,
+          obscureText: true,
         ),
         const SizedBox(height: 16),
         const Divider(), // Add divider

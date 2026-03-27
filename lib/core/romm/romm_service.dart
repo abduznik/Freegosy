@@ -205,6 +205,7 @@ class RommService {
 
   /// Returns the Authorization header value for downloads (Bearer if available, else Basic).
   String get authHeader {
+    if (config.apiKey.isNotEmpty) return 'Bearer ${config.apiKey}';
     final token = config.token;
     if (token != null && token.isNotEmpty) return 'Bearer $token';
     return 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
