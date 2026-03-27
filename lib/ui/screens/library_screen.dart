@@ -26,7 +26,7 @@ class LibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
-  Map<String, bool> _downloadedStates = {};
+  final Map<String, bool> _downloadedStates = {};
   late TextEditingController _searchController;
   final FocusNode _focusNode = FocusNode();
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
