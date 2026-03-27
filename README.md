@@ -2,6 +2,30 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
+## What's New in 0.1.2
+
+### Paginated Library Loading
+- Library now loads 50 games at a time instead of fetching everything at once
+- Scroll to the bottom to automatically load more games
+- Supports libraries with 2000+ games without performance issues
+
+### Server-Side Platform Filtering
+- Switching platforms now fetches only that platform's games from the server
+- Fixed RomM 4.x API compatibility — correctly uses `platform_ids` parameter
+- Platform results are cached in memory for instant switching on revisit
+
+### Search Improvements
+- Search is now debounced — waits 300ms after typing before firing the API call
+- No more per-keystroke requests hammering your RomM server
+
+### UX Fixes
+- F5 refresh now correctly shows the loading animation and clears cache
+- Pull-to-refresh always fetches fresh data from the server
+
+## What's New in 0.1.1
+
+- API key token verification improvements
+
 ## What's New in 0.1.0
 
 ### New Emulator Support
@@ -99,7 +123,7 @@ Freegosy is designed as a truly cross-platform experience. The codebase is struc
 
 ## Status
 
-Actively under development. Release 0.1.0 brings major emulator expansion, comprehensive save sync, and auto-sync on game close.
+Actively under development. Release 0.1.2 brings paginated library loading and server-side platform filtering for large library support.
 
 ## About RomM
 
