@@ -15,8 +15,9 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final username = prefs.getString('rommUsername') ?? 'guest';
   final password = prefs.getString('rommPassword') ?? '';
   final token = prefs.getString('rommAuthToken');
+  final apiKey = prefs.getString('rommApiKey') ?? ''; // Read apiKey from SharedPreferences
 
-  return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token);
+  return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token, apiKey: apiKey); // Pass apiKey
 });
 
 // Exposes a login function that fetches a Bearer token and refreshes the config/service providers.

@@ -21,6 +21,12 @@ class RommService {
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
+        // Check for 401 with API Key
+        if (e.response?.statusCode == 401 && config.apiKey.isNotEmpty) {
+          throw Exception('Invalid API key. Please check your token in RomM Settings → Client API Tokens.');
+        }
+
+        // If the server rejects the Bearer token with 403, retry once with Basic auth.
         if (e.response?.statusCode == 403 &&
           e.requestOptions.extra['_basicRetry'] != true &&
           e.requestOptions.data is! FormData &&
@@ -44,10 +50,16 @@ class RommService {
   /// Returns the appropriate auth Options for each request.
   /// Uses Bearer token if available, falls back to Basic auth.
   Options get _authOptions {
+    // Check for API Key first
+    if (config.apiKey.isNotEmpty) {
+      return Options(headers: {'Authorization': 'Bearer ${config.apiKey}'});
+    }
+    // Fallback to existing token logic
     final token = config.token;
     if (token != null && token.isNotEmpty) {
       return Options(headers: {'Authorization': 'Bearer $token'});
     }
+    // Fallback to Basic auth
     final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
     return Options(headers: {'Authorization': basic});
   }

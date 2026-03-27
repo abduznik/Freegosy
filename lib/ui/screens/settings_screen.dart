@@ -8,6 +8,7 @@ import '../../core/emulator/emulator_registry_data.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart'; // Assuming this file contains the display providers and kDisplayPresets
 import '../../core/romm/romm_service.dart';
+import '../../core/romm/romm_models.dart';
 import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 
@@ -22,6 +23,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _baseUrlController;
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
+  late TextEditingController _apiKeyController; // Added API Key controller
   bool _isSaving = false;
   Map<String, bool> _emulatorInstallStates = {};
   bool _emulatorsLoaded = false; // This state is managed here
@@ -33,6 +35,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _baseUrlController = TextEditingController();
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
+    _apiKeyController = TextEditingController(); // Initialize API Key controller
 
     // Mark preferences as loaded (they are now awaited by the provider)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -48,6 +51,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _baseUrlController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _apiKeyController.dispose(); // Dispose API Key controller
     super.dispose();
   }
 
@@ -101,6 +105,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _baseUrlController.text = rommConfig.baseUrl;
           _usernameController.text = rommConfig.username;
           _passwordController.text = rommConfig.password;
+          _apiKeyController.text = rommConfig.apiKey; // Load API Key into controller
 
           return directoryServiceAsync.when(
             data: (directoryService) {
@@ -118,7 +123,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16.0),
                   children: [
-                    _buildRommServerSection(context, ref, rommService),
+                    _buildRommServerSection(context, ref, rommService, rommConfig),
                     const SizedBox(height: 24),
                     // Call the extracted display section function
                     buildDisplaySection(
@@ -168,7 +173,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // --- RomM Server Section ---
-  Widget _buildRommServerSection(BuildContext context, WidgetRef ref, rommService) {
+  Widget _buildRommServerSection(BuildContext context, WidgetRef ref, RommService? rommService, RomMConfig rommConfig) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -200,6 +205,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           obscureText: true,
         ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _apiKeyController,
+          decoration: const InputDecoration(
+            labelText: 'API Key (RomM 4.8+)',
+            hintText: 'rmm_...',
+            border: OutlineInputBorder(),
+            helperText: 'Recommended. Generate in RomM Settings → Client API Tokens',
+            helperMaxLines: 2,
+          ),
+          keyboardType: TextInputType.text,
+        ),
+        const SizedBox(height: 16),
+        const Divider(), // Add divider
+        const SizedBox(height: 8),
+        const Text('Legacy Authentication (RomM 4.7 and below)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)), // Add label
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -217,9 +238,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 try {
                   // Test connection by fetching platforms
                   final platforms = await rommService.getPlatforms();
+                  String message;
+                  if (rommConfig.apiKey.isNotEmpty) {
+                    message = 'Connected via API key. ${platforms.length} platforms found.';
+                  } else {
+                    message = 'Connected via username/password. ${platforms.length} platforms found.';
+                  }
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Connection successful! ${platforms.length} platforms found.'), backgroundColor: Colors.green),
+                      SnackBar(content: Text(message), backgroundColor: Colors.green),
                     );
                   }
                 } catch (e) {
@@ -241,6 +268,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       final baseUrl = _baseUrlController.text.trim();
                       final username = _usernameController.text.trim();
                       final password = _passwordController.text;
+                      final apiKey = _apiKeyController.text.trim(); // Get API Key value
 
                       // Try Bearer token (OAuth2). If the server doesn't support
                       // it over HTTP or at all, fall back to Basic auth silently.
@@ -257,6 +285,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);
                       await prefs.setString('rommPassword', password);
+                      await prefs.setString('rommApiKey', apiKey); // Save API Key
 
                       // Invalidate providers to refresh RomM service and config
                       ref.invalidate(rommConfigProvider);
