@@ -35,6 +35,7 @@ dependencies:
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
   package_info_plus: ^5.0.1
+  crypto: ^3.0.3
   cached_network_image: ^3.3.1
 
   # The following adds the Cupertino Icons font to your application.

@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
@@ -145,28 +147,66 @@ class SaveSyncService {
     }
   }
 
+  String _hashKey(String gameId, String filename) =>
+      'last_hash_${gameId}_$filename';
+
+  Future<String?> _getStoredHash(
+      String gameId, String filename) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_hashKey(gameId, filename));
+  }
+
+  Future<void> _storeHash(
+      String gameId, String filename, String hash) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_hashKey(gameId, filename), hash);
+  }
+
+  Future<String> _hashFile(File file) async {
+    final bytes = await file.readAsBytes();
+    return md5.convert(bytes).toString();
+  }
+
+  String _pullKey(String gameId) =>
+      'last_pull_$gameId';
+
+  Future<DateTime?> _getLastPullTime(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_pullKey(gameId));
+    if (stored == null) return null;
+    return DateTime.tryParse(stored);
+  }
+
+  Future<void> _setLastPullTime(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _pullKey(gameId),
+      DateTime.now().toIso8601String(),
+    );
+  }
+
   /// Uploads all local save files for [game] to RomM.
   ///
   /// If [sessionStart] is provided, only files modified after that time are uploaded.
   /// Returns true if at least one file was uploaded successfully.
-  Future<bool> pushSaves(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
+  Future<bool> pushSaves(Game game, String romPath,
+      {DateTime? sessionStart, String syncMode = 'both'}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
-      if (strategy == null) {
-        return false;
-      }
+      if (strategy == null) return false;
 
-      final files = await strategy.getSaveFiles(game, romPath, sessionStart: sessionStart, syncMode: syncMode);
-      if (files.isEmpty) {
-        return false;
-      }
+      final files = await strategy.getSaveFiles(
+        game, romPath,
+        sessionStart: sessionStart,
+        syncMode: syncMode,
+      );
+      if (files.isEmpty) return false;
 
       int uploaded = 0;
       for (final file in files) {
         File uploadFile = file;
         bool isTempZip = false;
 
-        // If it's a directory, zip it first
         if (await FileSystemEntity.isDirectory(file.path)) {
           final zipPath = '${file.path}.zip';
           final encoder = ZipFileEncoder();
@@ -177,14 +217,30 @@ class SaveSyncService {
           isTempZip = true;
         }
 
-  final ok = await _rommService.uploadSave(game.id, uploadFile);
-  if (ok) uploaded++;
+        final filename = uploadFile.path
+            .split(RegExp(r'[/\\]'))
+            .last;
 
-  // Clean up temp zip
-  if (isTempZip && await uploadFile.exists()) {
-    await uploadFile.delete();
-  }
-}
+        final localHash = await _hashFile(uploadFile);
+        final storedHash = await _getStoredHash(game.id, filename);
+
+        if (storedHash != null && localHash == storedHash) {
+          if (isTempZip && await uploadFile.exists()) {
+            await uploadFile.delete();
+          }
+          continue;
+        }
+
+        final ok = await _rommService.uploadSave(game.id, uploadFile);
+        if (ok) {
+          uploaded++;
+          await _storeHash(game.id, filename, localHash);
+        }
+
+        if (isTempZip && await uploadFile.exists()) {
+          await uploadFile.delete();
+        }
+      }
 
       return uploaded > 0;
     } catch (e) {
@@ -198,35 +254,42 @@ class SaveSyncService {
   Future<bool> pullSave(Game game, String romPath) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
-      if (strategy == null) {
-        return false;
-      }
+      if (strategy == null) return false;
 
       final save = await _rommService.getLatestSave(game.id);
-      if (save == null) {
+      if (save == null) return false;
+
+      // Check remote updated_at vs last pull time
+      final remoteUpdatedAt = DateTime.tryParse(
+          save['updated_at']?.toString() ?? '');
+      final lastPull = await _getLastPullTime(game.id);
+
+      if (lastPull != null &&
+          remoteUpdatedAt != null &&
+          !remoteUpdatedAt.isAfter(lastPull)) {
+        // Remote hasn't changed since last pull, skip
         return false;
       }
-      // print('[Pull] getLatestSave result: $save');
 
-      final downloadUrl = save['download_path'] as String? ?? save['url'] as String?;
-      if (downloadUrl == null) {
-        return false;
+      final downloadUrl = save['download_path'] as String?
+          ?? save['url'] as String?;
+      if (downloadUrl == null) return false;
+
+      final bytes = await _rommService.downloadSave(
+          downloadUrl);
+      if (bytes == null) return false;
+
+      final filename = save['file_name'] as String?
+          ?? downloadUrl.split('/').last;
+
+      final ok = await strategy.restoreSave(
+          game, romPath, bytes, filename);
+
+      if (ok) {
+        await _setLastPullTime(game.id);
       }
-
-      final bytes = await _rommService.downloadSave(downloadUrl);
-      if (bytes == null) {
-        return false;
-      }
-      // print('[Pull] downloaded bytes: ${bytes?.length}');
-
-      final filename = save['file_name'] as String? ??
-          downloadUrl.split('/').last;
-
-      final ok = await strategy.restoreSave(game, romPath, bytes, filename);
-      // print('[Pull] restoreSave result: $ok');
       return ok;
     } catch (e) {
-      // print('[Pull] error: $e'); // Removed print statement
       rethrow;
     }
   }

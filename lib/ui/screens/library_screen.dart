@@ -3,11 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/paginated_games_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
@@ -25,36 +26,36 @@ class LibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
-  Map<String, bool> _downloadedStates = {};
-  bool _downloadStatesLoaded = false;
+  final Map<String, bool> _downloadedStates = {};
   late TextEditingController _searchController;
+  final FocusNode _focusNode = FocusNode();
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
+      GlobalKey<RefreshIndicatorState>();
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: ref.read(searchQueryProvider));
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadDownloadStates(
-      DirectoryService dirService, List<Game> games) async {
-    if (_downloadStatesLoaded) return;
-    final results = await Future.wait(
-      games.map((game) async {
-        final isDownloaded = await dirService.isRomDownloaded(game);
-        return MapEntry(game.id, isDownloaded);
-      }),
-    );
-    if (mounted) {
-      setState(() {
-        _downloadedStates = Map.fromEntries(results);
-        _downloadStatesLoaded = true;
-      });
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 600) {
+      ref.read(paginatedGamesProvider.notifier).loadMore();
     }
   }
 
@@ -66,6 +67,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         _downloadedStates[game.id] = isDownloaded;
       });
     }
+  }
+
+  Future<void> _refreshLibrary() async {
+    ref.invalidate(platformsProvider);
+    ref.read(paginatedGamesProvider.notifier).reset();
+    await ref.read(paginatedGamesProvider.notifier).loadInitial(
+      platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+      search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
+    );
   }
 
   void _startDownload(BuildContext context, WidgetRef ref, Game game) {
@@ -388,9 +398,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget build(BuildContext context) {
     final platformsAsync = ref.watch(platformsProvider);
     final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
-    final searchQuery = ref.watch(searchQueryProvider);
-    final gamesAsync = ref.watch(allGamesProvider);
-    final filteredGames = ref.watch(filteredGamesProvider);
+    final paginatedState = ref.watch(paginatedGamesProvider);
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
     final columnCount = ref.watch(columnCountProvider);
     final cardSpacing = ref.watch(cardSpacingProvider);
@@ -399,12 +407,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final rommConfigAsync = ref.watch(rommConfigProvider);
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
 
+    // Trigger initial load once service becomes available
+    ref.listen(rommServiceProvider, (prev, next) {
+      if (prev == null && next != null) {
+        ref.read(paginatedGamesProvider.notifier).loadInitial(platformId: null);
+      }
+    });
+
+    // Reload when platform changes
+    ref.listen<int?>(selectedPlatformIdProvider, (prev, next) {
+      if (prev != next) {
+        ref.read(paginatedGamesProvider.notifier).loadInitial(
+          platformId: next?.toString(),
+        );
+      }
+    });
+
     final appBarTitle = rommConfigAsync.when(
       data: (config) {
         final uri = Uri.tryParse(config.baseUrl);
         final host = uri?.host ?? config.baseUrl;
-        final totalGames = gamesAsync.asData?.value.length;
-        final gameCountStr = totalGames != null ? ' • $totalGames games' : '';
+        final gameCountStr = ' • ${paginatedState.total} games';
         return 'Freegosy • $host$gameCountStr';
       },
       loading: () => 'Freegosy',
@@ -413,159 +436,130 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(appBarTitle)),
-      body: ExcludeSemantics(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search games...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+      body: KeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: (KeyEvent event) {
+          if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f5) {
+            _refreshIndicatorKey.currentState?.show();
+          }
+        },
+        child: ExcludeSemantics(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search games...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
                   ),
+                  onChanged: (value) {
+                    ref.read(searchQueryProvider.notifier).state = value;
+                    ref.read(paginatedGamesProvider.notifier).loadInitial(
+                      platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+                      search: value.isEmpty ? null : value,
+                    );
+                  },
                 ),
-                onChanged: (value) {
-                  ref.read(searchQueryProvider.notifier).state = value;
-                },
               ),
-            ),
-            platformsAsync.when(
-              data: (platforms) => PlatformFilterBar(
-                platforms: platforms,
-                selectedPlatformId: selectedPlatformId,
-                onSelected: (platform) {
-                  ref.read(selectedPlatformIdProvider.notifier).state = platform?.id;
-                },
-              ),
-              loading: () => const LinearProgressIndicator(),
-              error: (e, s) => Text('Error loading platforms: $e'),
-            ),
-            Expanded(
-              child: gamesAsync.when(
-                loading: () => buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing, context),
-                error: (e, s) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      'Error loading games: $e',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
+              platformsAsync.when(
+                data: (platforms) => PlatformFilterBar(
+                  platforms: platforms,
+                  selectedPlatformId: selectedPlatformId,
+                  onSelected: (platform) {
+                    ref.read(selectedPlatformIdProvider.notifier).state = platform?.id;
+                  },
                 ),
-                data: (_) {
-                  final gamesCount = filteredGames.length;
-                  final countDisplayText =
-                      (selectedPlatformId == null && searchQuery.isEmpty)
-                          ? 'Showing all $gamesCount games'
-                          : 'Showing $gamesCount games';
-
-                  final dirService = directoryServiceAsync.asData?.value;
-                  if (dirService != null && !_downloadStatesLoaded) {
-                    final games = ref.read(allGamesProvider).asData?.value ?? [];
-                    _loadDownloadStates(dirService, games);
-                  }
-
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            countDisplayText,
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                loading: () => const LinearProgressIndicator(),
+                error: (e, s) => Text('Error loading platforms: $e'),
+              ),
+              Expanded(
+                child: paginatedState.isLoading
+                  ? buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing, context)
+                  : paginatedState.error != null
+                    ? Center(child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text('Error: ${paginatedState.error}', style: const TextStyle(color: Colors.red)),
+                      ))
+                    : Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                selectedPlatformId == null
+                                  ? 'Showing ${paginatedState.games.length} of ${paginatedState.total} games'
+                                  : 'Showing ${paginatedState.games.length} of ${paginatedState.total} games',
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      Expanded(
-                        child: RefreshIndicator(
-                          onRefresh: () async {
-                            setState(() {
-                              _downloadStatesLoaded = false;
-                              _downloadedStates = {};
-                            });
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.remove('cached_games');
-                            await prefs.remove('cached_platforms');
-                            await prefs.remove('cached_games_time');
-                            await prefs.remove('cached_platforms_time');
-                            await prefs.remove('cache_size_exceeded');
-                            ref.invalidate(allGamesProvider);
-                            ref.invalidate(platformsProvider);
-                            await ref.read(allGamesProvider.future);
-                          },
-                          child: filteredGames.isEmpty
-                              ? const CustomScrollView(
-                                  slivers: [
-                                    SliverFillRemaining(
-                                      child: Center(child: Text('No games found')),
+                          Expanded(
+                            child: RefreshIndicator(
+                              key: _refreshIndicatorKey,
+                              onRefresh: _refreshLibrary,
+                              child: paginatedState.games.isEmpty
+                                ? const CustomScrollView(slivers: [
+                                    SliverFillRemaining(child: Center(child: Text('No games found'))),
+                                  ])
+                                : GridView.builder(
+                                    controller: _scrollController,
+                                    padding: const EdgeInsets.all(12),
+                                    cacheExtent: 800,
+                                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columnCount,
+                                      crossAxisSpacing: cardSpacing,
+                                      mainAxisSpacing: cardSpacing,
+                                      mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context),
                                     ),
-                                  ],
-                                )
-                              : GridView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  cacheExtent: 800,
-                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columnCount,
-                                    crossAxisSpacing: cardSpacing,
-                                    mainAxisSpacing: cardSpacing,
-                                    mainAxisExtent: calculateCardHeight(
-                                        columnCount, cardSpacing, cardAspectRatio, context),
-                                  ),
-                                  itemCount: filteredGames.length,
-                                  itemBuilder: (context, index) {
-                                    final game = filteredGames[index];
-                                    final dirService = directoryServiceAsync.asData?.value;
-                                    final isWindowsGame = ['windows', 'pc', 'win']
-                                        .contains(game.platformSlug?.toLowerCase() ?? '');
-                                    final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
-
-                                    if (dirService == null) {
+                                    itemCount: paginatedState.games.length + (paginatedState.isLoadingMore ? 1 : 0),
+                                    itemBuilder: (context, index) {
+                                      if (index == paginatedState.games.length) {
+                                        return const Center(child: Padding(
+                                          padding: EdgeInsets.all(16),
+                                          child: CircularProgressIndicator(),
+                                        ));
+                                      }
+                                      final game = paginatedState.games[index];
+                                      final dirService = directoryServiceAsync.asData?.value;
+                                      final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+                                      final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                                      if (dirService == null) {
+                                        return GestureDetector(
+                                          onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
+                                          child: GameCard(
+                                            game: game, coverUrl: coverUrl, showTitle: showTitle,
+                                            showButtonsOnHover: showButtonsOnHover,
+                                            onDownload: () => _startDownload(context, ref, game),
+                                            onLaunch: () => _handleLaunch(context, ref, game),
+                                            onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                          ),
+                                        );
+                                      }
                                       return GestureDetector(
-                                        onLongPress: isWindowsGame
-                                            ? () => _handleWindowsConfig(context, ref, game)
-                                            : null,
+                                        onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
                                         child: GameCard(
-                                          game: game,
-                                          coverUrl: coverUrl,
-                                          showTitle: showTitle,
-                                          showButtonsOnHover: showButtonsOnHover,
+                                          game: game, coverUrl: coverUrl,
+                                          isDownloaded: _downloadedStates[game.id] ?? false,
+                                          showTitle: showTitle, showButtonsOnHover: showButtonsOnHover,
                                           onDownload: () => _startDownload(context, ref, game),
                                           onLaunch: () => _handleLaunch(context, ref, game),
                                           onSyncSaves: () => _handleSyncSaves(context, ref, game),
                                         ),
                                       );
-                                    }
-
-                                    return GestureDetector(
-                                      onLongPress: isWindowsGame
-                                          ? () => _handleWindowsConfig(context, ref, game)
-                                          : null,
-                                      child: GameCard(
-                                        game: game,
-                                        coverUrl: coverUrl,
-                                        isDownloaded: _downloadedStates[game.id] ?? false,
-                                        showTitle: showTitle,
-                                        showButtonsOnHover: showButtonsOnHover,
-                                        onDownload: () => _startDownload(context, ref, game),
-                                        onLaunch: () => _handleLaunch(context, ref, game),
-                                        onSyncSaves: () => _handleSyncSaves(context, ref, game),
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
+                                    },
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  );
-                },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
