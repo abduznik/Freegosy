@@ -27,6 +27,19 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Map<String, bool> _downloadedStates = {};
   bool _downloadStatesLoaded = false;
+  late TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: ref.read(searchQueryProvider));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadDownloadStates(
       DirectoryService dirService, List<Game> games) async {
@@ -406,6 +419,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
               child: TextField(
+                controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Search games...',
                   prefixIcon: const Icon(Icons.search),

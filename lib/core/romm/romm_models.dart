@@ -119,12 +119,14 @@ class RomMConfig {
   final String username;
   final String password;
   final String? token;
+  final String apiKey; // Added apiKey field
 
   RomMConfig({
     required this.baseUrl,
     required this.username,
     required this.password,
     this.token,
+    this.apiKey = '', // Added apiKey to constructor with default
   });
 
   factory RomMConfig.fromJson(Map<String, dynamic> json) {
@@ -133,6 +135,7 @@ class RomMConfig {
       username: json['username']?.toString() ?? '',
       password: json['password']?.toString() ?? '',
       token: json['token']?.toString(),
+      apiKey: json['apiKey']?.toString() ?? '', // Added apiKey from JSON with default
     );
   }
 
@@ -142,6 +145,7 @@ class RomMConfig {
       'username': username,
       'password': password,
       if (token != null) 'token': token,
+      'apiKey': apiKey, // Added apiKey to toJson
     };
   }
 }
