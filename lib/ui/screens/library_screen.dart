@@ -70,13 +70,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   Future<void> _refreshLibrary() async {
-    setState(() {
-      _downloadedStates = {};
-    });
     ref.invalidate(platformsProvider);
     ref.read(paginatedGamesProvider.notifier).reset();
     await ref.read(paginatedGamesProvider.notifier).loadInitial(
       platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+      search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
     );
   }
 
