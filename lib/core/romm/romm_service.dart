@@ -45,6 +45,11 @@ class RommService {
         handler.next(e);
       },
     ));
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+        handler.next(options);
+      },
+    ));
   }
 
   /// Returns the appropriate auth Options for each request.
@@ -134,6 +139,31 @@ class RommService {
       params['platform_id'] = int.parse(platformId);
     }
     return _fetchPaginatedGames(params);
+  }
+
+  Future<({List<Game> games, int total})> getGamesPage({
+    int offset = 0,
+    int limit = 50,
+    String? platformId,
+    String? search,
+  }) async {
+    final params = <String, dynamic>{
+      'limit': limit,
+      'offset': offset,
+    };
+    params['order_by'] = 'name';
+    params['order_dir'] = 'asc';
+    if (platformId != null) params['platform_ids'] = [int.parse(platformId)];
+    if (search != null && search.isNotEmpty) params['search_term'] = search;
+
+    final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
+      final List<dynamic> items = data['items'] ?? [];
+      final int total = data['total'] ?? items.length;
+      return (games: items.map((e) => Game.fromJson(e)).toList(), total: total);
+    }
+    throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
   }
 
   Future<List<Game>> _fetchPaginatedGames(Map<String, dynamic> params) async {
