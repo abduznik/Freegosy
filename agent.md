@@ -23,7 +23,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/app.dart` — MaterialApp setup, theme, initial route, navigation shell.
 
 ### Core — RomM
-- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getSaves(), uploadSave(), getLatestSave(), downloadSave(). Returns typed models.
+- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getAllGames(), getGamesPage(offset, limit, platformId, search), getSaves(), uploadSave(), getLatestSave(), downloadSave(). getGamesPage() uses platform_ids (array), order_by, order_dir params per RomM 4.x API spec. Returns typed models.
 - `lib/core/romm/romm_models.dart` — Data models: Game, Platform, SaveFile, RomMConfig.
 
 ### Core — Save Sync
@@ -83,11 +83,12 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 
 ### Providers
 - `lib/providers/romm_provider.dart` — Riverpod providers for RomM config, connection state, DirectoryService, StrategyRegistry, SaveSyncService. strategyRegistryProvider and saveSyncServiceProvider are FutureProviders that must be awaited with .future to ensure preferences are loaded before use.
-- `lib/providers/library_provider.dart` — Riverpod providers for platforms and games. Search, filtering, and display settings persistence. Background refresh silently updates cache.
+- `lib/providers/library_provider.dart` — Riverpod providers for platforms and display settings. Search and display settings persistence. Does NOT handle game fetching — that is handled by paginated_games_provider.dart.
+- `lib/providers/paginated_games_provider.dart` — PaginatedGamesNotifier and PaginatedGamesState. Handles all game fetching with server-side pagination (50 per page). Per-key in-memory cache keyed by platformId+search. Methods: loadInitial(platformId, search), loadMore(), reset(). Platform filtering uses RomM 4.x platform_ids param.
 - `lib/providers/download_provider.dart` — Riverpod providers for active downloads (games and emulators) and progress.
 
 ### UI — Screens
-- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Launch flow shows status snackbars at each stage. Catches MissingRetroArchCoreException to offer auto-download of missing core then re-launches. Cache invalidation on pull-to-refresh. Auto-syncs saves when game process exits via launchWithHandle(). Awaits strategyRegistryProvider.future and saveSyncServiceProvider.future on launch to ensure preferences are loaded before strategy lookup.
+- `lib/ui/screens/library_screen.dart` — Main screen. Game grid with search, platform filter, preset display system. Uses paginatedGamesProvider for all game display — scroll triggers loadMore(), platform/search changes trigger loadInitial(). Search is debounced 300ms. F5 and pull-to-refresh call reset() then loadInitial(). Launch flow shows status snackbars at each stage. Catches MissingRetroArchCoreException to offer auto-download of missing core then re-launches. Auto-syncs saves when game process exits via launchWithHandle().
 - `lib/ui/screens/library_skeleton.dart` — Skeleton loading grid and _SkeletonCard widget. Contains top-level functions buildSkeletonGrid() and calculateCardHeight().
 - `lib/ui/screens/download_screen.dart` — Active downloads list.
 - `lib/ui/screens/settings_screen.dart` — Server config, storage paths, RetroArch sync mode.
