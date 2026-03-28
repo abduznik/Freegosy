@@ -55,15 +55,45 @@ class RetroArchStrategy extends EmulatorStrategy {
   bool get supportsSaveSync => true;
 
   static const Map<String, String> _coreMap = {
-    'gba': 'mgba_libretro.dll',
-    'gbc': 'mgba_libretro.dll',
-    'gb': 'mgba_libretro.dll',
-    'snes': 'snes9x_libretro.dll',
-    'nds': 'desmume2015_libretro.dll',
-    'n64': 'mupen64plus_next_libretro.dll',
-    'psx': 'pcsx_rearmed_libretro.dll',
-    'psp': 'ppsspp_libretro.dll',
-    'dc': 'flycast_libretro.dll',
+    // Nintendo handhelds
+    'gba':         'mgba_libretro.dll',
+    'gbc':         'mgba_libretro.dll',
+    'gb':          'mgba_libretro.dll',
+    'nds':         'desmume2015_libretro.dll',
+    'virtualboy':  'mednafen_vb_libretro.dll',
+    // Nintendo home
+    'nes':         'fceumm_libretro.dll',
+    'snes':        'snes9x_libretro.dll',
+    'n64':         'mupen64plus_next_libretro.dll',
+    // Sony
+    'psx':         'pcsx_rearmed_libretro.dll',
+    'ps1':         'pcsx_rearmed_libretro.dll',
+    'playstation': 'pcsx_rearmed_libretro.dll',
+    'psp':         'ppsspp_libretro.dll',
+    // Sega
+    'megadrive':   'genesis_plus_gx_libretro.dll',
+    'genesis':     'genesis_plus_gx_libretro.dll',
+    'md':          'genesis_plus_gx_libretro.dll',
+    'segacd':      'genesis_plus_gx_libretro.dll',
+    'saturn':      'mednafen_saturn_libretro.dll',
+    'dc':          'flycast_libretro.dll',
+    'dreamcast':   'flycast_libretro.dll',
+    'gamegear':    'genesis_plus_gx_libretro.dll',
+    // Atari
+    'atari2600':   'stella_libretro.dll',
+    'atari7800':   'prosystem_libretro.dll',
+    'lynx':        'mednafen_lynx_libretro.dll',
+    // Arcade / SNK
+    'neogeo':      'fbneo_libretro.dll',
+    'arcade':      'fbneo_libretro.dll',
+    'mame':        'mame_libretro.dll',
+    // NEC
+    'pcengine':    'mednafen_pce_libretro.dll',
+    // Bandai
+    'wonderswan':  'mednafen_wswan_libretro.dll',
+    // Other
+    'msx':         'bluemsx_libretro.dll',
+    'dos':         'dosbox_pure_libretro.dll',
   };
 
   String? _getCoreForSlug(String? slug) {
