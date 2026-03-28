@@ -27,7 +27,7 @@ class PPSSPPStrategy extends EmulatorStrategy {
   String get macosExecutable => 'PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL';
 
   @override
-  bool get supportsSaveSync => false;
+  bool get supportsSaveSync => true;
 
   @override
   Future<void> launch(Game game, String romPath) async {
