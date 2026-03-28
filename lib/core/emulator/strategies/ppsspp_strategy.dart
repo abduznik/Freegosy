@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';

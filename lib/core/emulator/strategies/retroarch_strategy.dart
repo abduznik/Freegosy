@@ -1,4 +1,4 @@
-import 'dart:io' as io show Platform, File, Directory;
+import 'dart:io' as io show Platform, File;
 import 'dart:io' show Process, ProcessStartMode;
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;

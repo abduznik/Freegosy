@@ -8,8 +8,6 @@ import 'package:freegosy/core/romm/romm_models.dart';
 class DirectoryService {
   static const String _romsRootPathKey = 'romsRootPath';
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
-  static const String _defaultRomsPath = 'Documents/Freegosy/ROMs';
-  static const String _defaultEmulatorsPath = 'Documents/Freegosy/Emulators';
 
   // Known extensions per platform slug
   static const Map<String, List<String>> _platformExtensions = {
