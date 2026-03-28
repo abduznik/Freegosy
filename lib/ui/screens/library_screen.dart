@@ -41,6 +41,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
+      _refreshAllDownloadStates();
     });
   }
 
@@ -76,6 +77,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       platformId: ref.read(selectedPlatformIdProvider)?.toString(),
       search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
     );
+    await _refreshAllDownloadStates();
+  }
+
+  Future<void> _refreshAllDownloadStates() async {
+    if (ref.read(paginatedGamesProvider).games.isEmpty) return;
+    final dirService = ref.read(directoryServiceProvider).asData?.value;
+    if (dirService == null) return;
+    final games = ref.read(paginatedGamesProvider).games;
+    final results = await Future.wait(
+      games.map((g) async => MapEntry(g.id, await dirService.isRomDownloaded(g))),
+    );
+    if (mounted) {
+      setState(() {
+        for (final entry in results) {
+          _downloadedStates[entry.key] = entry.value;
+        }
+      });
+    }
   }
 
   void _startDownload(BuildContext context, WidgetRef ref, Game game) {
@@ -525,6 +544,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                         ));
                                       }
                                       final game = paginatedState.games[index];
+                                      if (_downloadedStates[game.id] == null) {
+                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                          _refreshAllDownloadStates();
+                                        });
+                                      }
                                       final dirService = directoryServiceAsync.asData?.value;
                                       final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
                                       final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);

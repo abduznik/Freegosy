@@ -1,6 +1,7 @@
 ﻿import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
@@ -42,8 +43,18 @@ class DirectoryService {
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
-    romsRootPath = prefs.getString(_romsRootPathKey) ?? _defaultRomsPath;
-    emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? _defaultEmulatorsPath;
+    final String defaultBase;
+    if (defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      final appSupport = await getApplicationSupportDirectory();
+      defaultBase = appSupport.path;
+    } else {
+      final docsDir = await getApplicationDocumentsDirectory();
+      defaultBase = docsDir.path;
+    }
+
+    romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
+    emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
     await _ensureDirectoryExists(romsRootPath);
     await _ensureDirectoryExists(emulatorsRootPath);
     await loadEmulatorPathOverrides();
@@ -219,30 +230,48 @@ class DirectoryService {
     return '$emulatorDir/$executableName';
   }
 
-  Future<bool> isEmulatorInstalled(String emulatorId, String executableName) async {
-    final dir = Directory(await getEmulatorDirectory(emulatorId));
-    if (!await dir.exists()) return false;
-    if (await File('${dir.path}/$executableName').exists()) return true;
-    await for (final entity in dir.list()) {
-      if (entity is Directory) {
-        if (await File('${entity.path}/$executableName').exists()) return true;
-      }
-    }
-    return false;
-  }
-
   Future<String?> findEmulatorExecutable(String emulatorId, String executableName) async {
-    final dir = Directory(await getEmulatorDirectory(emulatorId));
-    if (!await dir.exists()) return null;
-    final direct = File('${dir.path}/$executableName');
-    if (await direct.exists()) return direct.path;
+    final emulatorDir = await getEmulatorDirectory(emulatorId);
+    final dir = Directory(emulatorDir);
+    if (!await dir.exists()) {
+      return null;
+    }
+
+    final direct = File('$emulatorDir/$executableName');
+    if (await direct.exists()) {
+      return direct.path;
+    }
+
+    if (executableName.contains('/')) {
+      await for (final entity in dir.list()) {
+        if (entity is Directory) {
+          final sub = File('${entity.path}/$executableName');
+          if (await sub.exists()) {
+            return sub.path;
+          }
+        }
+      }
+      return null;
+    }
+
     await for (final entity in dir.list()) {
+      if (entity is File && entity.path.endsWith('/$executableName')) {
+        return entity.path;
+      }
       if (entity is Directory) {
         final sub = File('${entity.path}/$executableName');
-        if (await sub.exists()) return sub.path;
+        if (await sub.exists()) {
+          return sub.path;
+        }
       }
     }
+
     return null;
+  }
+
+  Future<bool> isEmulatorInstalled(String emulatorId, String executableName) async {
+    final found = await findEmulatorExecutable(emulatorId, executableName);
+    return found != null;
   }
 
   Future<bool> isRomDownloaded(Game game) async {

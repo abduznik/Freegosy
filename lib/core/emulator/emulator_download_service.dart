@@ -62,9 +62,13 @@ class EmulatorDownloadService {
         return;
       }
     } else {
-      downloadUrl = Platform.isWindows
-          ? definition['windows_url'] as String?
-          : definition['linux_url'] as String?;
+      if (Platform.isWindows) {
+        downloadUrl = definition['windows_url'] as String?;
+      } else if (Platform.isMacOS) {
+        downloadUrl = definition['macos_url'] as String?;
+      } else {
+        downloadUrl = definition['linux_url'] as String?;
+      }
     }
 
     if (downloadUrl == null) {

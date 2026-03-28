@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -22,6 +23,9 @@ class PPSSPPStrategy extends EmulatorStrategy {
 
   @override
   String get linuxExecutable => 'PPSSPP';
+
+  @override
+  String get macosExecutable => 'PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL';
 
   @override
   bool get supportsSaveSync => false;

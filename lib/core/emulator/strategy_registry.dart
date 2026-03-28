@@ -52,6 +52,7 @@ class StrategyRegistry {
       final supported = List<String>.from(definition['supported_platforms'] ?? []);
       if (Platform.isWindows && supported.contains('windows')) return true;
       if (Platform.isLinux && supported.contains('linux')) return true;
+      if (Platform.isMacOS && supported.contains('macos')) return true;
       return false;
     }).toList();
   }

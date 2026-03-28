@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' as io show Platform, File, Directory;
+import 'dart:io' show Process, ProcessStartMode;
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -52,9 +53,12 @@ class RetroArchStrategy extends EmulatorStrategy {
   String get linuxExecutable => 'retroarch';
 
   @override
+  String get macosExecutable => 'RetroArch.app/Contents/MacOS/RetroArch';
+
+  @override
   bool get supportsSaveSync => true;
 
-  static const Map<String, String> _coreMap = {
+  static const Map<String, String> _coreMapWindows = {
     'gba': 'mgba_libretro.dll',
     'gbc': 'mgba_libretro.dll',
     'gb': 'mgba_libretro.dll',
@@ -66,9 +70,22 @@ class RetroArchStrategy extends EmulatorStrategy {
     'dc': 'flycast_libretro.dll',
   };
 
+  static const Map<String, String> _coreMapUnix = {
+    'gba': 'mgba_libretro.dylib',
+    'gbc': 'mgba_libretro.dylib',
+    'gb': 'mgba_libretro.dylib',
+    'snes': 'snes9x_libretro.dylib',
+    'nds': 'desmume2015_libretro.dylib',
+    'n64': 'mupen64plus_next_libretro.dylib',
+    'psx': 'pcsx_rearmed_libretro.dylib',
+    'psp': 'ppsspp_libretro.dylib',
+    'dc': 'flycast_libretro.dylib',
+  };
+
   String? _getCoreForSlug(String? slug) {
     if (slug == null) return null;
-    return _coreMap[slug.toLowerCase()];
+    final map = io.Platform.isWindows ? _coreMapWindows : _coreMapUnix;
+    return map[slug.toLowerCase()];
   }
 
   @override
@@ -79,33 +96,28 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('$name not found. Please download it first.');
     }
 
-    final normalizedExe = exePath.replaceAll('/', r'\');
-    final normalizedRom = romPath.replaceAll('/', r'\');
     final coreName = _getCoreForSlug(game.platformSlug);
+    final sep = io.Platform.isWindows ? r'\' : '/';
 
     if (coreName == null) {
-      await Process.start(
-        normalizedExe,
-        [normalizedRom],
-        mode: ProcessStartMode.detached,
-      );
+      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
       return;
     }
 
-    final exeDir = File(normalizedExe).parent.path;
-    final corePath = '$exeDir\\cores\\$coreName';
+    final exeDir = io.File(exePath).parent.path;
+    final corePath = '$exeDir${sep}cores$sep$coreName';
 
-    if (!await File(corePath).exists()) {
+    if (!await io.File(corePath).exists()) {
       throw MissingRetroArchCoreException(
         coreName: coreName,
         corePath: corePath,
-        exePath: normalizedExe,
+        exePath: exePath,
       );
     }
 
     await Process.start(
-      normalizedExe,
-      ['-L', corePath, normalizedRom],
+      exePath,
+      ['-L', corePath, romPath],
       mode: ProcessStartMode.detached,
     );
   }
@@ -118,54 +130,61 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('$name not found. Please download it first.');
     }
 
-    final normalizedExe = exePath.replaceAll('/', r'\');
-    final normalizedRom = romPath.replaceAll('/', r'\');
     final coreName = _getCoreForSlug(game.platformSlug);
+    final sep = io.Platform.isWindows ? r'\' : '/';
 
     if (coreName == null) {
-      return await Process.start(
-        normalizedExe,
-        [normalizedRom],
-        mode: ProcessStartMode.normal,
-      );
+      return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
     }
 
-    final exeDir = File(normalizedExe).parent.path;
-    final corePath = '$exeDir\\cores\\$coreName';
+    final exeDir = io.File(exePath).parent.path;
+    final corePath = '$exeDir${sep}cores$sep$coreName';
 
-    if (!await File(corePath).exists()) {
+    if (!await io.File(corePath).exists()) {
       throw MissingRetroArchCoreException(
         coreName: coreName,
         corePath: corePath,
-        exePath: normalizedExe,
+        exePath: exePath,
       );
     }
 
     return await Process.start(
-      normalizedExe,
-      ['-L', corePath, normalizedRom],
+      exePath,
+      ['-L', corePath, romPath],
       mode: ProcessStartMode.normal,
     );
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
-    final url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreName.zip';
+    final String url;
+    final String ext;
+    if (io.Platform.isWindows) {
+      ext = 'dll';
+      url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreName.zip';
+    } else if (io.Platform.isMacOS) {
+      ext = 'dylib';
+      url = 'https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/$coreName.zip';
+    } else {
+      ext = 'so';
+      url = 'https://buildbot.libretro.com/nightly/linux/x86_64/latest/$coreName.zip';
+    }
+
     final tempDir = await getTemporaryDirectory();
     final zipPath = p.join(tempDir.path, '$coreName.zip');
 
     try {
       await dio.download(url, zipPath);
-      final bytes = await File(zipPath).readAsBytes();
+      final bytes = await io.File(zipPath).readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
       for (final entry in archive) {
-        if (entry.isFile && entry.name.endsWith('.dll')) {
-          final outFile = File('$coresDir\\${entry.name}');
+        if (entry.isFile && entry.name.endsWith('.$ext')) {
+          final outFile = io.File(p.join(coresDir, entry.name));
           await outFile.parent.create(recursive: true);
           await outFile.writeAsBytes(entry.content as List<int>);
         }
       }
     } finally {
-      final f = File(zipPath);
+      final f = io.File(zipPath);
       if (await f.exists()) await f.delete();
     }
   }

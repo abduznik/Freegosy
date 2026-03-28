@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -62,7 +63,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final states = <String, bool>{};
     for (final def in kEmulatorDefinitions) {
       final id = def['id'] as String;
-      final exe = def['windows_executable'] as String;
+      final String exe;
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        exe = (def['macos_executable'] as String?) ?? (def['windows_executable'] as String? ?? '');
+      } else if (defaultTargetPlatform == TargetPlatform.linux) {
+        exe = (def['linux_executable'] as String?) ?? '';
+      } else {
+        exe = (def['windows_executable'] as String?) ?? '';
+      }
       if (exe.isEmpty) {
         states[id] = true; // Assume installed if no executable is defined
         continue;

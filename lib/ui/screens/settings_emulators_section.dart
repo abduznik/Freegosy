@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -78,15 +79,23 @@ Widget buildEmulatorsSection(
                           ref.read(downloadProvider.notifier).startEmulatorDownload(emulatorId, emulatorName);
 
                           // Listen for download completion and update state
-                          ref.read(downloadProvider.notifier).stream.listen((downloads) {
+                          StreamSubscription? sub;
+                          sub = ref.read(downloadProvider.notifier).stream.listen((downloads) {
                             final progress = downloads[emulatorId];
-                            if (progress != null && progress.isComplete) { // Use safeContext here
-                              // Update the map directly. setState will re-render using the updated map.
-                              emulatorInstallStates[emulatorId] = true;
-                              setState(() {}); // Trigger parent state update
-                              messenger.showSnackBar(SnackBar(
-                                content: Text('$emulatorName downloaded.'),
-                              ));
+                            if (progress != null && (progress.isComplete || progress.error != null)) {
+                              if (progress.isComplete) {
+                                emulatorInstallStates[emulatorId] = true;
+                                if (context.mounted) setState(() {});
+                                messenger.showSnackBar(SnackBar(
+                                  content: Text('$emulatorName downloaded successfully.'),
+                                ));
+                              } else if (progress.error != null) {
+                                if (context.mounted) setState(() {});
+                                messenger.showSnackBar(SnackBar(
+                                  content: Text('Failed to download $emulatorName: ${progress.error}'),
+                                ));
+                              }
+                              sub?.cancel();
                             }
                           });
                         },
