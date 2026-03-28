@@ -1,8 +1,8 @@
 import 'dart:io' as io;
 import 'dart:io' show File;
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -16,21 +16,18 @@ class PpssppSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'ppsspp';
 
-  /// Returns the PPSSPP memstick PSP root directory for the current platform.
   Future<String?> _getPspDir() async {
     if (defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux) {
-      // PPSSPP SDL on macOS/Linux uses ~/.config/ppsspp/PSP
       final home = io.Platform.environment['HOME'];
       if (home == null) return null;
-      return '$home/.config/ppsspp/PSP';
+      return p.join(home, '.config', 'ppsspp', 'PSP');
     } else {
-      // Windows: saves are relative to the executable
       final exePath = await _directoryService.findEmulatorExecutable(
           'ppsspp', 'PPSSPPWindows64.exe');
       if (exePath == null) return null;
       final emuDir = io.File(exePath).parent.path;
-      return '$emuDir\\memstick\\PSP';
+      return p.join(emuDir, 'memstick', 'PSP');
     }
   }
 
@@ -38,8 +35,7 @@ class PpssppSaveStrategy extends SaveStrategy {
   Future<String?> getSaveDir(Game game, String romPath) async {
     final pspDir = await _getPspDir();
     if (pspDir == null) return null;
-    final sep = io.Platform.isWindows ? '\\' : '/';
-    return '$pspDir${sep}SAVEDATA';
+    return p.join(pspDir, 'SAVEDATA');
   }
 
   @override
@@ -48,11 +44,10 @@ class PpssppSaveStrategy extends SaveStrategy {
     final pspDir = await _getPspDir();
     if (pspDir == null) return [];
 
-    final sep = io.Platform.isWindows ? '\\' : '/';
     final result = <File>[];
     final stem = getRomStem(game);
 
-    final saveDataDir = io.Directory('$pspDir${sep}SAVEDATA');
+    final saveDataDir = io.Directory(p.join(pspDir, 'SAVEDATA'));
     if (await saveDataDir.exists()) {
       bool hasFiles = false;
       await for (final _ in saveDataDir.list(recursive: true)) {
@@ -64,9 +59,9 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
     }
 
-    final statesDir = io.Directory('$pspDir${sep}PPSSPP_STATE');
+    final statesDir = io.Directory(p.join(pspDir, 'PPSSPP_STATE'));
     if (await statesDir.exists()) {
-      final stateFile = io.File('$pspDir${sep}PPSSPP_STATE${sep}$stem.ppst');
+      final stateFile = io.File(p.join(pspDir, 'PPSSPP_STATE', '$stem.ppst'));
       if (await stateFile.exists()) {
         if (sessionStart == null ||
             (await stateFile.stat()).modified.isAfter(sessionStart)) {
@@ -85,19 +80,16 @@ class PpssppSaveStrategy extends SaveStrategy {
       final pspDir = await _getPspDir();
       if (pspDir == null) return false;
 
-      final sep = io.Platform.isWindows ? '\\' : '/';
-
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
-        final targetBaseDir = '$pspDir${sep}SAVEDATA';
+        final targetBaseDir = p.join(pspDir, 'SAVEDATA');
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
-          final entryPath = entry.name.replaceAll('/', sep);
-          final segments = entryPath.split(sep);
+          final segments = entry.name.split('/');
           final strippedPath =
-              segments.length > 1 ? segments.skip(1).join(sep) : entryPath;
+              segments.length > 1 ? segments.skip(1).join('/') : entry.name;
           if (strippedPath.isEmpty) continue;
-          final targetPath = '$targetBaseDir$sep$strippedPath';
+          final targetPath = p.join(targetBaseDir, strippedPath);
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = io.File(targetPath);
@@ -111,7 +103,7 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
 
       if (filename.toLowerCase().endsWith('.ppst')) {
-        final targetPath = '$pspDir${sep}PPSSPP_STATE$sep$filename';
+        final targetPath = p.join(pspDir, 'PPSSPP_STATE', filename);
         await backupSave(targetPath);
         final outFile = io.File(targetPath);
         await outFile.parent.create(recursive: true);
