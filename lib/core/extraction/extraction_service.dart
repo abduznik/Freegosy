@@ -22,6 +22,8 @@ class ExtractionService {
     try {
       if (pathLower.endsWith('.dmg')) {
         await _handleDmg(archivePath, destDir);
+      } else if (pathLower.endsWith('.tar.gz') || pathLower.endsWith('.tgz')) {
+        await _handleTarGz(archivePath, destDir);
       } else if (pathLower.endsWith('.zip')) {
         await _handleZip(archivePath, destDir);
       } else if (pathLower.endsWith('.7z')) {
@@ -34,6 +36,44 @@ class ExtractionService {
     } catch (e) {
       debugPrint('Extraction failed for $archivePath: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _handleTarGz(String archivePath, String destDir) async {
+    if (Platform.isMacOS || Platform.isLinux) {
+      try {
+        final result = await Process.run(
+          'tar',
+          ['-xzf', archivePath, '-C', destDir],
+          runInShell: false,
+        );
+        if (result.exitCode != 0) {
+          throw Exception('tar failed: ${result.stderr}');
+        }
+
+        if (Platform.isMacOS) {
+          // Verify Eden.app if this was an Eden archive
+          final edenAppPath = p.join(destDir, 'Eden.app');
+          if (archivePath.toLowerCase().contains('eden') && await Directory(edenAppPath).exists()) {
+             await _sanitizeAppBundle(edenAppPath);
+          } else {
+            // Otherwise find any .app bundles
+            final findResult = await Process.run(
+              'find', [destDir, '-name', '*.app', '-maxdepth', '3'],
+              runInShell: false,
+            );
+            for (final appPath in findResult.stdout.toString().trim().split('\n')) {
+              if (appPath.isEmpty) continue;
+              await _sanitizeAppBundle(appPath);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error during tar extraction: $e');
+        rethrow;
+      }
+    } else {
+      throw Exception('tar.gz extraction is not supported on this platform');
     }
   }
 

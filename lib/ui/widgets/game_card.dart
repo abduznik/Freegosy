@@ -7,7 +7,9 @@ class GameCard extends StatefulWidget {
   final String? coverUrl;
   final VoidCallback onDownload;
   final VoidCallback onLaunch;
-  final VoidCallback? onSyncSaves;
+  final VoidCallback onDelete;
+  final VoidCallback? onPushSaves;
+  final VoidCallback? onPullSaves;
   final bool isDownloaded;
   final bool showTitle;
   final bool showButtonsOnHover;
@@ -18,7 +20,9 @@ class GameCard extends StatefulWidget {
     this.coverUrl,
     required this.onDownload,
     required this.onLaunch,
-    this.onSyncSaves,
+    required this.onDelete,
+    this.onPushSaves,
+    this.onPullSaves,
     this.isDownloaded = false,
     this.showTitle = true,
     this.showButtonsOnHover = false,
@@ -97,7 +101,7 @@ class _GameCardState extends State<GameCard> {
                   valueListenable: _hovering,
                   builder: (context, isHovering, child) {
                     return SizedBox(
-                      height: 90,
+                      height: 100, // Slightly increased height for two rows
                       child: SingleChildScrollView(
                         physics: const NeverScrollableScrollPhysics(),
                         child: Column(
@@ -107,7 +111,7 @@ class _GameCardState extends State<GameCard> {
                             if (!widget.showButtonsOnHover || !isHovering)
                               if (widget.showTitle)
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 1.0),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
                                   child: Text(
                                     widget.game.displayName,
                                     maxLines: 2,
@@ -118,7 +122,7 @@ class _GameCardState extends State<GameCard> {
                                 )
                               else
                                 const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 1.0),
+                                  padding: EdgeInsets.symmetric(vertical: 4.0),
                                   child: Center(
                                     child: Icon(Icons.more_horiz, size: 16, color: Colors.grey),
                                   ),
@@ -126,37 +130,72 @@ class _GameCardState extends State<GameCard> {
                             
                             if (!widget.showButtonsOnHover || isHovering)
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
+                                child: Column(
                                   children: [
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      iconSize: 22,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      icon: const Icon(Icons.download),
-                                      onPressed: widget.onDownload,
-                                      tooltip: 'Download',
+                                    // Top Row: Download/Play and Delete
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        if (!widget.isDownloaded)
+                                          IconButton(
+                                            visualDensity: VisualDensity.compact,
+                                            iconSize: 22,
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            icon: const Icon(Icons.download),
+                                            onPressed: widget.onDownload,
+                                            tooltip: 'Download',
+                                          )
+                                        else ...[
+                                          IconButton(
+                                            visualDensity: VisualDensity.compact,
+                                            iconSize: 22,
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            icon: const Icon(Icons.play_arrow),
+                                            onPressed: widget.onLaunch,
+                                            tooltip: 'Play',
+                                          ),
+                                          IconButton(
+                                            visualDensity: VisualDensity.compact,
+                                            iconSize: 20,
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                            onPressed: () => _confirmDelete(context),
+                                            tooltip: 'Delete ROM',
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      iconSize: 22,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                      icon: const Icon(Icons.play_arrow),
-                                      onPressed: widget.onLaunch,
-                                      tooltip: 'Launch',
-                                    ),
-                                    if (widget.onSyncSaves != null)
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        iconSize: 18,
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        icon: const Icon(Icons.cloud_upload),
-                                        onPressed: widget.onSyncSaves,
-                                        tooltip: 'Sync saves',
+                                    const SizedBox(height: 4),
+                                    // Bottom Row: Push/Pull saves
+                                    if (widget.isDownloaded && (widget.onPushSaves != null || widget.onPullSaves != null))
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          if (widget.onPullSaves != null)
+                                            IconButton(
+                                              visualDensity: VisualDensity.compact,
+                                              iconSize: 20,
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.cloud_download),
+                                              onPressed: widget.onPullSaves,
+                                              tooltip: 'Pull saves',
+                                            ),
+                                          if (widget.onPushSaves != null)
+                                            IconButton(
+                                              visualDensity: VisualDensity.compact,
+                                              iconSize: 20,
+                                              padding: EdgeInsets.zero,
+                                              constraints: const BoxConstraints(),
+                                              icon: const Icon(Icons.cloud_upload),
+                                              onPressed: widget.onPushSaves,
+                                              tooltip: 'Push saves',
+                                            ),
+                                        ],
                                       ),
                                   ],
                                 ),
@@ -172,6 +211,32 @@ class _GameCardState extends State<GameCard> {
           ),
         ),
       ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete ROM'),
+          content: const Text('Are you sure you want to delete the local files for this game?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                widget.onDelete();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 

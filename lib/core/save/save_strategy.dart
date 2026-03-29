@@ -6,6 +6,9 @@ import '../romm/romm_models.dart';
 /// Abstract base for all save-file strategies.
 abstract class SaveStrategy {
   String get strategyId;
+  
+  /// Whether this strategy supports save synchronization.
+  bool get supportsSaveSync => false;
 
   /// Returns the local save directory for [game] given its [romPath].
   Future<String?> getSaveDir(Game game, String romPath);

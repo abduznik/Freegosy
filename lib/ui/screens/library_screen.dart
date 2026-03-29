@@ -4,12 +4,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/paginated_games_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/save/strategies/eden_save_strategy.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
 import '../../core/emulator/strategies/retroarch_strategy.dart';
 import '../widgets/game_card.dart';
@@ -205,7 +207,30 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           duration: const Duration(seconds: 30),
         ),
       );
-      await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+      try {
+        await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+      } on SaveMappingRequiredException {
+        if (!context.mounted) return;
+        final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
+        if (selectedFolder != null) {
+          await syncService.saveMappedFolder(game.id, selectedFolder);
+          if (context.mounted) {
+            await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+          }
+        }
+      } on ProfileConflictException catch (e) {
+        if (!context.mounted) return;
+        final selectedProfile = await _showProfileConflictDialog(context, e.profiles);
+        if (selectedProfile != null) {
+          await syncService.saveActiveProfile(selectedProfile);
+          if (context.mounted) {
+            await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+          }
+        }
+      } catch (e) {
+        // Ignore other push errors during launch to not block playing
+      }
+
       if (!context.mounted) return;
       messenger.clearSnackBars();
       try {
@@ -217,6 +242,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 content: Text('Cloud save restored'),
                 duration: Duration(seconds: 2)),
           );
+        }
+      } on SaveMappingRequiredException {
+        if (!context.mounted) return;
+        final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
+        if (selectedFolder != null) {
+          await syncService.saveMappedFolder(game.id, selectedFolder);
+          if (context.mounted) {
+            await syncService.pullSave(game, existingRomPath);
+          }
+        }
+      } on ProfileConflictException catch (e) {
+        if (!context.mounted) return;
+        final selectedProfile = await _showProfileConflictDialog(context, e.profiles);
+        if (selectedProfile != null) {
+          await syncService.saveActiveProfile(selectedProfile);
+          if (context.mounted) {
+            await syncService.pullSave(game, existingRomPath);
+          }
         }
       } catch (e) {
         if (!context.mounted) return;
@@ -381,31 +424,280 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     await _handleLaunch(context, ref, game);
   }
 
-  Future<void> _handleSyncSaves(
+  Future<void> _handleDeleteRom(BuildContext context, WidgetRef ref, Game game) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final dirService = ref.read(directoryServiceProvider).asData?.value;
+    if (dirService == null) return;
+
+    try {
+      await dirService.deleteRom(game);
+      _refreshDownloadState(dirService, game);
+      messenger.showSnackBar(SnackBar(content: Text('Deleted local files for ${game.name}')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Failed to delete files: $e')));
+    }
+  }
+
+  Future<void> _handlePushSaves(
       BuildContext context, WidgetRef ref, Game game) async {
     final messenger = ScaffoldMessenger.of(context);
-
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (syncService == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Save sync not available')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Save sync not available')));
       return;
     }
+
     final dir = ref.read(directoryServiceProvider).asData?.value;
     final romPath = dir != null ? await dir.getRomFilePath(game) : '';
     if (!context.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text('Syncing saves for ${game.name}...')),
-    );
     final syncMode = ref.read(retroarchSyncModeProvider);
-    final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
+
+    try {
+      messenger.showSnackBar(SnackBar(content: Text('Uploading saves for ${game.name}...')));
+      final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(ok ? 'Saves uploaded' : 'No local saves found')));
+    } on SaveMappingRequiredException {
+      if (!context.mounted) return;
+      final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
+      if (selectedFolder != null) {
+        await syncService.saveMappedFolder(game.id, selectedFolder);
+        if (!context.mounted) return;
+        // Retry
+        return _handlePushSaves(context, ref, game);
+      }
+    } on ProfileConflictException catch (e) {
+      if (!context.mounted) return;
+      final selectedProfile = await _showProfileConflictDialog(context, e.profiles);
+      if (selectedProfile != null) {
+        await syncService.saveActiveProfile(selectedProfile);
+        if (!context.mounted) return;
+        return _handlePushSaves(context, ref, game);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _handlePullSaves(
+      BuildContext context, WidgetRef ref, Game game) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final syncService = await ref.read(saveSyncServiceProvider.future);
+    if (syncService == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('Save sync not available')));
+      return;
+    }
+
+    final dir = ref.read(directoryServiceProvider).asData?.value;
+    final romPath = dir != null ? await dir.getRomFilePath(game) : '';
     if (!context.mounted) return;
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(ok
-            ? 'Saves uploaded for ${game.name}'
-            : 'No saves found for ${game.name}'),
+
+    try {
+      messenger.showSnackBar(SnackBar(content: Text('Fetching cloud saves for ${game.name}...')));
+      final saves = await syncService.getSavesForGame(game.id);
+      if (!context.mounted) return;
+
+      if (saves.isEmpty) {
+        messenger.showSnackBar(const SnackBar(content: Text('No cloud saves found for this game.')));
+        return;
+      }
+
+      final selectedSave = await _showSaveSelectionDialog(context, saves);
+      if (selectedSave == null) return;
+
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Downloading selected save...')));
+      final ok = await syncService.pullSave(game, romPath, saveData: selectedSave);
+
+      if (!context.mounted) return;
+      if (ok) {
+        messenger.showSnackBar(const SnackBar(content: Text('Saves downloaded')));
+      } else {
+        messenger.showSnackBar(const SnackBar(content: Text('Save appears unchanged since last pull. Retrying with force...')));
+        // Force pull by clearing the pull timestamp
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('last_pull_${game.id}');
+        if (context.mounted) {
+          final retryOk = await syncService.pullSave(game, romPath, saveData: selectedSave);
+          if (context.mounted) {
+            messenger.showSnackBar(SnackBar(content: Text(retryOk ? 'Saves downloaded' : 'Failed to download save')));
+          }
+        }
+      }
+    } on SaveMappingRequiredException {
+      if (!context.mounted) return;
+      final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
+      if (selectedFolder != null) {
+        await syncService.saveMappedFolder(game.id, selectedFolder);
+        if (!context.mounted) return;
+        // Retry
+        return _handlePullSaves(context, ref, game);
+      }
+    } on ProfileConflictException catch (e) {
+      if (!context.mounted) return;
+      final selectedProfile = await _showProfileConflictDialog(context, e.profiles);
+      if (selectedProfile != null) {
+        await syncService.saveActiveProfile(selectedProfile);
+        if (!context.mounted) return;
+        return _handlePullSaves(context, ref, game);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showSaveSelectionDialog(BuildContext context, List<Map<String, dynamic>> saves) async {
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Cloud Save'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: saves.length,
+            itemBuilder: (context, index) {
+              final save = saves[index];
+              final fileName = save['file_name_no_ext'] ?? save['file_name'] ?? 'Unknown Save';
+              final createdAtStr = save['created_at'] ?? save['updated_at'] ?? '';
+              final createdAt = DateTime.tryParse(createdAtStr.toString());
+
+              String subtitle = 'Unknown date';
+              if (createdAt != null) {
+                final diff = DateTime.now().difference(createdAt);
+                if (diff.inDays > 0) {
+                  subtitle = '${diff.inDays}d ago';
+                } else if (diff.inHours > 0) {
+                  subtitle = '${diff.inHours}h ago';
+                } else if (diff.inMinutes > 0) {
+                  subtitle = '${diff.inMinutes}m ago';
+                } else {
+                  subtitle = 'just now';
+                }
+              }
+
+              return ListTile(
+                title: Text(fileName.toString()),
+                subtitle: Text(subtitle),
+                onTap: () => Navigator.pop(context, save),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Future<String?> _showProfileConflictDialog(BuildContext context, List<Map<String, dynamic>> profiles) async {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Multiple Profiles Detected'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Multiple Eden profiles have recent save activity. Which one would you like to use?'),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: profiles.length,
+                  itemBuilder: (context, index) {
+                    final profile = profiles[index];
+                    final id = profile['id'] as String;
+                    final lastActive = profile['lastActive'] as DateTime;
+                    
+                    final diff = DateTime.now().difference(lastActive);
+                    String timeAgo;
+                    if (diff.inDays > 0) {
+                      timeAgo = '${diff.inDays}d ago';
+                    } else if (diff.inHours > 0) {
+                      timeAgo = '${diff.inHours}h ago';
+                    } else if (diff.inMinutes > 0) {
+                      timeAgo = '${diff.inMinutes}m ago';
+                    } else {
+                      timeAgo = 'just now';
+                    }
+
+                    return ListTile(
+                      title: Text(id),
+                      subtitle: Text('Last active: $timeAgo'),
+                      onTap: () => Navigator.pop(context, id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _showFolderMappingDialog(BuildContext context, EdenSaveStrategy strategy) async {
+    final folders = await strategy.getAvailableSaveFolders();
+    if (!context.mounted) return null;
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Save Folder'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: folders.isEmpty
+              ? const Text('No saves found. Launch the game in Eden first.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: folders.length,
+                  itemBuilder: (context, index) {
+                    final folder = folders[index];
+                    final name = folder['name'] as String;
+                    final date = folder['lastModified'] as DateTime;
+                    
+                    // Simple relative time string
+                    final diff = DateTime.now().difference(date);
+                    String timeAgo;
+                    if (diff.inDays > 0) {
+                      timeAgo = '${diff.inDays}d ago';
+                    } else if (diff.inHours > 0) {
+                      timeAgo = '${diff.inHours}h ago';
+                    } else if (diff.inMinutes > 0) {
+                      timeAgo = '${diff.inMinutes}m ago';
+                    } else {
+                      timeAgo = 'just now';
+                    }
+
+                    return ListTile(
+                      title: Text(name),
+                      subtitle: Text('Last played: $timeAgo'),
+                      onTap: () => Navigator.pop(context, name),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }
@@ -557,9 +849,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                             showButtonsOnHover: showButtonsOnHover,
                                             onDownload: () => _startDownload(context, ref, game),
                                             onLaunch: () => _handleLaunch(context, ref, game),
-                                            onSyncSaves: () => _handleSyncSaves(context, ref, game),
-                                          ),
-                                        );
+                                            onDelete: () => _handleDeleteRom(context, ref, game),
+                                            onPushSaves: () => _handlePushSaves(context, ref, game),
+                                            onPullSaves: () => _handlePullSaves(context, ref, game),
+                                          ),                                        );
                                       }
                                       return GestureDetector(
                                         onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
@@ -569,7 +862,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                           showTitle: showTitle, showButtonsOnHover: showButtonsOnHover,
                                           onDownload: () => _startDownload(context, ref, game),
                                           onLaunch: () => _handleLaunch(context, ref, game),
-                                          onSyncSaves: () => _handleSyncSaves(context, ref, game),
+                                          onDelete: () => _handleDeleteRom(context, ref, game),
+                                          onPushSaves: () => _handlePushSaves(context, ref, game),
+                                          onPullSaves: () => _handlePullSaves(context, ref, game),
                                         ),
                                       );
                                     },

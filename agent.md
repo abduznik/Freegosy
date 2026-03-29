@@ -23,7 +23,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/app.dart` — MaterialApp setup, theme, initial route, navigation shell.
 
 ### Core — RomM
-- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getAllGames(), getGamesPage(offset, limit, platformId, search), getSaves(), uploadSave(), getLatestSave(), downloadSave(). getGamesPage() uses platform_ids (array), order_by, order_dir params per RomM 4.x API spec. Returns typed models.
+- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getAllGames(), getGamesPage(offset, limit, platformId, search), getSaves(), uploadSave(), getLatestSave(), downloadSave(), pruneOldSaves(). getGamesPage() uses platform_ids (array), order_by, order_dir params per RomM 4.x API spec. Returns typed models.
 - `lib/core/romm/romm_models.dart` — Data models: Game, Platform, SaveFile, RomMConfig.
 
 ### Core — Save Sync

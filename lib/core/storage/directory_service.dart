@@ -276,4 +276,15 @@ class DirectoryService {
     final found = await findExistingRomPath(game);
     return found != null;
   }
+
+  Future<void> deleteRom(Game game) async {
+    final path = await findExistingRomPath(game);
+    if (path != null) {
+      if (await File(path).exists()) {
+        await File(path).delete();
+      } else if (await Directory(path).exists()) {
+        await Directory(path).delete(recursive: true);
+      }
+    }
+  }
 }

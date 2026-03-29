@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/extraction/extraction_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
@@ -69,10 +70,44 @@ class DownloadService {
         deleteOnError: true,
       ).then((_) async {
         try {
+          File file = File(savePath);
+          String currentPath = savePath;
+
+          debugPrint("=== DOWNLOAD COMPLETION DEBUG ===");
+          debugPrint("Game: ${game.name}, hasMultipleFiles: ${game.isMultiFile}");
+          debugPrint("Downloaded File Path: $savePath");
+
+          bool isZipSignature = false;
+          if (await file.exists()) {
+            // Peek at first 4 bytes for ZIP signature [0x50, 0x4B, 0x03, 0x04]
+            final raf = await file.open();
+            final bytes = await raf.read(4);
+            await raf.close();
+
+            debugPrint("File Magic Bytes: $bytes");
+
+            isZipSignature = bytes.length == 4 &&
+                bytes[0] == 0x50 &&
+                bytes[1] == 0x4B &&
+                bytes[2] == 0x03 &&
+                bytes[3] == 0x04;
+
+            debugPrint("Forcing ZIP extraction: $isZipSignature");
+
+            if (isZipSignature) {
+              if (!currentPath.toLowerCase().endsWith('.zip')) {
+                final newPath = '$currentPath.zip';
+                await file.rename(newPath);
+                currentPath = newPath;
+              }
+            }
+          }
+
           final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-          final isArchive = savePath.toLowerCase().endsWith('.zip') ||
-              savePath.toLowerCase().endsWith('.7z');
-          final shouldExtract = game.isMultiFile || (isWindowsGame && isArchive);
+          final isArchive = currentPath.toLowerCase().endsWith('.zip') ||
+              currentPath.toLowerCase().endsWith('.7z');
+          final shouldExtract = game.isMultiFile || (isWindowsGame && isArchive) || isZipSignature;
+          
           if (shouldExtract) {
             controller.add(DownloadProgress(
               id: game.id,
@@ -80,7 +115,7 @@ class DownloadService {
               percent: 1.0,
               status: 'Extracting...',
             ));
-            await _extractMultiFile(game, savePath);
+            await _extractMultiFile(game, currentPath);
           }
           controller.add(DownloadProgress(
             id: game.id,

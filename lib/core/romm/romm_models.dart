@@ -72,6 +72,25 @@ class Game {
       hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'platform_id': platformId,
+      'platform_slug': platformSlug,
+      'platform_display_name': platformDisplayName,
+      'path_cover_large': pathCoverLarge,
+      'path_cover_small': pathCoverSmall,
+      'url_cover': urlCover,
+      'url_download': fileUrl,
+      'file_name': fileName,
+      'fs_name': fsName,
+      'file_size_bytes': fileSize,
+      'multi_file_path': multiFilePath,
+      'has_multiple_files': hasMultipleFiles,
+    };
+  }
 }
 
 class Platform {

@@ -36,8 +36,10 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_url': 'https://git.eden-emu.dev/eden-emu/eden/-/releases/permalink/latest/downloads/eden-windows-msvc-install.zip',
     'windows_executable': 'eden.exe',
     'linux_executable': 'eden',
+    'macos_url': 'https://git.eden-emu.dev/eden-emu/eden/releases/download/v0.2.0-rc2/Eden-macOS-v0.2.0-rc2.tar.gz',
+    'macos_executable': 'Eden.app/Contents/MacOS/Eden',
     'platform_slugs': ['switch', 'nintendo-switch', 'ns'],
-    'supported_platforms': ['windows', 'linux'],
+    'supported_platforms': ['windows', 'linux', 'macos'],
   },
   {
     'id': 'rpcs3',

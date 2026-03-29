@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
 
@@ -244,35 +244,127 @@ class RommService {
   // ─── Save sync ─────────────────────────────────────────────────────────────
 
   /// Uploads [saveFile] for [gameId] to RomM via POST /api/saves.
-  Future<bool> uploadSave(String gameId, File saveFile, {String slot = 'freegosy'}) async {
+  Future<bool> uploadSave(String gameId, File saveFile, {String? slot}) async {
     try {
+      final now = DateTime.now();
+      final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
+      final effectiveSlot = slot ?? 'freegosy-srm_$ts';
       final fileName = saveFile.uri.pathSegments.last;
       final formData = FormData.fromMap({
         'saveFile': await MultipartFile.fromFile(saveFile.path, filename: fileName),
       });
       final response = await _dio.post(
         '/api/saves',
-        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': slot},
+        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot},
         data: formData,
         options: _authOptions,
       );
       final ok = response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300;
+      if (ok) {
+        debugPrint('[RomM] Uploaded save: slot=$effectiveSlot');
+      }
       return ok;
     } catch (e) {
+      debugPrint('[RomM] Upload error: $e');
       return false;
+    }
+  }
+
+  Future<void> pruneOldSaves(String gameId, {int keepCount = 5}) async {
+    try {
+      final saves = await getSavesList(gameId);
+      final freegosySaves = saves.where((s) =>
+        (s['emulator']?.toString() ?? '') == 'freegosy'
+      ).toList();
+      if (freegosySaves.length <= keepCount) return;
+      final toDelete = freegosySaves.sublist(keepCount);
+      for (final save in toDelete) {
+        final saveId = save['id'];
+        if (saveId == null) continue;
+        try {
+          await _dio.delete('/api/saves/$saveId', options: _authOptions);
+          debugPrint('[RomM] Pruned old save: id=$saveId');
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[RomM] Prune error: $e');
+    }
+  }
+
+  /// Returns all save objects for [gameId], sorted newest first.
+  Future<List<Map<String, dynamic>>> getSavesList(String gameId) async {
+    try {
+      final opts = _authOptions;
+      debugPrint("=== ROMM API REQUEST (getSavesList) ===");
+      debugPrint("URL: ${config.baseUrl}/api/saves?rom_id=$gameId");
+      
+      final response = await _dio.get(
+        '/api/saves',
+        queryParameters: {'rom_id': gameId},
+        options: opts,
+      );
+
+      debugPrint("=== ROMM API RESPONSE ===");
+      debugPrint("Status Code: ${response.statusCode}");
+
+      if (response.statusCode != 200) return [];
+
+      final List<dynamic> items;
+      if (response.data is Map && response.data.containsKey('items')) {
+        items = response.data['items'] as List<dynamic>;
+      } else if (response.data is List) {
+        items = response.data as List<dynamic>;
+      } else {
+        debugPrint("WARNING: Unexpected API response structure for getSavesList.");
+        return [];
+      }
+
+      final sorted = List<Map<String, dynamic>>.from(
+        items.whereType<Map<String, dynamic>>(),
+      );
+      
+      // Sort by created_at descending (newest first)
+      sorted.sort((a, b) {
+        final ta = DateTime.tryParse(a['created_at']?.toString() ?? a['updated_at']?.toString() ?? '') ?? DateTime(0);
+        final tb = DateTime.tryParse(b['created_at']?.toString() ?? b['updated_at']?.toString() ?? '') ?? DateTime(0);
+        return tb.compareTo(ta);
+      });
+
+      if (sorted.isEmpty) {
+        debugPrint("WARNING: Parsed saves list is empty.");
+      }
+
+      return sorted;
+    } catch (e) {
+      debugPrint("ERROR in getSavesList: $e");
+      return [];
     }
   }
 
   /// Returns the most recently updated save object for [gameId], or null.
   Future<Map<String, dynamic>?> getLatestSave(String gameId) async {
     try {
+      final opts = _authOptions;
+      debugPrint("=== ROMM API REQUEST (getLatestSave) ===");
+      debugPrint("URL: ${config.baseUrl}/api/saves?rom_id=$gameId");
+      final headers = Map<String, dynamic>.from(opts.headers ?? {});
+      if (headers.containsKey('Authorization')) {
+        headers['Authorization'] = 'Bearer ***';
+      }
+      debugPrint("Headers: $headers");
+
       final response = await _dio.get(
         '/api/saves',
         queryParameters: {'rom_id': gameId},
-        options: _authOptions,
+        options: opts,
       );
+
+      debugPrint("=== ROMM API RESPONSE ===");
+      debugPrint("Status Code: ${response.statusCode}");
+      debugPrint("Body: ${response.data}");
+
       if (response.statusCode != 200) return null;
 
       final List<dynamic> items;
@@ -281,10 +373,14 @@ class RommService {
       } else if (response.data is List) {
         items = response.data as List<dynamic>;
       } else {
+        debugPrint("WARNING: Unexpected API response structure for getLatestSave.");
         return null;
       }
 
-      if (items.isEmpty) return null;
+      if (items.isEmpty) {
+        debugPrint("WARNING: Parsed saves list is empty. Check if the API response structure matches the parsing logic.");
+        return null;
+      }
 
       // Sort by updated_at descending, return the most recent
       final sorted = List<Map<String, dynamic>>.from(
@@ -297,6 +393,7 @@ class RommService {
       });
       return sorted.first;
     } catch (e) {
+      debugPrint("ERROR in getLatestSave: $e");
       return null;
     }
   }
@@ -309,15 +406,32 @@ class RommService {
           ? saveUrl
           : '${_normalizeBaseUrl(config.baseUrl)}$saveUrl';
 
+      final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
+      debugPrint("=== ROMM API REQUEST (downloadSave) ===");
+      debugPrint("URL: $url");
+      final headers = Map<String, dynamic>.from(opts.headers ?? {});
+      if (headers.containsKey('Authorization')) {
+        headers['Authorization'] = 'Bearer ***';
+      }
+      debugPrint("Headers: $headers");
+
       final response = await _dio.get<List<int>>(
         url,
-        options: _authOptions.copyWith(responseType: ResponseType.bytes),
+        options: opts,
       );
+
+      debugPrint("=== ROMM API RESPONSE ===");
+      debugPrint("Status Code: ${response.statusCode}");
+      if (response.data != null) {
+        debugPrint("Body Length: ${response.data!.length} bytes");
+      }
+
       if (response.statusCode == 200 && response.data != null) {
         return Uint8List.fromList(response.data!);
       }
       return null;
     } catch (e) {
+      debugPrint("ERROR in downloadSave: $e");
       return null;
     }
   }
