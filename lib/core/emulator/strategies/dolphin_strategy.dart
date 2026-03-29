@@ -24,20 +24,41 @@ class DolphinStrategy extends EmulatorStrategy {
   String get linuxExecutable => 'dolphin-emu';
 
   @override
+  String get macosExecutable => 'Dolphin.app/Contents/MacOS/Dolphin';
+
+  @override
   bool get supportsSaveSync => true;
 
   @override
   Future<void> launch(Game game, String romPath) async {
-    final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
-    if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.run(exePath, ['-e', romPath]);
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId,
+      getExecutableForPlatform(),
+    );
+    if (exePath == null) {
+      throw Exception('$name not found. Please download it first.');
+    }
+    await Process.start(
+      exePath,
+      ['-b', '-e', romPath],
+      mode: ProcessStartMode.detached,
+    );
   }
 
   @override
   Future<Process?> launchWithHandle(Game game, String romPath) async {
-    final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
-    if (exePath == null) throw Exception('$name not found. Please download it first.');
-    return await Process.start(exePath, ['-e', romPath], mode: ProcessStartMode.normal);
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId,
+      getExecutableForPlatform(),
+    );
+    if (exePath == null) {
+      throw Exception('$name not found. Please download it first.');
+    }
+    return await Process.start(
+      exePath,
+      ['-b', '-e', romPath],
+      mode: ProcessStartMode.normal,
+    );
   }
 
   @override

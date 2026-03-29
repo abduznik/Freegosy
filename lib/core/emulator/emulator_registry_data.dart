@@ -24,8 +24,10 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_url': 'https://dl.dolphin-emu.org/builds/dolphin-master-latest-x64.7z',
     'windows_executable': 'Dolphin.exe',
     'linux_executable': 'dolphin-emu',
+    'macos_url': 'https://dl.dolphin-emu.org/releases/2603a/dolphin-2603a-universal.dmg',
+    'macos_executable': 'Dolphin.app/Contents/MacOS/Dolphin',
     'platform_slugs': ['gc', 'gamecube', 'wii', 'ngc'],
-    'supported_platforms': ['windows', 'linux'],
+    'supported_platforms': ['windows', 'linux', 'macos'],
   },
   {
     'id': 'eden',
