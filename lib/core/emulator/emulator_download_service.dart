@@ -45,7 +45,15 @@ class EmulatorDownloadService {
         gameName: emulatorName,
         status: 'Fetching latest release...',
       );
-      final repo = definition['github_repo'] as String;
+      
+      String repo = definition['github_repo'] as String;
+      if (Platform.isWindows && definition.containsKey('github_repo_windows')) {
+        repo = definition['github_repo_windows'] as String;
+      } else if (Platform.isMacOS && definition.containsKey('github_repo_macos')) {
+        repo = definition['github_repo_macos'] as String;
+      } else if (Platform.isLinux && definition.containsKey('github_repo_linux')) {
+        repo = definition['github_repo_linux'] as String;
+      }
 
       // Determine platform-specific asset filters with generic fallbacks
       final String requiredKey;

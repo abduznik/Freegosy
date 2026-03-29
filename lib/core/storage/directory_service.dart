@@ -175,9 +175,8 @@ class DirectoryService {
   }
 
   Future<String?> resolveSevenZipPath() async {
-    String appData = '';
-
     if (defaultTargetPlatform == TargetPlatform.windows) {
+      String appData = '';
       try {
         final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
         appData = result.stdout.toString().trim();
@@ -185,6 +184,32 @@ class DirectoryService {
         return null;
       }
       if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
+
+      final dest = File('$appData\\Freegosy\\thirdparty\\7zr.exe');
+      if (await dest.exists()) return dest.path;
+
+      try {
+        await dest.parent.create(recursive: true);
+        final byteData = await rootBundle.load('thirdparty/7zr.exe');
+        await dest.writeAsBytes(byteData.buffer.asUint8List());
+        return dest.path;
+      } catch (e) {
+        return null;
+      }
+    } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+      final appSupport = await getApplicationSupportDirectory();
+      final dest = File('${appSupport.path}/Freegosy/thirdparty/7zz');
+      if (await dest.exists()) return dest.path;
+
+      try {
+        await dest.parent.create(recursive: true);
+        final byteData = await rootBundle.load('thirdparty/7zz');
+        await dest.writeAsBytes(byteData.buffer.asUint8List());
+        await Process.run('chmod', ['+x', dest.path]);
+        return dest.path;
+      } catch (e) {
+        return null;
+      }
     } else if (defaultTargetPlatform == TargetPlatform.linux) {
       // Linux: Try to find system 7z
       try {
@@ -196,23 +221,9 @@ class DirectoryService {
         // ignore
       }
       return null;
-    } else {
-      // macOS: no 7zr needed
-      return null;
     }
 
-    final dest = File('$appData\\Freegosy\\thirdparty\\7zr.exe');
-
-    if (await dest.exists()) return dest.path;
-
-    try {
-      await dest.parent.create(recursive: true);
-      final byteData = await rootBundle.load('thirdparty/7zr.exe');
-      await dest.writeAsBytes(byteData.buffer.asUint8List());
-      return dest.path;
-    } catch (e) {
-      return null;
-    }
+    return null;
   }
 
   Future<String> getEmulatorDirectory(String emulatorId) async {
