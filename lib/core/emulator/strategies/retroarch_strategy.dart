@@ -59,27 +59,87 @@ class RetroArchStrategy extends EmulatorStrategy {
   bool get supportsSaveSync => true;
 
   static const Map<String, String> _coreMapWindows = {
-    'gba': 'mgba_libretro.dll',
-    'gbc': 'mgba_libretro.dll',
-    'gb': 'mgba_libretro.dll',
-    'snes': 'snes9x_libretro.dll',
-    'nds': 'desmume2015_libretro.dll',
-    'n64': 'mupen64plus_next_libretro.dll',
-    'psx': 'pcsx_rearmed_libretro.dll',
-    'psp': 'ppsspp_libretro.dll',
-    'dc': 'flycast_libretro.dll',
+    // Nintendo handhelds
+    'gba':         'mgba_libretro.dll',
+    'gbc':         'mgba_libretro.dll',
+    'gb':          'mgba_libretro.dll',
+    'nds':         'desmume2015_libretro.dll',
+    'virtualboy':  'mednafen_vb_libretro.dll',
+    // Nintendo home
+    'nes':         'fceumm_libretro.dll',
+    'snes':        'snes9x_libretro.dll',
+    'n64':         'mupen64plus_next_libretro.dll',
+    // Sony
+    'psx':         'pcsx_rearmed_libretro.dll',
+    'ps1':         'pcsx_rearmed_libretro.dll',
+    'playstation': 'pcsx_rearmed_libretro.dll',
+    'psp':         'ppsspp_libretro.dll',
+    // Sega
+    'megadrive':   'genesis_plus_gx_libretro.dll',
+    'genesis':     'genesis_plus_gx_libretro.dll',
+    'md':          'genesis_plus_gx_libretro.dll',
+    'segacd':      'genesis_plus_gx_libretro.dll',
+    'saturn':      'mednafen_saturn_libretro.dll',
+    'dc':          'flycast_libretro.dll',
+    'dreamcast':   'flycast_libretro.dll',
+    'gamegear':    'genesis_plus_gx_libretro.dll',
+    // Atari
+    'atari2600':   'stella_libretro.dll',
+    'atari7800':   'prosystem_libretro.dll',
+    'lynx':        'mednafen_lynx_libretro.dll',
+    // Arcade / SNK
+    'neogeo':      'fbneo_libretro.dll',
+    'arcade':      'fbneo_libretro.dll',
+    'mame':        'mame_libretro.dll',
+    // NEC
+    'pcengine':    'mednafen_pce_libretro.dll',
+    // Bandai
+    'wonderswan':  'mednafen_wswan_libretro.dll',
+    // Other
+    'msx':         'bluemsx_libretro.dll',
+    'dos':         'dosbox_pure_libretro.dll',
   };
 
   static const Map<String, String> _coreMapUnix = {
-    'gba': 'mgba_libretro.dylib',
-    'gbc': 'mgba_libretro.dylib',
-    'gb': 'mgba_libretro.dylib',
-    'snes': 'snes9x_libretro.dylib',
-    'nds': 'desmume2015_libretro.dylib',
-    'n64': 'mupen64plus_next_libretro.dylib',
-    'psx': 'pcsx_rearmed_libretro.dylib',
-    'psp': 'ppsspp_libretro.dylib',
-    'dc': 'flycast_libretro.dylib',
+    // Nintendo handhelds
+    'gba':         'mgba_libretro.dylib',
+    'gbc':         'mgba_libretro.dylib',
+    'gb':          'mgba_libretro.dylib',
+    'nds':         'desmume2015_libretro.dylib',
+    'virtualboy':  'mednafen_vb_libretro.dylib',
+    // Nintendo home
+    'nes':         'fceumm_libretro.dylib',
+    'snes':        'snes9x_libretro.dylib',
+    'n64':         'mupen64plus_next_libretro.dylib',
+    // Sony
+    'psx':         'pcsx_rearmed_libretro.dylib',
+    'ps1':         'pcsx_rearmed_libretro.dylib',
+    'playstation': 'pcsx_rearmed_libretro.dylib',
+    'psp':         'ppsspp_libretro.dylib',
+    // Sega
+    'megadrive':   'genesis_plus_gx_libretro.dylib',
+    'genesis':     'genesis_plus_gx_libretro.dylib',
+    'md':          'genesis_plus_gx_libretro.dylib',
+    'segacd':      'genesis_plus_gx_libretro.dylib',
+    'saturn':      'mednafen_saturn_libretro.dylib',
+    'dc':          'flycast_libretro.dylib',
+    'dreamcast':   'flycast_libretro.dylib',
+    'gamegear':    'genesis_plus_gx_libretro.dylib',
+    // Atari
+    'atari2600':   'stella_libretro.dylib',
+    'atari7800':   'prosystem_libretro.dylib',
+    'lynx':        'mednafen_lynx_libretro.dylib',
+    // Arcade / SNK
+    'neogeo':      'fbneo_libretro.dylib',
+    'arcade':      'fbneo_libretro.dylib',
+    'mame':        'mame_libretro.dylib',
+    // NEC
+    'pcengine':    'mednafen_pce_libretro.dylib',
+    // Bandai
+    'wonderswan':  'mednafen_wswan_libretro.dylib',
+    // Other
+    'msx':         'bluemsx_libretro.dylib',
+    'dos':         'dosbox_pure_libretro.dylib',
   };
 
   String? _getCoreForSlug(String? slug) {

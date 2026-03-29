@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -106,9 +105,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       return;
     }
     final url = service.getDownloadUrl(game);
-    final basicAuth =
-        'Basic ${base64Encode(utf8.encode('${service.config.username}:${service.config.password}'))}';
-    final headers = <String, String>{'Authorization': basicAuth};
+    final headers = <String, String>{'Authorization': service.authHeader};
     ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Downloading ${game.name}...')),
