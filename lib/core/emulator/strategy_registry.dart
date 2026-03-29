@@ -142,6 +142,15 @@ class StrategyRegistry {
     }
   }
 
+  Future<void> clearPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('emulator_pref_')).toList();
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
+    _slugPreferences.clear();
+  }
+
   EmulatorStrategy? getStrategyForSlug(String platformSlug) {
     if (kIsWeb) return null;
 
@@ -149,6 +158,7 @@ class StrategyRegistry {
     if (preferredId != null) {
       for (final strategy in _strategies) {
         if (strategy.emulatorId == preferredId) {
+          debugPrint("[Registry] Using preferred emulator for $platformSlug: $preferredId");
           return strategy;
         }
       }
@@ -156,9 +166,11 @@ class StrategyRegistry {
 
     for (final strategy in _strategies) {
       if (strategy.supportedSlugs.contains(platformSlug)) {
+        debugPrint("[Registry] Falling back to first supported emulator for $platformSlug: ${strategy.emulatorId}");
         return strategy;
       }
     }
+    debugPrint("[Registry] No emulator found for slug: $platformSlug");
     return null;
   }
 

@@ -7,13 +7,6 @@ import '../save_strategy.dart';
 
 // ─── Exceptions ──────────────────────────────────────────────────────────────
 
-class SaveMappingRequiredException implements Exception {
-  final String message;
-  SaveMappingRequiredException([this.message = 'Manual save mapping required']);
-  @override
-  String toString() => 'SaveMappingRequiredException: $message';
-}
-
 class ProfileConflictException implements Exception {
   final List<Map<String, dynamic>> profiles;
   ProfileConflictException(this.profiles);

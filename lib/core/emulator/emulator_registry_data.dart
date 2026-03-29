@@ -13,7 +13,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
       'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds', 'psx', 'ps1', 'playstation',
       'psp', 'dc', 'dreamcast', 'segacd', 'saturn', 'megadrive', 'genesis', 'md',
       'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo', 'arcade', 'mame',
-      'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos'
+      'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos', '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'
     ],
     'supported_platforms': ['windows', 'linux', 'macos'],
   },
@@ -70,12 +70,15 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'name': 'Azahar (Nintendo 3DS)',
     'type': 'github',
     'github_repo': 'azahar-emu/azahar',
-    'github_asset_required': ['windows', 'msys2'],
-    'github_asset_excluded': ['debug', 'appimage'],
+    'github_asset_required_windows': ['windows', 'msys2'],
+    'github_asset_required_macos': ['macos', 'arm64'],
+    'github_asset_excluded_windows': ['debug', 'appimage'],
+    'github_asset_excluded_macos': ['debug', 'libretro'],
     'windows_executable': 'azahar.exe',
     'linux_executable': 'azahar',
+    'macos_executable': 'Azahar.app/Contents/MacOS/azahar',
     'platform_slugs': ['3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'],
-    'supported_platforms': ['windows', 'linux'],
+    'supported_platforms': ['windows', 'linux', 'macos'],
   },
   {
     'id': 'cemu',

@@ -1,4 +1,5 @@
-﻿import 'dart:io';
+﻿import 'dart:io' as io;
+import 'dart:io' show Directory, File, Process;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -223,6 +224,24 @@ class DirectoryService {
     return dirPath;
   }
 
+  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
+    String dirPath;
+
+    if (emulatorId == 'retroarch') {
+      final emuDir = await getEmulatorDirectory(emulatorId);
+      dirPath = '$emuDir/system';
+    } else if (emulatorId == 'azahar' && io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home == null) throw Exception('HOME environment variable not set');
+      dirPath = '$home/Library/Application Support/Azahar';
+    } else {
+      dirPath = await getEmulatorDirectory(emulatorId);
+    }
+
+    await _ensureDirectoryExists(dirPath);
+    return dirPath;
+  }
+
   Future<String> getEmulatorExecutable(String emulatorId, String executableName) async {
     final emulatorDir = await getEmulatorDirectory(emulatorId);
     return '$emulatorDir/$executableName';
@@ -233,6 +252,12 @@ class DirectoryService {
     final dir = Directory(emulatorDir);
     if (!await dir.exists()) {
       return null;
+    }
+
+    debugPrint("=== EMULATOR CHECK ===");
+    debugPrint("Looking for: $executableName in $emulatorDir");
+    await for (final e in dir.list()) {
+      debugPrint("Found on disk: ${e.path}");
     }
 
     final direct = File('$emulatorDir/$executableName');
@@ -260,6 +285,18 @@ class DirectoryService {
         final sub = File('${entity.path}/$executableName');
         if (await sub.exists()) {
           return sub.path;
+        }
+      }
+    }
+
+    // Secondary check for core libraries if binary not found
+    final ext = io.Platform.isMacOS ? '.dylib' : (io.Platform.isWindows ? '.dll' : '.so');
+    await for (final entity in dir.list(recursive: true)) {
+      if (entity is File) {
+        final name = entity.path.split(io.Platform.isWindows ? r'\' : '/').last.toLowerCase();
+        if (name.endsWith(ext) && name.contains(emulatorId.toLowerCase())) {
+          debugPrint("Found core library fallback: ${entity.path}");
+          return entity.path;
         }
       }
     }

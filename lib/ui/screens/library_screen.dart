@@ -11,7 +11,9 @@ import '../../providers/romm_provider.dart';
 import '../../providers/paginated_games_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/save/save_strategy.dart';
 import '../../core/save/strategies/eden_save_strategy.dart';
+import '../../core/save/strategies/azahar_save_strategy.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
 import '../../core/emulator/strategies/retroarch_strategy.dart';
 import '../widgets/game_card.dart';
@@ -128,6 +130,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     if (registryReady == null) return;
     final strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
 
+    debugPrint("=== LAUNCH DEBUG ===");
+    debugPrint("Game: ${game.name} | Slug: ${game.platformSlug} | Chosen Strategy: ${strategy?.name} (ID: ${strategy?.emulatorId})");
+
     if (strategy == null) {
       messenger.showSnackBar(
         SnackBar(
@@ -211,11 +216,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
       } on SaveMappingRequiredException {
         if (!context.mounted) return;
-        final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
-        if (selectedFolder != null) {
-          await syncService.saveMappedFolder(game.id, selectedFolder);
-          if (context.mounted) {
-            await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+        final strategy = syncService.getStrategyForSlug(game.platformSlug);
+        if (strategy is EdenSaveStrategy || strategy is AzaharSaveStrategy) {
+          final selectedFolder = await _showFolderMappingDialog(context, strategy);
+          if (selectedFolder != null) {
+            await syncService.saveMappedFolder(game.id, selectedFolder);
+            if (context.mounted) {
+              await syncService.pushSaves(game, existingRomPath, syncMode: syncMode);
+            }
           }
         }
       } on ProfileConflictException catch (e) {
@@ -245,11 +253,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         }
       } on SaveMappingRequiredException {
         if (!context.mounted) return;
-        final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
-        if (selectedFolder != null) {
-          await syncService.saveMappedFolder(game.id, selectedFolder);
-          if (context.mounted) {
-            await syncService.pullSave(game, existingRomPath);
+        final strategy = syncService.getStrategyForSlug(game.platformSlug);
+        if (strategy is EdenSaveStrategy || strategy is AzaharSaveStrategy) {
+          final selectedFolder = await _showFolderMappingDialog(context, strategy);
+          if (selectedFolder != null) {
+            await syncService.saveMappedFolder(game.id, selectedFolder);
+            if (context.mounted) {
+              await syncService.pullSave(game, existingRomPath);
+            }
           }
         }
       } on ProfileConflictException catch (e) {
@@ -283,6 +294,39 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         );
         if (!context.mounted) return;
         if (shouldContinue != true) return;
+      }
+    }
+
+    // Check for 3DS keys before starting
+    final is3ds = [
+      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds',
+      'new-nintendo-3ds', 'new-nintendo-3ds-xl'
+    ].contains(game.platformSlug?.toLowerCase());
+
+    if (is3ds) {
+      final systemDir = await dir.getEmulatorSystemDirectory(strategy.emulatorId);
+      final keysSubPath = strategy.emulatorId == 'retroarch' ? 'citra/sysdata/aes_keys.txt' : 'sysdata/aes_keys.txt';
+      final keysPath = '$systemDir/$keysSubPath';
+
+      if (!await File(keysPath).exists()) {
+        final prefs = await SharedPreferences.getInstance();
+        final shownOnce = prefs.getBool('shown_3ds_keys_warning') ?? false;
+        if (!shownOnce && context.mounted) {
+          await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Missing 3DS Keys'),
+              content: const Text('Note: Decrypted 3DS ROMs require aes_keys.txt in your emulator system folder to run correctly.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          await prefs.setBool('shown_3ds_keys_warning', true);
+        }
       }
     }
 
@@ -459,7 +503,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       messenger.showSnackBar(SnackBar(content: Text(ok ? 'Saves uploaded' : 'No local saves found')));
     } on SaveMappingRequiredException {
       if (!context.mounted) return;
-      final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
+      final strategy = syncService.getStrategyForSlug(game.platformSlug);
+      final selectedFolder = await _showFolderMappingDialog(context, strategy);
       if (selectedFolder != null) {
         await syncService.saveMappedFolder(game.id, selectedFolder);
         if (!context.mounted) return;
@@ -527,7 +572,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       }
     } on SaveMappingRequiredException {
       if (!context.mounted) return;
-      final selectedFolder = await _showFolderMappingDialog(context, syncService.edenSaveStrategy);
+      final strategy = syncService.getStrategyForSlug(game.platformSlug);
+      final selectedFolder = await _showFolderMappingDialog(context, strategy);
       if (selectedFolder != null) {
         await syncService.saveMappedFolder(game.id, selectedFolder);
         if (!context.mounted) return;
@@ -651,7 +697,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  Future<String?> _showFolderMappingDialog(BuildContext context, EdenSaveStrategy strategy) async {
+  Future<String?> _showFolderMappingDialog(BuildContext context, dynamic strategy) async {
     final folders = await strategy.getAvailableSaveFolders();
     if (!context.mounted) return null;
 
@@ -662,13 +708,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         content: SizedBox(
           width: double.maxFinite,
           child: folders.isEmpty
-              ? const Text('No saves found. Launch the game in Eden first.')
+              ? const Text('No saves found. Launch the game in the emulator first.')
               : ListView.builder(
                   shrinkWrap: true,
                   itemCount: folders.length,
                   itemBuilder: (context, index) {
                     final folder = folders[index];
                     final name = folder['name'] as String;
+                    final path = (folder['path'] ?? folder['name']) as String;
                     final date = folder['lastModified'] as DateTime;
                     
                     // Simple relative time string
@@ -687,7 +734,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     return ListTile(
                       title: Text(name),
                       subtitle: Text('Last played: $timeAgo'),
-                      onTap: () => Navigator.pop(context, name),
+                      onTap: () => Navigator.pop(context, path),
                     );
                   },
                 ),

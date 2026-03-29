@@ -3,6 +3,15 @@ import 'dart:typed_data';
 
 import '../romm/romm_models.dart';
 
+// ─── Exceptions ──────────────────────────────────────────────────────────────
+
+class SaveMappingRequiredException implements Exception {
+  final String message;
+  SaveMappingRequiredException([this.message = 'Manual save mapping required']);
+  @override
+  String toString() => 'SaveMappingRequiredException: $message';
+}
+
 /// Abstract base for all save-file strategies.
 abstract class SaveStrategy {
   String get strategyId;

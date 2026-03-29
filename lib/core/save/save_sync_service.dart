@@ -19,6 +19,7 @@ import 'strategies/melonds_save_strategy.dart';
 import 'strategies/mgba_save_strategy.dart';
 import 'strategies/ppsspp_save_strategy.dart';
 import 'strategies/cemu_save_strategy.dart';
+import 'strategies/azahar_save_strategy.dart';
 import '../emulator/strategy_registry.dart';
 
 class SaveSyncService {
@@ -38,6 +39,7 @@ class SaveSyncService {
   late final MgbaSaveStrategy _mgba;
   late final PpssppSaveStrategy _ppsspp;
   late final CemuSaveStrategy _cemu;
+  late final AzaharSaveStrategy _azahar;
 
   SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry) {
     _retroarch = RetroArchSaveStrategy(_directoryService);
@@ -52,6 +54,7 @@ class SaveSyncService {
     _mgba = MgbaSaveStrategy();
     _ppsspp = PpssppSaveStrategy(_directoryService);
     _cemu = CemuSaveStrategy(_directoryService);
+    _azahar = AzaharSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
   }
 
   /// Returns the manual Title ID mapping for a given game.
@@ -96,6 +99,7 @@ class SaveSyncService {
         if (id == 'xenia' || id == 'xenia_canary') return _xenia;
         if (id == 'eden') return _eden;
         if (id == 'windows') return _windows;
+        if (id == 'azahar') return _azahar;
       }
     }
 
@@ -157,6 +161,13 @@ class SaveSyncService {
       case 'nintendo-wii-u':
       case 'nintendo-wiiu':
         return _cemu;
+      case '3ds':
+      case 'n3ds':
+      case 'nintendo-3ds':
+      case 'nintendo3ds':
+      case 'new-nintendo-3ds':
+      case 'new-nintendo-3ds-xl':
+        return _azahar;
       default:
         return null;
     }
@@ -222,6 +233,9 @@ class SaveSyncService {
         strategy.setManualMapping(mapping);
         final activeProfile = await getActiveProfile();
         strategy.setActiveProfileOverride(activeProfile);
+      } else if (strategy is AzaharSaveStrategy) {
+        final mapping = await getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
       }
 
       final files = await strategy.getSaveFiles(
@@ -303,6 +317,9 @@ class SaveSyncService {
         strategy.setManualMapping(mapping);
         final activeProfile = await getActiveProfile();
         strategy.setActiveProfileOverride(activeProfile);
+      } else if (strategy is AzaharSaveStrategy) {
+        final mapping = await getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
       }
 
       final Map<String, dynamic>? save = saveData ?? await _rommService.getLatestSave(game.id);
@@ -345,4 +362,5 @@ class SaveSyncService {
 
   WindowsSaveStrategy get windowsSaveStrategy => _windows;
   EdenSaveStrategy get edenSaveStrategy => _eden;
+  AzaharSaveStrategy get azaharSaveStrategy => _azahar;
 }

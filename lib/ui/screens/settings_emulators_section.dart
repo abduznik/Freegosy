@@ -162,6 +162,17 @@ Widget buildConflictsSection(
             ),
           );
         }),
+      const SizedBox(height: 16),
+      ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.red,
+        ),
+        onPressed: () async {
+          await registry.clearPreferences();
+          setState(() {});
+        },
+        child: const Text('Reset Emulator Preferences'),
+      ),
     ],
   );
 }

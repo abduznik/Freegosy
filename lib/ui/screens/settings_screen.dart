@@ -73,10 +73,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       if (exe.isEmpty) {
         states[id] = true; // Assume installed if no executable is defined
+        debugPrint("Emulator $id installed state: ${states[id]} (Target exe: $exe)");
         continue;
       }
       // Check if emulator is installed using the directory service
       states[id] = await directoryService.isEmulatorInstalled(id, exe);
+      debugPrint("Emulator $id installed state: ${states[id]} (Target exe: $exe)");
     }
     if (mounted) {
       setState(() {

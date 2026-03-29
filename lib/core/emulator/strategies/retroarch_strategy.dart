@@ -1,6 +1,7 @@
-import 'dart:io' as io show Platform, File;
+import 'dart:io' as io show Platform, File, Directory;
 import 'dart:io' show Process, ProcessStartMode;
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive_io.dart';
@@ -43,7 +44,8 @@ class RetroArchStrategy extends EmulatorStrategy {
       'dc', 'dreamcast',
       'megadrive', 'genesis', 'md',
       'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo',
-      'arcade', 'mame', 'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos'
+      'arcade', 'mame', 'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos',
+      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'
     ];
 
   @override
@@ -64,6 +66,11 @@ class RetroArchStrategy extends EmulatorStrategy {
     'gbc':         'mgba_libretro.dll',
     'gb':          'mgba_libretro.dll',
     'nds':         'desmume2015_libretro.dll',
+    '3ds':         'azahar_libretro.dll',
+    'n3ds':        'azahar_libretro.dll',
+    'nintendo-3ds':'azahar_libretro.dll',
+    'new-nintendo-3ds': 'azahar_libretro.dll',
+    'new-nintendo-3ds-xl': 'azahar_libretro.dll',
     'virtualboy':  'mednafen_vb_libretro.dll',
     // Nintendo home
     'nes':         'fceumm_libretro.dll',
@@ -106,6 +113,11 @@ class RetroArchStrategy extends EmulatorStrategy {
     'gbc':         'mgba_libretro.dylib',
     'gb':          'mgba_libretro.dylib',
     'nds':         'desmume2015_libretro.dylib',
+    '3ds':         'azahar_libretro.dylib',
+    'n3ds':        'azahar_libretro.dylib',
+    'nintendo-3ds':'azahar_libretro.dylib',
+    'new-nintendo-3ds': 'azahar_libretro.dylib',
+    'new-nintendo-3ds-xl': 'azahar_libretro.dylib',
     'virtualboy':  'mednafen_vb_libretro.dylib',
     // Nintendo home
     'nes':         'fceumm_libretro.dylib',
@@ -148,6 +160,62 @@ class RetroArchStrategy extends EmulatorStrategy {
     return map[slug.toLowerCase()];
   }
 
+  Future<String?> _resolveCorePath(String exePath, String coreName) async {
+    final sep = io.Platform.isWindows ? r'\' : '/';
+    final exeDir = io.File(exePath).parent.path;
+    final standardPath = '$exeDir${sep}cores$sep$coreName';
+
+    if (await io.File(standardPath).exists()) {
+      return standardPath;
+    }
+
+    // Try to find in standalone directory
+    // Extract emulatorId from coreName: 'azahar_libretro.dylib' -> 'azahar'
+    final underscoreIdx = coreName.indexOf('_');
+    if (underscoreIdx != -1) {
+      final standaloneEmuId = coreName.substring(0, underscoreIdx);
+      final foundPath = await _directoryService.findEmulatorExecutable(standaloneEmuId, coreName);
+      if (foundPath != null) {
+        debugPrint('[RetroArch] Borrowing core from standalone $standaloneEmuId: $foundPath');
+        return foundPath;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _ensure3dsFonts(String citraSystemDir) async {
+    final fontFile = io.File(p.join(citraSystemDir, 'sysdata', 'shared_font.bin'));
+    if (await fontFile.exists()) return;
+
+    debugPrint('[RetroArch] Downloading 3DS shared font...');
+    final dio = Dio();
+    try {
+      await dio.download(
+        'https://github.com/citra-emu/citra-sysdata-mks/raw/master/shared_font.bin',
+        fontFile.path,
+      );
+      debugPrint('[RetroArch] 3DS shared font downloaded.');
+    } catch (e) {
+      debugPrint('[RetroArch] Failed to download 3DS shared font: $e');
+    }
+  }
+
+  Future<void> _ensure3dsSetup() async {
+    final systemDir = await _directoryService.getEmulatorSystemDirectory('retroarch');
+    final citraDir = io.Directory(p.join(systemDir, 'citra'));
+    final sysdataDir = io.Directory(p.join(citraDir.path, 'sysdata'));
+    final configDir = io.Directory(p.join(citraDir.path, 'config'));
+
+    if (!await citraDir.exists()) await citraDir.create(recursive: true);
+    if (!await sysdataDir.exists()) await sysdataDir.create(recursive: true);
+    if (!await configDir.exists()) await configDir.create(recursive: true);
+
+    await _ensure3dsFonts(citraDir.path);
+
+    debugPrint('[RetroArch] 3DS setup ensured at ${citraDir.path}. Place your aes_keys.txt in ${sysdataDir.path}');
+  }
+
   @override
   Future<void> launch(Game game, String romPath) async {
     final exePath = await _directoryService.findEmulatorExecutable(
@@ -156,28 +224,40 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('$name not found. Please download it first.');
     }
 
+    final normalizedRomPath = p.normalize(romPath);
     final coreName = _getCoreForSlug(game.platformSlug);
-    final sep = io.Platform.isWindows ? r'\' : '/';
+
+    // 1. Check if platform is 3DS-related
+    final is3ds = [
+      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds',
+      'new-nintendo-3ds', 'new-nintendo-3ds-xl'
+    ].contains(game.platformSlug?.toLowerCase());
+
+    if (is3ds) {
+      // 2. Ensure 'citra' exists inside the RetroArch 'system' directory
+      await _ensure3dsSetup();
+    }
 
     if (coreName == null) {
-      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+      await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.detached);
       return;
     }
 
-    final exeDir = io.File(exePath).parent.path;
-    final corePath = '$exeDir${sep}cores$sep$coreName';
+    final corePath = await _resolveCorePath(exePath, coreName);
 
-    if (!await io.File(corePath).exists()) {
+    if (corePath == null) {
+      final sep = io.Platform.isWindows ? r'\' : '/';
+      final exeDir = io.File(exePath).parent.path;
       throw MissingRetroArchCoreException(
         coreName: coreName,
-        corePath: corePath,
+        corePath: '$exeDir${sep}cores$sep$coreName',
         exePath: exePath,
       );
     }
 
     await Process.start(
       exePath,
-      ['-L', corePath, romPath],
+      ['-L', corePath, normalizedRomPath],
       mode: ProcessStartMode.detached,
     );
   }
@@ -190,27 +270,39 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('$name not found. Please download it first.');
     }
 
+    final normalizedRomPath = p.normalize(romPath);
     final coreName = _getCoreForSlug(game.platformSlug);
-    final sep = io.Platform.isWindows ? r'\' : '/';
 
-    if (coreName == null) {
-      return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    // 1. Check if platform is 3DS-related
+    final is3ds = [
+      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds',
+      'new-nintendo-3ds', 'new-nintendo-3ds-xl'
+    ].contains(game.platformSlug?.toLowerCase());
+
+    if (is3ds) {
+      // 2. Ensure 'citra' exists inside the RetroArch 'system' directory
+      await _ensure3dsSetup();
     }
 
-    final exeDir = io.File(exePath).parent.path;
-    final corePath = '$exeDir${sep}cores$sep$coreName';
+    if (coreName == null) {
+      return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
+    }
 
-    if (!await io.File(corePath).exists()) {
+    final corePath = await _resolveCorePath(exePath, coreName);
+
+    if (corePath == null) {
+      final sep = io.Platform.isWindows ? r'\' : '/';
+      final exeDir = io.File(exePath).parent.path;
       throw MissingRetroArchCoreException(
         coreName: coreName,
-        corePath: corePath,
+        corePath: '$exeDir${sep}cores$sep$coreName',
         exePath: exePath,
       );
     }
 
     return await Process.start(
       exePath,
-      ['-L', corePath, romPath],
+      ['-L', corePath, normalizedRomPath],
       mode: ProcessStartMode.normal,
     );
   }

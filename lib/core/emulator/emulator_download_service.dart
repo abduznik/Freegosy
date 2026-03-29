@@ -46,8 +46,33 @@ class EmulatorDownloadService {
         status: 'Fetching latest release...',
       );
       final repo = definition['github_repo'] as String;
-      final required = List<String>.from(definition['github_asset_required'] ?? []);
-      final excluded = List<String>.from(definition['github_asset_excluded'] ?? []);
+
+      // Determine platform-specific asset filters with generic fallbacks
+      final String requiredKey;
+      final String excludedKey;
+
+      if (Platform.isWindows && definition.containsKey('github_asset_required_windows')) {
+        requiredKey = 'github_asset_required_windows';
+      } else if (Platform.isMacOS && definition.containsKey('github_asset_required_macos')) {
+        requiredKey = 'github_asset_required_macos';
+      } else if (Platform.isLinux && definition.containsKey('github_asset_required_linux')) {
+        requiredKey = 'github_asset_required_linux';
+      } else {
+        requiredKey = 'github_asset_required';
+      }
+
+      if (Platform.isWindows && definition.containsKey('github_asset_excluded_windows')) {
+        excludedKey = 'github_asset_excluded_windows';
+      } else if (Platform.isMacOS && definition.containsKey('github_asset_excluded_macos')) {
+        excludedKey = 'github_asset_excluded_macos';
+      } else if (Platform.isLinux && definition.containsKey('github_asset_excluded_linux')) {
+        excludedKey = 'github_asset_excluded_linux';
+      } else {
+        excludedKey = 'github_asset_excluded';
+      }
+
+      final required = List<String>.from(definition[requiredKey] ?? []);
+      final excluded = List<String>.from(definition[excludedKey] ?? []);
       downloadUrl = await _githubService.getLatestReleaseUrl(
         repo: repo,
         required: required,
