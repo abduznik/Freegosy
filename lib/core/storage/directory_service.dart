@@ -174,16 +174,21 @@ class DirectoryService {
     return null;
   }
 
+  Future<String?> _getWindowsAppData() async {
+    try {
+      final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
+      final path = result.stdout.toString().trim();
+      if (path.isEmpty || path.contains('%APPDATA%')) return null;
+      return path;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<String?> resolveSevenZipPath() async {
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      String appData = '';
-      try {
-        final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
-        appData = result.stdout.toString().trim();
-      } catch (e) {
-        return null;
-      }
-      if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
+      final appData = await _getWindowsAppData();
+      if (appData == null) return null;
 
       final dest = File('$appData\\Freegosy\\thirdparty\\7zr.exe');
       if (await dest.exists()) return dest.path;
@@ -241,10 +246,18 @@ class DirectoryService {
     if (emulatorId == 'retroarch') {
       final emuDir = await getEmulatorDirectory(emulatorId);
       dirPath = '$emuDir/system';
-    } else if (emulatorId == 'azahar' && io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'];
-      if (home == null) throw Exception('HOME environment variable not set');
-      dirPath = '$home/Library/Application Support/Azahar';
+    } else if (emulatorId == 'azahar') {
+      if (io.Platform.isMacOS) {
+        final home = io.Platform.environment['HOME'];
+        if (home == null) throw Exception('HOME environment variable not set');
+        dirPath = '$home/Library/Application Support/Azahar';
+      } else if (io.Platform.isWindows) {
+        final appData = await _getWindowsAppData();
+        if (appData == null) throw Exception('APPDATA environment variable not set');
+        dirPath = '$appData\\Azahar';
+      } else {
+        dirPath = await getEmulatorDirectory(emulatorId);
+      }
     } else {
       dirPath = await getEmulatorDirectory(emulatorId);
     }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -32,9 +33,14 @@ class Pcsx2Strategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    final normalizedRom = romPath.replaceAll('/', '\\');
-    final normalizedExe = exePath.replaceAll('/', '\\');
-    await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.detached);
+    
+    if (io.Platform.isWindows) {
+      final normalizedRom = romPath.replaceAll('/', '\\');
+      final normalizedExe = exePath.replaceAll('/', '\\');
+      await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.detached);
+    } else {
+      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    }
   }
 
   @override
@@ -43,9 +49,14 @@ class Pcsx2Strategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    final normalizedRom = romPath.replaceAll('/', '\\');
-    final normalizedExe = exePath.replaceAll('/', '\\');
-    return await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.normal);
+    
+    if (io.Platform.isWindows) {
+      final normalizedRom = romPath.replaceAll('/', '\\');
+      final normalizedExe = exePath.replaceAll('/', '\\');
+      return await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.normal);
+    } else {
+      return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    }
   }
 
   @override
@@ -54,8 +65,16 @@ class Pcsx2Strategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    final normalizedExe = exePath.replaceAll('/', '\\');
-    await Process.start(normalizedExe, [], mode: ProcessStartMode.detached);
+
+    final exeDir = File(exePath).parent.path;
+
+    if (io.Platform.isWindows) {
+      final normalizedExe = exePath.replaceAll('/', '\\');
+      final normalizedDir = exeDir.replaceAll('/', '\\');
+      await Process.start(normalizedExe, [], mode: ProcessStartMode.detached, workingDirectory: normalizedDir);
+    } else {
+      await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    }
   }
 
   @override

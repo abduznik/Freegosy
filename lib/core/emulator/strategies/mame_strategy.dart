@@ -70,7 +70,14 @@ class MAMEStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.start(exePath, [], mode: ProcessStartMode.detached);
+
+    final exeDir = File(exePath).parent.path;
+    await Process.start(
+      exePath,
+      [],
+      mode: ProcessStartMode.detached,
+      workingDirectory: exeDir,
+    );
   }
 
   @override

@@ -1,7 +1,6 @@
 import 'dart:io' as io show Platform, File, Directory;
 import 'dart:io' show Process, ProcessStartMode;
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive_io.dart';
@@ -176,7 +175,6 @@ class RetroArchStrategy extends EmulatorStrategy {
       final standaloneEmuId = coreName.substring(0, underscoreIdx);
       final foundPath = await _directoryService.findEmulatorExecutable(standaloneEmuId, coreName);
       if (foundPath != null) {
-        debugPrint('[RetroArch] Borrowing core from standalone $standaloneEmuId: $foundPath');
         return foundPath;
       }
     }
@@ -357,7 +355,8 @@ class RetroArchStrategy extends EmulatorStrategy {
       }
     }
 
-    await Process.start(exePath, [], mode: ProcessStartMode.detached);
+    final exeDir = io.File(exePath).parent.path;
+    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
   }
 
   @override

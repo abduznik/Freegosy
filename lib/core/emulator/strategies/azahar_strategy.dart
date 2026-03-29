@@ -122,25 +122,27 @@ class AzaharStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
+    final exeDir = io.File(exePath).parent.path;
+
     if (io.Platform.isMacOS) {
       // Find the .app bundle path
       final parts = exePath.split('/');
       final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
       if (appIdx != -1) {
         final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await Directory(appBundlePath).exists()) {
+        if (await io.Directory(appBundlePath).exists()) {
           await io.Process.run('open', [appBundlePath]);
           return;
         }
       }
     }
 
-    String? workingDir;
-    if (io.Platform.isMacOS) {
-      workingDir = File(exePath).parent.path;
-    }
-
-    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: workingDir);
+    await Process.start(
+      exePath,
+      [],
+      mode: ProcessStartMode.detached,
+      workingDirectory: exeDir,
+    );
   }
 
   @override

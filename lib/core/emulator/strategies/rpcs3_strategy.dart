@@ -66,19 +66,15 @@ class Rpcs3Strategy extends EmulatorStrategy {
       final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
       if (appIdx != -1) {
         final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await Directory(appBundlePath).exists()) {
+        if (await io.Directory(appBundlePath).exists()) {
           await io.Process.run('open', [appBundlePath]);
           return;
         }
       }
     }
 
-    String? workingDir;
-    if (io.Platform.isMacOS) {
-      workingDir = File(exePath).parent.path;
-    }
-
-    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: workingDir);
+    final exeDir = File(exePath).parent.path;
+    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
   }
 
   @override

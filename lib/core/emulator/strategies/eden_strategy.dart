@@ -95,6 +95,8 @@ class EdenStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
+    final exeDir = io.File(exePath).parent.path;
+
     if (io.Platform.isMacOS) {
       // Find the .app bundle path
       final parts = exePath.split('/');
@@ -108,12 +110,12 @@ class EdenStrategy extends EmulatorStrategy {
       }
     }
 
-    String? workingDir;
-    if (io.Platform.isMacOS) {
-      workingDir = io.File(exePath).parent.path;
-    }
-
-    await io.Process.start(exePath, [], mode: io.ProcessStartMode.detached, workingDirectory: workingDir);
+    await io.Process.start(
+      exePath,
+      [],
+      mode: io.ProcessStartMode.detached,
+      workingDirectory: exeDir,
+    );
   }
 
   @override

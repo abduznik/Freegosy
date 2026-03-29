@@ -69,6 +69,8 @@ class DolphinStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
+    final exeDir = io.File(exePath).parent.path;
+
     if (io.Platform.isMacOS) {
       // Find the .app bundle path (folder ending in .app containing the executable)
       final parts = exePath.split('/');
@@ -82,12 +84,12 @@ class DolphinStrategy extends EmulatorStrategy {
       }
     }
 
-    String? workingDir;
-    if (io.Platform.isMacOS) {
-      workingDir = File(exePath).parent.path;
-    }
-
-    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: workingDir);
+    await Process.start(
+      exePath,
+      [],
+      mode: ProcessStartMode.detached,
+      workingDirectory: exeDir,
+    );
   }
 
   @override
