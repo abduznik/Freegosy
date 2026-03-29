@@ -229,7 +229,6 @@ class SaveSyncService {
         sessionStart: sessionStart,
         syncMode: syncMode,
       );
-      debugPrint('[SyncService] Push: ${files.length} files, force=$force');
       if (files.isEmpty) return false;
 
       int uploaded = 0;

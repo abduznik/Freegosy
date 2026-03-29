@@ -101,7 +101,7 @@ class _GameCardState extends State<GameCard> {
                   valueListenable: _hovering,
                   builder: (context, isHovering, child) {
                     return SizedBox(
-                      height: 100, // Slightly increased height for two rows
+                      height: 80,
                       child: SingleChildScrollView(
                         physics: const NeverScrollableScrollPhysics(),
                         child: Column(
@@ -131,72 +131,59 @@ class _GameCardState extends State<GameCard> {
                             if (!widget.showButtonsOnHover || isHovering)
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 2.0),
-                                child: Column(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    // Top Row: Download/Play and Delete
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        if (!widget.isDownloaded)
-                                          IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            iconSize: 22,
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(),
-                                            icon: const Icon(Icons.download),
-                                            onPressed: widget.onDownload,
-                                            tooltip: 'Download',
-                                          )
-                                        else ...[
-                                          IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            iconSize: 22,
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(),
-                                            icon: const Icon(Icons.play_arrow),
-                                            onPressed: widget.onLaunch,
-                                            tooltip: 'Play',
-                                          ),
-                                          IconButton(
-                                            visualDensity: VisualDensity.compact,
-                                            iconSize: 20,
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(),
-                                            icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                            onPressed: () => _confirmDelete(context),
-                                            tooltip: 'Delete ROM',
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    // Bottom Row: Push/Pull saves
-                                    if (widget.isDownloaded && (widget.onPushSaves != null || widget.onPullSaves != null))
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          if (widget.onPullSaves != null)
-                                            IconButton(
-                                              visualDensity: VisualDensity.compact,
-                                              iconSize: 20,
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(),
-                                              icon: const Icon(Icons.cloud_download),
-                                              onPressed: widget.onPullSaves,
-                                              tooltip: 'Pull saves',
-                                            ),
-                                          if (widget.onPushSaves != null)
-                                            IconButton(
-                                              visualDensity: VisualDensity.compact,
-                                              iconSize: 20,
-                                              padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(),
-                                              icon: const Icon(Icons.cloud_upload),
-                                              onPressed: widget.onPushSaves,
-                                              tooltip: 'Push saves',
-                                            ),
-                                        ],
+                                    if (!widget.isDownloaded)
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        iconSize: 22,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        icon: const Icon(Icons.download),
+                                        onPressed: widget.onDownload,
+                                        tooltip: 'Download',
+                                      )
+                                    else ...[
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        iconSize: 22,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        icon: const Icon(Icons.play_arrow),
+                                        onPressed: widget.onLaunch,
+                                        tooltip: 'Play',
                                       ),
+                                      if (widget.onPushSaves != null)
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          iconSize: 20,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          icon: const Icon(Icons.cloud_upload),
+                                          onPressed: widget.onPushSaves,
+                                          tooltip: 'Push saves',
+                                        ),
+                                      if (widget.onPullSaves != null)
+                                        IconButton(
+                                          visualDensity: VisualDensity.compact,
+                                          iconSize: 20,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          icon: const Icon(Icons.cloud_download),
+                                          onPressed: widget.onPullSaves,
+                                          tooltip: 'Pull saves',
+                                        ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        iconSize: 20,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                        onPressed: () => _confirmDelete(context),
+                                        tooltip: 'Delete ROM',
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

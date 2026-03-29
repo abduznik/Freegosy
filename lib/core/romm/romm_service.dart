@@ -297,17 +297,11 @@ class RommService {
   Future<List<Map<String, dynamic>>> getSavesList(String gameId) async {
     try {
       final opts = _authOptions;
-      debugPrint("=== ROMM API REQUEST (getSavesList) ===");
-      debugPrint("URL: ${config.baseUrl}/api/saves?rom_id=$gameId");
-      
       final response = await _dio.get(
         '/api/saves',
         queryParameters: {'rom_id': gameId},
         options: opts,
       );
-
-      debugPrint("=== ROMM API RESPONSE ===");
-      debugPrint("Status Code: ${response.statusCode}");
 
       if (response.statusCode != 200) return [];
 
@@ -317,7 +311,6 @@ class RommService {
       } else if (response.data is List) {
         items = response.data as List<dynamic>;
       } else {
-        debugPrint("WARNING: Unexpected API response structure for getSavesList.");
         return [];
       }
 
@@ -347,23 +340,11 @@ class RommService {
   Future<Map<String, dynamic>?> getLatestSave(String gameId) async {
     try {
       final opts = _authOptions;
-      debugPrint("=== ROMM API REQUEST (getLatestSave) ===");
-      debugPrint("URL: ${config.baseUrl}/api/saves?rom_id=$gameId");
-      final headers = Map<String, dynamic>.from(opts.headers ?? {});
-      if (headers.containsKey('Authorization')) {
-        headers['Authorization'] = 'Bearer ***';
-      }
-      debugPrint("Headers: $headers");
-
       final response = await _dio.get(
         '/api/saves',
         queryParameters: {'rom_id': gameId},
         options: opts,
       );
-
-      debugPrint("=== ROMM API RESPONSE ===");
-      debugPrint("Status Code: ${response.statusCode}");
-      debugPrint("Body: ${response.data}");
 
       if (response.statusCode != 200) return null;
 
@@ -373,12 +354,10 @@ class RommService {
       } else if (response.data is List) {
         items = response.data as List<dynamic>;
       } else {
-        debugPrint("WARNING: Unexpected API response structure for getLatestSave.");
         return null;
       }
 
       if (items.isEmpty) {
-        debugPrint("WARNING: Parsed saves list is empty. Check if the API response structure matches the parsing logic.");
         return null;
       }
 
@@ -407,24 +386,11 @@ class RommService {
           : '${_normalizeBaseUrl(config.baseUrl)}$saveUrl';
 
       final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
-      debugPrint("=== ROMM API REQUEST (downloadSave) ===");
-      debugPrint("URL: $url");
-      final headers = Map<String, dynamic>.from(opts.headers ?? {});
-      if (headers.containsKey('Authorization')) {
-        headers['Authorization'] = 'Bearer ***';
-      }
-      debugPrint("Headers: $headers");
 
       final response = await _dio.get<List<int>>(
         url,
         options: opts,
       );
-
-      debugPrint("=== ROMM API RESPONSE ===");
-      debugPrint("Status Code: ${response.statusCode}");
-      if (response.data != null) {
-        debugPrint("Body Length: ${response.data!.length} bytes");
-      }
 
       if (response.statusCode == 200 && response.data != null) {
         return Uint8List.fromList(response.data!);

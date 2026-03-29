@@ -84,7 +84,8 @@ class EdenSaveStrategy extends SaveStrategy {
   /// Master resolver: header → filename → manual mapping → throw.
   Future<String> _resolveTitleId(String romPath, Game game) async {
     // 1. Header byte scan (the source of truth)
-    final fromHeader = await extractTitleIdFromHeader(romPath);
+    final (fromHeader, resolvedRomPath) =
+        await extractTitleIdFromHeader(romPath);
     if (fromHeader != null) {
       debugPrint('[Eden] Title ID from header: $fromHeader');
       // Persist so future syncs skip the scan
@@ -95,7 +96,8 @@ class EdenSaveStrategy extends SaveStrategy {
     }
 
     // 2. Extract from ROM filename  e.g. "Splatoon 3 [0100C2500FC20000][v0].nsp"
-    final fromFilename = _extractTitleIdFromFilename(romPath, game);
+    final fromFilename =
+        _extractTitleIdFromFilename(resolvedRomPath ?? romPath, game);
     if (fromFilename != null) {
       debugPrint('[Eden] Title ID from filename: $fromFilename');
       if (onMappingResolved != null) {
@@ -140,11 +142,12 @@ class EdenSaveStrategy extends SaveStrategy {
   ///   1. Tries appending .nsp / .xci / .nsz
   ///   2. Fuzzy-searches the parent directory for a matching ROM
   ///   3. If the path is a directory, picks the largest ROM inside
-  Future<String?> extractTitleIdFromHeader(String romPath) async {
+  Future<(String? titleId, String? resolvedPath)> extractTitleIdFromHeader(
+      String romPath) async {
     final actualPath = await _resolveRomFile(romPath);
     if (actualPath == null) {
       debugPrint('[Eden][Scanner] No ROM file found for: $romPath');
-      return null;
+      return (null, null);
     }
 
     debugPrint('[Eden][Scanner] Reading: $actualPath');
@@ -164,14 +167,14 @@ class EdenSaveStrategy extends SaveStrategy {
         final raw = match.group(1)!;
         final normalized = _normalizeToBaseId(raw);
         debugPrint('[Eden][Scanner] Found: ${match.group(0)} → $normalized');
-        return normalized;
+        return (normalized, actualPath);
       }
 
       debugPrint('[Eden][Scanner] No .cnmt match in first 256 KB');
     } catch (e) {
       debugPrint('[Eden][Scanner] ERROR: $e');
     }
-    return null;
+    return (null, actualPath);
   }
 
   /// Force the last 3 hex chars to "000" → base game save folder.
@@ -358,6 +361,26 @@ class EdenSaveStrategy extends SaveStrategy {
       return bestMatch.path;
     }
 
+    // Case 4b: Fuzzy match DIRECTORIES in parent (multi-file ROMs)
+    // e.g. path is ".../switch/Snipperclips Cut it out Together" but actual
+    // dir is ".../switch/Snipperclips_ Cut It Out, Together!"
+    for (final entity in parentDir.listSync()) {
+      if (entity is! io.Directory) continue;
+      final dirName = p.basename(entity.path);
+      final dirTokens = _tokenize(dirName);
+      int score = 0;
+      for (final token in searchTokens) {
+        if (dirTokens.contains(token)) score++;
+      }
+      if (score >= (searchTokens.length / 2).ceil() && score > 0) {
+        final found = _findLargestRomInDir(entity.path);
+        if (found != null) {
+          debugPrint('[Eden][Resolve] Fuzzy dir match: ${entity.path} → $found');
+          return found;
+        }
+      }
+    }
+
     // Case 5: Try one level up (multi-file ROMs in sibling dirs)
     final grandparent = io.Directory(p.dirname(parentPath));
     if (grandparent.existsSync()) {
@@ -536,14 +559,15 @@ class EdenSaveStrategy extends SaveStrategy {
       String? titleId;
 
       // 1. Header scan on the ROM
-      titleId = await extractTitleIdFromHeader(destPath);
+      final (headerId, resolvedPath) = await extractTitleIdFromHeader(destPath);
+      titleId = headerId;
       if (titleId != null) {
         debugPrint('[Eden][Restore] Title ID from header: $titleId');
       }
 
       // 2. Filename extraction
       if (titleId == null) {
-        titleId = _extractTitleIdFromFilename(destPath, game);
+        titleId = _extractTitleIdFromFilename(resolvedPath ?? destPath, game);
         if (titleId != null) {
           debugPrint('[Eden][Restore] Title ID from filename: $titleId');
         }
