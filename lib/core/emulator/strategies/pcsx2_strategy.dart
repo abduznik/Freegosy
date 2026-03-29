@@ -49,5 +49,15 @@ class Pcsx2Strategy extends EmulatorStrategy {
   }
 
   @override
+  Future<void> launchStandalone() async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+    final normalizedExe = exePath.replaceAll('/', '\\');
+    await Process.start(normalizedExe, [], mode: ProcessStartMode.detached);
+  }
+
+  @override
   String resolveSavePath(Game game) => '';
 }

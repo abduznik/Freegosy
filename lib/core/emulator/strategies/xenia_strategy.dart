@@ -45,5 +45,14 @@ class XeniaStrategy extends EmulatorStrategy {
   }
 
   @override
+  Future<void> launchStandalone() async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+    await Process.start(exePath, [], mode: ProcessStartMode.detached);
+  }
+
+  @override
   String resolveSavePath(Game game) => '';
 }

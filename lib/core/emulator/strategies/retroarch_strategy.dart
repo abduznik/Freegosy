@@ -188,16 +188,14 @@ class RetroArchStrategy extends EmulatorStrategy {
     final fontFile = io.File(p.join(citraSystemDir, 'sysdata', 'shared_font.bin'));
     if (await fontFile.exists()) return;
 
-    debugPrint('[RetroArch] Downloading 3DS shared font...');
     final dio = Dio();
     try {
       await dio.download(
         'https://github.com/citra-emu/citra-sysdata-mks/raw/master/shared_font.bin',
         fontFile.path,
       );
-      debugPrint('[RetroArch] 3DS shared font downloaded.');
     } catch (e) {
-      debugPrint('[RetroArch] Failed to download 3DS shared font: $e');
+      // ignore
     }
   }
 
@@ -212,8 +210,6 @@ class RetroArchStrategy extends EmulatorStrategy {
     if (!await configDir.exists()) await configDir.create(recursive: true);
 
     await _ensure3dsFonts(citraDir.path);
-
-    debugPrint('[RetroArch] 3DS setup ensured at ${citraDir.path}. Place your aes_keys.txt in ${sysdataDir.path}');
   }
 
   @override
@@ -339,6 +335,29 @@ class RetroArchStrategy extends EmulatorStrategy {
       final f = io.File(zipPath);
       if (await f.exists()) await f.delete();
     }
+  }
+
+  @override
+  Future<void> launchStandalone() async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isMacOS) {
+      // Find the .app bundle path
+      final parts = exePath.split('/');
+      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+      if (appIdx != -1) {
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        if (await io.Directory(appBundlePath).exists()) {
+          await Process.run('open', [appBundlePath]);
+          return;
+        }
+      }
+    }
+
+    await Process.start(exePath, [], mode: ProcessStartMode.detached);
   }
 
   @override

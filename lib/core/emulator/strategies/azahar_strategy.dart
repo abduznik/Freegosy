@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:io' as io;
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
@@ -40,16 +39,14 @@ class AzaharStrategy extends EmulatorStrategy {
     final fontFile = io.File(p.join(azaharSystemDir, 'sysdata', 'shared_font.bin'));
     if (await fontFile.exists()) return;
 
-    debugPrint('[Azahar] Downloading 3DS shared font...');
     final dio = Dio();
     try {
       await dio.download(
         'https://github.com/citra-emu/citra-sysdata-mks/raw/master/shared_font.bin',
         fontFile.path,
       );
-      debugPrint('[Azahar] 3DS shared font downloaded.');
     } catch (e) {
-      debugPrint('[Azahar] Failed to download 3DS shared font: $e');
+      // ignore
     }
   }
 
@@ -62,8 +59,6 @@ class AzaharStrategy extends EmulatorStrategy {
     if (!await configDir.exists()) await configDir.create(recursive: true);
 
     await _ensure3dsFonts(azaharSystemDir);
-
-    debugPrint('[Azahar] 3DS setup ensured at $azaharSystemDir. Place your aes_keys.txt in ${sysdataDir.path}');
   }
 
   @override
@@ -118,6 +113,34 @@ class AzaharStrategy extends EmulatorStrategy {
     await _ensure3dsSetup();
 
     return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+  }
+
+  @override
+  Future<void> launchStandalone() async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isMacOS) {
+      // Find the .app bundle path
+      final parts = exePath.split('/');
+      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+      if (appIdx != -1) {
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        if (await Directory(appBundlePath).exists()) {
+          await io.Process.run('open', [appBundlePath]);
+          return;
+        }
+      }
+    }
+
+    String? workingDir;
+    if (io.Platform.isMacOS) {
+      workingDir = File(exePath).parent.path;
+    }
+
+    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: workingDir);
   }
 
   @override

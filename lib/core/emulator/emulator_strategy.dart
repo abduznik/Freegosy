@@ -20,5 +20,6 @@ abstract class EmulatorStrategy {
 
   Future<void> launch(Game game, String romPath);
   Future<Process?> launchWithHandle(Game game, String romPath) async => null;
+  Future<void> launchStandalone();
   String resolveSavePath(Game game);
 }

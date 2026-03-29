@@ -6,6 +6,7 @@ import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/strategy_registry.dart';
 import '../../providers/download_provider.dart';
+import '../../providers/romm_provider.dart';
 
 // Function to build the Emulators section
 Widget buildEmulatorsSection(
@@ -65,6 +66,27 @@ Widget buildEmulatorsSection(
                     }
                   },
                 ),
+                if (isInstalled)
+                  IconButton(
+                    icon: const Icon(Icons.play_arrow, color: Colors.green),
+                    tooltip: "Launch Standalone",
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final strategy = ref
+                          .read(strategyRegistryProvider)
+                          .asData
+                          ?.value
+                          ?.getStrategyById(emulatorId);
+                      if (strategy != null) {
+                        try {
+                          await strategy.launchStandalone();
+                        } catch (e) {
+                          messenger.showSnackBar(
+                              SnackBar(content: Text("Failed to launch: $e")));
+                        }
+                      }
+                    },
+                  ),
                 ElevatedButton(
                   onPressed: isInstalled
                       ? null

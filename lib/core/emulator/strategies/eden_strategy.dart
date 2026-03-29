@@ -89,6 +89,34 @@ class EdenStrategy extends EmulatorStrategy {
   }
 
   @override
+  Future<void> launchStandalone() async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isMacOS) {
+      // Find the .app bundle path
+      final parts = exePath.split('/');
+      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+      if (appIdx != -1) {
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        if (await io.Directory(appBundlePath).exists()) {
+          await io.Process.run('open', [appBundlePath]);
+          return;
+        }
+      }
+    }
+
+    String? workingDir;
+    if (io.Platform.isMacOS) {
+      workingDir = io.File(exePath).parent.path;
+    }
+
+    await io.Process.start(exePath, [], mode: io.ProcessStartMode.detached, workingDirectory: workingDir);
+  }
+
+  @override
   String resolveSavePath(Game game) {
     return "";
   }

@@ -174,6 +174,8 @@ class StrategyRegistry {
     return null;
   }
 
+  EmulatorStrategy? getStrategyById(String id) => _strategies.cast<EmulatorStrategy?>().firstWhere((s) => s?.emulatorId == id, orElse: () => null);
+
   Map<String, dynamic>? getDefinition(String emulatorId) {
     try {
       return kEmulatorDefinitions.firstWhere((def) => def['id'] == emulatorId);
