@@ -278,6 +278,14 @@ class DirectoryService {
     return dirPath;
   }
 
+  Future<void> deleteEmulator(String emulatorId) async {
+    final dirPath = await getEmulatorDirectory(emulatorId);
+    final directory = io.Directory(dirPath);
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  }
+
   Future<String> getEmulatorExecutable(String emulatorId, String executableName) async {
     final emulatorDir = await getEmulatorDirectory(emulatorId);
     return '$emulatorDir/$executableName';
