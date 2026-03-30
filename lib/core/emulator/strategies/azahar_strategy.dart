@@ -67,24 +67,27 @@ class AzaharStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
 
-    if (io.Platform.isMacOS) {
-      final emuDir = await _directoryService.getEmulatorDirectory(emulatorId);
-      final appExists = await Directory('$emuDir/Azahar.app').exists();
-      final dylibExists = await File('$emuDir/azahar_libretro.dylib').exists();
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-      if (!appExists && dylibExists) {
+    if (io.Platform.isMacOS) {
+      if (exePath.endsWith('.dylib')) {
         throw Exception('Found Azahar Libretro core. Please switch to RetroArch in Settings to play this game.');
+      }
+
+      // On macOS, launching via 'open -a App.app --args rom' is much more stable than launching internal binary
+      final parts = exePath.split('/');
+      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+      if (appIdx != -1) {
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        if (await Directory(appBundlePath).exists()) {
+          await _ensure3dsSetup();
+          await io.Process.run('open', [appBundlePath, '--args', romPath]);
+          return;
+        }
       }
     }
 
-    if (exePath == null) throw Exception('$name not found. Please download it first.');
-
-    if (io.Platform.isMacOS && exePath.endsWith('.dylib')) {
-      throw Exception('Found Azahar Libretro core. Please switch to RetroArch in Settings to play this game.');
-    }
-
     await _ensure3dsSetup();
-
     await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
   }
 
@@ -94,16 +97,6 @@ class AzaharStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
 
-    if (io.Platform.isMacOS) {
-      final emuDir = await _directoryService.getEmulatorDirectory(emulatorId);
-      final appExists = await Directory('$emuDir/Azahar.app').exists();
-      final dylibExists = await File('$emuDir/azahar_libretro.dylib').exists();
-
-      if (!appExists && dylibExists) {
-        throw Exception('Found Azahar Libretro core. Please switch to RetroArch in Settings to play this game.');
-      }
-    }
-
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
     if (io.Platform.isMacOS && exePath.endsWith('.dylib')) {
@@ -111,7 +104,6 @@ class AzaharStrategy extends EmulatorStrategy {
     }
 
     await _ensure3dsSetup();
-
     return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
   }
 
@@ -121,8 +113,6 @@ class AzaharStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-
-    final exeDir = io.File(exePath).parent.path;
 
     if (io.Platform.isMacOS) {
       // Find the .app bundle path
@@ -137,6 +127,7 @@ class AzaharStrategy extends EmulatorStrategy {
       }
     }
 
+    final exeDir = io.File(exePath).parent.path;
     await Process.start(
       exePath,
       [],
