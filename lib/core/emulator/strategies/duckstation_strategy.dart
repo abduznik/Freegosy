@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -24,7 +25,10 @@ class DuckstationStrategy extends EmulatorStrategy {
   String get linuxExecutable => 'duckstation-qt';
 
   @override
-  bool get supportsSaveSync => false;
+  String get macosExecutable => 'DuckStation.app/Contents/MacOS/DuckStation';
+
+  @override
+  bool get supportsSaveSync => true;
 
   @override
   Future<void> launch(Game game, String romPath) async {
@@ -51,6 +55,19 @@ class DuckstationStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
+    if (io.Platform.isMacOS) {
+      // Find the .app bundle path
+      final parts = exePath.split('/');
+      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+      if (appIdx != -1) {
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        if (await Directory(appBundlePath).exists()) {
+          await io.Process.run('open', [appBundlePath]);
+          return;
+        }
+      }
+    }
+
     final exeDir = File(exePath).parent.path;
     await Process.start(
       exePath,
@@ -61,5 +78,13 @@ class DuckstationStrategy extends EmulatorStrategy {
   }
 
   @override
-  String resolveSavePath(Game game) => '';
+  String resolveSavePath(Game game) {
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home != null) {
+        return '$home/Library/Application Support/DuckStation/';
+      }
+    }
+    return '';
+  }
 }
