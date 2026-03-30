@@ -32,8 +32,8 @@ class AzaharSaveStrategy extends SaveStrategy {
     _manualMapping = mapping;
   }
 
-  Future<String?> _getAzaharBase() async {
-    return await _directoryService.getEmulatorDirectory('azahar');
+  Future<String?> _getAzaharSystemBase() async {
+    return await _directoryService.getEmulatorSystemDirectory('azahar');
   }
 
   @override
@@ -45,7 +45,7 @@ class AzaharSaveStrategy extends SaveStrategy {
           'Please select the save folder manually from the sdmc directory.');
     }
 
-    final base = await _getAzaharBase();
+    final base = await _getAzaharSystemBase();
     if (base == null) return null;
 
     // _manualMapping is expected to be the relative path from sdmc
@@ -168,7 +168,7 @@ class AzaharSaveStrategy extends SaveStrategy {
   /// Scans the 'sdmc' directory for available save data folders.
   /// Looks for '00000001' folders which are typical for 3DS saves.
   Future<List<Map<String, dynamic>>> getAvailableSaveFolders() async {
-    final base = await _getAzaharBase();
+    final base = await _getAzaharSystemBase();
     if (base == null) return [];
 
     final sdmcDir = io.Directory(p.join(base, 'sdmc'));

@@ -54,31 +54,7 @@ class ExtractionService {
         }
 
         if (Platform.isMacOS) {
-          // Find and sanitize any .app bundles
-          final findResult = await Process.run(
-            'find', [destDir, '-name', '*.app', '-maxdepth', '3'],
-            runInShell: false,
-          );
-          for (final appPath in findResult.stdout.toString().trim().split('\n')) {
-            if (appPath.isEmpty) continue;
-            
-            String finalAppPath = appPath;
-            // Feature: Rename versioned apps to canonical names (e.g. PCSX2-v2.6.3.app -> PCSX2.app)
-            final name = p.basename(appPath);
-            if (name.contains('-v') || name.contains('_v')) {
-              final parts = name.split(RegExp(r'[-_]v'));
-              if (parts.isNotEmpty) {
-                final canonicalName = '${parts.first}.app';
-                final newPath = p.join(p.dirname(appPath), canonicalName);
-                try {
-                  await Directory(appPath).rename(newPath);
-                  finalAppPath = newPath;
-                } catch (_) {}
-              }
-            }
-
-            await _sanitizeAppBundle(finalAppPath);
-          }
+          await _postExtractSanitize(destDir);
         }
       } catch (e) {
         debugPrint('Error during tar extraction: $e');
@@ -94,7 +70,6 @@ class ExtractionService {
       throw Exception('DMG extraction is only supported on macOS');
     }
 
-    // Task Requirement 2: hdiutil attach with -nobrowse and -readonly
     final mountResult = await Process.run(
       'hdiutil',
       ['attach', archivePath, '-nobrowse', '-readonly'],
@@ -104,7 +79,6 @@ class ExtractionService {
     }
 
     String? mountPoint;
-    // Robust mount point detection
     final lines = mountResult.stdout.toString().split('\n');
     for (final line in lines) {
       if (line.contains('/Volumes/')) {
@@ -114,7 +88,6 @@ class ExtractionService {
     }
 
     if (mountPoint == null) {
-      // Try parsing standard hdiutil output which might have mount point at the end
       final lastLine = lines.where((l) => l.trim().isNotEmpty).last;
       if (lastLine.contains('/Volumes/')) {
         mountPoint = lastLine.substring(lastLine.indexOf('/Volumes/')).trim();
@@ -129,17 +102,12 @@ class ExtractionService {
       final volume = Directory(mountPoint);
       await for (final entity in volume.list()) {
         if (entity is Directory && entity.path.endsWith('.app')) {
-          final appName = p.basename(entity.path);
-          final destPath = p.join(destDir, appName);
-          
-          // Use cp -R to preserve symlinks and metadata which is critical for .app bundles
           final cpResult = await Process.run('cp', ['-R', entity.path, destDir]);
           if (cpResult.exitCode != 0) {
             throw Exception('Failed to copy .app bundle: ${cpResult.stderr}');
           }
           
-          // Task Requirement 2: Quarantine removal and codesigning
-          await _sanitizeAppBundle(destPath);
+          await _postExtractSanitize(destDir);
           break;
         }
       }
@@ -147,7 +115,6 @@ class ExtractionService {
       debugPrint('Error copying from DMG: $e');
       rethrow;
     } finally {
-      // Task Requirement 2: hdiutil detach -force
       await Process.run('hdiutil', ['detach', mountPoint, '-force']);
     }
   }
@@ -164,15 +131,7 @@ class ExtractionService {
       }
       
       if (Platform.isMacOS) {
-        // Find and sanitize any .app bundles in the extracted files
-        final findResult = await Process.run(
-          'find', [destDir, '-name', '*.app', '-maxdepth', '3'],
-          runInShell: false,
-        );
-        for (final appPath in findResult.stdout.toString().trim().split('\n')) {
-          if (appPath.isEmpty) continue;
-          await _sanitizeAppBundle(appPath);
-        }
+        await _postExtractSanitize(destDir);
       }
     } else {
       final fileBytes = await File(archivePath).readAsBytes();
@@ -192,6 +151,10 @@ class ExtractionService {
     );
     if (result.exitCode != 0) {
       throw Exception('7z extraction failed: ${result.stderr}');
+    }
+
+    if (Platform.isMacOS) {
+      await _postExtractSanitize(destDir);
     }
   }
 
@@ -226,15 +189,53 @@ class ExtractionService {
     }
   }
 
+  Future<void> _postExtractSanitize(String destDir) async {
+    if (!Platform.isMacOS) return;
+
+    // Find all .app bundles
+    final findResult = await Process.run(
+      'find', [destDir, '-name', '*.app', '-maxdepth', '3'],
+      runInShell: false,
+    );
+    
+    final appPaths = findResult.stdout.toString().trim().split('\n').where((p) => p.isNotEmpty);
+    
+    for (final appPath in appPaths) {
+      String finalAppPath = appPath;
+      final name = p.basename(appPath);
+      
+      // Feature: Rename versioned apps to canonical names (e.g. PCSX2-v2.6.3.app -> PCSX2.app)
+      // Standard versioning patterns like -v1.0, _v2.0, or just -2.0
+      if (name.contains('-') || name.contains('_') || RegExp(r'\d').hasMatch(name)) {
+        final baseNameMatch = name.split(RegExp(r'[-_v]'))[0];
+        if (baseNameMatch.length > 3) {
+          final canonicalName = '$baseNameMatch.app';
+          final newPath = p.join(p.dirname(appPath), canonicalName);
+          if (finalAppPath != newPath && !await Directory(newPath).exists()) {
+            try {
+              await Directory(appPath).rename(newPath);
+              finalAppPath = newPath;
+              debugPrint('[Extraction] Renamed versioned bundle: $name -> $canonicalName');
+            } catch (e) {
+              debugPrint('[Extraction] Failed to rename $name to $canonicalName: $e');
+            }
+          }
+        }
+      }
+
+      await _sanitizeAppBundle(finalAppPath);
+    }
+  }
+
   Future<void> _sanitizeAppBundle(String appPath) async {
     if (!Platform.isMacOS) return;
     
     try {
       // Ensure it's executable
       await Process.run('chmod', ['-R', '+x', appPath]);
-      // Task Requirement 2: Remove quarantine
+      // Remove quarantine
       await Process.run('xattr', ['-rd', 'com.apple.quarantine', appPath]);
-      // Task Requirement 2: Self-sign
+      // deep self-sign
       await Process.run('codesign', ['--force', '--deep', '--sign', '-', appPath]);
     } catch (e) {
       debugPrint('Warning: Could not sanitize app bundle at $appPath: $e');
