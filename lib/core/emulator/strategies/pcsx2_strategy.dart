@@ -25,7 +25,10 @@ class Pcsx2Strategy extends EmulatorStrategy {
   String get linuxExecutable => 'pcsx2-qt';
 
   @override
-  bool get supportsSaveSync => false;
+  String get macosExecutable => 'PCSX2.app/Contents/MacOS/PCSX2';
+
+  @override
+  bool get supportsSaveSync => true;
 
   @override
   Future<void> launch(Game game, String romPath) async {
@@ -66,6 +69,19 @@ class Pcsx2Strategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
+    if (io.Platform.isMacOS) {
+      // Find the .app bundle path
+      final parts = exePath.split('/');
+      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+      if (appIdx != -1) {
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        if (await Directory(appBundlePath).exists()) {
+          await io.Process.run('open', [appBundlePath]);
+          return;
+        }
+      }
+    }
+
     final exeDir = File(exePath).parent.path;
 
     if (io.Platform.isWindows) {
@@ -78,5 +94,13 @@ class Pcsx2Strategy extends EmulatorStrategy {
   }
 
   @override
-  String resolveSavePath(Game game) => '';
+  String resolveSavePath(Game game) {
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home != null) {
+        return '$home/Library/Application Support/PCSX2/';
+      }
+    }
+    return '';
+  }
 }

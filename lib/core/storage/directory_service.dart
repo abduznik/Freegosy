@@ -258,6 +258,18 @@ class DirectoryService {
       } else {
         dirPath = await getEmulatorDirectory(emulatorId);
       }
+    } else if (emulatorId == 'pcsx2') {
+      if (io.Platform.isMacOS) {
+        final home = io.Platform.environment['HOME'];
+        if (home == null) throw Exception('HOME environment variable not set');
+        dirPath = '$home/Library/Application Support/PCSX2';
+      } else if (io.Platform.isWindows) {
+        final appData = await _getWindowsAppData();
+        if (appData == null) throw Exception('APPDATA environment variable not set');
+        dirPath = '$appData\\PCSX2';
+      } else {
+        dirPath = await getEmulatorDirectory(emulatorId);
+      }
     } else {
       dirPath = await getEmulatorDirectory(emulatorId);
     }
@@ -290,11 +302,28 @@ class DirectoryService {
     }
 
     if (executableName.contains('/')) {
+      final parts = executableName.split('/');
+      final firstPart = parts.first; // e.g. "PCSX2.app"
+      final remaining = parts.sublist(1).join('/'); // e.g. "Contents/MacOS/PCSX2"
+
       await for (final entity in dir.list()) {
         if (entity is Directory) {
-          final sub = File('${entity.path}/$executableName');
-          if (await sub.exists()) {
-            return sub.path;
+          final dirName = entity.path.split(io.Platform.isWindows ? r'\' : '/').last;
+          
+          // Exact match or fuzzy match for versioned .app bundles (e.g. PCSX2-v2.6.3.app matches PCSX2.app)
+          bool matches = dirName == firstPart;
+          if (!matches && firstPart.endsWith('.app') && dirName.endsWith('.app')) {
+            final stem = firstPart.substring(0, firstPart.length - 4).toLowerCase();
+            if (dirName.toLowerCase().startsWith(stem)) {
+              matches = true;
+            }
+          }
+
+          if (matches) {
+            final sub = File('${entity.path}/$remaining');
+            if (await sub.exists()) {
+              return sub.path;
+            }
           }
         }
       }

@@ -34,7 +34,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/save/strategies/eden_save_strategy.dart` — Eden/Switch save strategy. Resolves title ID via filename regex, XCI header parse, or save folder scan. Zips save folder for upload.
 - `lib/core/save/strategies/azahar_save_strategy.dart` — Azahar/3DS save strategy. Uses manual folder mapping and zip-based sync for SDMC data.
 - `lib/core/save/strategies/windows_save_strategy.dart` — Windows native game save strategy. Uses PCGamingWiki API for auto-detection, supports manual override. Zips entire save directory for upload, extracts on restore. Persists overrides via SharedPreferences (prefix `win_save_`).
-- `lib/core/save/strategies/pcsx2_save_strategy.dart` — PCSX2 save strategy (PS2). Memcards: {emulatorDir}/memcards/Mcd001.ps2, Mcd002.ps2. States: {emulatorDir}/sstates/{stem}.000 etc.
+- `lib/core/save/strategies/pcsx2_save_strategy.dart` — PCSX2 save strategy (PS2). Memcards: {systemDir}/memcards/*.ps2. States: {systemDir}/sstates/{stem}.*. Supports cross-platform system directory resolution (Application Support on macOS, APPDATA on Windows).
 - `lib/core/save/strategies/rpcs3_save_strategy.dart` — RPCS3 save strategy (PS3). Saves at %APPDATA%pcs3\dev_hdd0\home\00000001\savedata\{titleId}\ (Windows) or ~/Library/Application Support/rpcs3/... (macOS). Extracts title ID via regex [A-Z]{4}\d{5}. Zips save folder for upload.
 - `lib/core/save/strategies/xenia_save_strategy.dart` — Xenia Canary save strategy (Xbox 360). Saves at {emulatorDir}\content\{titleId}\00000001\. Extracts title ID via 8-char hex regex. Zips save folder for upload.
 - `lib/core/save/strategies/duckstation_save_strategy.dart` — DuckStation save strategy (PS1). Checks for portable.txt in emulator dir — if present uses {emulatorDir}/memcards/{stem}.mcd, otherwise falls back to %LOCALAPPDATA%\DuckStation\memcards\{stem}.mcd.
@@ -67,7 +67,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/emulator/strategies/windows_strategy.dart` — Windows native game strategy. Auto-detects exe in game folder.
 
 ### Core — Extraction
-- `lib/core/extraction/extraction_service.dart` — Unified extraction service. Handles .zip, .7z (via bundled 7zr.exe/7zz), .dmg (macOS), and self-extracting .exe files. Sanitizes macOS .app bundles (xattr -cr).
+- `lib/core/extraction/extraction_service.dart` — Unified extraction service. Handles .zip, .7z (via bundled 7zr.exe/7zz), .dmg (macOS), .tar.gz, .tar.xz, and self-extracting .exe files. Sanitizes macOS .app bundles (xattr -cr).
 
 ### Core — Downloader
 - `lib/core/downloader/download_service.dart` — HTTP ROM download via Dio. Stream<DownloadProgress> for UI.
