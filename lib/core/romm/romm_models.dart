@@ -97,11 +97,13 @@ class Platform {
   final int id;
   final String name;
   final String slug;
+  final int gamesCount;
 
   Platform({
     required this.id,
     required this.name,
     required this.slug,
+    this.gamesCount = 0,
   });
 
   factory Platform.fromJson(Map<String, dynamic> json) {
@@ -109,6 +111,9 @@ class Platform {
       id: json['id'] as int? ?? 0,
       name: json['name']?.toString() ?? '',
       slug: json['slug']?.toString() ?? '',
+      gamesCount: (json['rom_count'] as int?) ?? 
+                  (json['roms_count'] as int?) ?? 
+                  (json['games_count'] as int?) ?? 0,
     );
   }
 }
