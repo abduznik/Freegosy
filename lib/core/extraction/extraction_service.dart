@@ -192,9 +192,9 @@ class ExtractionService {
   Future<void> _postExtractSanitize(String destDir) async {
     if (!Platform.isMacOS) return;
 
-    // Find all .app bundles
+    // Find all .app bundles (case-insensitive)
     final findResult = await Process.run(
-      'find', [destDir, '-name', '*.app', '-maxdepth', '3'],
+      'find', [destDir, '-iname', '*.app', '-maxdepth', '3'],
       runInShell: false,
     );
     

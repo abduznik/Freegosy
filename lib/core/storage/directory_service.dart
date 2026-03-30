@@ -306,13 +306,14 @@ class DirectoryService {
       final firstPart = parts.first; // e.g. "PCSX2.app"
       final remaining = parts.sublist(1).join('/'); // e.g. "Contents/MacOS/PCSX2"
 
-      await for (final entity in dir.list()) {
+      // Recursive search for the bundle directory (max 3 levels)
+      await for (final entity in dir.list(recursive: true)) {
         if (entity is Directory) {
           final dirName = entity.path.split(io.Platform.isWindows ? r'\' : '/').last;
           
           // Exact match or fuzzy match for versioned .app bundles (e.g. PCSX2-v2.6.3.app matches PCSX2.app)
-          bool matches = dirName == firstPart;
-          if (!matches && firstPart.endsWith('.app') && dirName.endsWith('.app')) {
+          bool matches = dirName.toLowerCase() == firstPart.toLowerCase();
+          if (!matches && firstPart.toLowerCase().endsWith('.app') && dirName.toLowerCase().endsWith('.app')) {
             final stem = firstPart.substring(0, firstPart.length - 4).toLowerCase();
             if (dirName.toLowerCase().startsWith(stem)) {
               matches = true;
@@ -320,9 +321,46 @@ class DirectoryService {
           }
 
           if (matches) {
+            debugPrint("[DirectoryService] Found matching .app bundle: $dirName at ${entity.path}");
             final sub = File('${entity.path}/$remaining');
             if (await sub.exists()) {
+              debugPrint("[DirectoryService] Found direct binary: ${sub.path}");
               return sub.path;
+            }
+            
+            // Secondary check: search inside Contents/MacOS case-insensitively
+            final macosDir = Directory('${entity.path}/Contents/MacOS');
+            if (await macosDir.exists()) {
+              final binaryName = remaining.split('/').last.toLowerCase();
+              debugPrint("[DirectoryService] Searching for binary '$binaryName' in ${macosDir.path}");
+              await for (final subEntity in macosDir.list()) {
+                if (subEntity is File) {
+                  final subName = subEntity.path.split('/').last.toLowerCase();
+                  if (subName == binaryName) {
+                    debugPrint("[DirectoryService] Found binary via case-insensitive match: ${subEntity.path}");
+                    return subEntity.path;
+                  }
+                }
+              }
+              
+              // Third check: find any file in Contents/MacOS (fallback)
+              await for (final subEntity in macosDir.list()) {
+                if (subEntity is File) {
+                  final subName = subEntity.path.split('/').last.toLowerCase();
+                  final stem = dirName.toLowerCase().replaceAll('.app', '');
+                  if (subName.contains(stem) || stem.contains(subName)) {
+                    debugPrint("[DirectoryService] Found binary via stem match: ${subEntity.path}");
+                    return subEntity.path;
+                  }
+                }
+              }
+              // Last resort: return the first file in Contents/MacOS
+              await for (final subEntity in macosDir.list()) {
+                if (subEntity is File) {
+                   debugPrint("[DirectoryService] Using first binary found as last resort: ${subEntity.path}");
+                   return subEntity.path;
+                }
+              }
             }
           }
         }
