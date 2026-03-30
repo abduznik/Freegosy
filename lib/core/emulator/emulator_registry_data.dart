@@ -128,7 +128,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'type': 'github',
     'github_repo': 'stenzek/duckstation',
     'github_asset_required': ['windows', 'x64'],
-    'github_asset_required_macos': ['mac', 'Qt'],
+    'github_asset_required_macos': ['mac', 'release'],
     'github_asset_excluded': ['nogui', 'debug', 'arm64'],
     'windows_executable': 'duckstation-qt-x64-ReleaseLTCG.exe',
     'linux_executable': 'duckstation-qt',
