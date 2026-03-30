@@ -1,0 +1,56 @@
+7-Zip License
+-------------
+
+7-Zip Copyright (C) 1999-2025 Igor Pavlov.
+
+The licenses for files are:
+
+  1) 7z.dll:
+     - The "GNU LGPL" as main license for most of the code
+     - The "GNU LGPL" with "unRAR license restriction" for some code
+     - The "BSD 3-clause License" for some code
+     - The "BSD 2-clause License" for some code
+
+  2) All other files: the "GNU LGPL".
+
+Redistributions in binary form must reproduce related license information from this file.
+
+Notes:
+
+  - You can use 7-Zip on any computer, including a computer in a commercial 
+    organization. You don't need to register or pay for 7-Zip.
+
+  - GNU LGPL information:
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You can receive a copy of the GNU Lesser General Public License from 
+    http://www.gnu.org/
+
+  - unRAR restriction:
+    The decompression engine for RAR archives was developed using source 
+    code of unRAR program.
+    All copyrights to original unRAR code are owned by Alexander Roshal.
+    The license for unRAR source code specifies that "no part of 
+    unRAR source code may be used to recreate the RAR compression algorithm, 
+    which is proprietary".
+
+  - BSD 3-clause License information:
+    The code for LZFSE decompression was developed by Apple Inc.
+    The code for ZSTD decompression was developed by Facebook (Meta).
+    Redistribution and use in binary form must reproduce the copyright notice, 
+    this list of conditions and the following disclaimer in the documentation 
+    and/or other materials provided with the distribution.
+
+  - BSD 2-clause License information:
+    The code for XXH64 was developed by Yann Collet.
+    Redistribution and use in binary form must reproduce the copyright notice 
+    and the following disclaimer in the documentation and/or other materials 
+    provided with the distribution.

@@ -1,14 +1,14 @@
-﻿import 'dart:io';
+﻿import 'dart:io' as io;
+import 'dart:io' show Directory, File, Process;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
 class DirectoryService {
   static const String _romsRootPathKey = 'romsRootPath';
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
-  static const String _defaultRomsPath = 'Documents/Freegosy/ROMs';
-  static const String _defaultEmulatorsPath = 'Documents/Freegosy/Emulators';
 
   // Known extensions per platform slug
   static const Map<String, List<String>> _platformExtensions = {
@@ -42,8 +42,18 @@ class DirectoryService {
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
-    romsRootPath = prefs.getString(_romsRootPathKey) ?? _defaultRomsPath;
-    emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? _defaultEmulatorsPath;
+    final String defaultBase;
+    if (defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      final appSupport = await getApplicationSupportDirectory();
+      defaultBase = appSupport.path;
+    } else {
+      final docsDir = await getApplicationDocumentsDirectory();
+      defaultBase = docsDir.path;
+    }
+
+    romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
+    emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
     await _ensureDirectoryExists(romsRootPath);
     await _ensureDirectoryExists(emulatorsRootPath);
     await loadEmulatorPathOverrides();
@@ -164,17 +174,47 @@ class DirectoryService {
     return null;
   }
 
-  Future<String?> resolveSevenZipPath() async {
-    String appData = '';
+  Future<String?> _getWindowsAppData() async {
+    try {
+      final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
+      final path = result.stdout.toString().trim();
+      if (path.isEmpty || path.contains('%APPDATA%')) return null;
+      return path;
+    } catch (e) {
+      return null;
+    }
+  }
 
+  Future<String?> resolveSevenZipPath() async {
     if (defaultTargetPlatform == TargetPlatform.windows) {
+      final appData = await _getWindowsAppData();
+      if (appData == null) return null;
+
+      final dest = File('$appData\\Freegosy\\thirdparty\\7zr.exe');
+      if (await dest.exists()) return dest.path;
+
       try {
-        final result = await Process.run('cmd', ['/c', 'echo %APPDATA%'], runInShell: false);
-        appData = result.stdout.toString().trim();
+        await dest.parent.create(recursive: true);
+        final byteData = await rootBundle.load('thirdparty/7zr.exe');
+        await dest.writeAsBytes(byteData.buffer.asUint8List());
+        return dest.path;
       } catch (e) {
         return null;
       }
-      if (appData.isEmpty || appData.contains('%APPDATA%')) return null;
+    } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+      final appSupport = await getApplicationSupportDirectory();
+      final dest = File('${appSupport.path}/Freegosy/thirdparty/7zz');
+      if (await dest.exists()) return dest.path;
+
+      try {
+        await dest.parent.create(recursive: true);
+        final byteData = await rootBundle.load('thirdparty/7zz');
+        await dest.writeAsBytes(byteData.buffer.asUint8List());
+        await Process.run('chmod', ['+x', dest.path]);
+        return dest.path;
+      } catch (e) {
+        return null;
+      }
     } else if (defaultTargetPlatform == TargetPlatform.linux) {
       // Linux: Try to find system 7z
       try {
@@ -186,23 +226,9 @@ class DirectoryService {
         // ignore
       }
       return null;
-    } else {
-      // macOS: no 7zr needed
-      return null;
     }
 
-    final dest = File('$appData\\Freegosy\\thirdparty\\7zr.exe');
-
-    if (await dest.exists()) return dest.path;
-
-    try {
-      await dest.parent.create(recursive: true);
-      final byteData = await rootBundle.load('thirdparty/7zr.exe');
-      await dest.writeAsBytes(byteData.buffer.asUint8List());
-      return dest.path;
-    } catch (e) {
-      return null;
-    }
+    return null;
   }
 
   Future<String> getEmulatorDirectory(String emulatorId) async {
@@ -214,39 +240,187 @@ class DirectoryService {
     return dirPath;
   }
 
+  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
+    String dirPath;
+
+    if (emulatorId == 'retroarch') {
+      final emuDir = await getEmulatorDirectory(emulatorId);
+      dirPath = '$emuDir/system';
+    } else if (emulatorId == 'azahar') {
+      if (io.Platform.isMacOS) {
+        final home = io.Platform.environment['HOME'];
+        if (home == null) throw Exception('HOME environment variable not set');
+        dirPath = '$home/Library/Application Support/Azahar';
+      } else if (io.Platform.isWindows) {
+        final appData = await _getWindowsAppData();
+        if (appData == null) throw Exception('APPDATA environment variable not set');
+        dirPath = '$appData\\Azahar';
+      } else {
+        dirPath = await getEmulatorDirectory(emulatorId);
+      }
+    } else if (emulatorId == 'pcsx2') {
+      if (io.Platform.isMacOS) {
+        final home = io.Platform.environment['HOME'];
+        if (home == null) throw Exception('HOME environment variable not set');
+        dirPath = '$home/Library/Application Support/PCSX2';
+      } else if (io.Platform.isWindows) {
+        final appData = await _getWindowsAppData();
+        if (appData == null) throw Exception('APPDATA environment variable not set');
+        dirPath = '$appData\\PCSX2';
+      } else {
+        dirPath = await getEmulatorDirectory(emulatorId);
+      }
+    } else {
+      dirPath = await getEmulatorDirectory(emulatorId);
+    }
+
+    await _ensureDirectoryExists(dirPath);
+    return dirPath;
+  }
+
+  Future<void> deleteEmulator(String emulatorId) async {
+    final dirPath = await getEmulatorDirectory(emulatorId);
+    final directory = io.Directory(dirPath);
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  }
+
   Future<String> getEmulatorExecutable(String emulatorId, String executableName) async {
     final emulatorDir = await getEmulatorDirectory(emulatorId);
     return '$emulatorDir/$executableName';
   }
 
-  Future<bool> isEmulatorInstalled(String emulatorId, String executableName) async {
-    final dir = Directory(await getEmulatorDirectory(emulatorId));
-    if (!await dir.exists()) return false;
-    if (await File('${dir.path}/$executableName').exists()) return true;
-    await for (final entity in dir.list()) {
-      if (entity is Directory) {
-        if (await File('${entity.path}/$executableName').exists()) return true;
-      }
-    }
-    return false;
-  }
-
   Future<String?> findEmulatorExecutable(String emulatorId, String executableName) async {
-    final dir = Directory(await getEmulatorDirectory(emulatorId));
-    if (!await dir.exists()) return null;
-    final direct = File('${dir.path}/$executableName');
-    if (await direct.exists()) return direct.path;
+    final emulatorDir = await getEmulatorDirectory(emulatorId);
+    final dir = Directory(emulatorDir);
+    if (!await dir.exists()) {
+      return null;
+    }
+
+    debugPrint("=== EMULATOR CHECK ===");
+    debugPrint("Looking for: $executableName in $emulatorDir");
+    await for (final e in dir.list()) {
+      debugPrint("Found on disk: ${e.path}");
+    }
+
+    final direct = File('$emulatorDir/$executableName');
+    if (await direct.exists()) {
+      return direct.path;
+    }
+
+    if (executableName.contains('/')) {
+      final parts = executableName.split('/');
+      final firstPart = parts.first; // e.g. "PCSX2.app"
+      final remaining = parts.sublist(1).join('/'); // e.g. "Contents/MacOS/PCSX2"
+
+      // Recursive search for the bundle directory (max 3 levels)
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is Directory) {
+          final dirName = entity.path.split(io.Platform.isWindows ? r'\' : '/').last;
+          
+          // Exact match or fuzzy match for versioned .app bundles (e.g. PCSX2-v2.6.3.app matches PCSX2.app)
+          bool matches = dirName.toLowerCase() == firstPart.toLowerCase();
+          if (!matches && firstPart.toLowerCase().endsWith('.app') && dirName.toLowerCase().endsWith('.app')) {
+            final stem = firstPart.substring(0, firstPart.length - 4).toLowerCase();
+            if (dirName.toLowerCase().startsWith(stem)) {
+              matches = true;
+            }
+          }
+
+          if (matches) {
+            debugPrint("[DirectoryService] Found matching .app bundle: $dirName at ${entity.path}");
+            final sub = File('${entity.path}/$remaining');
+            if (await sub.exists()) {
+              debugPrint("[DirectoryService] Found direct binary: ${sub.path}");
+              return sub.path;
+            }
+            
+            // Secondary check: search inside Contents/MacOS case-insensitively
+            final macosDir = Directory('${entity.path}/Contents/MacOS');
+            if (await macosDir.exists()) {
+              final binaryName = remaining.split('/').last.toLowerCase();
+              debugPrint("[DirectoryService] Searching for binary '$binaryName' in ${macosDir.path}");
+              await for (final subEntity in macosDir.list()) {
+                if (subEntity is File) {
+                  final subName = subEntity.path.split('/').last.toLowerCase();
+                  if (subName == binaryName) {
+                    debugPrint("[DirectoryService] Found binary via case-insensitive match: ${subEntity.path}");
+                    return subEntity.path;
+                  }
+                }
+              }
+              
+              // Third check: find any file in Contents/MacOS (fallback)
+              await for (final subEntity in macosDir.list()) {
+                if (subEntity is File) {
+                  final subName = subEntity.path.split('/').last.toLowerCase();
+                  final stem = dirName.toLowerCase().replaceAll('.app', '');
+                  if (subName.contains(stem) || stem.contains(subName)) {
+                    debugPrint("[DirectoryService] Found binary via stem match: ${subEntity.path}");
+                    return subEntity.path;
+                  }
+                }
+              }
+              // Last resort: return the first file in Contents/MacOS
+              await for (final subEntity in macosDir.list()) {
+                if (subEntity is File) {
+                   debugPrint("[DirectoryService] Using first binary found as last resort: ${subEntity.path}");
+                   return subEntity.path;
+                }
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
     await for (final entity in dir.list()) {
+      if (entity is File && entity.path.endsWith('/$executableName')) {
+        return entity.path;
+      }
       if (entity is Directory) {
         final sub = File('${entity.path}/$executableName');
-        if (await sub.exists()) return sub.path;
+        if (await sub.exists()) {
+          return sub.path;
+        }
       }
     }
+
+    // Secondary check for core libraries if binary not found
+    final ext = io.Platform.isMacOS ? '.dylib' : (io.Platform.isWindows ? '.dll' : '.so');
+    await for (final entity in dir.list(recursive: true)) {
+      if (entity is File) {
+        final name = entity.path.split(io.Platform.isWindows ? r'\' : '/').last.toLowerCase();
+        if (name.endsWith(ext) && name.contains(emulatorId.toLowerCase())) {
+          debugPrint("Found core library fallback: ${entity.path}");
+          return entity.path;
+        }
+      }
+    }
+
     return null;
+  }
+
+  Future<bool> isEmulatorInstalled(String emulatorId, String executableName) async {
+    final found = await findEmulatorExecutable(emulatorId, executableName);
+    return found != null;
   }
 
   Future<bool> isRomDownloaded(Game game) async {
     final found = await findExistingRomPath(game);
     return found != null;
+  }
+
+  Future<void> deleteRom(Game game) async {
+    final path = await findExistingRomPath(game);
+    if (path != null) {
+      if (await File(path).exists()) {
+        await File(path).delete();
+      } else if (await Directory(path).exists()) {
+        await Directory(path).delete(recursive: true);
+      }
+    }
   }
 }

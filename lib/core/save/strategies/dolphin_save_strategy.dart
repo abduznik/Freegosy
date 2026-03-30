@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:typed_data';
+import 'package:path/path.dart' as p;
 
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
@@ -7,14 +8,33 @@ import '../save_strategy.dart';
 
 /// Save strategy for Dolphin emulator (GameCube / Wii).
 ///
-/// Save files live in {emulatorDir}/User/GC/{region}/Card A/
+/// Refined to support macOS and Windows user directories and Wii/GC specific paths.
 class DolphinSaveStrategy extends SaveStrategy {
+  // ignore: unused_field
   final DirectoryService _directoryService;
 
   DolphinSaveStrategy(this._directoryService);
 
   @override
   String get strategyId => 'dolphin';
+
+  /// Returns the base user directory for Dolphin.
+  String _getUserDir() {
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home == null) throw Exception('HOME environment variable not set');
+      return p.join(home, 'Library', 'Application Support', 'Dolphin');
+    } else if (io.Platform.isWindows) {
+      final userProfile = io.Platform.environment['USERPROFILE'];
+      if (userProfile == null) throw Exception('USERPROFILE environment variable not set');
+      return p.join(userProfile, 'Documents', 'Dolphin Emulator');
+    } else {
+      // Default to Linux or other
+      final home = io.Platform.environment['HOME'];
+      if (home == null) throw Exception('HOME environment variable not set');
+      return p.join(home, '.local', 'share', 'dolphin-emu');
+    }
+  }
 
   /// Detects region code from [romPath].
   String _detectRegion(String romPath) {
@@ -26,101 +46,118 @@ class DolphinSaveStrategy extends SaveStrategy {
 
   /// Normalizes game name for comparison.
   String _normalizeGameName(String name) {
-    return name
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  /// Extracts Game ID/Code from filename if possible.
+  /// Often formatted as [GAMEID] Name.ext or Name [GAMEID].ext
+  String? _extractGameId(String filename) {
+    final base = p.basenameWithoutExtension(filename);
+    // Look for 4 or 6 character uppercase alphanumeric codes
+    final match = RegExp(r'\[([A-Z0-9]{4,6})\]').firstMatch(base);
+    if (match != null) return match.group(1);
+    
+    // Also try 6 char codes at the start of filename (common in some sets)
+    final startMatch = RegExp(r'^([A-Z0-9]{6})').firstMatch(base);
+    if (startMatch != null) return startMatch.group(1);
+
+    return null;
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final exePath = await _directoryService.findEmulatorExecutable('dolphin', 'Dolphin.exe');
-    if (exePath == null) return null;
+    final userDir = _getUserDir();
+    if (!await io.Directory(userDir).exists()) return null;
 
-    final emulatorDir = File(exePath).parent.path;
-    final region = _detectRegion(romPath);
-    return '$emulatorDir/User/GC/$region/Card A';
+    final isWii = game.platformSlug?.toLowerCase() == 'wii';
+
+    if (isWii) {
+      // Wii saves are in Wii/title/00010000/[TITLE_ID_HEX]
+      // We need to find the title ID.
+      String? titleId = _extractGameId(p.basename(romPath));
+      if (titleId != null && titleId.length >= 4) {
+        // Dolphin uses the 4-char ID in hex format for the folder name
+        // e.g. RMCE (Mario Kart Wii) -> 524d4345
+        final hexId = titleId.substring(0, 4).codeUnits
+            .map((e) => e.toRadixString(16).padLeft(2, '0'))
+            .join();
+        final wiiPath = p.join(userDir, 'Wii', 'title', '00010000', hexId);
+        if (await io.Directory(wiiPath).exists()) return wiiPath;
+      }
+      
+      // Fallback: search title directory for modified folders if sessionStart is known
+      return p.join(userDir, 'Wii', 'title', '00010000');
+    } else {
+      // GameCube
+      final region = _detectRegion(romPath);
+      
+      // First, check for GCI folder (preferred for sync)
+      final gciPath = p.join(userDir, 'GC', region, 'Card A');
+      if (await io.Directory(gciPath).exists()) return gciPath;
+
+      // Fallback to the general GC folder for memory cards
+      return p.join(userDir, 'GC');
+    }
   }
 
   @override
-  Future<List<File>> getSaveFiles(
+  Future<List<io.File>> getSaveFiles(
       Game game,
       String romPath,
       {DateTime? sessionStart,
       String syncMode = 'both'}) async {
-    final saveDir = await getSaveDir(game, romPath);
-    if (saveDir == null) return [];
+    final rootSaveDir = await getSaveDir(game, romPath);
+    if (rootSaveDir == null) return [];
 
-    final dir = Directory(saveDir);
-    if (!await dir.exists()) return [];
+    final isWii = game.platformSlug?.toLowerCase() == 'wii';
+    final result = <io.File>[];
 
-    // First pass: collect all GCI files and read their
-    // game codes from binary headers
-    final allGciFiles = <File>[];
-    await for (final entity in dir.list()) {
-      if (entity is! File) continue;
-      final filename = entity.path
-          .split(RegExp(r'[/\\]'))
-          .last
-          .toUpperCase();
-      if (!filename.endsWith('.GCI')) continue;
-      allGciFiles.add(entity);
-    }
-
-    // Read game codes from all GCI headers to find which
-    // code belongs to our target game.
-    // We find the game code by matching GCI filename
-    // against the game name from RomM.
-    // GCI filename format: XX-GAMECODE-GAME NAME.gci
-    // Extract the game code (segment between first and
-    // second dash) from filename.
-
-    String? targetGameCode;
-    final normalizedTarget = _normalizeGameName(game.displayName);
-
-    for (final gciFile in allGciFiles) {
-      final filename = gciFile.path
-          .split(RegExp(r'[/\\]'))
-          .last;
-      final parts = filename.split('-');
-      if (parts.length < 3) continue;
-      final codeFromFilename = parts[1].toUpperCase();
-      // Get the name part (everything after second dash,
-      // before the bracket timestamp)
-      final namePart = parts.sublist(2).join('-')
-          .replaceAll(RegExp(r'\[.*?\]'), '')
-          .trim();
-      final normalizedGciName = _normalizeGameName(namePart);
-
-      if (normalizedGciName.contains(normalizedTarget) ||
-          normalizedTarget.contains(normalizedGciName)) {
-        targetGameCode = codeFromFilename;
-        break;
+    if (isWii) {
+      // For Wii, if we have the specific folder, sync it (SaveSyncService will zip it)
+      if (p.basename(rootSaveDir) != '00010000') {
+        result.add(io.File(rootSaveDir));
       }
-    }
+    } else {
+      // GameCube fuzzy matching
+      final dir = io.Directory(rootSaveDir);
+      if (!await dir.exists()) return [];
 
-    // If we found a matching game code filter by it,
-    // otherwise return empty list to avoid syncing
-    // wrong game saves
-    if (targetGameCode == null) {
-      return [];
-    }
+      final gameId = _extractGameId(p.basename(romPath))?.toUpperCase();
+      final normalizedTarget = _normalizeGameName(game.displayName);
 
-    final result = <File>[];
-    for (final gciFile in allGciFiles) {
-      final filename = gciFile.path
-          .split(RegExp(r'[/\\]'))
-          .last;
-      final parts = filename.split('-');
-      if (parts.length < 2) continue;
-      final codeFromFilename = parts[1].toUpperCase();
+      await for (final entity in dir.list()) {
+        if (entity is! io.File) continue;
+        final filename = p.basename(entity.path).toUpperCase();
 
-      if (codeFromFilename != targetGameCode) continue;
+        // 1. Match .gci files by ID or name
+        if (filename.endsWith('.GCI')) {
+          bool match = false;
+          if (gameId != null && filename.contains(gameId)) {
+            match = true;
+          } else {
+            final normalizedGci = _normalizeGameName(filename);
+            if (normalizedGci.contains(normalizedTarget) || normalizedTarget.contains(normalizedGci)) {
+              match = true;
+            }
+          }
 
-      if (sessionStart != null) {
-        final stat = await gciFile.stat();
-        if (stat.modified.isBefore(sessionStart)) continue;
+          if (match) {
+            if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+              result.add(entity);
+            }
+          }
+        } 
+        
+        // 2. Match Memory Card files (.raw, .mcp) - only if they match region
+        else if (filename.startsWith('MEMORYCARDA') && (filename.endsWith('.RAW') || filename.endsWith('.MCP'))) {
+          final region = _detectRegion(romPath);
+          if (filename.contains(region)) {
+             if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+              result.add(entity);
+            }
+          }
+        }
       }
-      result.add(gciFile);
     }
 
     return result;
@@ -132,12 +169,12 @@ class DolphinSaveStrategy extends SaveStrategy {
       final saveDir = await getSaveDir(game, destPath);
       if (saveDir == null) return false;
 
-      final dir = Directory(saveDir);
+      final dir = io.Directory(saveDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      final targetPath = '$saveDir/$filename';
+      final targetPath = p.join(saveDir, filename);
       await backupSave(targetPath);
-      await File(targetPath).writeAsBytes(data);
+      await io.File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
       return false;

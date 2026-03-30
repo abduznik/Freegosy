@@ -3,9 +3,21 @@ import 'dart:typed_data';
 
 import '../romm/romm_models.dart';
 
+// ─── Exceptions ──────────────────────────────────────────────────────────────
+
+class SaveMappingRequiredException implements Exception {
+  final String message;
+  SaveMappingRequiredException([this.message = 'Manual save mapping required']);
+  @override
+  String toString() => 'SaveMappingRequiredException: $message';
+}
+
 /// Abstract base for all save-file strategies.
 abstract class SaveStrategy {
   String get strategyId;
+  
+  /// Whether this strategy supports save synchronization.
+  bool get supportsSaveSync => false;
 
   /// Returns the local save directory for [game] given its [romPath].
   Future<String?> getSaveDir(Game game, String romPath);

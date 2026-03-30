@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -5,6 +7,7 @@ import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/strategy_registry.dart';
 import '../../providers/download_provider.dart';
+import '../../providers/romm_provider.dart';
 
 // Function to build the Emulators section
 Widget buildEmulatorsSection(
@@ -15,6 +18,16 @@ Widget buildEmulatorsSection(
   Function(void Function()) setState,
   WidgetRef ref,
 ) {
+  final currentPlatform = defaultTargetPlatform == TargetPlatform.windows 
+      ? 'windows' 
+      : (defaultTargetPlatform == TargetPlatform.macOS ? 'macos' : 'linux');
+
+  // Filter emulators that are supported on the current OS
+  final supportedEmulators = kEmulatorDefinitions.where((def) {
+    final supported = def['supported_platforms'] as List<String>? ?? [];
+    return supported.contains(currentPlatform);
+  }).toList();
+
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -24,11 +37,13 @@ Widget buildEmulatorsSection(
       if (!emulatorsLoaded)
         const Center(child: CircularProgressIndicator())
       else
-        ...kEmulatorDefinitions.map<Widget>((def) {
+        ...supportedEmulators.map<Widget>((def) {
           final emulatorId = def['id'] as String;
           final emulatorName = def['name'] as String;
           final isInstalled = emulatorInstallStates[emulatorId] ?? false;
           final overridePath = directoryService.getEmulatorPathOverride(emulatorId);
+          final type = def['type'] as String? ?? 'none';
+          final canManage = type != 'none'; // Only github/direct emulators can be updated/uninstalled
 
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -64,40 +79,118 @@ Widget buildEmulatorsSection(
                     }
                   },
                 ),
-                ElevatedButton(
-                  onPressed: isInstalled
-                      ? null
-                      : () async {
-                          // Capture context safely before any async operations.
-                          final messenger = ScaffoldMessenger.of(context);
+                if (isInstalled) ...[
+                  IconButton(
+                    icon: const Icon(Icons.play_arrow, color: Colors.green),
+                    tooltip: "Launch Standalone",
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final strategy = ref
+                          .read(strategyRegistryProvider)
+                          .asData
+                          ?.value
+                          ?.getStrategyById(emulatorId);
+                      if (strategy != null) {
+                        try {
+                          await strategy.launchStandalone();
+                        } catch (e) {
+                          messenger.showSnackBar(
+                              SnackBar(content: Text("Failed to launch: $e")));
+                        }
+                      }
+                    },
+                  ),
+                  if (canManage) ...[
+                    IconButton(
+                      icon: const Icon(Icons.update, color: Colors.blue),
+                      tooltip: "Update Emulator",
+                      onPressed: () async {
+                        _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      tooltip: "Uninstall Emulator",
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text("Uninstall Emulator"),
+                            content: Text("Are you sure you want to delete $emulatorName? This will remove all local files."),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+                              TextButton(
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text("Uninstall"),
+                              ),
+                            ],
+                          ),
+                        );
 
-                          messenger.showSnackBar(SnackBar(
-                            content: Text('Starting download for $emulatorName...'),
-                          ));
-
-                          ref.read(downloadProvider.notifier).startEmulatorDownload(emulatorId, emulatorName);
-
-                          // Listen for download completion and update state
-                          ref.read(downloadProvider.notifier).stream.listen((downloads) {
-                            final progress = downloads[emulatorId];
-                            if (progress != null && progress.isComplete) { // Use safeContext here
-                              // Update the map directly. setState will re-render using the updated map.
-                              emulatorInstallStates[emulatorId] = true;
-                              setState(() {}); // Trigger parent state update
-                              messenger.showSnackBar(SnackBar(
-                                content: Text('$emulatorName downloaded.'),
-                              ));
-                            }
-                          });
-                        },
-                  child: Text(isInstalled ? 'Installed' : 'Download'),
-                ),
+                        if (confirm == true) {
+                          await directoryService.deleteEmulator(emulatorId);
+                          emulatorInstallStates[emulatorId] = false;
+                          setState(() {});
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("$emulatorName uninstalled.")),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ],
+                ],
+                if (!isInstalled && canManage)
+                  ElevatedButton(
+                    onPressed: () => _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState),
+                    child: const Text('Download'),
+                  ),
               ],
             ),
           );
         }),
     ],
   );
+}
+
+void _startDownload(
+  BuildContext context,
+  WidgetRef ref,
+  String emulatorId,
+  String emulatorName,
+  Map<String, bool> emulatorInstallStates,
+  Function(void Function()) setState,
+) {
+  final messenger = ScaffoldMessenger.of(context);
+
+  messenger.showSnackBar(SnackBar(
+    content: Text('Starting download for $emulatorName...'),
+  ));
+
+  ref.read(downloadProvider.notifier).startEmulatorDownload(emulatorId, emulatorName);
+
+  // Listen for download completion and update state
+  StreamSubscription? sub;
+  sub = ref.read(downloadProvider.notifier).stream.listen((downloads) {
+    final progress = downloads[emulatorId];
+    if (progress != null && (progress.isComplete || progress.error != null)) {
+      if (progress.isComplete) {
+        emulatorInstallStates[emulatorId] = true;
+        if (context.mounted) setState(() {});
+        messenger.showSnackBar(SnackBar(
+          content: Text('$emulatorName downloaded successfully.'),
+        ));
+      } else if (progress.error != null) {
+        if (context.mounted) setState(() {});
+        messenger.showSnackBar(SnackBar(
+          content: Text('Failed to download $emulatorName: ${progress.error}'),
+        ));
+      }
+      sub?.cancel();
+    }
+  });
 }
 
 // Function to build the Emulator Conflicts section
@@ -153,6 +246,17 @@ Widget buildConflictsSection(
             ),
           );
         }),
+      const SizedBox(height: 16),
+      ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.red,
+        ),
+        onPressed: () async {
+          await registry.clearPreferences();
+          setState(() {});
+        },
+        child: const Text('Reset Emulator Preferences'),
+      ),
     ],
   );
 }

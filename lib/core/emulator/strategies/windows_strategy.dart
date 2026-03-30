@@ -99,5 +99,8 @@ class WindowsStrategy extends EmulatorStrategy {
   }
 
   @override
+  Future<void> launchStandalone() async {}
+
+  @override
   String resolveSavePath(Game game) => '';
 }

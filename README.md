@@ -2,6 +2,26 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
+## What's New in 0.2.0
+
+### Full macOS Support
+- Native support for macOS (ARM64 and Intel)
+- Automated `.app` bundle detection and stable launching via the `open` command
+- Native `.dmg` and `.tar.xz` extraction support
+- Platform-specific path resolution for Application Support and User directories
+- Fully enabled cross-platform Save Sync for macOS users
+
+### Enhanced Emulator Management
+- **One-Tap Uninstall**: New red trash bin button in Settings to completely remove an emulator and its local files
+- **Easy Updates**: New blue update button to fetch the latest release from GitHub/Direct links
+- **Smart Filtering**: The Emulators list in Settings now only shows emulators supported on your current OS (Windows/macOS/Linux)
+
+### UI & UX Improvements
+- **Clean Filter Bar**: Platforms with zero games are now automatically filtered out of the main library view
+- **Automatic Renaming**: Extracted versioned emulators (e.g. `PCSX2-v2.6.3.app`) are automatically renamed to their canonical names (`PCSX2.app`) for stable detection
+- **Recursive Discovery**: Deep search for `.app` bundles allows Freegosy to find emulators even when they are extracted into nested folders
+- **Flexible RomM Integration**: Added support for multiple game-count field names (`rom_count`, `roms_count`, `games_count`) for better compatibility with different RomM versions
+
 ## What's New in 0.1.2
 
 ### Paginated Library Loading
@@ -14,66 +34,13 @@ A cross-platform Flutter app for browsing your RomM library, downloading ROMs, a
 - Fixed RomM 4.x API compatibility — correctly uses `platform_ids` parameter
 - Platform results are cached in memory for instant switching on revisit
 
-### Search Improvements
-- Search is now debounced — waits 300ms after typing before firing the API call
-- No more per-keystroke requests hammering your RomM server
-
-### UX Fixes
-- F5 refresh now correctly shows the loading animation and clears cache
-- Pull-to-refresh always fetches fresh data from the server
-
-## What's New in 0.1.1
-
-- API key token verification improvements
-
-## What's New in 0.1.0
-
-### New Emulator Support
-- **Flycast** (Dreamcast, Naomi, Atomiswave)
-- **melonDS** (Nintendo DS)
-- **PPSSPP** standalone (PlayStation Portable)
-- **mGBA** standalone (Game Boy Advance, GBC, GB)
-- **MAME** (Arcade)
-
-### Expanded Save Sync
-- **DuckStation** (PS1): Memory card save sync
-- **melonDS** (NDS): Save file sync
-- **mGBA** (GBA/GBC/GB): Save file sync
-- **PPSSPP** (PSP): Entire SAVEDATA directory with automatic folder structure restoration
-- **Cemu** (Wii U): Full mlc01/usr/save/ directory packaging and restore
-- All new strategies support both push (upload) and pull (download) operations
-
-### Auto-Sync on Game Close
-- Saves automatically push to cloud when you close the emulator
-- Available for all supported emulators via `launchWithHandle()`
-- Seamless background operation—no manual intervention needed
-- Works alongside pre-launch save push and manual sync
-
-### Smart Emulator Management
-- **Conflict Resolver**: When multiple emulators support the same platform, choose which one to use in Settings
-- **Path Overrides**: Point Freegosy to existing emulator installations via Settings folder icon (no need to re-download)
-- **Preference Persistence**: Your emulator choices and custom paths are saved across app restarts
-
-### RetroArch Core Auto-Download
-- Missing cores are detected at launch time
-- User is offered to auto-download and install the required core
-- Full core list support via RetroArch buildbot
-
-### Performance & UX Enhancements
-- Library grid renders without blocking—0% CPU while idle
-- Cached images (memCache) for fast card rendering
-- Optimized grid with extended cache extent and dual-stem state file matching for RetroArch
-- **Library Display Presets**: Windows, Steam Deck, Cozy, Compact—quick-switch your layout
-- **Launch Status Snackbars**: Real-time feedback showing "Pushing saves / Syncing saves / Launching / Auto-syncing" at each stage
-- **Downloads Tab**: Emulator downloads now show alongside game downloads with progress tracking
-
 ## Currently Working
 
 - **RomM Integration**: Browse and filter your entire RomM library by platform or search
 - **ROM Downloads**: Download games via HTTP from your RomM server with progress tracking
-- **Archive Extraction**: Automatic extraction of .zip and .7z archives on download
+- **Archive Extraction**: Automatic extraction of .zip, .7z, .dmg, .tar.gz, and .tar.xz archives
 - **Game Launching**: Launch games directly from the app using:
-  - RetroArch (GBA, GBC, GB, NES, SNES, N64, NDS, PSX, PSP, Dreamcast, Megadrive, and more)
+  - RetroArch (All major retro platforms)
   - Dolphin (GameCube & Wii)
   - Eden (Nintendo Switch)
   - RPCS3 (PlayStation 3)
@@ -89,28 +56,13 @@ A cross-platform Flutter app for browsing your RomM library, downloading ROMs, a
   - mGBA (Game Boy Advance/Color/Game Boy)
   - MAME (Arcade)
   - Windows Native (PC games)
-- **Emulator Downloads**: One-tap emulator download and installation from Settings
-- **Save Sync**: Bidirectional save synchronization with RomM cloud for:
-  - RetroArch (all supported platforms)
-  - Dolphin (GameCube/Wii)
-  - Eden (Switch)
-  - PCSX2 (PS2)
-  - RPCS3 (PS3)
-  - DuckStation (PS1)
-  - melonDS (NDS)
-  - mGBA (GBA/GBC/GB)
-  - PPSSPP (PSP)
-  - Cemu (Wii U)
-  - Xenia Canary (Xbox 360)
-  - Windows native games (via PCGamingWiki auto-detection)
+- **Emulator Management**: Download, update, and uninstall emulators directly from Settings
+- **Save Sync**: Bidirectional save synchronization with RomM cloud for almost all supported emulators including cross-platform path resolution.
 
 ## Roadmap
 
-### In Progress
-- **Linux/macOS support** — Platform detection and path resolution already structured; adding platform-specific executable paths and environment variable resolution
-
 ### Near Term
-- **Auto-update emulators** — Keep emulators fresh without manual downloads
+- **Linux support** — Enhancing native binary detection and system path resolution
 - **Android support** — Deep links to app stores for Play Store/Epic Games/etc.
 - **Recently played / play time tracking** — See your gaming stats at a glance
 
@@ -123,7 +75,7 @@ Freegosy is designed as a truly cross-platform experience. The codebase is struc
 
 ## Status
 
-Actively under development. Release 0.1.2 brings paginated library loading and server-side platform filtering for large library support.
+Actively under development. Release 0.2.0 brings full macOS support and major UI management improvements.
 
 ## About RomM
 

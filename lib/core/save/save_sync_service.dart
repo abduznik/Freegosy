@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
@@ -18,6 +19,7 @@ import 'strategies/melonds_save_strategy.dart';
 import 'strategies/mgba_save_strategy.dart';
 import 'strategies/ppsspp_save_strategy.dart';
 import 'strategies/cemu_save_strategy.dart';
+import 'strategies/azahar_save_strategy.dart';
 import '../emulator/strategy_registry.dart';
 
 class SaveSyncService {
@@ -37,11 +39,12 @@ class SaveSyncService {
   late final MgbaSaveStrategy _mgba;
   late final PpssppSaveStrategy _ppsspp;
   late final CemuSaveStrategy _cemu;
+  late final AzaharSaveStrategy _azahar;
 
   SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry) {
     _retroarch = RetroArchSaveStrategy(_directoryService);
     _dolphin = DolphinSaveStrategy(_directoryService);
-    _eden = EdenSaveStrategy();
+    _eden = EdenSaveStrategy(onMappingResolved: saveMappedFolder);
     _windows = WindowsSaveStrategy();
     _pcsx2 = Pcsx2SaveStrategy(_directoryService);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
@@ -51,14 +54,37 @@ class SaveSyncService {
     _mgba = MgbaSaveStrategy();
     _ppsspp = PpssppSaveStrategy(_directoryService);
     _cemu = CemuSaveStrategy(_directoryService);
+    _azahar = AzaharSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
+  }
+
+  /// Returns the manual Title ID mapping for a given game.
+  Future<String?> getMappedFolder(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('eden_mapping_$gameId');
+  }
+
+  /// Saves the manual Title ID mapping for a given game.
+  Future<void> saveMappedFolder(String gameId, String folderName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('eden_mapping_$gameId', folderName);
+  }
+
+  /// Returns the manual Eden profile choice.
+  Future<String?> getActiveProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('active_eden_profile');
+  }
+
+  /// Saves the manual Eden profile choice.
+  Future<void> saveActiveProfile(String profileId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('active_eden_profile', profileId);
   }
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
   SaveStrategy? getStrategyForSlug(String? platformSlug) {
-    // print('[SaveSync] getStrategyForSlug called with: $platformSlug');
     if (platformSlug != null) {
       final preferredId = _strategyRegistry.getPreferredEmulatorId(platformSlug);
-      // print('[SaveSync] preferredId for $platformSlug: $preferredId');
       if (preferredId != null) {
         final id = preferredId.toLowerCase();
         if (id == 'melonds') return _melonds;
@@ -73,6 +99,7 @@ class SaveSyncService {
         if (id == 'xenia' || id == 'xenia_canary') return _xenia;
         if (id == 'eden') return _eden;
         if (id == 'windows') return _windows;
+        if (id == 'azahar') return _azahar;
       }
     }
 
@@ -140,8 +167,7 @@ class SaveSyncService {
       case 'nintendo3ds':
       case 'new-nintendo-3ds':
       case 'new-nintendo-3ds-xl':
-      case 'xbox':
-        return null;
+        return _azahar;
       default:
         return null;
     }
@@ -160,6 +186,16 @@ class SaveSyncService {
       String gameId, String filename, String hash) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_hashKey(gameId, filename), hash);
+  }
+
+  /// Clears the stored hash for a game, forcing the next push to upload.
+  Future<void> clearHashCache(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('last_hash_${gameId}_'));
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
+    debugPrint('[SyncService] Cleared hash cache for game $gameId');
   }
 
   Future<String> _hashFile(File file) async {
@@ -186,14 +222,21 @@ class SaveSyncService {
   }
 
   /// Uploads all local save files for [game] to RomM.
-  ///
-  /// If [sessionStart] is provided, only files modified after that time are uploaded.
-  /// Returns true if at least one file was uploaded successfully.
   Future<bool> pushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both'}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
+
+      if (strategy is EdenSaveStrategy) {
+        final mapping = await getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
+        final activeProfile = await getActiveProfile();
+        strategy.setActiveProfileOverride(activeProfile);
+      } else if (strategy is AzaharSaveStrategy) {
+        final mapping = await getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
+      }
 
       final files = await strategy.getSaveFiles(
         game, romPath,
@@ -209,10 +252,16 @@ class SaveSyncService {
 
         if (await FileSystemEntity.isDirectory(file.path)) {
           final zipPath = '${file.path}.zip';
+          // Write a temp metadata file into the save dir before zipping.
+          // This gives each zip a unique content hash so RomM won't deduplicate.
+          final metaFile = File('${file.path}/.freegosy_sync');
+          await metaFile.writeAsString(DateTime.now().toIso8601String());
           final encoder = ZipFileEncoder();
           encoder.create(zipPath);
           await encoder.addDirectory(Directory(file.path));
           encoder.close();
+          // Clean up the temp meta file
+          if (await metaFile.exists()) await metaFile.delete();
           uploadFile = File(zipPath);
           isTempZip = true;
         }
@@ -224,7 +273,7 @@ class SaveSyncService {
         final localHash = await _hashFile(uploadFile);
         final storedHash = await _getStoredHash(game.id, filename);
 
-        if (storedHash != null && localHash == storedHash) {
+        if (!force && storedHash != null && localHash == storedHash) {
           if (isTempZip && await uploadFile.exists()) {
             await uploadFile.delete();
           }
@@ -242,33 +291,50 @@ class SaveSyncService {
         }
       }
 
+      if (uploaded > 0) {
+        await _rommService.pruneOldSaves(game.id);
+      }
       return uploaded > 0;
     } catch (e) {
+      if (e is SaveMappingRequiredException) rethrow;
       return false;
     }
   }
 
-  /// Downloads the latest save for [game] from RomM and restores it locally.
-  ///
-  /// Returns true on success.
-  Future<bool> pullSave(Game game, String romPath) async {
+  /// Returns all available saves for [gameId] from RomM.
+  Future<List<Map<String, dynamic>>> getSavesForGame(String gameId) async {
+    return _rommService.getSavesList(gameId);
+  }
+
+  /// Downloads a specific save for [game] from RomM and restores it locally.
+  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
 
-      final save = await _rommService.getLatestSave(game.id);
+      if (strategy is EdenSaveStrategy) {
+        final mapping = await getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
+        final activeProfile = await getActiveProfile();
+        strategy.setActiveProfileOverride(activeProfile);
+      } else if (strategy is AzaharSaveStrategy) {
+        final mapping = await getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
+      }
+
+      final Map<String, dynamic>? save = saveData ?? await _rommService.getLatestSave(game.id);
       if (save == null) return false;
 
-      // Check remote updated_at vs last pull time
-      final remoteUpdatedAt = DateTime.tryParse(
-          save['updated_at']?.toString() ?? '');
-      final lastPull = await _getLastPullTime(game.id);
+      if (saveData == null) {
+        final remoteUpdatedAt = DateTime.tryParse(
+            save['updated_at']?.toString() ?? '');
+        final lastPull = await _getLastPullTime(game.id);
 
-      if (lastPull != null &&
-          remoteUpdatedAt != null &&
-          !remoteUpdatedAt.isAfter(lastPull)) {
-        // Remote hasn't changed since last pull, skip
-        return false;
+        if (lastPull != null &&
+            remoteUpdatedAt != null &&
+            !remoteUpdatedAt.isAfter(lastPull)) {
+          return false;
+        }
       }
 
       final downloadUrl = save['download_path'] as String?
@@ -295,4 +361,6 @@ class SaveSyncService {
   }
 
   WindowsSaveStrategy get windowsSaveStrategy => _windows;
+  EdenSaveStrategy get edenSaveStrategy => _eden;
+  AzaharSaveStrategy get azaharSaveStrategy => _azahar;
 }

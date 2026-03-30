@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:io' as io;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -16,11 +18,17 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   String get strategyId => 'rpcs3';
 
   Future<String?> _getRpcs3SaveRoot() async {
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home == null) return null;
+      return p.join(home, 'Library', 'Application Support', 'rpcs3', 'dev_hdd0', 'home', '00000001', 'savedata');
+    }
+
     final exePath = await _directoryService.findEmulatorExecutable(
         'rpcs3', 'rpcs3.exe');
     if (exePath == null) return null;
     final exeDir = File(exePath).parent.path;
-    return '$exeDir\\dev_hdd0\\home\\00000001\\savedata';
+    return p.join(exeDir, 'dev_hdd0', 'home', '00000001', 'savedata');
   }
 
   /// Finds all save folders for this game by scanning savedata dir for
@@ -44,7 +52,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     if (match != null) {
       final titleId = match.group(0)!;
       final byTitleId = allDirs.where((d) {
-        final folderName = d.path.split('\\').last.toUpperCase();
+        final folderName = d.path.split(p.separator).last.toUpperCase();
         return folderName.startsWith(titleId);
       }).toList();
       if (byTitleId.isNotEmpty) {
@@ -61,7 +69,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
         .toList();
 
     final byName = allDirs.where((d) {
-      final folderLower = d.path.split('\\').last.toLowerCase();
+      final folderLower = d.path.split(p.separator).last.toLowerCase();
       return gameWords.any((word) => folderLower.contains(word));
     }).toList();
 
@@ -107,7 +115,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }
     if (!hasFiles) return [];
 
-    final zipPath = '$saveRoot\\${game.id}.saves.zip';
+    final zipPath = p.join(saveRoot, '${game.id}.saves.zip');
     final encoder = ZipFileEncoder();
     encoder.create(zipPath);
     for (final dir in saveDirs) {
@@ -128,7 +136,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
-          final entryPath = '$saveRoot\\${entry.name}';
+          final entryPath = p.join(saveRoot, entry.name);
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);
@@ -144,7 +152,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       // Fallback single file
       final saveDir = await getSaveDir(game, destPath) ?? saveRoot;
       await Directory(saveDir).create(recursive: true);
-      final targetPath = '$saveDir\\$filename';
+      final targetPath = p.join(saveDir, filename);
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       return true;

@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
+import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -15,12 +17,18 @@ class DuckstationSaveStrategy extends SaveStrategy {
   String get strategyId => 'duckstation';
 
   Future<String?> _getBaseDir() async {
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home == null) return null;
+      return p.join(home, 'Library', 'Application Support', 'DuckStation');
+    }
+
     final exePath = await _directoryService.findEmulatorExecutable(
         'duckstation', 'duckstation-qt-x64-ReleaseLTCG.exe');
     if (exePath == null) return null;
-    final emulatorDir = File(exePath).parent.path.replaceAll('/', '\\');
+    final emulatorDir = File(exePath).parent.path;
 
-    if (await File('$emulatorDir\\portable.txt').exists()) {
+    if (await File(p.join(emulatorDir, 'portable.txt')).exists()) {
       return emulatorDir;
     }
 
@@ -28,7 +36,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
       final result = await Process.run('cmd', ['/c', 'echo %LOCALAPPDATA%'], runInShell: false);
       final localAppData = result.stdout.toString().trim();
       if (localAppData.isNotEmpty && !localAppData.contains('%')) {
-        return '$localAppData\\DuckStation';
+        return p.join(localAppData, 'DuckStation');
       }
     } catch (e) {
       // ignore
@@ -52,11 +60,11 @@ class DuckstationSaveStrategy extends SaveStrategy {
     final result = <File>[];
     final stem = getRomStem(game);
 
-    final memcardsDir = Directory('$baseDir\\memcards');
+    final memcardsDir = Directory(p.join(baseDir, 'memcards'));
     if (await memcardsDir.exists()) {
       await for (final entity in memcardsDir.list()) {
         if (entity is File &&
-            entity.path.toLowerCase().contains(stem.toLowerCase()) &&
+            p.basename(entity.path).toLowerCase().contains(stem.toLowerCase()) &&
             entity.path.toLowerCase().endsWith('.mcd')) {
           if (sessionStart != null) {
             final stat = await entity.stat();
@@ -67,10 +75,10 @@ class DuckstationSaveStrategy extends SaveStrategy {
       }
     }
 
-    final statesDir = Directory('$baseDir\\savestates');
+    final statesDir = Directory(p.join(baseDir, 'savestates'));
     if (await statesDir.exists()) {
       await for (final entity in statesDir.list()) {
-        if (entity is File && entity.path.toLowerCase().contains(stem.toLowerCase())) {
+        if (entity is File && p.basename(entity.path).toLowerCase().contains(stem.toLowerCase())) {
           if (sessionStart != null) {
             final stat = await entity.stat();
             if (stat.modified.isBefore(sessionStart)) continue;
@@ -95,11 +103,12 @@ class DuckstationSaveStrategy extends SaveStrategy {
         for (final entry in archive) {
           if (!entry.isFile) continue;
           final entryLower = entry.name.toLowerCase();
-          final targetDir = entryLower.endsWith('.mcd')
-              ? '$baseDir\\memcards'
-              : '$baseDir\\savestates';
+          final targetDirName = entryLower.endsWith('.mcd')
+              ? 'memcards'
+              : 'savestates';
+          final targetDir = p.join(baseDir, targetDirName);
 
-          final targetPath = '$targetDir\\${entry.name.split('\\').last.split('/').last}';
+          final targetPath = p.join(targetDir, p.basename(entry.name));
           await backupSave(targetPath);
           final outFile = File(targetPath);
           await outFile.parent.create(recursive: true);
@@ -109,9 +118,9 @@ class DuckstationSaveStrategy extends SaveStrategy {
       }
 
       final isState = !filename.toLowerCase().endsWith('.mcd');
-      final targetDir = isState ? '$baseDir\\savestates' : '$baseDir\\memcards';
-      final targetPath = '$targetDir\\$filename';
-      await Directory(targetDir).create(recursive: true);
+      final targetDirName = isState ? 'savestates' : 'memcards';
+      final targetPath = p.join(baseDir, targetDirName, filename);
+      await Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       return true;

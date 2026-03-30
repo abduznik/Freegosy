@@ -18,6 +18,7 @@ void main() {
               ),
               onDownload: () {},
               onLaunch: () {},
+              onDelete: () {},
             ),
           ),
         ),

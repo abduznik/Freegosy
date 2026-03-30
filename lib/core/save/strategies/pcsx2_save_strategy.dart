@@ -1,13 +1,14 @@
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
 
 /// Save strategy for PCSX2 (PlayStation 2).
-/// Memcards: {emulatorDir}\memcards\*.ps2
-/// States:   {emulatorDir}\sstates\{stem}.*.
+/// Memcards: {systemDir}/memcards/*.ps2
+/// States:   {systemDir}/sstates/{stem}.*.
 class Pcsx2SaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
 
@@ -16,33 +17,31 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'pcsx2';
 
-  Future<String?> _getExeDir() async {
-    final exePath = await _directoryService.findEmulatorExecutable(
-        'pcsx2', 'pcsx2-qt.exe');
-    if (exePath == null) return null;
-    return File(exePath).parent.path.replaceAll('/', '\\');
+  Future<String?> _getSaveRoot() async {
+    return await _directoryService.getEmulatorSystemDirectory('pcsx2');
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final exeDir = await _getExeDir();
-    if (exeDir == null) return null;
-    return '$exeDir\\memcards';
+    final root = await _getSaveRoot();
+    if (root == null) return null;
+    return p.join(root, 'memcards');
   }
 
   @override
-  Future<List<File>> getSaveFiles(Game game, String romPath,
+  Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final exeDir = await _getExeDir();
-    if (exeDir == null) return [];
+    final root = await _getSaveRoot();
+    if (root == null) return [];
 
-    final result = <File>[];
+    final result = <io.File>[];
 
     // Memory cards — scan all .ps2 files in memcards folder
-    final memcardsDir = Directory('$exeDir\\memcards');
+    // Note: This matches the existing behavior of syncing entire cards.
+    final memcardsDir = io.Directory(p.join(root, 'memcards'));
     if (await memcardsDir.exists()) {
       await for (final entity in memcardsDir.list()) {
-        if (entity is! File) continue;
+        if (entity is! io.File) continue;
         if (!entity.path.toLowerCase().endsWith('.ps2')) continue;
         if (sessionStart != null) {
           final stat = await entity.stat();
@@ -54,11 +53,11 @@ class Pcsx2SaveStrategy extends SaveStrategy {
 
     // Save states — named after ROM stem
     final stem = getRomStem(game);
-    final statesDir = Directory('$exeDir\\sstates');
+    final statesDir = io.Directory(p.join(root, 'sstates'));
     if (await statesDir.exists()) {
       await for (final entity in statesDir.list()) {
-        if (entity is! File) continue;
-        if (!entity.path.contains(stem)) continue;
+        if (entity is! io.File) continue;
+        if (!p.basename(entity.path).contains(stem)) continue;
         if (sessionStart != null) {
           final stat = await entity.stat();
           if (stat.modified.isBefore(sessionStart)) continue;
@@ -74,8 +73,8 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final exeDir = await _getExeDir();
-      if (exeDir == null) return false;
+      final root = await _getSaveRoot();
+      if (root == null) return false;
 
       // Cloud saves come as zips — extract into the appropriate directory
       if (filename.toLowerCase().endsWith('.zip')) {
@@ -84,13 +83,13 @@ class Pcsx2SaveStrategy extends SaveStrategy {
           // Determine target dir by file extension
           final entryLower = entry.name.toLowerCase();
           final targetDir = entryLower.endsWith('.ps2')
-              ? '$exeDir\\memcards'
-              : '$exeDir\\sstates';
+              ? p.join(root, 'memcards')
+              : p.join(root, 'sstates');
 
           if (entry.isFile) {
-            final targetPath = '$targetDir\\${entry.name}';
+            final targetPath = p.join(targetDir, entry.name);
             await backupSave(targetPath);
-            final outFile = File(targetPath);
+            final outFile = io.File(targetPath);
             await outFile.parent.create(recursive: true);
             await outFile.writeAsBytes(entry.content as List<int>);
           }
@@ -101,11 +100,11 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       // Single file fallback
       final isState = filename.contains('.') &&
           int.tryParse(filename.split('.').last) != null;
-      final targetDir = isState ? '$exeDir\\sstates' : '$exeDir\\memcards';
-      await Directory(targetDir).create(recursive: true);
-      final targetPath = '$targetDir\\$filename';
+      final targetDir = isState ? p.join(root, 'sstates') : p.join(root, 'memcards');
+      await io.Directory(targetDir).create(recursive: true);
+      final targetPath = p.join(targetDir, filename);
       await backupSave(targetPath);
-      await File(targetPath).writeAsBytes(data);
+      await io.File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
       return false;

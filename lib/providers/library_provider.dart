@@ -5,7 +5,7 @@ import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
 
 const String _gamesCacheKey = 'cached_games';
-const String _platformsCacheKey = 'cached_platforms';
+const String _platformsCacheKey = 'cached_platforms_v2';
 const String _gamesCacheTimeKey = 'cached_games_time';
 const String _platformsCacheTimeKey = 'cached_platforms_time';
 const int _cacheExpiryDays = 7;
@@ -64,6 +64,7 @@ Future<void> _savePlatformsCache(List<Platform> platforms) async {
     'id': p.id,
     'name': p.name,
     'slug': p.slug,
+    'games_count': p.gamesCount,
   }).toList();
   await prefs.setString(_platformsCacheKey, jsonEncode(jsonList));
   await prefs.setString(_platformsCacheTimeKey, DateTime.now().toIso8601String());
@@ -236,7 +237,7 @@ final platformsProvider = FutureProvider<List<Platform>>((ref) async {
         }
       } catch (_) {}
     });
-    return cached;
+    return cached.where((p) => p.gamesCount > 0).toList();
   }
 
   // No valid cache — fetch fresh
@@ -244,7 +245,7 @@ final platformsProvider = FutureProvider<List<Platform>>((ref) async {
   if (platforms.isNotEmpty) {
     await _savePlatformsCache(platforms);
   }
-  return platforms;
+  return platforms.where((p) => p.gamesCount > 0).toList();
 });
 
 final allGamesProvider = FutureProvider<List<Game>>((ref) async {

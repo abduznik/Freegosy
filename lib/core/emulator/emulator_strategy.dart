@@ -8,15 +8,18 @@ abstract class EmulatorStrategy {
   List<String> get supportedSlugs;
   String get windowsExecutable;
   String get linuxExecutable;
+  String get macosExecutable => windowsExecutable;
   bool get supportsSaveSync;
 
   String getExecutableForPlatform() {
     if (io.Platform.isWindows) return windowsExecutable;
     if (io.Platform.isLinux) return linuxExecutable;
+    if (io.Platform.isMacOS) return macosExecutable;
     return windowsExecutable;
   }
 
   Future<void> launch(Game game, String romPath);
   Future<Process?> launchWithHandle(Game game, String romPath) async => null;
+  Future<void> launchStandalone();
   String resolveSavePath(Game game);
 }
