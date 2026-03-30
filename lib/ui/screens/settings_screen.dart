@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -169,6 +170,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         setState, // Pass the setState callback
                       ),
                     ],
+                    const SizedBox(height: 24),
+                    _buildLegalSection(context),
                   ],
                 ),
               );
@@ -415,6 +418,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ref.read(retroarchSyncModeProvider.notifier).state = value;
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('retroarch_sync_mode', value);
+          },
+        ),
+      ],
+    );
+  }
+
+  // --- Legal Section ---
+  Widget _buildLegalSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Legal', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Third-Party Licenses'),
+          subtitle: const Text('View licenses for open-source software used in Freegosy'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            // Register 7-Zip license before showing the page
+            LicenseRegistry.addLicense(() async* {
+              final license = await rootBundle.loadString('thirdparty/7zip_license.txt');
+              yield LicenseEntryWithLineBreaks(['7-Zip'], license);
+            });
+
+            showLicensePage(
+              context: context,
+              applicationName: 'Freegosy',
+              applicationVersion: '0.2.0',
+              applicationLegalese: '© 2026 Freegosy Contributors.\nRedistributes 7-Zip binaries under LGPL.',
+            );
           },
         ),
       ],
