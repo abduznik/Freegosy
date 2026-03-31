@@ -52,7 +52,11 @@ jobs:
         run: flutter pub get
 
       - name: Build macOS
-        run: flutter build macos --release --no-codesign
+        run: flutter build macos --release
+        env:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_REQUIRED: NO
 
       - name: Archive macOS build
         run: |
