@@ -7,10 +7,21 @@ import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
 
+class SaveFolderConflictException implements Exception {
+  final List<Map<String, dynamic>> folders;
+  SaveFolderConflictException(this.folders);
+  @override
+  String toString() =>
+      'SaveFolderConflictException: ${folders.length} matching save folders found.';
+}
+
 /// Save strategy for RPCS3 (PlayStation 3).
 /// Saves: {emulatorDir}\dev_hdd0\home\00000001\savedata\{titleId}\
 class Rpcs3SaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+
+  String? _activeFolderOverride;
+  void setActiveFolderOverride(String? path) => _activeFolderOverride = path;
 
   Rpcs3SaveStrategy(this._directoryService);
 
@@ -39,11 +50,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     return resolvedPath;
   }
 
-  /// Finds all save folders for this game by scanning savedata dir for
-  /// folders starting with the title ID (e.g. BLUS30443 matches BLUS30443DEMONSS005)
-  /// Finds save folders by scanning savedata dir.
-  /// First tries title ID from ROM name, then falls back to
-  /// fuzzy matching folder names against game name.
   Future<List<Directory>> _findSaveDirs(String saveRoot, Game game) async {
     final rootDir = Directory(saveRoot);
     if (!await rootDir.exists()) return [];
@@ -73,7 +79,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
         .toLowerCase()
         .replaceAll(RegExp(r"[^a-z0-9\s]"), '')
         .split(' ')
-        .where((w) => w.length > 3)
+        .where((w) => w.length >= 2)
         .toList();
 
     final byName = allDirs.where((d) {
@@ -81,15 +87,67 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       return gameWords.any((word) => folderLower.contains(word));
     }).toList();
 
-    if (byName.isNotEmpty) {
+    if (byName.isEmpty) return [];
+
+    // Single match — done
+    if (byName.length == 1) {
       return byName;
     }
 
-    return [];
+    // Method 3: multiple fuzzy matches — auto-pick most recently modified
+    
+    final withTimes = <Map<String, dynamic>>[];
+    for (final dir in byName) {
+      DateTime? latestFile;
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is! File) continue;
+        final stat = await entity.stat();
+        if (latestFile == null || stat.modified.isAfter(latestFile)) {
+          latestFile = stat.modified;
+        }
+      }
+      if (latestFile != null) {
+        withTimes.add({
+          'dir': dir,
+          'path': dir.path,
+          'name': dir.path.split(p.separator).last,
+          'newestFile': latestFile,
+        });
+      }
+    }
+
+    if (withTimes.isEmpty) return [byName.first];
+
+    // Sort by most recent
+    withTimes.sort((a, b) => (b['newestFile'] as DateTime)
+        .compareTo(a['newestFile'] as DateTime));
+
+    final winner = withTimes[0];
+    final runnerUp = withTimes[1];
+    final gap = (winner['newestFile'] as DateTime)
+        .difference(runnerUp['newestFile'] as DateTime);
+
+    // Auto-pick if winner is clearly ahead (>1h gap)
+    if (gap.inHours >= 1) {
+      return [winner['dir'] as Directory];
+    }
+
+    // Method 4: genuine conflict — throw for UI to handle
+    throw SaveFolderConflictException(withTimes
+        .map((e) => {
+              'name': e['name'] as String,
+              'path': e['path'] as String,
+              'newestFile': e['newestFile'] as DateTime,
+            })
+        .toList());
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
+    // Manual override from conflict dialog
+    if (_activeFolderOverride != null) {
+      return _activeFolderOverride;
+    }
     final saveRoot = await _getRpcs3SaveRoot();
     final dirs = await _findSaveDirs(saveRoot, game);
     return dirs.isNotEmpty ? dirs.first.path : null;
@@ -100,12 +158,17 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final saveRoot = await _getRpcs3SaveRoot();
 
-    final saveDirs = await _findSaveDirs(saveRoot, game);
-    if (saveDirs.isEmpty) {
-      return [];
+    // Manual override — wrap single dir
+    List<Directory> saveDirs;
+    if (_activeFolderOverride != null) {
+      saveDirs = [Directory(_activeFolderOverride!)];
+    } else {
+      saveDirs = await _findSaveDirs(saveRoot, game);
     }
 
-    // Package all matching save folders into a single zip
+    if (saveDirs.isEmpty) return [];
+
+    // Check if any files exist (respecting sessionStart)
     bool hasFiles = false;
     for (final dir in saveDirs) {
       await for (final entity in dir.list(recursive: true)) {

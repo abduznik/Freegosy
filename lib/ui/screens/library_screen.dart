@@ -662,7 +662,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   itemBuilder: (context, index) {
                     final profile = profiles[index];
                     final id = profile['id'] as String;
-                    final lastActive = profile['lastActive'] as DateTime;
+                    final lastActive = profile['newestFile'] as DateTime;
                     
                     final diff = DateTime.now().difference(lastActive);
                     String timeAgo;
