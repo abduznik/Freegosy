@@ -15,35 +15,45 @@ class CemuSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'cemu';
 
-  Future<String?> _getEmulatorDir() async {
-    final dir = await _directoryService.getEmulatorDirectory('cemu');
-    if (!await io.Directory(dir).exists()) return null;
-    return dir;
+  Future<String> _getSaveRoot() async {
+    // 1. Check emulator-relative path first (e.g. for Windows portable)
+    final emuDir = await _directoryService.getEmulatorDirectory('cemu');
+    final portableRoot = p.join(emuDir, 'mlc01', 'usr', 'save');
+    if (await io.Directory(portableRoot).exists()) {
+      return portableRoot;
+    }
+
+    // 2. Dynamic path resolution for macOS/Windows/Linux
+    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('Cemu');
+    // On macOS, Cemu's save structure might be different in Application Support,
+    // but typically it mirrors the internal folder structure if using the same mlc01 logic.
+    // Actually, Cemu on macOS often puts mlc01 directly in Application Support/Cemu
+    final resolvedPath = p.join(baseDir, 'mlc01', 'usr', 'save');
+
+    if (!await io.Directory(resolvedPath).exists()) {
+      throw Exception('Save directory not found for Cemu at $resolvedPath. Please launch Cemu at least once to generate save data.');
+    }
+    return resolvedPath;
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final emuDir = await _getEmulatorDir();
-    if (emuDir == null) return null;
-    return p.join(emuDir, 'mlc01', 'usr', 'save');
+    return await _getSaveRoot();
   }
 
   @override
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final emuDir = await _getEmulatorDir();
-    if (emuDir == null) return [];
-    final saveRoot = io.Directory(p.join(emuDir, 'mlc01', 'usr', 'save', '00050000'));
-    if (!await saveRoot.exists()) return [];
-    return [io.File(saveRoot.path)]; // Return the directory as a single item
+    final saveRoot = await _getSaveRoot();
+    final saveBase = io.Directory(p.join(saveRoot, '00050000'));
+    if (!await saveBase.exists()) return [];
+    return [io.File(saveBase.path)]; // Return the directory as a single item
   }
 
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final emuDir = await _getEmulatorDir();
-      if (emuDir == null) return false;
-      final saveRoot = p.join(emuDir, 'mlc01', 'usr', 'save');
+      final saveRoot = await _getSaveRoot();
       await io.Directory(saveRoot).create(recursive: true);
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);

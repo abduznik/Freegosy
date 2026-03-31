@@ -19,21 +19,12 @@ class DolphinSaveStrategy extends SaveStrategy {
   String get strategyId => 'dolphin';
 
   /// Returns the base user directory for Dolphin.
-  String _getUserDir() {
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'];
-      if (home == null) throw Exception('HOME environment variable not set');
-      return p.join(home, 'Library', 'Application Support', 'Dolphin');
-    } else if (io.Platform.isWindows) {
-      final userProfile = io.Platform.environment['USERPROFILE'];
-      if (userProfile == null) throw Exception('USERPROFILE environment variable not set');
-      return p.join(userProfile, 'Documents', 'Dolphin Emulator');
-    } else {
-      // Default to Linux or other
-      final home = io.Platform.environment['HOME'];
-      if (home == null) throw Exception('HOME environment variable not set');
-      return p.join(home, '.local', 'share', 'dolphin-emu');
+  Future<String> _getUserDir() async {
+    final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('Dolphin');
+    if (!await io.Directory(resolvedPath).exists()) {
+      throw Exception('Save directory not found for Dolphin at $resolvedPath. Please launch Dolphin at least once to generate save data.');
     }
+    return resolvedPath;
   }
 
   /// Detects region code from [romPath].
@@ -66,8 +57,7 @@ class DolphinSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final userDir = _getUserDir();
-    if (!await io.Directory(userDir).exists()) return null;
+    final userDir = await _getUserDir();
 
     final isWii = game.platformSlug?.toLowerCase() == 'wii';
 

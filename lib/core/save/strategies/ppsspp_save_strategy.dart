@@ -16,25 +16,33 @@ class PpssppSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'ppsspp';
 
-  Future<String?> _getPspDir() async {
-    if (defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux) {
-      final home = io.Platform.environment['HOME'];
-      if (home == null) return null;
-      return p.join(home, '.config', 'ppsspp', 'PSP');
-    } else {
+  Future<String> _getPspDir() async {
+    // 1. Check portable mode first (Windows)
+    if (io.Platform.isWindows) {
       final exePath = await _directoryService.findEmulatorExecutable(
           'ppsspp', 'PPSSPPWindows64.exe');
-      if (exePath == null) return null;
-      final emuDir = io.File(exePath).parent.path;
-      return p.join(emuDir, 'memstick', 'PSP');
+      if (exePath != null) {
+        final emuDir = io.File(exePath).parent.path;
+        final portableDir = p.join(emuDir, 'memstick', 'PSP');
+        if (await io.Directory(portableDir).exists()) {
+          return portableDir;
+        }
+      }
     }
+
+    // 2. Dynamic path resolution
+    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('ppsspp');
+    final pspDir = p.join(baseDir, 'PSP');
+
+    if (!await io.Directory(pspDir).exists()) {
+      throw Exception('Save directory not found for PPSSPP at $pspDir. Please launch PPSSPP at least once to generate save data.');
+    }
+    return pspDir;
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final pspDir = await _getPspDir();
-    if (pspDir == null) return null;
     return p.join(pspDir, 'SAVEDATA');
   }
 
@@ -42,7 +50,6 @@ class PpssppSaveStrategy extends SaveStrategy {
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final pspDir = await _getPspDir();
-    if (pspDir == null) return [];
 
     final result = <File>[];
     final stem = getRomStem(game);
@@ -78,7 +85,6 @@ class PpssppSaveStrategy extends SaveStrategy {
       Game game, String destPath, Uint8List data, String filename) async {
     try {
       final pspDir = await _getPspDir();
-      if (pspDir == null) return false;
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);

@@ -17,14 +17,17 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'pcsx2';
 
-  Future<String?> _getSaveRoot() async {
-    return await _directoryService.getEmulatorSystemDirectory('pcsx2');
+  Future<String> _getSaveRoot() async {
+    final resolvedPath = await _directoryService.getEmulatorSystemDirectory('pcsx2');
+    if (!await io.Directory(resolvedPath).exists()) {
+      throw Exception('Save directory not found for PCSX2 at $resolvedPath. Please launch PCSX2 at least once to generate save data.');
+    }
+    return resolvedPath;
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final root = await _getSaveRoot();
-    if (root == null) return null;
     return p.join(root, 'memcards');
   }
 
@@ -32,7 +35,6 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final root = await _getSaveRoot();
-    if (root == null) return [];
 
     final result = <io.File>[];
 
@@ -74,7 +76,6 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       Game game, String destPath, Uint8List data, String filename) async {
     try {
       final root = await _getSaveRoot();
-      if (root == null) return false;
 
       // Cloud saves come as zips — extract into the appropriate directory
       if (filename.toLowerCase().endsWith('.zip')) {

@@ -3,6 +3,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
+import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
 
 // ─── Exceptions ──────────────────────────────────────────────────────────────
@@ -30,10 +31,11 @@ class ProfileConflictException implements Exception {
 ///   2. Recency heuristic on actual save *files* (not dir mtime)
 ///   3. Throw [ProfileConflictException] → UI shows profile picker
 class EdenSaveStrategy extends SaveStrategy {
+  final DirectoryService _directoryService;
   final Future<void> Function(String gameId, String titleId)?
       onMappingResolved;
 
-  EdenSaveStrategy({this.onMappingResolved});
+  EdenSaveStrategy(this._directoryService, {this.onMappingResolved});
 
   @override
   String get strategyId => 'switch';
@@ -439,17 +441,22 @@ class EdenSaveStrategy extends SaveStrategy {
   //  Platform-specific save base path
   // ═══════════════════════════════════════════════════════════════════════════
 
-  String? _getEdenSaveBase() {
+  Future<String> _getEdenSaveBase() async {
+    final String resolvedPath;
     if (io.Platform.isMacOS || io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'];
-      if (home == null) return null;
-      return p.join(home, '.local', 'share', 'eden', 'nand', 'user', 'save');
+      resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('eden');
     } else if (io.Platform.isWindows) {
-      final appData = io.Platform.environment['APPDATA'];
-      if (appData == null) return null;
-      return p.join(appData, 'eden', 'nand', 'user', 'save');
+      final appData = io.Platform.environment['APPDATA'] ?? '';
+      resolvedPath = p.join(appData, 'eden');
+    } else {
+      throw UnsupportedError('Platform not supported for Eden save path resolution');
     }
-    return null;
+
+    final finalPath = p.join(resolvedPath, 'nand', 'user', 'save');
+    if (!await io.Directory(finalPath).exists()) {
+      throw Exception('Save directory not found for Eden at $finalPath. Please launch Eden at least once to generate save data.');
+    }
+    return finalPath;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -460,10 +467,7 @@ class EdenSaveStrategy extends SaveStrategy {
   Future<String?> getSaveDir(Game game, String romPath) async {
     debugPrint('=== EDEN SAVE DIR: ${game.name} ===');
 
-    final base = _getEdenSaveBase();
-    if (base == null) {
-      throw Exception('Cannot determine Eden save path on this platform.');
-    }
+    final base = await _getEdenSaveBase();
 
     final profileId = await _resolveProfileId(base);
     final titleId = await _resolveTitleId(romPath, game);
@@ -543,8 +547,7 @@ class EdenSaveStrategy extends SaveStrategy {
     try {
       debugPrint('=== EDEN RESTORE: ${game.name} ===');
 
-      final base = _getEdenSaveBase();
-      if (base == null) return false;
+      final base = await _getEdenSaveBase();
 
       final profileId = await _resolveProfileId(base);
 
@@ -628,8 +631,7 @@ class EdenSaveStrategy extends SaveStrategy {
   /// Lists all Title ID save folders for the active profile.
   /// Used by the UI for manual folder selection.
   Future<List<Map<String, dynamic>>> getAvailableSaveFolders() async {
-    final base = _getEdenSaveBase();
-    if (base == null) return [];
+    final base = await _getEdenSaveBase();
 
     String profileId;
     try {

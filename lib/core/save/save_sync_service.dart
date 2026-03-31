@@ -44,7 +44,7 @@ class SaveSyncService {
   SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry) {
     _retroarch = RetroArchSaveStrategy(_directoryService);
     _dolphin = DolphinSaveStrategy(_directoryService);
-    _eden = EdenSaveStrategy(onMappingResolved: saveMappedFolder);
+    _eden = EdenSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
     _windows = WindowsSaveStrategy();
     _pcsx2 = Pcsx2SaveStrategy(_directoryService);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
@@ -296,8 +296,7 @@ class SaveSyncService {
       }
       return uploaded > 0;
     } catch (e) {
-      if (e is SaveMappingRequiredException) rethrow;
-      return false;
+      rethrow;
     }
   }
 

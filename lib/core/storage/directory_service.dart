@@ -3,6 +3,7 @@ import 'dart:io' show Directory, File, Process;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
@@ -240,40 +241,36 @@ class DirectoryService {
     return dirPath;
   }
 
-  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
-    String dirPath;
+  Future<String> getEmulatorAppSupportDirectory(String emulatorName) async {
+    if (io.Platform.isMacOS) {
+      final appSupport = await getApplicationSupportDirectory();
+      // On macOS, getApplicationSupportDirectory() returns ~/Library/Application Support/com.example.app
+      // We want ~/Library/Application Support/emulatorName
+      return p.join(appSupport.parent.parent.path, 'Application Support', emulatorName);
+    } else if (io.Platform.isWindows) {
+      final appData = io.Platform.environment['APPDATA'] ?? '';
+      return p.join(appData, emulatorName);
+    } else if (io.Platform.isLinux) {
+      final home = io.Platform.environment['HOME'] ?? '';
+      return p.join(home, '.config', emulatorName);
+    }
+    throw UnsupportedError('Platform not supported for save path resolution');
+  }
 
+  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
     if (emulatorId == 'retroarch') {
       final emuDir = await getEmulatorDirectory(emulatorId);
-      dirPath = '$emuDir/system';
-    } else if (emulatorId == 'azahar') {
-      if (io.Platform.isMacOS) {
-        final home = io.Platform.environment['HOME'];
-        if (home == null) throw Exception('HOME environment variable not set');
-        dirPath = '$home/Library/Application Support/Azahar';
-      } else if (io.Platform.isWindows) {
-        final appData = await _getWindowsAppData();
-        if (appData == null) throw Exception('APPDATA environment variable not set');
-        dirPath = '$appData\\Azahar';
-      } else {
-        dirPath = await getEmulatorDirectory(emulatorId);
-      }
-    } else if (emulatorId == 'pcsx2') {
-      if (io.Platform.isMacOS) {
-        final home = io.Platform.environment['HOME'];
-        if (home == null) throw Exception('HOME environment variable not set');
-        dirPath = '$home/Library/Application Support/PCSX2';
-      } else if (io.Platform.isWindows) {
-        final appData = await _getWindowsAppData();
-        if (appData == null) throw Exception('APPDATA environment variable not set');
-        dirPath = '$appData\\PCSX2';
-      } else {
-        dirPath = await getEmulatorDirectory(emulatorId);
-      }
-    } else {
-      dirPath = await getEmulatorDirectory(emulatorId);
+      final dirPath = p.join(emuDir, 'system');
+      await _ensureDirectoryExists(dirPath);
+      return dirPath;
     }
 
+    if (emulatorId == 'azahar' || emulatorId == 'pcsx2') {
+      return await getEmulatorAppSupportDirectory(
+          emulatorId == 'azahar' ? 'Azahar' : 'PCSX2');
+    }
+
+    final dirPath = await getEmulatorDirectory(emulatorId);
     await _ensureDirectoryExists(dirPath);
     return dirPath;
   }

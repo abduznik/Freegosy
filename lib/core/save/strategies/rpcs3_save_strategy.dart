@@ -17,18 +17,26 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'rpcs3';
 
-  Future<String?> _getRpcs3SaveRoot() async {
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'];
-      if (home == null) return null;
-      return p.join(home, 'Library', 'Application Support', 'rpcs3', 'dev_hdd0', 'home', '00000001', 'savedata');
-    }
-
+  Future<String> _getRpcs3SaveRoot() async {
+    // 1. Check portable mode first (Windows)
     final exePath = await _directoryService.findEmulatorExecutable(
         'rpcs3', 'rpcs3.exe');
-    if (exePath == null) return null;
-    final exeDir = File(exePath).parent.path;
-    return p.join(exeDir, 'dev_hdd0', 'home', '00000001', 'savedata');
+    if (exePath != null) {
+      final exeDir = File(exePath).parent.path;
+      final portableSaves = p.join(exeDir, 'dev_hdd0', 'home', '00000001', 'savedata');
+      if (await io.Directory(portableSaves).exists()) {
+        return portableSaves;
+      }
+    }
+
+    // 2. Dynamic path resolution
+    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('rpcs3');
+    final resolvedPath = p.join(baseDir, 'dev_hdd0', 'home', '00000001', 'savedata');
+
+    if (!await io.Directory(resolvedPath).exists()) {
+      throw Exception('Save directory not found for RPCS3 at $resolvedPath. Please launch RPCS3 at least once to generate save data.');
+    }
+    return resolvedPath;
   }
 
   /// Finds all save folders for this game by scanning savedata dir for
@@ -83,7 +91,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final saveRoot = await _getRpcs3SaveRoot();
-    if (saveRoot == null) return null;
     final dirs = await _findSaveDirs(saveRoot, game);
     return dirs.isNotEmpty ? dirs.first.path : null;
   }
@@ -92,7 +99,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final saveRoot = await _getRpcs3SaveRoot();
-    if (saveRoot == null) return [];
 
     final saveDirs = await _findSaveDirs(saveRoot, game);
     if (saveDirs.isEmpty) {
@@ -131,7 +137,6 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       Game game, String destPath, Uint8List data, String filename) async {
     try {
       final saveRoot = await _getRpcs3SaveRoot();
-      if (saveRoot == null) return false;
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
