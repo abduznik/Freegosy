@@ -51,13 +51,18 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build macOS
+      - name: Disable macOS code signing
         run: |
-          flutter build macos --release \
-            --dart-define=FLUTTER_XCODE_CODE_SIGN_IDENTITY="" \
-            --dart-define=FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO \
-            --dart-define=FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO \
-            --dart-define=FLUTTER_XCODE_DEVELOPMENT_TEAM=""
+          sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/g' macos/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = FWFZZNYS2X/DEVELOPMENT_TEAM = ""/g' macos/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = ""/g' macos/Runner.xcodeproj/project.pbxproj
+
+      - name: Build macOS
+        run: flutter build macos --release
+        env:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_REQUIRED: NO
 
       - name: Archive macOS build
         run: |
