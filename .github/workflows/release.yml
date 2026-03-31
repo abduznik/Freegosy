@@ -35,59 +35,9 @@ jobs:
           name: windows-release
           path: freegosy-windows.zip
 
-  build-macos:
-    name: Build macOS
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Disable macOS code signing
-        run: |
-          python3 -c "
-          import re
-          with open('macos/Runner.xcodeproj/project.pbxproj', 'r') as f:
-              content = f.read()
-          content = re.sub(r'CODE_SIGN_STYLE = Manual;', 'CODE_SIGN_STYLE = Automatic;', content)
-          content = re.sub(r'DEVELOPMENT_TEAM = [A-Z0-9]+;', 'DEVELOPMENT_TEAM = \"\";', content)
-          content = re.sub(r'CODE_SIGN_IDENTITY = \"[^\"]*\";', 'CODE_SIGN_IDENTITY = \"\";', content)
-          content = re.sub(r'\"CODE_SIGN_IDENTITY\[sdk=macosx\*\]\" = \"[^\"]*\";', '\"CODE_SIGN_IDENTITY[sdk=macosx*]\" = \"\";', content)
-          content = re.sub(r'PROVISIONING_PROFILE_SPECIFIER = \"[^\"]*\";', 'PROVISIONING_PROFILE_SPECIFIER = \"\";', content)
-          with open('macos/Runner.xcodeproj/project.pbxproj', 'w') as f:
-              f.write(content)
-          print('Patched pbxproj successfully')
-          "
-
-      - name: Build macOS
-        run: flutter build macos --release
-        env:
-          CODE_SIGNING_ALLOWED: NO
-          CODE_SIGN_IDENTITY: ""
-          CODE_SIGNING_REQUIRED: NO
-
-      - name: Archive macOS build
-        run: |
-          cd build/macos/Build/Products/Release
-          zip -r ../../../../../freegosy-macos.zip freegosy.app
-
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-release
-          path: freegosy-macos.zip
-
   release:
     name: Create GitHub Release
-    needs: [build-windows, build-macos]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -102,10 +52,7 @@ jobs:
         with:
           files: |
             freegosy-windows.zip
-            freegosy-macos.zip
           body: |
             See CHANGELOG for details.
-            
-            macOS users: right-click the app → Open on first launch (Gatekeeper warning is expected — app is not notarized).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

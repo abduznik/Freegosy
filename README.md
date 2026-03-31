@@ -2,7 +2,7 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
-## What's New in 0.2.0
+## What's New in 0.2.1
 
 ### Full macOS Support
 - Native support for macOS (ARM64 and Intel)
@@ -75,7 +75,7 @@ Freegosy is designed as a truly cross-platform experience. The codebase is struc
 
 ## Status
 
-Actively under development. Release 0.2.0 brings full macOS support and major UI management improvements.
+Actively under development. Release 0.2.1 brings full macOS support and major UI management improvements.
 
 ## About RomM
 
