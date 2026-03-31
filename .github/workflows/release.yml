@@ -52,11 +52,12 @@ jobs:
         run: flutter pub get
 
       - name: Build macOS
-        run: flutter build macos --release
-        env:
-          CODE_SIGNING_ALLOWED: NO
-          CODE_SIGN_IDENTITY: ""
-          CODE_SIGNING_REQUIRED: NO
+        run: |
+          flutter build macos --release \
+            --dart-define=FLUTTER_XCODE_CODE_SIGN_IDENTITY="" \
+            --dart-define=FLUTTER_XCODE_CODE_SIGNING_REQUIRED=NO \
+            --dart-define=FLUTTER_XCODE_CODE_SIGNING_ALLOWED=NO \
+            --dart-define=FLUTTER_XCODE_DEVELOPMENT_TEAM=""
 
       - name: Archive macOS build
         run: |
