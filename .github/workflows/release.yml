@@ -53,9 +53,19 @@ jobs:
 
       - name: Disable macOS code signing
         run: |
-          sed -i '' 's/CODE_SIGN_STYLE = Manual/CODE_SIGN_STYLE = Automatic/g' macos/Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = FWFZZNYS2X/DEVELOPMENT_TEAM = ""/g' macos/Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development"/CODE_SIGN_IDENTITY = ""/g' macos/Runner.xcodeproj/project.pbxproj
+          python3 -c "
+          import re
+          with open('macos/Runner.xcodeproj/project.pbxproj', 'r') as f:
+              content = f.read()
+          content = re.sub(r'CODE_SIGN_STYLE = Manual;', 'CODE_SIGN_STYLE = Automatic;', content)
+          content = re.sub(r'DEVELOPMENT_TEAM = [A-Z0-9]+;', 'DEVELOPMENT_TEAM = \"\";', content)
+          content = re.sub(r'CODE_SIGN_IDENTITY = \"[^\"]*\";', 'CODE_SIGN_IDENTITY = \"\";', content)
+          content = re.sub(r'\"CODE_SIGN_IDENTITY\[sdk=macosx\*\]\" = \"[^\"]*\";', '\"CODE_SIGN_IDENTITY[sdk=macosx*]\" = \"\";', content)
+          content = re.sub(r'PROVISIONING_PROFILE_SPECIFIER = \"[^\"]*\";', 'PROVISIONING_PROFILE_SPECIFIER = \"\";', content)
+          with open('macos/Runner.xcodeproj/project.pbxproj', 'w') as f:
+              f.write(content)
+          print('Patched pbxproj successfully')
+          "
 
       - name: Build macOS
         run: flutter build macos --release
