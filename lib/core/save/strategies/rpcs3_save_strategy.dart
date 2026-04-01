@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:io' as io;
 import 'package:archive/archive_io.dart';
@@ -28,6 +29,60 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'rpcs3';
 
+  Future<String?> _readParamSfoTitle(String folderPath) async {
+    try {
+      final sfoFile = io.File(p.join(folderPath, 'PARAM.SFO'));
+      if (!await sfoFile.exists()) return null;
+
+      final bytes = await sfoFile.readAsBytes();
+      if (bytes.length < 20) return null;
+
+      final byteData = ByteData.view(bytes.buffer);
+
+      if (bytes[0] != 0x00 || bytes[1] != 0x50 ||
+          bytes[2] != 0x53 || bytes[3] != 0x46) {
+        return null;
+      }
+
+      final keyTableOffset  = byteData.getUint32(8,  Endian.little);
+      final dataTableOffset = byteData.getUint32(12, Endian.little);
+      final entriesCount    = byteData.getUint32(16, Endian.little);
+
+      for (int i = 0; i < entriesCount; i++) {
+        final entryBase = 20 + i * 16;
+        if (entryBase + 16 > bytes.length) break;
+
+        final keyRelOffset  = byteData.getUint16(entryBase + 0,  Endian.little);
+        final dataLen       = byteData.getUint32(entryBase + 4,  Endian.little);
+        final dataRelOffset = byteData.getUint32(entryBase + 12, Endian.little);
+
+        final keyStart = keyTableOffset + keyRelOffset;
+        final keyBytes = <int>[];
+        int j = keyStart;
+        while (j < bytes.length && bytes[j] != 0) {
+          keyBytes.add(bytes[j++]);
+        }
+        final key = utf8.decode(keyBytes);
+
+        if (key == 'TITLE') {
+          final valueStart = dataTableOffset + dataRelOffset;
+          final valueEnd   = valueStart + dataLen;
+          if (valueEnd > bytes.length) return null;
+
+          final titleBytes = bytes.sublist(valueStart, valueEnd);
+          final nullIdx = titleBytes.indexOf(0);
+          final actual  = nullIdx != -1 ? titleBytes.sublist(0, nullIdx) : titleBytes;
+          return utf8.decode(actual);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[RPCS3] Error reading PARAM.SFO: $e');
+      return null;
+    }
+  }
+
   Future<String> _getRpcs3SaveRoot() async {
     // 1. Check portable mode first (Windows)
     final exePath = await _directoryService.findEmulatorExecutable(
@@ -51,6 +106,13 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   }
 
   Future<List<Directory>> _findSaveDirs(String saveRoot, Game game) async {
+    final gameWords = game.name
+        .toLowerCase()
+        .replaceAll(RegExp(r"[^a-z0-9\s]"), '')
+        .split(' ')
+        .where((w) => w.length >= 2)
+        .toList();
+
     final rootDir = Directory(saveRoot);
     if (!await rootDir.exists()) return [];
 
@@ -74,13 +136,65 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       }
     }
 
-    // Method 2: fuzzy match — folder name contains words from game name
-    final gameWords = game.name
-        .toLowerCase()
-        .replaceAll(RegExp(r"[^a-z0-9\s]"), '')
-        .split(' ')
-        .where((w) => w.length >= 2)
-        .toList();
+    // Method 2: PARAM.SFO title matching
+    final bySfo = <Directory>[];
+    for (final dir in allDirs) {
+      final title = await _readParamSfoTitle(dir.path);
+      if (title == null) continue;
+      final titleLower = title.toLowerCase();
+      debugPrint('[RPCS3] PARAM.SFO title for ${dir.path.split(p.separator).last}: $title');
+      if (gameWords.any((word) => titleLower.contains(word))) {
+        bySfo.add(dir);
+      }
+    }
+
+    if (bySfo.isNotEmpty) {
+      if (bySfo.length == 1) {
+        debugPrint('[RPCS3] Method 2 PARAM.SFO single match: ${bySfo.first.path}');
+        return bySfo;
+      }
+      // Multiple SFO matches — fall through to recency/conflict logic below
+      // using bySfo as the candidate list instead of byName
+      final withTimes = <Map<String, dynamic>>[];
+      for (final dir in bySfo) {
+        DateTime? latestFile;
+        await for (final entity in dir.list(recursive: true)) {
+          if (entity is! File) continue;
+          final stat = await entity.stat();
+          if (latestFile == null || stat.modified.isAfter(latestFile)) {
+            latestFile = stat.modified;
+          }
+        }
+        if (latestFile != null) {
+          withTimes.add({
+            'dir': dir,
+            'path': dir.path,
+            'name': dir.path.split(p.separator).last,
+            'newestFile': latestFile,
+          });
+        }
+      }
+      if (withTimes.isNotEmpty) {
+        withTimes.sort((a, b) => (b['newestFile'] as DateTime)
+            .compareTo(a['newestFile'] as DateTime));
+        final winner = withTimes[0];
+        final runnerUp = withTimes[1];
+        final gap = (winner['newestFile'] as DateTime)
+            .difference(runnerUp['newestFile'] as DateTime);
+        if (gap.inHours >= 1) {
+          return [winner['dir'] as Directory];
+        }
+        throw SaveFolderConflictException(withTimes
+            .map((e) => {
+                  'name': e['name'] as String,
+                  'path': e['path'] as String,
+                  'newestFile': e['newestFile'] as DateTime,
+                })
+            .toList());
+      }
+    }
+
+
 
     final byName = allDirs.where((d) {
       final folderLower = d.path.split(p.separator).last.toLowerCase();

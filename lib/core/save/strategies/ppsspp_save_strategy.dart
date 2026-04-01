@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:io' show File;
 import 'package:archive/archive_io.dart';
@@ -30,6 +31,28 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
     }
 
+    // macOS check
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'];
+      if (home != null) {
+        final pspDir = p.join(home, '.config', 'ppsspp', 'PSP');
+        if (await io.Directory(pspDir).exists()) {
+          return pspDir;
+        }
+      }
+    }
+
+    // Linux check
+    if (io.Platform.isLinux) {
+      final home = io.Platform.environment['HOME'];
+      if (home != null) {
+        final pspDir = p.join(home, '.config', 'ppsspp', 'PSP');
+        if (await io.Directory(pspDir).exists()) {
+          return pspDir;
+        }
+      }
+    }
+
     // 2. Dynamic path resolution
     final baseDir = await _directoryService.getEmulatorAppSupportDirectory('ppsspp');
     final pspDir = p.join(baseDir, 'PSP');
@@ -38,6 +61,65 @@ class PpssppSaveStrategy extends SaveStrategy {
       throw Exception('Save directory not found for PPSSPP at $pspDir. Please launch PPSSPP at least once to generate save data.');
     }
     return pspDir;
+  }
+
+
+  /// Reads PARAM.SFO file and extracts the game title.
+  /// Returns the title string if found, or null if parsing fails.
+  Future<String?> _readParamSfoTitle(String folderPath) async {
+    try {
+      final sfoFile = io.File(p.join(folderPath, 'PARAM.SFO'));
+      if (!await sfoFile.exists()) return null;
+
+      final bytes = await sfoFile.readAsBytes();
+      if (bytes.length < 20) return null;
+
+      final byteData = ByteData.view(bytes.buffer);
+
+      // Magic: 0x00PSF
+      if (bytes[0] != 0x00 || bytes[1] != 0x50 ||
+          bytes[2] != 0x53 || bytes[3] != 0x46) {
+        return null;
+      }
+
+      final keyTableOffset  = byteData.getUint32(8,  Endian.little);
+      final dataTableOffset = byteData.getUint32(12, Endian.little);
+      final entriesCount    = byteData.getUint32(16, Endian.little);
+
+      for (int i = 0; i < entriesCount; i++) {
+        final entryBase = 20 + i * 16;
+        if (entryBase + 16 > bytes.length) break;
+
+        final keyRelOffset  = byteData.getUint16(entryBase + 0,  Endian.little);
+        final dataLen       = byteData.getUint32(entryBase + 4,  Endian.little);
+        final dataRelOffset = byteData.getUint32(entryBase + 12, Endian.little);
+
+        // Read null-terminated key string
+        final keyStart = keyTableOffset + keyRelOffset;
+        final keyBytes = <int>[];
+        int j = keyStart;
+        while (j < bytes.length && bytes[j] != 0) {
+          keyBytes.add(bytes[j++]);
+        }
+        final key = utf8.decode(keyBytes);
+
+        if (key == 'TITLE') {
+          final valueStart = dataTableOffset + dataRelOffset;
+          final valueEnd   = valueStart + dataLen;
+          if (valueEnd > bytes.length) return null;
+
+          final titleBytes = bytes.sublist(valueStart, valueEnd);
+          final nullIdx = titleBytes.indexOf(0);
+          final actual  = nullIdx != -1 ? titleBytes.sublist(0, nullIdx) : titleBytes;
+          return utf8.decode(actual);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('Error reading PARAM.SFO: $e');
+      return null;
+    }
   }
 
   @override
@@ -50,24 +132,73 @@ class PpssppSaveStrategy extends SaveStrategy {
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final pspDir = await _getPspDir();
-
     final result = <File>[];
-    final stem = getRomStem(game);
 
+    // --- Handle SAVEDATA folders ---
     final saveDataDir = io.Directory(p.join(pspDir, 'SAVEDATA'));
     if (await saveDataDir.exists()) {
-      bool hasFiles = false;
-      await for (final _ in saveDataDir.list(recursive: true)) {
-        hasFiles = true;
-        break;
-      }
-      if (hasFiles) {
-        result.add(io.File(saveDataDir.path));
+      final allSubdirs = await saveDataDir.list().where((e) => e is io.Directory).cast<io.Directory>().toList();
+
+      if (allSubdirs.isNotEmpty) {
+        final foldersWithTitles = <Map<String, dynamic>>[];
+        for (final dir in allSubdirs) {
+          final title = await _readParamSfoTitle(dir.path);
+          if (title != null) {
+            foldersWithTitles.add({
+              'dir': dir,
+              'title': title,
+              'modified': (await dir.stat()).modified,
+            });
+          }
+        }
+
+        final gameWords = game.name
+            .toLowerCase()
+            .replaceAll(RegExp(r"[^a-z0-9\s]"), '')
+            .split(' ')
+            .where((w) => w.length >= 2)
+            .toList();
+
+        final matchingFolders = foldersWithTitles.where((entry) {
+          final folderTitleLower = (entry['title'] as String).toLowerCase();
+          return gameWords.any((word) => folderTitleLower.contains(word));
+        }).toList();
+
+        List<io.Directory> foldersToZip = [];
+
+        if (matchingFolders.length == 1) {
+          foldersToZip.add(matchingFolders.first['dir'] as io.Directory);
+        } else if (matchingFolders.length > 1) {
+          foldersToZip.addAll(matchingFolders.map((e) => e['dir'] as io.Directory));
+        } else {
+          // Zero matches: fall back to recency
+          if (foldersWithTitles.isNotEmpty) {
+            foldersWithTitles.sort((a, b) => (b['modified'] as DateTime).compareTo(a['modified'] as DateTime));
+            foldersToZip.add(foldersWithTitles.first['dir'] as io.Directory);
+            debugPrint('No exact PARAM.SFO title match for "${game.name}". Falling back to most recently modified folder: ${(foldersWithTitles.first['dir'] as io.Directory).path}');
+          }
+        }
+
+        if (foldersToZip.isNotEmpty) {
+          debugPrint('[PPSSPP] Zipping folders: ${foldersToZip.map((d) => d.path).toList()}');
+          final zipPath = p.join(pspDir, '${game.id}.saves.zip');
+          final encoder = ZipFileEncoder();
+          encoder.create(zipPath);
+          for (final dir in foldersToZip) {
+            // Add the content of the directory, not the directory itself as a root
+            // This is important for the restore to place files directly into SAVEDATA
+            await encoder.addDirectory(dir);
+          }
+          encoder.close();
+          result.add(io.File(zipPath));
+        }
       }
     }
 
+    // --- Handle PPSSPP_STATE (.ppst files) ---
     final statesDir = io.Directory(p.join(pspDir, 'PPSSPP_STATE'));
     if (await statesDir.exists()) {
+      final stem = getRomStem(game);
       final stateFile = io.File(p.join(pspDir, 'PPSSPP_STATE', '$stem.ppst'));
       if (await stateFile.exists()) {
         if (sessionStart == null ||
@@ -91,11 +222,7 @@ class PpssppSaveStrategy extends SaveStrategy {
         final targetBaseDir = p.join(pspDir, 'SAVEDATA');
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
-          final segments = entry.name.split('/');
-          final strippedPath =
-              segments.length > 1 ? segments.skip(1).join('/') : entry.name;
-          if (strippedPath.isEmpty) continue;
-          final targetPath = p.join(targetBaseDir, strippedPath);
+          final targetPath = p.join(targetBaseDir, entry.name);
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = io.File(targetPath);
