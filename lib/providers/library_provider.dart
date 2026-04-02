@@ -1,6 +1,8 @@
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
 
@@ -316,3 +318,49 @@ final retroarchSyncModeLoaderProvider = FutureProvider<void>((ref) async {
   final saved = prefs.getString('retroarch_sync_mode') ?? 'both';
   ref.read(retroarchSyncModeProvider.notifier).state = saved;
 });
+
+final platformLogoCacheProvider = FutureProvider.family<Uint8List?, String>((ref, logoUrl) async {
+  if (logoUrl.isEmpty) return null;
+  try {
+    final response = await http.get(Uri.parse(logoUrl));
+    if (response.statusCode != 200) return null;
+    final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+    final body = response.body;
+    if (!contentType.contains('svg') && !body.trim().startsWith('<svg')) return null;
+    final inlined = _inlineSvgStyles(body);
+    return Uint8List.fromList(utf8.encode(inlined));
+  } catch (_) {
+    return null;
+  }
+});
+
+String _inlineSvgStyles(String svgContent) {
+  try {
+    final styleRegex = RegExp(r'<style[^>]*>(.*?)</style>', dotAll: true);
+    final styleMatch = styleRegex.firstMatch(svgContent);
+    if (styleMatch == null) return svgContent;
+    final styleBlock = styleMatch.group(1)!;
+    final classRegex = RegExp(r'\.([\w-]+)\s*\{([^}]*)\}');
+    final classMap = <String, String>{};
+    for (final match in classRegex.allMatches(styleBlock)) {
+      classMap[match.group(1)!] = match.group(2)!.trim();
+    }
+    var result = svgContent;
+    result = result.replaceAllMapped(
+      RegExp(r'class="([^"]+)"'),
+      (match) {
+        final classes = match.group(1)!.split(RegExp(r'\s+'));
+        final combinedStyles = classes
+            .map((c) => classMap[c] ?? '')
+            .where((s) => s.isNotEmpty)
+            .join('; ');
+        if (combinedStyles.isEmpty) return '';
+        return 'style="$combinedStyles"';
+      },
+    );
+    result = result.replaceAll(styleRegex, '');
+    return result;
+  } catch (_) {
+    return svgContent;
+  }
+}

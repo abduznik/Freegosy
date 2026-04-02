@@ -1,10 +1,15 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/romm/romm_models.dart';
+import '../../providers/library_provider.dart';
 
-class GameCard extends StatefulWidget {
+class GameCard extends ConsumerStatefulWidget {
   final Game game;
   final String? coverUrl;
+  final String? platformLogoUrl;
   final VoidCallback onDownload;
   final VoidCallback onLaunch;
   final VoidCallback onDelete;
@@ -18,6 +23,7 @@ class GameCard extends StatefulWidget {
     super.key,
     required this.game,
     this.coverUrl,
+    this.platformLogoUrl,
     required this.onDownload,
     required this.onLaunch,
     required this.onDelete,
@@ -29,10 +35,10 @@ class GameCard extends StatefulWidget {
   });
 
   @override
-  State<GameCard> createState() => _GameCardState();
+  ConsumerState<GameCard> createState() => _GameCardState();
 }
 
-class _GameCardState extends State<GameCard> {
+class _GameCardState extends ConsumerState<GameCard> {
   final ValueNotifier<bool> _hovering = ValueNotifier(false);
 
   @override
@@ -91,6 +97,40 @@ class _GameCardState extends State<GameCard> {
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.check, size: 14, color: Colors.white),
+                          ),
+                        ),
+                      if (widget.platformLogoUrl != null && widget.platformLogoUrl!.isNotEmpty)
+                        Positioned.fill(
+                          child: Align(
+                            alignment: Alignment.bottomRight,
+                            child: Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Consumer(
+                                builder: (context, ref, _) {
+                                  final logoAsync = widget.platformLogoUrl != null && widget.platformLogoUrl!.isNotEmpty
+                                      ? ref.watch(platformLogoCacheProvider(widget.platformLogoUrl!))
+                                      : const AsyncValue<Uint8List?>.data(null);
+                                  return logoAsync.when(
+                                    data: (bytes) {
+                                      if (bytes == null) return const SizedBox.shrink();
+                                      return Opacity(
+                                        opacity: 0.9,
+                                        child: FractionallySizedBox(
+                                          widthFactor: 0.3,
+                                          heightFactor: 0.3,
+                                          child: SvgPicture.memory(
+                                            bytes,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    loading: () => const SizedBox.shrink(),
+                                    error: (_, _) => const SizedBox.shrink(),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
                         ),
                     ],
