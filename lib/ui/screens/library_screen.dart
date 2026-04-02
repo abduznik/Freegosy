@@ -20,6 +20,7 @@ import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
 import '../widgets/windows_game_config_dialog.dart';
 import 'library_skeleton.dart';
+import 'game_detail_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -98,6 +99,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         }
       });
     }
+  }
+
+  void _handleGameTap(BuildContext context, WidgetRef ref, Game game) {
+    final config = ref.read(rommConfigProvider).value;
+    final baseUrl = config?.baseUrl ?? '';
+    final isDownloaded = _downloadedStates[game.id] ?? false;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => GameDetailScreen(
+          game: game,
+          rommBaseUrl: baseUrl,
+          isDownloaded: isDownloaded,
+          onLaunch: isDownloaded ? () => _handleLaunch(context, ref, game) : () {},
+          onDownload: () => _startDownload(context, ref, game),
+          onPushSaves: isDownloaded ? () => _handlePushSaves(context, ref, game) : () {},
+          onPullSaves: isDownloaded ? () => _handlePullSaves(context, ref, game) : () {},
+          onDelete: () => _handleDeleteRom(context, ref, game),
+        ),
+      ),
+    );
   }
 
   void _startDownload(BuildContext context, WidgetRef ref, Game game) {
@@ -890,34 +913,41 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                       final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
                                       if (dirService == null) {
                                         return GestureDetector(
+                                          onTap: () => _handleGameTap(context, ref, game),
+                                          child: GestureDetector(
+                                            onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
+                                            child: GameCard(
+                                              game: game, coverUrl: coverUrl, showTitle: showTitle,
+                                              platformLogoUrl: game.platformSlug != null
+                                                  ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
+                                                  : null,
+                                              showButtonsOnHover: showButtonsOnHover,
+                                              onDownload: () => _startDownload(context, ref, game),
+                                              onLaunch: () => _handleLaunch(context, ref, game),
+                                              onDelete: () => _handleDeleteRom(context, ref, game),
+                                              onPushSaves: () => _handlePushSaves(context, ref, game),
+                                              onPullSaves: () => _handlePullSaves(context, ref, game),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return GestureDetector(
+                                        onTap: () => _handleGameTap(context, ref, game),
+                                        child: GestureDetector(
                                           onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
                                           child: GameCard(
-                                            game: game, coverUrl: coverUrl, showTitle: showTitle,
+                                            game: game, coverUrl: coverUrl,
+                                            isDownloaded: _downloadedStates[game.id] ?? false,
                                             platformLogoUrl: game.platformSlug != null
                                                 ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
                                                 : null,
-                                            showButtonsOnHover: showButtonsOnHover,
+                                            showTitle: showTitle, showButtonsOnHover: showButtonsOnHover,
                                             onDownload: () => _startDownload(context, ref, game),
                                             onLaunch: () => _handleLaunch(context, ref, game),
                                             onDelete: () => _handleDeleteRom(context, ref, game),
                                             onPushSaves: () => _handlePushSaves(context, ref, game),
                                             onPullSaves: () => _handlePullSaves(context, ref, game),
-                                          ),                                        );
-                                      }
-                                      return GestureDetector(
-                                        onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
-                                        child: GameCard(
-                                          game: game, coverUrl: coverUrl,
-                                          isDownloaded: _downloadedStates[game.id] ?? false,
-                                          platformLogoUrl: game.platformSlug != null
-                                              ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
-                                              : null,
-                                          showTitle: showTitle, showButtonsOnHover: showButtonsOnHover,
-                                          onDownload: () => _startDownload(context, ref, game),
-                                          onLaunch: () => _handleLaunch(context, ref, game),
-                                          onDelete: () => _handleDeleteRom(context, ref, game),
-                                          onPushSaves: () => _handlePushSaves(context, ref, game),
-                                          onPullSaves: () => _handlePullSaves(context, ref, game),
+                                          ),
                                         ),
                                       );
                                     },

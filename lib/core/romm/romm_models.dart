@@ -14,6 +14,26 @@ class Game {
   final String? multiFilePath; // maps to 'multi_file_path' in JSON
   final bool hasMultipleFiles;
 
+  // New fields
+  final String? summary;
+  final List<String> genres;
+  final List<String> companies;
+  final String? playerCount;
+  final int? firstReleaseDate; // unix timestamp in milliseconds
+  final double? averageRating;
+  final List<String> regions;
+  final List<String> languages;
+  final List<String> tags;
+  final List<String> mergedScreenshots; // local paths like /assets/romm/...
+  final String? screenshotUrl; // from ss_metadata.screenshot_url
+  final String? fanartUrl; // from ss_metadata.fanart_url
+  final DateTime? lastPlayed; // from rom_user.last_played
+  final int userRating; // from rom_user.rating, default 0
+  final int completion; // from rom_user.completion, default 0
+  final String? status; // from rom_user.status
+  final bool backlogged; // from rom_user.backlogged, default false
+  final bool nowPlaying; // from rom_user.now_playing, default false
+
   bool get isMultiFile => hasMultipleFiles;
 
   String get displayName {
@@ -52,6 +72,24 @@ class Game {
     required this.fileSize, // Kept
     this.multiFilePath,
     this.hasMultipleFiles = false,
+    this.summary,
+    this.genres = const [],
+    this.companies = const [],
+    this.playerCount,
+    this.firstReleaseDate,
+    this.averageRating,
+    this.regions = const [],
+    this.languages = const [],
+    this.tags = const [],
+    this.mergedScreenshots = const [],
+    this.screenshotUrl,
+    this.fanartUrl,
+    this.lastPlayed,
+    this.userRating = 0,
+    this.completion = 0,
+    this.status,
+    this.backlogged = false,
+    this.nowPlaying = false,
   });
 
   factory Game.fromJson(Map<String, dynamic> json) {
@@ -70,6 +108,24 @@ class Game {
       fileSize: json['file_size_bytes'] is int ? json['file_size_bytes'] : 0,
       multiFilePath: json['multi_file_path']?.toString(),
       hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
+      summary: json['summary']?.toString(),
+      genres: (json['metadatum']?['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      companies: (json['metadatum']?['companies'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      playerCount: json['metadatum']?['player_count']?.toString(),
+      firstReleaseDate: json['metadatum']?['first_release_date'] as int?,
+      averageRating: (json['metadatum']?['average_rating'] as num?)?.toDouble(),
+      regions: (json['regions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      languages: (json['languages'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      mergedScreenshots: (json['merged_screenshots'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      screenshotUrl: json['ss_metadata']?['screenshot_url']?.toString(),
+      fanartUrl: json['ss_metadata']?['fanart_url']?.toString(),
+      lastPlayed: json['rom_user']?['last_played'] != null ? DateTime.tryParse(json['rom_user']['last_played'].toString()) : null,
+      userRating: json['rom_user']?['rating'] as int? ?? 0,
+      completion: json['rom_user']?['completion'] as int? ?? 0,
+      status: json['rom_user']?['status']?.toString(),
+      backlogged: json['rom_user']?['backlogged'] as bool? ?? false,
+      nowPlaying: json['rom_user']?['now_playing'] as bool? ?? false,
     );
   }
 
