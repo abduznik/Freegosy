@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -20,9 +20,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   // _CoreInfo maps platform slugs to RetroArch core info, including save and state directories.
   static const Map<String, _CoreInfo> _coreMap = {
-    'gba':       _CoreInfo('mgba_libretro',            'GBA',                'States/GBA'),
-    'gbc':       _CoreInfo('mgba_libretro',            'GBA',                'States/GBA'), // mGBA uses the same save folder for GBA/GBC/GB
-    'gb':        _CoreInfo('mgba_libretro',            'GBA',                'States/GBA'),
+    'gba':       _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'),
+    'gbc':       _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'), // mGBA uses the same save folder for GBA/GBC/GB
+    'gb':        _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'),
     'snes':      _CoreInfo('snes9x_libretro',          'SNES',               'States/SNES'),
     'nes':       _CoreInfo('fceumm_libretro',          'NES',                'States/NES'),
     'n64':       _CoreInfo('mupen64plus_next_libretro', 'N64',                'States/N64'),
@@ -47,7 +47,11 @@ class RetroArchSaveStrategy extends SaveStrategy {
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
     if (exePath == null) return null;
 
-    final exeDir = File(exePath).parent.path;
+    String exeDir = File(exePath).parent.path;
+    // If exePath points to a folder instead of an exe, use it directly
+    if (await FileSystemEntity.isDirectory(exePath)) {
+      exeDir = exePath;
+    }
     // The saveFolder in _coreMap is relative to the RetroArch installation directory.
     return p.join(exeDir, 'saves', coreInfo.saveFolder);
   }
@@ -60,9 +64,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
     if (exePath == null) return [];
-    final exeDir = File(exePath).parent.path;
+    
+    String exeDir = File(exePath).parent.path;
+    // If exePath points to a folder instead of an exe, use it directly
+    if (await FileSystemEntity.isDirectory(exePath)) {
+      exeDir = exePath;
+    }
 
     final stem = getRomStem(game); // Assuming getRomStem is available and correct for generating base filename
+    debugPrint('[RetroArch] slug: $slug, stem: $stem, romPath: $romPath');
 
     final List<File> filesToReturn = [];
 
@@ -86,7 +96,47 @@ class RetroArchSaveStrategy extends SaveStrategy {
       // Existing logic for non-PSP saves (e.g., SRM files)
       if (syncMode == 'saves' || syncMode == 'both') {
         final savesDir = p.join(exeDir, 'saves', coreInfo.saveFolder);
-        filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
+        debugPrint('[RetroArch] savesDir: $savesDir');
+        debugPrint('[RetroArch] savesDirExists: ${await Directory(savesDir).exists()}');
+        final savesDirObj = Directory(savesDir);
+        if (await savesDirObj.exists()) {
+          final stemLower = stem.toLowerCase();
+          bool found = false;
+          await for (final entity in savesDirObj.list()) {
+            if (entity is! File) continue;
+            final fname = p.basename(entity.path).toLowerCase();
+            if (fname.startsWith(stemLower) && fname.endsWith('.srm')) {
+              filesToReturn.add(entity);
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            // Also try scanning for any .srm that fuzzy matches the stem
+            await for (final entity in savesDirObj.list()) {
+              if (entity is! File) continue;
+              final fname = p.basename(entity.path).toLowerCase();
+              if (fname.endsWith('.srm')) {
+                final stemWords = stemLower
+                    .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+                    .split(' ')
+                    .where((w) => w.length >= 3)
+                    .toList();
+                if (stemWords.any((word) => fname.contains(word))) {
+                  filesToReturn.add(entity);
+                  found = true;
+                  break;
+                }
+              }
+            }
+          }
+          debugPrint('[RetroArch] found SRM: $found');
+          if (!found) {
+            filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
+          }
+        } else {
+          filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
+        }
       }
     }
 
@@ -118,6 +168,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
       }
       finalResult.add(f);
     }
+    debugPrint('[RetroArch] finalResult: ${finalResult.map((f) => f.path).toList()}');
     return finalResult;
   }
 
@@ -130,7 +181,12 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
       final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
       if (exePath == null) return false;
-      final exeDir = File(exePath).parent.path;
+      
+      String exeDir = File(exePath).parent.path;
+      // If exePath points to a folder instead of an exe, use it directly
+      if (await FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
 
       final isState = filename.contains('.state');
       final targetDir = isState
