@@ -893,6 +893,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                           onLongPress: isWindowsGame ? () => _handleWindowsConfig(context, ref, game) : null,
                                           child: GameCard(
                                             game: game, coverUrl: coverUrl, showTitle: showTitle,
+                                            platformLogoUrl: game.platformSlug != null
+                                                ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
+                                                : null,
                                             showButtonsOnHover: showButtonsOnHover,
                                             onDownload: () => _startDownload(context, ref, game),
                                             onLaunch: () => _handleLaunch(context, ref, game),
@@ -906,6 +909,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                         child: GameCard(
                                           game: game, coverUrl: coverUrl,
                                           isDownloaded: _downloadedStates[game.id] ?? false,
+                                          platformLogoUrl: game.platformSlug != null
+                                              ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
+                                              : null,
                                           showTitle: showTitle, showButtonsOnHover: showButtonsOnHover,
                                           onDownload: () => _startDownload(context, ref, game),
                                           onLaunch: () => _handleLaunch(context, ref, game),
