@@ -1,6 +1,6 @@
 import 'dart:io' as io;
+import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
@@ -18,6 +18,20 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   String get strategyId => 'pcsx2';
 
   Future<String> _getSaveRoot() async {
+    // 1. Check portable mode first — exe next to memcards folder
+    final exePath = await _directoryService.findEmulatorExecutable('pcsx2', 'pcsx2-qt.exe');
+    if (exePath != null) {
+      String exeDir = io.File(exePath).parent.path;
+      if (await io.FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
+      final portableMemcards = p.join(exeDir, 'memcards');
+      if (await io.Directory(portableMemcards).exists()) {
+        return exeDir;
+      }
+    }
+
+    // 2. Fall back to app support directory
     final resolvedPath = await _directoryService.getEmulatorSystemDirectory('pcsx2');
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for PCSX2 at $resolvedPath. Please launch PCSX2 at least once to generate save data.');
@@ -44,7 +58,10 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     if (await memcardsDir.exists()) {
       await for (final entity in memcardsDir.list()) {
         if (entity is! io.File) continue;
-        if (!entity.path.toLowerCase().endsWith('.ps2')) continue;
+        final basename = p.basename(entity.path);
+        if (!basename.toLowerCase().endsWith('.ps2')) continue;
+        // Skip timestamped backup copies like "Mcd001 [2026-03-26_09-18-21].ps2"
+        if (basename.contains('[') || basename.contains(']')) continue;
         if (sessionStart != null) {
           final stat = await entity.stat();
           if (stat.modified.isBefore(sessionStart)) continue;

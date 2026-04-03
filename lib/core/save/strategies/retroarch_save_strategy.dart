@@ -1,6 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -72,7 +72,6 @@ class RetroArchSaveStrategy extends SaveStrategy {
     }
 
     final stem = getRomStem(game); // Assuming getRomStem is available and correct for generating base filename
-    debugPrint('[RetroArch] slug: $slug, stem: $stem, romPath: $romPath');
 
     final List<File> filesToReturn = [];
 
@@ -96,8 +95,6 @@ class RetroArchSaveStrategy extends SaveStrategy {
       // Existing logic for non-PSP saves (e.g., SRM files)
       if (syncMode == 'saves' || syncMode == 'both') {
         final savesDir = p.join(exeDir, 'saves', coreInfo.saveFolder);
-        debugPrint('[RetroArch] savesDir: $savesDir');
-        debugPrint('[RetroArch] savesDirExists: ${await Directory(savesDir).exists()}');
         final savesDirObj = Directory(savesDir);
         if (await savesDirObj.exists()) {
           final stemLower = stem.toLowerCase();
@@ -130,7 +127,6 @@ class RetroArchSaveStrategy extends SaveStrategy {
               }
             }
           }
-          debugPrint('[RetroArch] found SRM: $found');
           if (!found) {
             filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
           }
@@ -168,7 +164,6 @@ class RetroArchSaveStrategy extends SaveStrategy {
       }
       finalResult.add(f);
     }
-    debugPrint('[RetroArch] finalResult: ${finalResult.map((f) => f.path).toList()}');
     return finalResult;
   }
 
