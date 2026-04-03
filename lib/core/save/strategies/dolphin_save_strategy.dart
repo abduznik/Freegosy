@@ -20,6 +20,21 @@ class DolphinSaveStrategy extends SaveStrategy {
 
   /// Returns the base user directory for Dolphin.
   Future<String> _getUserDir() async {
+    // 1. Check portable mode first — User folder next to exe
+    final exePath = await _directoryService.findEmulatorExecutable(
+        'dolphin', 'Dolphin.exe');
+    if (exePath != null) {
+      String exeDir = io.File(exePath).parent.path;
+      if (await io.FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
+      final portableUser = p.join(exeDir, 'User');
+      if (await io.Directory(portableUser).exists()) {
+        return portableUser;
+      }
+    }
+
+    // 2. Fall back to app support directory
     final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('Dolphin');
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for Dolphin at $resolvedPath. Please launch Dolphin at least once to generate save data.');
