@@ -17,8 +17,20 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'pcsx2';
 
+  String _normalizeMemcardFilename(String filename) {
+    // Convert "Mcd001 [2026-04-03_20-31-19].ps2" -> "Mcd001.ps2"
+    // Convert "Mcd002 [anything].ps2" -> "Mcd002.ps2"
+    if (!filename.toLowerCase().endsWith('.ps2')) return filename;
+    final match =
+        RegExp(r'^(Mcd\d+)', caseSensitive: false).firstMatch(filename);
+    if (match != null) {
+      return '${match.group(1)}.ps2';
+    }
+    return filename;
+  }
+
   Future<String> _getSaveRoot() async {
-    // 1. Check portable mode first — exe next to memcards folder
+    // 1. Check portable mode first — memcards folder next to exe (Windows)
     final exePath = await _directoryService.findEmulatorExecutable('pcsx2', 'pcsx2-qt.exe');
     if (exePath != null) {
       String exeDir = io.File(exePath).parent.path;
@@ -31,7 +43,25 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       }
     }
 
-    // 2. Fall back to app support directory
+    // 2. macOS: ~/Library/Application Support/PCSX2
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'] ?? '';
+      final macPath = p.join(home, 'Library', 'Application Support', 'PCSX2');
+      if (await io.Directory(p.join(macPath, 'memcards')).exists()) {
+        return macPath;
+      }
+    }
+
+    // 3. Linux: ~/.config/PCSX2
+    if (io.Platform.isLinux) {
+      final home = io.Platform.environment['HOME'] ?? '';
+      final linuxPath = p.join(home, '.config', 'PCSX2');
+      if (await io.Directory(p.join(linuxPath, 'memcards')).exists()) {
+        return linuxPath;
+      }
+    }
+
+    // 4. Fall back to app support directory
     final resolvedPath = await _directoryService.getEmulatorSystemDirectory('pcsx2');
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for PCSX2 at $resolvedPath. Please launch PCSX2 at least once to generate save data.');
@@ -105,7 +135,10 @@ class Pcsx2SaveStrategy extends SaveStrategy {
               : p.join(root, 'sstates');
 
           if (entry.isFile) {
-            final targetPath = p.join(targetDir, entry.name);
+            final targetFilename = entryLower.endsWith('.ps2')
+                ? _normalizeMemcardFilename(p.basename(entry.name))
+                : p.basename(entry.name);
+            final targetPath = p.join(targetDir, targetFilename);
             await backupSave(targetPath);
             final outFile = io.File(targetPath);
             await outFile.parent.create(recursive: true);
@@ -120,7 +153,10 @@ class Pcsx2SaveStrategy extends SaveStrategy {
           int.tryParse(filename.split('.').last) != null;
       final targetDir = isState ? p.join(root, 'sstates') : p.join(root, 'memcards');
       await io.Directory(targetDir).create(recursive: true);
-      final targetPath = p.join(targetDir, filename);
+      final normalizedFilename = filename.toLowerCase().endsWith('.ps2')
+          ? _normalizeMemcardFilename(filename)
+          : filename;
+      final targetPath = p.join(targetDir, normalizedFilename);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);
       return true;
