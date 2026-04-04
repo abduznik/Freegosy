@@ -102,6 +102,45 @@ class DirectoryService {
     await _ensureDirectoryExists(path);
   }
 
+  Future<String> getRomsDirectory() async => romsRootPath;
+
+  Future<Set<String>> getAllDownloadedFileNames() async {
+    final Set<String> downloaded = {};
+    try {
+      final romsDir = Directory(await getRomsDirectory());
+      if (!await romsDir.exists()) return downloaded;
+      
+      await for (final platformDir in romsDir.list()) {
+        if (platformDir is! Directory) continue;
+        await for (final entity in platformDir.list()) {
+          final name = p.basename(entity.path);
+          downloaded.add(name.toLowerCase());
+        }
+      }
+    } catch (_) {}
+    return downloaded;
+  }
+
+  Future<Map<String, Set<String>>> getAllDownloadedFileNamesByPlatform() async {
+    final Map<String, Set<String>> platformMap = {};
+    try {
+      final romsDir = Directory(await getRomsDirectory());
+      if (!await romsDir.exists()) return platformMap;
+      
+      await for (final platformDir in romsDir.list()) {
+        if (platformDir is! Directory) continue;
+        final platformSlug = p.basename(platformDir.path);
+        final Set<String> downloaded = {};
+        await for (final entity in platformDir.list()) {
+          final name = p.basename(entity.path);
+          downloaded.add(name.toLowerCase());
+        }
+        platformMap[platformSlug] = downloaded;
+      }
+    } catch (_) {}
+    return platformMap;
+  }
+
   Future<String> getRomDirectory(Game game) async {
     final platformSlug = game.platformSlug ?? 'unknown';
     final dirPath = '$romsRootPath/$platformSlug';

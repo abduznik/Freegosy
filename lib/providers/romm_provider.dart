@@ -8,7 +8,13 @@ import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 
+import 'package:freegosy/core/storage/download_cache_service.dart';
+
 final _secureStorage = const FlutterSecureStorage();
+
+final downloadCacheServiceProvider = Provider<DownloadCacheService>((ref) {
+  return DownloadCacheService();
+});
 
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
