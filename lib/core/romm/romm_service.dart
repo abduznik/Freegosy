@@ -302,7 +302,6 @@ class RommService {
       if (items.isEmpty) return null;
       return Game.fromJson(items.first as Map<String, dynamic>);
     } catch (e) {
-      debugPrint('Error getting random game: $e');
       return null;
     }
   }
