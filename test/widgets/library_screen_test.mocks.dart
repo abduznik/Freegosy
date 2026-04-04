@@ -69,6 +69,16 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as _i5.Future<List<_i2.Platform>>);
 
   @override
+  _i5.Future<List<Map<String, dynamic>>> getCollections() =>
+      (super.noSuchMethod(
+            Invocation.method(#getCollections, []),
+            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+              <Map<String, dynamic>>[],
+            ),
+          )
+          as _i5.Future<List<Map<String, dynamic>>>);
+
+  @override
   String? resolveCoverUrl(_i2.Game? game) =>
       (super.noSuchMethod(Invocation.method(#resolveCoverUrl, [game]))
           as String?);
@@ -90,11 +100,27 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as _i5.Future<List<_i2.Game>>);
 
   @override
+  _i5.Future<List<_i2.Game>> getRecentlyPlayed({int? limit = 15}) =>
+      (super.noSuchMethod(
+            Invocation.method(#getRecentlyPlayed, [], {#limit: limit}),
+            returnValue: _i5.Future<List<_i2.Game>>.value(<_i2.Game>[]),
+          )
+          as _i5.Future<List<_i2.Game>>);
+
+  @override
   _i5.Future<({List<_i2.Game> games, int total})> getGamesPage({
     int? offset = 0,
     int? limit = 50,
     String? platformId,
     String? search,
+    List<String>? genres = const [],
+    List<String>? regions = const [],
+    List<String>? languages = const [],
+    List<String>? collections = const [],
+    List<String>? statuses = const [],
+    bool? lastPlayed,
+    bool? withCharIndex = false,
+    bool? withFilterValues = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#getGamesPage, [], {
@@ -102,6 +128,14 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
               #limit: limit,
               #platformId: platformId,
               #search: search,
+              #genres: genres,
+              #regions: regions,
+              #languages: languages,
+              #collections: collections,
+              #statuses: statuses,
+              #lastPlayed: lastPlayed,
+              #withCharIndex: withCharIndex,
+              #withFilterValues: withFilterValues,
             }),
             returnValue: _i5.Future<({List<_i2.Game> games, int total})>.value((
               games: <_i2.Game>[],
@@ -276,6 +310,27 @@ class MockDirectoryService extends _i1.Mock implements _i8.DirectoryService {
           as _i5.Future<void>);
 
   @override
+  _i5.Future<String> getRomsDirectory() =>
+      (super.noSuchMethod(
+            Invocation.method(#getRomsDirectory, []),
+            returnValue: _i5.Future<String>.value(
+              _i4.dummyValue<String>(
+                this,
+                Invocation.method(#getRomsDirectory, []),
+              ),
+            ),
+          )
+          as _i5.Future<String>);
+
+  @override
+  _i5.Future<Set<String>> getAllDownloadedFileNames() =>
+      (super.noSuchMethod(
+            Invocation.method(#getAllDownloadedFileNames, []),
+            returnValue: _i5.Future<Set<String>>.value(<String>{}),
+          )
+          as _i5.Future<Set<String>>);
+
+  @override
   _i5.Future<String> getRomDirectory(_i2.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#getRomDirectory, [game]),
@@ -325,6 +380,21 @@ class MockDirectoryService extends _i1.Mock implements _i8.DirectoryService {
               _i4.dummyValue<String>(
                 this,
                 Invocation.method(#getEmulatorDirectory, [emulatorId]),
+              ),
+            ),
+          )
+          as _i5.Future<String>);
+
+  @override
+  _i5.Future<String> getEmulatorAppSupportDirectory(String? emulatorName) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmulatorAppSupportDirectory, [emulatorName]),
+            returnValue: _i5.Future<String>.value(
+              _i4.dummyValue<String>(
+                this,
+                Invocation.method(#getEmulatorAppSupportDirectory, [
+                  emulatorName,
+                ]),
               ),
             ),
           )

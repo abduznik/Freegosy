@@ -120,6 +120,27 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
           as _i4.Future<void>);
 
   @override
+  _i4.Future<String> getRomsDirectory() =>
+      (super.noSuchMethod(
+            Invocation.method(#getRomsDirectory, []),
+            returnValue: _i4.Future<String>.value(
+              _i3.dummyValue<String>(
+                this,
+                Invocation.method(#getRomsDirectory, []),
+              ),
+            ),
+          )
+          as _i4.Future<String>);
+
+  @override
+  _i4.Future<Set<String>> getAllDownloadedFileNames() =>
+      (super.noSuchMethod(
+            Invocation.method(#getAllDownloadedFileNames, []),
+            returnValue: _i4.Future<Set<String>>.value(<String>{}),
+          )
+          as _i4.Future<Set<String>>);
+
+  @override
   _i4.Future<String> getRomDirectory(_i5.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#getRomDirectory, [game]),
@@ -169,6 +190,21 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
               _i3.dummyValue<String>(
                 this,
                 Invocation.method(#getEmulatorDirectory, [emulatorId]),
+              ),
+            ),
+          )
+          as _i4.Future<String>);
+
+  @override
+  _i4.Future<String> getEmulatorAppSupportDirectory(String? emulatorName) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmulatorAppSupportDirectory, [emulatorName]),
+            returnValue: _i4.Future<String>.value(
+              _i3.dummyValue<String>(
+                this,
+                Invocation.method(#getEmulatorAppSupportDirectory, [
+                  emulatorName,
+                ]),
               ),
             ),
           )
