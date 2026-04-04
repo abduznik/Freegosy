@@ -13,6 +13,7 @@ class Game {
   final int fileSize; // Kept
   final String? multiFilePath; // maps to 'multi_file_path' in JSON
   final bool hasMultipleFiles;
+  final List<Map<String, dynamic>> files; // Added: list of files for multi-disc games
 
   // New fields
   final String? summary;
@@ -72,6 +73,7 @@ class Game {
     required this.fileSize, // Kept
     this.multiFilePath,
     this.hasMultipleFiles = false,
+    this.files = const [], // Added
     this.summary,
     this.genres = const [],
     this.companies = const [],
@@ -108,6 +110,7 @@ class Game {
       fileSize: json['file_size_bytes'] is int ? json['file_size_bytes'] : 0,
       multiFilePath: json['multi_file_path']?.toString(),
       hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
+      files: (json['files'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ?? [],
       summary: json['summary']?.toString(),
       genres: (json['metadatum']?['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       companies: (json['metadatum']?['companies'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
@@ -153,12 +156,16 @@ class Platform {
   final int id;
   final String name;
   final String slug;
+  final String fsSlug;
+  final String displayName;
   final int gamesCount;
 
   Platform({
     required this.id,
     required this.name,
     required this.slug,
+    this.fsSlug = '',
+    this.displayName = '',
     this.gamesCount = 0,
   });
 
@@ -167,6 +174,8 @@ class Platform {
       id: json['id'] as int? ?? 0,
       name: json['name']?.toString() ?? '',
       slug: json['slug']?.toString() ?? '',
+      fsSlug: json['fs_slug']?.toString() ?? '',
+      displayName: json['display_name']?.toString() ?? '',
       gamesCount: (json['rom_count'] as int?) ?? 
                   (json['roms_count'] as int?) ?? 
                   (json['games_count'] as int?) ?? 0,
