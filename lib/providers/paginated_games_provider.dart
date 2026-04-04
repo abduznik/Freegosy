@@ -2,6 +2,55 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
 
+class ActiveFilters {
+  final List<String> genres;
+  final List<String> regions;
+  final List<String> languages;
+  final List<String> collections;
+  final List<String> statuses;
+  final bool downloadedOnly;
+  final bool notDownloadedOnly;
+
+  const ActiveFilters({
+    this.genres = const [],
+    this.regions = const [],
+    this.languages = const [],
+    this.collections = const [],
+    this.statuses = const [],
+    this.downloadedOnly = false,
+    this.notDownloadedOnly = false,
+  });
+
+  bool get hasActiveFilters =>
+      genres.isNotEmpty ||
+      regions.isNotEmpty ||
+      languages.isNotEmpty ||
+      collections.isNotEmpty ||
+      statuses.isNotEmpty ||
+      downloadedOnly ||
+      notDownloadedOnly;
+
+  ActiveFilters copyWith({
+    List<String>? genres,
+    List<String>? regions,
+    List<String>? languages,
+    List<String>? collections,
+    List<String>? statuses,
+    bool? downloadedOnly,
+    bool? notDownloadedOnly,
+  }) {
+    return ActiveFilters(
+      genres: genres ?? this.genres,
+      regions: regions ?? this.regions,
+      languages: languages ?? this.languages,
+      collections: collections ?? this.collections,
+      statuses: statuses ?? this.statuses,
+      downloadedOnly: downloadedOnly ?? this.downloadedOnly,
+      notDownloadedOnly: notDownloadedOnly ?? this.notDownloadedOnly,
+    );
+  }
+}
+
 class PaginatedGamesState {
   final List<Game> games;
   final bool isLoading;
@@ -48,11 +97,24 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
 
   String? _currentPlatformId;
   String? _currentSearch;
+  ActiveFilters _activeFilters = const ActiveFilters();
 
   PaginatedGamesNotifier(this._ref) : super(const PaginatedGamesState());
 
-  String _key(String? platformId, String? search) =>
-      '${platformId ?? "all"}|${search ?? ""}';
+  void setFilters(ActiveFilters filters) {
+    _activeFilters = filters;
+  }
+
+  String _key(String? platformId, String? search) {
+    final filterKey = [
+      ..._activeFilters.genres,
+      ..._activeFilters.regions,
+      ..._activeFilters.languages,
+      ..._activeFilters.collections,
+      if (_activeFilters.statuses.isNotEmpty) ..._activeFilters.statuses,
+    ].join(',');
+    return '${platformId ?? "all"}|${search ?? ""}|$filterKey';
+  }
 
   Future<void> loadInitial({String? platformId, String? search}) async {
     _currentPlatformId = platformId;
@@ -85,6 +147,11 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         limit: _pageSize,
         platformId: platformId,
         search: search,
+        genres: _activeFilters.genres,
+        regions: _activeFilters.regions,
+        languages: _activeFilters.languages,
+        collections: _activeFilters.collections,
+        statuses: _activeFilters.statuses,
       );
       _cache[key] = result.games;
       _offsets[key] = result.games.length;
@@ -113,6 +180,11 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         limit: _pageSize,
         platformId: platformId,
         search: search,
+        genres: _activeFilters.genres,
+        regions: _activeFilters.regions,
+        languages: _activeFilters.languages,
+        collections: _activeFilters.collections,
+        statuses: _activeFilters.statuses,
       );
       // Only update if still on same key
       if (_key(_currentPlatformId, _currentSearch) == key) {
@@ -142,6 +214,11 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         limit: _pageSize,
         platformId: _currentPlatformId,
         search: _currentSearch,
+        genres: _activeFilters.genres,
+        regions: _activeFilters.regions,
+        languages: _activeFilters.languages,
+        collections: _activeFilters.collections,
+        statuses: _activeFilters.statuses,
       );
       final merged = [...state.games, ...result.games];
       _cache[key] = merged;
@@ -171,4 +248,12 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
 final paginatedGamesProvider =
     StateNotifierProvider<PaginatedGamesNotifier, PaginatedGamesState>((ref) {
   return PaginatedGamesNotifier(ref);
+});
+
+final activeFiltersProvider = StateProvider<ActiveFilters>((ref) => const ActiveFilters());
+
+final recentlyPlayedProvider = FutureProvider<List<Game>>((ref) async {
+  final service = ref.watch(rommServiceProvider);
+  if (service == null) return [];
+  return service.getRecentlyPlayed(limit: 15);
 });

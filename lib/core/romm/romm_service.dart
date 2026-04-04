@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -115,6 +116,19 @@ class RommService {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getCollections() async {
+    try {
+      final response = await _dio.get('/api/collections', options: _authOptions);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data is List ? response.data : [];
+        return data.map((e) => e as Map<String, dynamic>).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   String? resolveCoverUrl(Game game) {
     final host = _normalizeBaseUrl(config.baseUrl);
     String? path = game.pathCoverLarge ?? game.pathCoverSmall;
@@ -141,11 +155,45 @@ class RommService {
     return _fetchPaginatedGames(params);
   }
 
+  Future<List<Game>> getRecentlyPlayed({int limit = 15}) async {
+    try {
+      final params = <String, dynamic>{
+        'limit': limit,
+        'order_by': 'last_played',
+        'order_dir': 'desc',
+        'last_played': true,
+        'with_char_index': false,
+        'with_filter_values': false,
+      };
+      final response = await _dio.get(
+        '/api/roms',
+        queryParameters: params,
+        options: _authOptions,
+      );
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final List<dynamic> items = data is Map ? (data['items'] ?? []) : (data is List ? data : []);
+        return items.map((e) => Game.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<({List<Game> games, int total})> getGamesPage({
     int offset = 0,
     int limit = 50,
     String? platformId,
     String? search,
+    List<String> genres = const [],
+    List<String> regions = const [],
+    List<String> languages = const [],
+    List<String> collections = const [],
+    List<String> statuses = const [],
+    bool? lastPlayed,
+    bool withCharIndex = false,
+    bool withFilterValues = false,
   }) async {
     final params = <String, dynamic>{
       'limit': limit,
@@ -153,8 +201,19 @@ class RommService {
     };
     params['order_by'] = 'name';
     params['order_dir'] = 'asc';
+    params['with_char_index'] = withCharIndex;
+    params['with_filter_values'] = withFilterValues;
+    if (lastPlayed != null) params['last_played'] = lastPlayed;
     if (platformId != null) params['platform_ids'] = [int.parse(platformId)];
     if (search != null && search.isNotEmpty) params['search_term'] = search;
+    if (genres.isNotEmpty) params['genres'] = genres;
+    if (regions.isNotEmpty) params['regions'] = regions;
+    if (languages.isNotEmpty) params['languages'] = languages;
+    if (collections.isNotEmpty) params['collection_id'] = int.tryParse(collections.first);
+    if (statuses.isNotEmpty) {
+      params['statuses'] = statuses;
+      params['statuses_logic'] = 'any';
+    }
 
     final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
     if (response.statusCode == 200) {
@@ -199,6 +258,53 @@ class RommService {
     } while (allGames.length < total && offset < total);
 
     return allGames;
+  }
+
+  Future<Game?> getRandomGame() async {
+    try {
+      // Get total count with required params
+      final countResponse = await _dio.get(
+        '/api/roms',
+        queryParameters: {
+          'limit': 1,
+          'offset': 0,
+          'order_by': 'name',
+          'order_dir': 'asc',
+          'with_char_index': false,
+          'with_filter_values': false,
+        },
+        options: _authOptions,
+      );
+      if (countResponse.statusCode != 200) return null;
+      final data = countResponse.data;
+      final total = (data is Map ? data['total'] : null) as int? ?? 0;
+      if (total == 0) return null;
+
+      // Pick truly random offset
+      final randomOffset = Random().nextInt(total);
+
+      // Fetch that single game
+      final response = await _dio.get(
+        '/api/roms',
+        queryParameters: {
+          'limit': 1,
+          'offset': randomOffset,
+          'order_by': 'name',
+          'order_dir': 'asc',
+          'with_char_index': false,
+          'with_filter_values': false,
+        },
+        options: _authOptions,
+      );
+      if (response.statusCode != 200) return null;
+      final responseData = response.data;
+      final items = (responseData is Map ? responseData['items'] : null) as List<dynamic>? ?? [];
+      if (items.isEmpty) return null;
+      return Game.fromJson(items.first as Map<String, dynamic>);
+    } catch (e) {
+      debugPrint('Error getting random game: $e');
+      return null;
+    }
   }
 
   Future<List<SaveFile>> getSaves(String gameId) async {
