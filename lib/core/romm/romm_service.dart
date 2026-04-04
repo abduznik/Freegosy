@@ -9,6 +9,7 @@ import 'romm_models.dart';
 class RommService {
   final RomMConfig config;
   final Dio _dio;
+  Options _authOptions;
 
   static String _normalizeBaseUrl(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
@@ -18,13 +19,56 @@ class RommService {
           baseUrl: _normalizeBaseUrl(config.baseUrl),
           connectTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(minutes: 2),
-        )) {
+        )),
+        _authOptions = _computeAuthOptions(config) {
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
         // Check for 401 with API Key
         if (e.response?.statusCode == 401 && config.apiKey.isNotEmpty) {
           throw Exception('Invalid API key. Please check your token in RomM Settings → Client API Tokens.');
+        }
+
+        // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related
+        final statusCode = e.response?.statusCode;
+        if (statusCode == 401 || (statusCode == 500 && e.requestOptions.path != '/api/token')) {
+          try {
+            // Re-fetch token using stored credentials
+            final prefs = await SharedPreferences.getInstance();
+            final username = prefs.getString('romm_username') ?? config.username;
+            final password = prefs.getString('romm_password') ?? config.password;
+
+            if (username.isNotEmpty && password.isNotEmpty) {
+              final tokenResponse = await _dio.post(
+                '/api/token',
+                data: {
+                  'username': username,
+                  'password': password,
+                  'grant_type': 'password',
+                },
+                options: Options(
+                  contentType: 'application/x-www-form-urlencoded',
+                  validateStatus: (_) => true,
+                ),
+              );
+
+              if (tokenResponse.statusCode == 200) {
+                final newToken = tokenResponse.data['access_token']?.toString() ?? '';
+                if (newToken.isNotEmpty) {
+                  // Save new token
+                  await prefs.setString('rommAuthToken', newToken);
+                  // Update auth options
+                  _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
+                  // Retry original request
+                  final retryResponse = await _dio.fetch(e.requestOptions
+                    ..headers['Authorization'] = 'Bearer $newToken');
+                  return handler.resolve(retryResponse);
+                }
+              }
+            }
+          } catch (reAuthErr) {
+            debugPrint('[RomM] Silent re-auth failed: $reAuthErr');
+          }
         }
 
         // If the server rejects the Bearer token with 403, retry once with Basic auth.
@@ -55,7 +99,7 @@ class RommService {
 
   /// Returns the appropriate auth Options for each request.
   /// Uses Bearer token if available, falls back to Basic auth.
-  Options get _authOptions {
+  static Options _computeAuthOptions(RomMConfig config) {
     // Check for API Key first
     if (config.apiKey.isNotEmpty) {
       return Options(headers: {'Authorization': 'Bearer ${config.apiKey}'});
@@ -85,7 +129,6 @@ class RommService {
         'username': username,
         'password': password,
         'grant_type': 'password',
-        'scope': 'me.read me.write platforms.read roms.read assets.read assets.write roms.user.read roms.user.write',
       },
       options: Options(contentType: 'application/x-www-form-urlencoded'),
     );
@@ -96,6 +139,35 @@ class RommService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rommAuthToken', token);
     return token;
+  }
+
+  Future<void> refreshToken() async {
+    // Don't refresh if API key is already configured - it takes priority
+    if (config.apiKey.isNotEmpty) {
+      debugPrint('[RomM] refreshToken: skipping - API key already set');
+      return;
+    }
+    try {
+      final username = config.username;
+      final password = config.password;
+      if (username.isEmpty || password.isEmpty) {
+        return;
+      }
+      final newToken = await fetchToken(config.baseUrl, username, password);
+      _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
+    } catch (e) {
+      // Silence errors
+    }
+  }
+
+  Future<void> _ensureBearerToken() async {
+    // API key is already a valid Bearer token - no need to refresh
+    if (config.apiKey.isNotEmpty) return;
+
+    final authHeader = _authOptions.headers?['Authorization']?.toString() ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      await refreshToken();
+    }
   }
 
   Future<List<Platform>> getPlatforms() async {
@@ -504,6 +576,41 @@ class RommService {
     } catch (e) {
       debugPrint("ERROR in downloadSave: $e");
       return null;
+    }
+  }
+
+  Future<bool> updateRomProps(
+    String romId, {
+    bool? backlogged,
+    bool? nowPlaying,
+    int? rating,
+    String? status,
+    int? completion,
+  }) async {
+    try {
+      await _ensureBearerToken(); // ensure we have Bearer token
+      final body = <String, dynamic>{};
+      if (backlogged != null) body['backlogged'] = backlogged;
+      if (nowPlaying != null) body['now_playing'] = nowPlaying;
+      if (rating != null) body['rating'] = rating;
+      if (status != null) body['status'] = status;
+      if (completion != null) body['completion'] = completion;
+
+      final response = await _dio.put(
+        '/api/roms/$romId/props',
+        data: jsonEncode(body),
+        options: Options(
+          headers: {
+            'Authorization': _authOptions.headers?['Authorization'],
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      return false;
     }
   }
 }

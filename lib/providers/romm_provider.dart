@@ -89,7 +89,12 @@ final rommServiceProvider = Provider<RommService?>((ref) {
 
   if (config != null && directoryService != null) {
     try {
-      return RommService(config);
+      final service = RommService(config);
+      // Refresh token on startup to ensure latest scopes
+      if (config.username.isNotEmpty && config.password.isNotEmpty) {
+        service.refreshToken();
+      }
+      return service;
     } catch (e) {
       return null;
     }

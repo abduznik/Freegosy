@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/romm/romm_service.dart';
+import '../../core/error/error_handler.dart';
 
-class GameDetailScreen extends StatelessWidget {
+class GameDetailScreen extends StatefulWidget {
   final Game game;
   final String rommBaseUrl;
   final bool isDownloaded;
@@ -11,6 +13,7 @@ class GameDetailScreen extends StatelessWidget {
   final VoidCallback onPushSaves;
   final VoidCallback onPullSaves;
   final VoidCallback onDelete;
+  final RommService? rommService;
 
   const GameDetailScreen({
     super.key,
@@ -22,7 +25,51 @@ class GameDetailScreen extends StatelessWidget {
     required this.onPushSaves,
     required this.onPullSaves,
     required this.onDelete,
+    this.rommService,
   });
+
+  @override
+  State<GameDetailScreen> createState() => _GameDetailScreenState();
+}
+
+class _GameDetailScreenState extends State<GameDetailScreen> {
+  late bool _backlogged;
+  late bool _nowPlaying;
+  late int _rating;
+  late String? _status;
+  late int _completion;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _backlogged = widget.game.backlogged;
+    _nowPlaying = widget.game.nowPlaying;
+    _rating = widget.game.userRating;
+    _status = widget.game.status;
+    _completion = widget.game.completion;
+  }
+
+  Future<void> _saveProps(BuildContext context) async {
+    if (widget.rommService == null) return;
+    setState(() => _isSaving = true);
+    final success = await widget.rommService!.updateRomProps(
+      widget.game.id,
+      backlogged: _backlogged,
+      nowPlaying: _nowPlaying,
+      rating: _rating,
+      status: _status,
+      completion: _completion,
+    );
+    setState(() => _isSaving = false);
+    if (context.mounted) {
+      if (success) {
+        ErrorHandler.showSuccess(context, 'Saved', message: 'Game status updated.');
+      } else {
+        ErrorHandler.showException(context, Exception('Failed to update'), contextLabel: 'Update Status');
+      }
+    }
+  }
 
   void _showScreenshotFullscreen(BuildContext context, String imageUrl) {
     showDialog(
@@ -59,9 +106,9 @@ class GameDetailScreen extends StatelessWidget {
   String _normalizeUrl(String? path) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('http')) return path;
-    final base = rommBaseUrl.endsWith('/')
-        ? rommBaseUrl.substring(0, rommBaseUrl.length - 1)
-        : rommBaseUrl;
+    final base = widget.rommBaseUrl.endsWith('/')
+        ? widget.rommBaseUrl.substring(0, widget.rommBaseUrl.length - 1)
+        : widget.rommBaseUrl;
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     return '$base$normalizedPath';
   }
@@ -73,10 +120,10 @@ class GameDetailScreen extends StatelessWidget {
     final headerHeight = size.height * 0.4;
 
     String? backgroundUrl;
-    if (game.screenshotUrl != null && game.screenshotUrl!.isNotEmpty) {
-      backgroundUrl = _normalizeUrl(game.screenshotUrl);
-    } else if (game.mergedScreenshots.isNotEmpty) {
-      backgroundUrl = _normalizeUrl(game.mergedScreenshots.first);
+    if (widget.game.screenshotUrl != null && widget.game.screenshotUrl!.isNotEmpty) {
+      backgroundUrl = _normalizeUrl(widget.game.screenshotUrl);
+    } else if (widget.game.mergedScreenshots.isNotEmpty) {
+      backgroundUrl = _normalizeUrl(widget.game.mergedScreenshots.first);
     }
 
     return Scaffold(
@@ -140,7 +187,7 @@ class GameDetailScreen extends StatelessWidget {
                       children: [
                         // Cover Image
                         Hero(
-                          tag: 'game_cover_${game.id}',
+                          tag: 'game_cover_${widget.game.id}',
                           child: Container(
                             width: 130,
                             height: 180,
@@ -157,7 +204,7 @@ class GameDetailScreen extends StatelessWidget {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(
-                                imageUrl: _normalizeUrl(game.pathCoverLarge),
+                                imageUrl: _normalizeUrl(widget.game.pathCoverLarge),
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(color: Colors.grey[800]),
                                 errorWidget: (context, url, error) => const Icon(Icons.image_not_supported),
@@ -173,7 +220,7 @@ class GameDetailScreen extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                game.name,
+                                widget.game.name,
                                 style: theme.textTheme.headlineSmall?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -181,9 +228,9 @@ class GameDetailScreen extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              if (game.platformDisplayName != null)
+                              if (widget.game.platformDisplayName != null)
                                 Text(
-                                  game.platformDisplayName!,
+                                  widget.game.platformDisplayName!,
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     color: Colors.white70,
                                   ),
@@ -207,32 +254,32 @@ class GameDetailScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      if (!isDownloaded)
+                      if (!widget.isDownloaded)
                         _ActionButton(
                           icon: Icons.download,
                           label: 'Download',
-                          onPressed: onDownload,
+                          onPressed: widget.onDownload,
                         )
                       else ...[
                         _ActionButton(
                           icon: Icons.play_arrow,
                           label: 'Play',
-                          onPressed: onLaunch,
+                          onPressed: widget.onLaunch,
                         ),
                         _ActionButton(
                           icon: Icons.cloud_upload,
                           label: 'Push',
-                          onPressed: onPushSaves,
+                          onPressed: widget.onPushSaves,
                         ),
                         _ActionButton(
                           icon: Icons.cloud_download,
                           label: 'Pull',
-                          onPressed: onPullSaves,
+                          onPressed: widget.onPullSaves,
                         ),
                         _ActionButton(
                           icon: Icons.delete,
                           label: 'Delete',
-                          onPressed: onDelete,
+                          onPressed: widget.onDelete,
                           color: Colors.red,
                         ),
                       ],
@@ -246,23 +293,23 @@ class GameDetailScreen extends StatelessWidget {
                     runSpacing: 8,
                     children: [
                       // Genres (first 2)
-                      ...game.genres.take(2).map((g) => _MetadataChip(label: g)),
+                      ...widget.game.genres.take(2).map((g) => _MetadataChip(label: g)),
                       // Player Count
-                      if (game.playerCount != null && game.playerCount!.isNotEmpty)
+                      if (widget.game.playerCount != null && widget.game.playerCount!.isNotEmpty)
                         _MetadataChip(
-                          label: game.playerCount!,
+                          label: widget.game.playerCount!,
                           icon: Icons.people_outline,
                         ),
                       // Average Rating
-                      if (game.averageRating != null)
+                      if (widget.game.averageRating != null)
                         _MetadataChip(
-                          label: '${game.averageRating!.toStringAsFixed(0)}/100',
+                          label: '${widget.game.averageRating!.toStringAsFixed(0)}/100',
                           icon: Icons.star_outline,
                         ),
                       // Release Year
-                      if (game.firstReleaseDate != null)
+                      if (widget.game.firstReleaseDate != null)
                         _MetadataChip(
-                          label: DateTime.fromMillisecondsSinceEpoch(game.firstReleaseDate!).year.toString(),
+                          label: DateTime.fromMillisecondsSinceEpoch(widget.game.firstReleaseDate!).year.toString(),
                           icon: Icons.calendar_today_outlined,
                         ),
                     ],
@@ -279,7 +326,7 @@ class GameDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    game.summary ?? 'No description available',
+                    widget.game.summary ?? 'No description available',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white70,
                       height: 1.5,
@@ -296,11 +343,11 @@ class GameDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _DetailsGrid(game: game),
+                  _DetailsGrid(game: widget.game),
                   const SizedBox(height: 24),
 
                   // SECTION 6 - Screenshots
-                  if (game.mergedScreenshots.isNotEmpty) ...[
+                  if (widget.game.mergedScreenshots.isNotEmpty) ...[
                     Text(
                       'Screenshots',
                       style: theme.textTheme.titleLarge?.copyWith(
@@ -313,10 +360,10 @@ class GameDetailScreen extends StatelessWidget {
                       height: 120,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        itemCount: game.mergedScreenshots.length,
+                        itemCount: widget.game.mergedScreenshots.length,
                         separatorBuilder: (context, index) => const SizedBox(width: 12),
                         itemBuilder: (context, index) {
-                          final imageUrl = _normalizeUrl(game.mergedScreenshots[index]);
+                          final imageUrl = _normalizeUrl(widget.game.mergedScreenshots[index]);
                           return GestureDetector(
                             onTap: () => _showScreenshotFullscreen(context, imageUrl),
                             child: ClipRRect(
@@ -336,6 +383,107 @@ class GameDetailScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                   ],
+
+                  // SECTION 7 - Personal
+                  const SizedBox(height: 8),
+                  const Divider(color: Colors.white12),
+                  const SizedBox(height: 8),
+                  Text('Personal', style: theme.textTheme.titleLarge?.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+
+                  // Status dropdown
+                  Row(
+                    children: [
+                      const Text('Status', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                      const Spacer(),
+                      DropdownButton<String>(
+                        value: _status,
+                        dropdownColor: Colors.grey[900],
+                        style: const TextStyle(color: Colors.white),
+                        hint: const Text('Not set', style: TextStyle(color: Colors.white54)),
+                        underline: const SizedBox(),
+                        items: const [
+                          DropdownMenuItem(value: 'never_played', child: Text('Never Played')),
+                          DropdownMenuItem(value: 'incomplete', child: Text('Incomplete')),
+                          DropdownMenuItem(value: 'finished', child: Text('Finished')),
+                          DropdownMenuItem(value: 'fully_completed', child: Text('100% Completed')),
+                        ],
+                        onChanged: (val) => setState(() => _status = val),
+                      ),
+                    ],
+                  ),
+
+                  // Rating stars
+                  Row(
+                    children: [
+                      const Text('Rating', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                      const Spacer(),
+                      Row(
+                        children: List.generate(5, (i) => GestureDetector(
+                          onTap: () => setState(() => _rating = i + 1),
+                          child: Icon(
+                            i < _rating ? Icons.star : Icons.star_border,
+                            color: Colors.amber,
+                            size: 28,
+                          ),
+                        )),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Completion slider
+                  Row(
+                    children: [
+                      const Text('Completion', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                      const Spacer(),
+                      Text('$_completion%', style: const TextStyle(color: Colors.white)),
+                    ],
+                  ),
+                  Slider(
+                    value: _completion.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    label: '$_completion%',
+                    onChanged: (val) => setState(() => _completion = val.toInt()),
+                  ),
+
+                  // Toggles row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SwitchListTile(
+                          title: const Text('Backlog', style: TextStyle(fontSize: 13)),
+                          value: _backlogged,
+                          onChanged: (val) => setState(() => _backlogged = val),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                      Expanded(
+                        child: SwitchListTile(
+                          title: const Text('Now Playing', style: TextStyle(fontSize: 13)),
+                          value: _nowPlaying,
+                          onChanged: (val) => setState(() => _nowPlaying = val),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Save button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : () => _saveProps(context),
+                      child: _isSaving
+                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Save'),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

@@ -23,7 +23,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/app.dart` — MaterialApp setup, theme, initial route, navigation shell.
 
 ### Core — RomM
-- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getAllGames(), getGamesPage(offset, limit, platformId, search), getSaves(), uploadSave(), getLatestSave(), downloadSave(), pruneOldSaves(), getRecentlyPlayed(), getRandomGame(). getGamesPage() uses platform_ids (array), order_by, order_dir, statuses (list) params.
+- `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getAllGames(), getGamesPage(offset, limit, platformId, search), getSaves(), uploadSave(), getLatestSave(), downloadSave(), pruneOldSaves(), getRecentlyPlayed(), getRandomGame(), updateRomProps(), refreshToken(), fetchToken(). Includes silent re-authentication interceptor.
 - `lib/core/romm/romm_models.dart` — Data models: Game, Platform (with fsSlug, displayName, gamesCount and flexible parsing), SaveFile, RomMConfig.
 
 ### Core — Save Sync
@@ -79,7 +79,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/screens/library_actions.dart` — LibraryActionsMixin containing shared operation logic (download, launch, sync, delete). Integrated with ErrorHandler and MultiDiscPicker.
 - `lib/ui/screens/settings_screen.dart` — Global settings UI.
 - `lib/ui/screens/settings_emulators_section.dart` — Emulator management UI.
-- `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions.
+- `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions. Now a StatefulWidget for managing personal game properties (rating, status, completion).
 
 ### UI — Widgets
 - `lib/ui/widgets/game_card.dart` — Grid item for games.
