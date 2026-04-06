@@ -2,6 +2,14 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
+# Support the Project
+
+Freegosy is a solo passion project — built and maintained in my spare time, with AI tools I pay for out of pocket. If it saves you time or makes your RomM setup better, a small contribution genuinely helps keep it going.
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=github)](https://github.com/sponsors/abduznik)
+
+No pressure at all — the app is and will always be free.
+
 ## What's New in 0.2.1
 
 ### Full macOS Support
