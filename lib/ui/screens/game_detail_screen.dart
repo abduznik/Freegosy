@@ -71,7 +71,8 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     }
   }
 
-  void _showScreenshotFullscreen(BuildContext context, String imageUrl) {
+  void _showScreenshotFullscreen(BuildContext context, int initialIndex, List<String> imageUrls) {
+    final PageController controller = PageController(initialPage: initialIndex);
     showDialog(
       context: context,
       barrierColor: Colors.black87,
@@ -84,17 +85,23 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
             onTap: () {}, // prevent tap from closing when tapping image itself
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                errorWidget: (context, url, error) => const Icon(
-                  Icons.image_not_supported,
-                  color: Colors.white,
-                  size: 48,
-                ),
+              child: PageView.builder(
+                controller: controller,
+                itemCount: imageUrls.length,
+                itemBuilder: (context, index) {
+                  return CachedNetworkImage(
+                    imageUrl: imageUrls[index],
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    errorWidget: (context, url, error) => const Icon(
+                      Icons.image_not_supported,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -365,7 +372,12 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                         itemBuilder: (context, index) {
                           final imageUrl = _normalizeUrl(widget.game.mergedScreenshots[index]);
                           return GestureDetector(
-                            onTap: () => _showScreenshotFullscreen(context, imageUrl),
+                            onTap: () {
+                              final allUrls = widget.game.mergedScreenshots
+                                  .map((path) => _normalizeUrl(path))
+                                  .toList();
+                              _showScreenshotFullscreen(context, index, allUrls);
+                            },
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(
