@@ -2,6 +2,17 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
+![Main Menu](screenshots/screenshot1.png)
+*The main menu showcasing the intuitive game card interface.*
+
+![Game Details](screenshots/screenshot2.png)
+*Detailed game view with metadata, screenshots, and quick actions.*
+
+## Background & Vision
+Freegosy (Free as in "Free for all OS") is the successor to [**Wingosy**](https://github.com/abduznik/Wingosy-Launcher). While Wingosy was focused on Windows, Freegosy is built from the ground up using **Flutter** to provide a unified frontend for all major platforms. 
+
+The original inspiration for these projects was [**Argosy**](https://github.com/rommapp/argosy-launcher), the native Android app for RomM built in Kotlin. Freegosy aims to bring that same native experience to desktop and beyond, ensuring a seamless, ease-of-use interface for accessing your RomM collection on any device.
+
 # Support the Project
 
 Freegosy is a solo passion project — built and maintained in my spare time, with AI tools I pay for out of pocket. If it saves you time or makes your RomM setup better, a small contribution genuinely helps keep it going.
@@ -10,85 +21,39 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## What's New in 0.2.1
+## Current Features (v0.2.x)
 
-### Full macOS Support
-- Native support for macOS (ARM64 and Intel)
-- Automated `.app` bundle detection and stable launching via the `open` command
-- Native `.dmg` and `.tar.xz` extraction support
-- Platform-specific path resolution for Application Support and User directories
-- Fully enabled cross-platform Save Sync for macOS users
+- **Native Multi-Platform Support**: Robust implementation for **macOS** (ARM64/Intel) and **Windows**, with deep integration for local file systems.
+- **RomM Integration**: 
+    - Browse and filter your entire library with server-side pagination (50 games at a time).
+    - Download ROMs directly via HTTP with real-time progress tracking.
+    - **New**: Personal game properties support (rating, status, completion).
+- **Advanced Emulator Management**: 
+    - Download, update, and uninstall emulators directly from Settings.
+    - Automatic extraction of `.zip`, `.7z`, `.dmg`, `.tar.gz`, and `.tar.xz`.
+    - Smart `.app` bundle detection and canonical renaming on macOS.
+- **Save Sync**: Bidirectional local-to-cloud save synchronization with RomM, featuring cross-platform path resolution and automated backups.
+- **Refined UI/UX**:
+    - **Game Cards**: Visual-first interface with detailed metadata and screenshots.
+    - **Recently Played**: Quick access to your latest games.
+    - **Multi-Disc Support**: Integrated picker for games with multiple files.
+    - **Centralized Error Handling**: Improved stability with user-friendly notifications.
 
-### Enhanced Emulator Management
-- **One-Tap Uninstall**: New red trash bin button in Settings to completely remove an emulator and its local files
-- **Easy Updates**: New blue update button to fetch the latest release from GitHub/Direct links
-- **Smart Filtering**: The Emulators list in Settings now only shows emulators supported on your current OS (Windows/macOS/Linux)
+## Roadmap: Version 0.3.0 (Coming Soon)
 
-### UI & UX Improvements
-- **Clean Filter Bar**: Platforms with zero games are now automatically filtered out of the main library view
-- **Automatic Renaming**: Extracted versioned emulators (e.g. `PCSX2-v2.6.3.app`) are automatically renamed to their canonical names (`PCSX2.app`) for stable detection
-- **Recursive Discovery**: Deep search for `.app` bundles allows Freegosy to find emulators even when they are extracted into nested folders
-- **Flexible RomM Integration**: Added support for multiple game-count field names (`rom_count`, `roms_count`, `games_count`) for better compatibility with different RomM versions
+- **BIOS Management**: Ability to fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
+- **Linux Support (Beta)**: Starting with a skeleton/shell for **Steam Deck (EmuDeck)** integration.
+- **Enhanced macOS Support**: Further refinements to the native implementation and bug fixes.
+- **Save Sync Improvements**: Polishing the push/pull logic for edge cases.
+- **Better Screenshot Handling**: Improved performance and display of game gallery images.
+- **API v4.8.2 Readiness**: Shells are already in place for updating game data like completion status and progression bars; full functionality will be unlocked with the RomM 4.8.2 API release.
 
-## What's New in 0.1.2
+## Calling All Testers!
+I am currently searching for testers on **macOS** and **Windows** to help polish the experience. 
 
-### Paginated Library Loading
-- Library now loads 50 games at a time instead of fetching everything at once
-- Scroll to the bottom to automatically load more games
-- Supports libraries with 2000+ games without performance issues
-
-### Server-Side Platform Filtering
-- Switching platforms now fetches only that platform's games from the server
-- Fixed RomM 4.x API compatibility — correctly uses `platform_ids` parameter
-- Platform results are cached in memory for instant switching on revisit
-
-## Currently Working
-
-- **RomM Integration**: Browse and filter your entire RomM library by platform or search
-- **ROM Downloads**: Download games via HTTP from your RomM server with progress tracking
-- **Archive Extraction**: Automatic extraction of .zip, .7z, .dmg, .tar.gz, and .tar.xz archives
-- **Game Launching**: Launch games directly from the app using:
-  - RetroArch (All major retro platforms)
-  - Dolphin (GameCube & Wii)
-  - Eden (Nintendo Switch)
-  - RPCS3 (PlayStation 3)
-  - PCSX2 (PlayStation 2)
-  - DuckStation (PlayStation 1)
-  - Azahar (Nintendo 3DS)
-  - Cemu (Wii U)
-  - Xemu (Xbox)
-  - Xenia Canary (Xbox 360)
-  - Flycast (Dreamcast, Naomi, Atomiswave)
-  - melonDS (Nintendo DS)
-  - PPSSPP (PlayStation Portable)
-  - mGBA (Game Boy Advance/Color/Game Boy)
-  - MAME (Arcade)
-  - Windows Native (PC games)
-- **Emulator Management**: Download, update, and uninstall emulators directly from Settings
-- **Save Sync**: Bidirectional save synchronization with RomM cloud for almost all supported emulators including cross-platform path resolution.
-
-## Roadmap
-
-### Near Term
-- **Linux support** — Enhancing native binary detection and system path resolution
-- **Android support** — Deep links to app stores for Play Store/Epic Games/etc.
-- **Recently played / play time tracking** — See your gaming stats at a glance
-
-### End-Game Features
-- Custom ROM platform tagging
-- Mobile companion app for on-the-go library browsing
-
-### Cross-Platform Vision
-Freegosy is designed as a truly cross-platform experience. The codebase is structured to support Windows, macOS, Linux, and Android with platform-specific code isolated behind strategy patterns and service abstractions.
-
-## Status
-
-Actively under development. Release 0.2.1 brings full macOS support and major UI management improvements.
+- **Future Plans**: Steam Deck/Linux support is next, followed by **Android** for a truly unified app.
+- **Get Involved**: If you're interested in testing an early release, reach out via GitHub or join the community discussions.
 
 ## About RomM
 
 Freegosy is built to complement [RomM](https://github.com/rommapp/romm), a modern ROM manager. It connects to your RomM instance to provide a lightweight, portable way to access and play your games.
-
-## Contributing
-
-Check out `agent.md` for the full file map, coding rules, and contracts for adding new emulators, save strategies, or features.
