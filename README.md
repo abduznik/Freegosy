@@ -2,11 +2,10 @@
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
+[**Watch the Feature Walkthrough on YouTube**](https://youtu.be/SE5BoFoA700)
+
 ![Main Menu](screenshots/screenshot1.png)
 *The main menu showcasing the intuitive game card interface.*
-
-[![Watch the Freegosy Demo](https://img.youtube.com/vi/SE5BoFoA700/0.jpg)](https://youtu.be/SE5BoFoA700)
-*Click above to watch the Freegosy feature walkthrough.*
 
 ![Game Details](screenshots/screenshot2.png)
 *Detailed game view with metadata, screenshots, and quick actions.*
