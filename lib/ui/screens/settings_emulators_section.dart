@@ -31,8 +31,33 @@ Widget buildEmulatorsSection(
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text('Emulators',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Emulators',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync),
+            label: const Text('Sync BIOS from RomM'),
+            onPressed: () async {
+              final firmwareService = await ref.read(firmwareServiceProvider.future);
+              if (firmwareService != null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Syncing BIOS from RomM...')),
+                  );
+                }
+                await firmwareService.syncAllFirmware();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('BIOS sync complete.')),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
       const SizedBox(height: 16),
       if (!emulatorsLoaded)
         const Center(child: CircularProgressIndicator())
