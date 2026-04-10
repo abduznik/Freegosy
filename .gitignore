@@ -46,3 +46,10 @@ app.*.map.json
 .aider*
 Documents/
 *.dmg
+
+# gemini-cli settings
+.gemini/
+
+# GitHub App credentials
+gha-creds-*.json
+

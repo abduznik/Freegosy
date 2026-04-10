@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
+import '../widgets/screenshot_gallery_dialog.dart';
 
 class GameDetailScreen extends StatefulWidget {
   final Game game;
@@ -71,34 +72,13 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     }
   }
 
-  void _showScreenshotFullscreen(BuildContext context, String imageUrl) {
+  void _showScreenshotFullscreen(BuildContext context, int initialIndex, List<String> imageUrls) {
     showDialog(
       context: context,
-      barrierColor: Colors.black87,
-      builder: (context) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(16),
-          child: GestureDetector(
-            onTap: () {}, // prevent tap from closing when tapping image itself
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                errorWidget: (context, url, error) => const Icon(
-                  Icons.image_not_supported,
-                  color: Colors.white,
-                  size: 48,
-                ),
-              ),
-            ),
-          ),
-        ),
+      useRootNavigator: true,
+      builder: (context) => ScreenshotGalleryDialog(
+        initialIndex: initialIndex,
+        imageUrls: imageUrls,
       ),
     );
   }
@@ -365,7 +345,12 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                         itemBuilder: (context, index) {
                           final imageUrl = _normalizeUrl(widget.game.mergedScreenshots[index]);
                           return GestureDetector(
-                            onTap: () => _showScreenshotFullscreen(context, imageUrl),
+                            onTap: () {
+                              final allUrls = widget.game.mergedScreenshots
+                                  .map((path) => _normalizeUrl(path))
+                                  .toList();
+                              _showScreenshotFullscreen(context, index, allUrls);
+                            },
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(

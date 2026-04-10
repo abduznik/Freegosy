@@ -87,6 +87,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/widgets/platform_filter_bar.dart` — Horizontal platform selector.
 - `lib/ui/widgets/windows_game_config_dialog.dart` — Manual path override UI.
 - `lib/ui/widgets/multi_disc_picker.dart` — Bottom sheet for selecting discs in multi-file games.
+- `lib/ui/widgets/screenshot_gallery_dialog.dart` — Fullscreen swipeable screenshot gallery with zoom support.
 
 ## Key Contracts
 
