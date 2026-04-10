@@ -63,6 +63,15 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as String);
 
   @override
+  _i5.Future<void> refreshToken() =>
+      (super.noSuchMethod(
+            Invocation.method(#refreshToken, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   _i5.Future<List<_i2.Platform>> getPlatforms() =>
       (super.noSuchMethod(
             Invocation.method(#getPlatforms, []),
@@ -147,6 +156,14 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as _i5.Future<({List<_i2.Game> games, int total})>);
 
   @override
+  _i5.Future<_i2.Game?> getRandomGame() =>
+      (super.noSuchMethod(
+            Invocation.method(#getRandomGame, []),
+            returnValue: _i5.Future<_i2.Game?>.value(),
+          )
+          as _i5.Future<_i2.Game?>);
+
+  @override
   _i5.Future<List<_i2.SaveFile>> getSaves(String? gameId) =>
       (super.noSuchMethod(
             Invocation.method(#getSaves, [gameId]),
@@ -215,6 +232,58 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
             returnValue: _i5.Future<_i7.Uint8List?>.value(),
           )
           as _i5.Future<_i7.Uint8List?>);
+
+  @override
+  _i5.Future<List<_i2.Firmware>> getFirmware({String? platformId}) =>
+      (super.noSuchMethod(
+            Invocation.method(#getFirmware, [], {#platformId: platformId}),
+            returnValue: _i5.Future<List<_i2.Firmware>>.value(<_i2.Firmware>[]),
+          )
+          as _i5.Future<List<_i2.Firmware>>);
+
+  @override
+  String getFirmwareDownloadUrl(_i2.Firmware? firmware) =>
+      (super.noSuchMethod(
+            Invocation.method(#getFirmwareDownloadUrl, [firmware]),
+            returnValue: _i4.dummyValue<String>(
+              this,
+              Invocation.method(#getFirmwareDownloadUrl, [firmware]),
+            ),
+          )
+          as String);
+
+  @override
+  _i5.Future<_i7.Uint8List?> downloadFirmware(_i2.Firmware? firmware) =>
+      (super.noSuchMethod(
+            Invocation.method(#downloadFirmware, [firmware]),
+            returnValue: _i5.Future<_i7.Uint8List?>.value(),
+          )
+          as _i5.Future<_i7.Uint8List?>);
+
+  @override
+  _i5.Future<bool> updateRomProps(
+    String? romId, {
+    bool? backlogged,
+    bool? nowPlaying,
+    int? rating,
+    String? status,
+    int? completion,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #updateRomProps,
+              [romId],
+              {
+                #backlogged: backlogged,
+                #nowPlaying: nowPlaying,
+                #rating: rating,
+                #status: status,
+                #completion: completion,
+              },
+            ),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
 }
 
 /// A class which mocks [DirectoryService].
@@ -333,6 +402,16 @@ class MockDirectoryService extends _i1.Mock implements _i8.DirectoryService {
           as _i5.Future<Set<String>>);
 
   @override
+  _i5.Future<Map<String, Set<String>>> getAllDownloadedFileNamesByPlatform() =>
+      (super.noSuchMethod(
+            Invocation.method(#getAllDownloadedFileNamesByPlatform, []),
+            returnValue: _i5.Future<Map<String, Set<String>>>.value(
+              <String, Set<String>>{},
+            ),
+          )
+          as _i5.Future<Map<String, Set<String>>>);
+
+  @override
   _i5.Future<String> getRomDirectory(_i2.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#getRomDirectory, [game]),
@@ -397,6 +476,19 @@ class MockDirectoryService extends _i1.Mock implements _i8.DirectoryService {
                 Invocation.method(#getEmulatorAppSupportDirectory, [
                   emulatorName,
                 ]),
+              ),
+            ),
+          )
+          as _i5.Future<String>);
+
+  @override
+  _i5.Future<String> getEmulatorBiosDirectory(String? emulatorId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmulatorBiosDirectory, [emulatorId]),
+            returnValue: _i5.Future<String>.value(
+              _i4.dummyValue<String>(
+                this,
+                Invocation.method(#getEmulatorBiosDirectory, [emulatorId]),
               ),
             ),
           )
