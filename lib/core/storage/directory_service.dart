@@ -296,22 +296,15 @@ class DirectoryService {
     throw UnsupportedError('Platform not supported for save path resolution');
   }
 
-  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
-    if (emulatorId == 'retroarch') {
-      final emuDir = await getEmulatorDirectory(emulatorId);
-      final dirPath = p.join(emuDir, 'system');
-      await _ensureDirectoryExists(dirPath);
-      return dirPath;
-    }
-
-    if (emulatorId == 'azahar' || emulatorId == 'pcsx2') {
-      return await getEmulatorAppSupportDirectory(
-          emulatorId == 'azahar' ? 'Azahar' : 'PCSX2');
-    }
-
-    final dirPath = await getEmulatorDirectory(emulatorId);
+  Future<String> getEmulatorBiosDirectory(String emulatorId) async {
+    final emuDir = await getEmulatorDirectory(emulatorId);
+    final dirPath = p.join(emuDir, 'BIOS');
     await _ensureDirectoryExists(dirPath);
     return dirPath;
+  }
+
+  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
+    return await getEmulatorBiosDirectory(emulatorId);
   }
 
   Future<void> deleteEmulator(String emulatorId) async {

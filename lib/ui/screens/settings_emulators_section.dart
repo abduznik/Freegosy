@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/strategy_registry.dart';
+import '../../core/emulator/firmware_service.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 
@@ -31,8 +32,20 @@ Widget buildEmulatorsSection(
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text('Emulators',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Emulators',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync),
+            label: const Text('Sync BIOS from RomM'),
+            onPressed: () async {
+              _syncAllBios(context, ref);
+            },
+          ),
+        ],
+      ),
       const SizedBox(height: 16),
       if (!emulatorsLoaded)
         const Center(child: CircularProgressIndicator())
@@ -77,6 +90,13 @@ Widget buildEmulatorsSection(
                       await directoryService.setEmulatorPathOverride(emulatorId, selectedDirectory);
                       setState(() {}); // Trigger parent state update
                     }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.library_books, size: 20),
+                  tooltip: 'Sync BIOS from RomM',
+                  onPressed: () async {
+                    _syncBiosForEmulator(context, ref, emulatorId, emulatorName);
                   },
                 ),
                 if (isInstalled) ...[
@@ -259,4 +279,118 @@ Widget buildConflictsSection(
       ),
     ],
   );
+}
+
+void _syncAllBios(BuildContext context, WidgetRef ref) async {
+  final firmwareService = await ref.read(firmwareServiceProvider.future);
+  if (firmwareService == null) return;
+
+  if (!context.mounted) return;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => _FirmwareProgressDialog(
+      title: 'Syncing All BIOS',
+      onSync: (onProgress) => firmwareService.syncAllFirmware(onProgress: onProgress),
+    ),
+  );
+}
+
+void _syncBiosForEmulator(BuildContext context, WidgetRef ref, String emulatorId, String emulatorName) async {
+  final firmwareService = await ref.read(firmwareServiceProvider.future);
+  if (firmwareService == null) return;
+
+  if (!context.mounted) return;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => _FirmwareProgressDialog(
+      title: 'Syncing BIOS for $emulatorName',
+      onSync: (onProgress) => firmwareService.syncFirmwareForEmulator(emulatorId, onProgress: onProgress),
+    ),
+  );
+}
+
+class _FirmwareProgressDialog extends StatefulWidget {
+  final String title;
+  final Future<void> Function(FirmwareProgressCallback onProgress) onSync;
+
+  const _FirmwareProgressDialog({
+    required this.title,
+    required this.onSync,
+  });
+
+  @override
+  State<_FirmwareProgressDialog> createState() => _FirmwareProgressDialogState();
+}
+
+class _FirmwareProgressDialogState extends State<_FirmwareProgressDialog> {
+  String _currentFile = 'Initializing...';
+  double _progress = 0;
+  String _status = '';
+  bool _isComplete = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startSync();
+  }
+
+  void _startSync() async {
+    await widget.onSync((fileName, received, total) {
+      if (mounted) {
+        setState(() {
+          _currentFile = fileName;
+          if (total > 0) {
+            _progress = received / total;
+            final mbReceived = (received / (1024 * 1024)).toStringAsFixed(1);
+            final mbTotal = (total / (1024 * 1024)).toStringAsFixed(1);
+            
+            if (total > 10 * 1024 * 1024) {
+              _status = 'Downloading large file... ($mbReceived / $mbTotal MB)';
+            } else {
+              _status = '$mbReceived / $mbTotal MB';
+            }
+          } else {
+            _progress = 0;
+            _status = 'Fetching...';
+          }
+        });
+      }
+    });
+
+    if (mounted) {
+      setState(() {
+        _isComplete = true;
+        _currentFile = 'Complete!';
+        _status = 'All BIOS files synced successfully.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_currentFile, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(value: _isComplete ? 1.0 : (_progress > 0 ? _progress : null)),
+          const SizedBox(height: 8),
+          Text(_status, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isComplete ? () => Navigator.pop(context) : null,
+          child: Text(_isComplete ? 'Close' : 'Please wait...'),
+        ),
+      ],
+    );
+  }
 }

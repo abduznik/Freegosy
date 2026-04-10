@@ -10,7 +10,17 @@ import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 
 import 'package:freegosy/core/storage/download_cache_service.dart';
 
+import 'package:freegosy/core/emulator/firmware_service.dart';
+
 final _secureStorage = const FlutterSecureStorage();
+
+final firmwareServiceProvider = FutureProvider<FirmwareService?>((ref) async {
+  final rommService = ref.watch(rommServiceProvider);
+  final directoryService = ref.watch(directoryServiceProvider).asData?.value;
+  final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
+  if (rommService == null || directoryService == null || strategyRegistry == null) return null;
+  return FirmwareService(rommService, directoryService, strategyRegistry);
+});
 
 final downloadCacheServiceProvider = Provider<DownloadCacheService>((ref) {
   return DownloadCacheService();

@@ -152,6 +152,59 @@ class Game {
   }
 }
 
+class Firmware {
+  final int id;
+  final String fileName;
+  final String? fileNameNoTags;
+  final String? fileNameNoExt;
+  final String? fileExtension;
+  final String? filePath;
+  final int fileSizeBytes;
+  final bool isVerified;
+  final String? crcHash;
+  final String? md5Hash;
+  final String? sha1Hash;
+  final bool missingFromFs;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  Firmware({
+    required this.id,
+    required this.fileName,
+    this.fileNameNoTags,
+    this.fileNameNoExt,
+    this.fileExtension,
+    this.filePath,
+    required this.fileSizeBytes,
+    this.isVerified = false,
+    this.crcHash,
+    this.md5Hash,
+    this.sha1Hash,
+    this.missingFromFs = false,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory Firmware.fromJson(Map<String, dynamic> json) {
+    return Firmware(
+      id: json['id'] as int? ?? 0,
+      fileName: json['file_name']?.toString() ?? '',
+      fileNameNoTags: json['file_name_no_tags']?.toString(),
+      fileNameNoExt: json['file_name_no_ext']?.toString(),
+      fileExtension: json['file_extension']?.toString(),
+      filePath: json['file_path']?.toString(),
+      fileSizeBytes: json['file_size_bytes'] as int? ?? 0,
+      isVerified: json['is_verified'] as bool? ?? false,
+      crcHash: json['crc_hash']?.toString(),
+      md5Hash: json['md5_hash']?.toString(),
+      sha1Hash: json['sha1_hash']?.toString(),
+      missingFromFs: json['missing_from_fs'] as bool? ?? false,
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'].toString()) : null,
+    );
+  }
+}
+
 class Platform {
   final int id;
   final String name;
@@ -159,6 +212,8 @@ class Platform {
   final String fsSlug;
   final String displayName;
   final int gamesCount;
+  final List<Firmware> firmware;
+  final int firmwareCount;
 
   Platform({
     required this.id,
@@ -167,6 +222,8 @@ class Platform {
     this.fsSlug = '',
     this.displayName = '',
     this.gamesCount = 0,
+    this.firmware = const [],
+    this.firmwareCount = 0,
   });
 
   factory Platform.fromJson(Map<String, dynamic> json) {
@@ -179,6 +236,8 @@ class Platform {
       gamesCount: (json['rom_count'] as int?) ?? 
                   (json['roms_count'] as int?) ?? 
                   (json['games_count'] as int?) ?? 0,
+      firmware: (json['firmware'] as List<dynamic>?)?.map((e) => Firmware.fromJson(e)).toList() ?? [],
+      firmwareCount: json['firmware_count'] as int? ?? 0,
     );
   }
 }

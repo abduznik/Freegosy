@@ -579,6 +579,52 @@ class RommService {
     }
   }
 
+  Future<List<Firmware>> getFirmware({String? platformId}) async {
+    final params = <String, dynamic>{};
+    if (platformId != null) {
+      params['platform_id'] = platformId;
+    }
+    final response = await _dio.get('/api/firmware', queryParameters: params, options: _authOptions);
+    if (response.statusCode == 200) {
+      final List<dynamic> items;
+      if (response.data is Map && response.data.containsKey('items')) {
+        items = response.data['items'] as List<dynamic>;
+      } else {
+        items = response.data as List<dynamic>;
+      }
+      return items.map((item) => Firmware.fromJson(item)).toList();
+    }
+    throw DioException(
+      requestOptions: response.requestOptions,
+      response: response,
+      type: DioExceptionType.badResponse,
+    );
+  }
+
+  String getFirmwareDownloadUrl(Firmware firmware) {
+    final baseUrl = _normalizeBaseUrl(config.baseUrl);
+    return '$baseUrl/api/firmware/${firmware.id}/content/${Uri.encodeComponent(firmware.fileName)}';
+  }
+
+  Future<Uint8List?> downloadFirmware(Firmware firmware, {void Function(int received, int total)? onProgress}) async {
+    try {
+      final url = getFirmwareDownloadUrl(firmware);
+      final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
+      final response = await _dio.get<List<int>>(
+        url,
+        options: opts,
+        onReceiveProgress: onProgress,
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return Uint8List.fromList(response.data!);
+      }
+      return null;
+    } catch (e) {
+      debugPrint("ERROR in downloadFirmware: $e");
+      return null;
+    }
+  }
+
   Future<bool> updateRomProps(
     String romId, {
     bool? backlogged,
