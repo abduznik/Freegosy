@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/romm/romm_models.dart';
@@ -81,24 +82,38 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
         child: Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(16),
-          child: GestureDetector(
-            onTap: () {}, // prevent tap from closing when tapping image itself
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: ScrollConfiguration(
+              behavior: _DesktopScrollBehavior(),
               child: PageView.builder(
                 controller: controller,
                 itemCount: imageUrls.length,
                 itemBuilder: (context, index) {
-                  return CachedNetworkImage(
-                    imageUrl: imageUrls[index],
-                    fit: BoxFit.contain,
-                    placeholder: (context, url) => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                    errorWidget: (context, url, error) => const Icon(
-                      Icons.image_not_supported,
-                      color: Colors.white,
-                      size: 48,
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    behavior: HitTestBehavior.opaque,
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrls[index],
+                      imageBuilder: (context, imageProvider) => Center(
+                        child: GestureDetector(
+                          onTap: () {}, // prevent tap from closing when tapping image itself
+                          child: Image(
+                            image: imageProvider,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                      placeholder: (context, url) => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                      errorWidget: (context, url, error) => const Center(
+                        child: Icon(
+                          Icons.image_not_supported,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
                     ),
                   );
                 },
@@ -616,4 +631,13 @@ class _DetailsGrid extends StatelessWidget {
       },
     );
   }
+}
+
+class _DesktopScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+  };
 }
