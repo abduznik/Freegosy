@@ -46,7 +46,7 @@ class _ScreenshotGalleryDialogState extends State<ScreenshotGalleryDialog> {
       controller.value = Matrix4.identity();
     } else {
       // Zoom in to 2x at the center
-      controller.value = Matrix4.identity()..scale(2.0);
+      controller.value = Matrix4.diagonal3Values(2.0, 2.0, 1.0);
     }
   }
 
