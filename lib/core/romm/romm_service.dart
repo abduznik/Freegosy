@@ -606,11 +606,15 @@ class RommService {
     return '$baseUrl/api/firmware/${firmware.id}/content/${Uri.encodeComponent(firmware.fileName)}';
   }
 
-  Future<Uint8List?> downloadFirmware(Firmware firmware) async {
+  Future<Uint8List?> downloadFirmware(Firmware firmware, {void Function(int received, int total)? onProgress}) async {
     try {
       final url = getFirmwareDownloadUrl(firmware);
       final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
-      final response = await _dio.get<List<int>>(url, options: opts);
+      final response = await _dio.get<List<int>>(
+        url,
+        options: opts,
+        onReceiveProgress: onProgress,
+      );
       if (response.statusCode == 200 && response.data != null) {
         return Uint8List.fromList(response.data!);
       }
