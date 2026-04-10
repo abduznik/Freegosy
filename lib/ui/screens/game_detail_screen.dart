@@ -1,9 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
+import '../widgets/screenshot_gallery_dialog.dart';
 
 class GameDetailScreen extends StatefulWidget {
   final Game game;
@@ -73,54 +73,12 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   }
 
   void _showScreenshotFullscreen(BuildContext context, int initialIndex, List<String> imageUrls) {
-    final PageController controller = PageController(initialPage: initialIndex);
     showDialog(
       context: context,
-      barrierColor: Colors.black87,
-      builder: (context) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(16),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: ScrollConfiguration(
-              behavior: _DesktopScrollBehavior(),
-              child: PageView.builder(
-                controller: controller,
-                itemCount: imageUrls.length,
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    behavior: HitTestBehavior.opaque,
-                    child: CachedNetworkImage(
-                      imageUrl: imageUrls[index],
-                      imageBuilder: (context, imageProvider) => Center(
-                        child: GestureDetector(
-                          onTap: () {}, // prevent tap from closing when tapping image itself
-                          child: Image(
-                            image: imageProvider,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                      placeholder: (context, url) => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      errorWidget: (context, url, error) => const Center(
-                        child: Icon(
-                          Icons.image_not_supported,
-                          color: Colors.white,
-                          size: 48,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
+      useRootNavigator: true,
+      builder: (context) => ScreenshotGalleryDialog(
+        initialIndex: initialIndex,
+        imageUrls: imageUrls,
       ),
     );
   }
@@ -631,13 +589,4 @@ class _DetailsGrid extends StatelessWidget {
       },
     );
   }
-}
-
-class _DesktopScrollBehavior extends MaterialScrollBehavior {
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-  };
 }
