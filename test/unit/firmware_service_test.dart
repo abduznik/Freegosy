@@ -56,7 +56,8 @@ void main() {
       when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
       when(mockStrategyRegistry.getStrategyForSlug('test_platform')).thenReturn(mockStrategy);
       when(mockDirectoryService.getEmulatorBiosDirectory('test_emulator')).thenAnswer((_) async => biosDir);
-      when(mockRommService.downloadFirmware(firmware)).thenAnswer((_) async => Uint8List.fromList([1, 2, 3]));
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([1, 2, 3]));
 
       await service.syncAllFirmware();
 
@@ -90,7 +91,8 @@ void main() {
       when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
       when(mockStrategyRegistry.getStrategyForSlug('single_slug')).thenReturn(mockStrategy);
       when(mockDirectoryService.getEmulatorBiosDirectory('test_emulator')).thenAnswer((_) async => biosDir);
-      when(mockRommService.downloadFirmware(firmware)).thenAnswer((_) async => Uint8List.fromList([4, 5, 6]));
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([4, 5, 6]));
 
       await service.syncFirmwareForPlatform('single_slug');
 

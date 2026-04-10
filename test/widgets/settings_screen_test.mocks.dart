@@ -551,9 +551,16 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
           as String);
 
   @override
-  _i5.Future<_i8.Uint8List?> downloadFirmware(_i2.Firmware? firmware) =>
+  _i5.Future<_i8.Uint8List?> downloadFirmware(
+    _i2.Firmware? firmware, {
+    void Function(int, int)? onProgress,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#downloadFirmware, [firmware]),
+            Invocation.method(
+              #downloadFirmware,
+              [firmware],
+              {#onProgress: onProgress},
+            ),
             returnValue: _i5.Future<_i8.Uint8List?>.value(),
           )
           as _i5.Future<_i8.Uint8List?>);
