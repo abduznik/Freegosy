@@ -15,7 +15,7 @@ class CemuSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'cemu';
 
-  Future<String> _getSaveRoot() async {
+  Future<String> _getSaveRoot({String? platformSlug}) async {
     // 1. Check emulator-relative path first (e.g. for Windows portable)
     final emuDir = await _directoryService.getEmulatorDirectory('cemu');
     final portableRoot = p.join(emuDir, 'mlc01', 'usr', 'save');
@@ -24,7 +24,7 @@ class CemuSaveStrategy extends SaveStrategy {
     }
 
     // 2. Dynamic path resolution for macOS/Windows/Linux
-    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('Cemu');
+    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('Cemu', platformSlug: platformSlug);
     // On macOS, Cemu's save structure might be different in Application Support,
     // but typically it mirrors the internal folder structure if using the same mlc01 logic.
     // Actually, Cemu on macOS often puts mlc01 directly in Application Support/Cemu
@@ -38,13 +38,13 @@ class CemuSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    return await _getSaveRoot();
+    return await _getSaveRoot(platformSlug: game.platformSlug);
   }
 
   @override
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final saveRoot = await _getSaveRoot();
+    final saveRoot = await _getSaveRoot(platformSlug: game.platformSlug);
     final saveBase = io.Directory(p.join(saveRoot, '00050000'));
     if (!await saveBase.exists()) return [];
     return [io.File(saveBase.path)]; // Return the directory as a single item
@@ -53,7 +53,7 @@ class CemuSaveStrategy extends SaveStrategy {
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final saveRoot = await _getSaveRoot();
+      final saveRoot = await _getSaveRoot(platformSlug: game.platformSlug);
       await io.Directory(saveRoot).create(recursive: true);
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);

@@ -22,7 +22,7 @@ class Pcsx2Strategy extends EmulatorStrategy {
   String get windowsExecutable => 'pcsx2-qt.exe';
 
   @override
-  String get linuxExecutable => 'pcsx2-qt';
+  String get linuxExecutable => 'pcsx2-qt.AppImage';
 
   @override
   String get macosExecutable => 'PCSX2.app/Contents/MacOS/PCSX2';

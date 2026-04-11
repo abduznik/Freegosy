@@ -178,6 +178,18 @@ class EmulatorDownloadService {
             status: 'Extracting...',
           ));
           await _extractionService.extract(tempFilePath, emulatorDir);
+
+          // Linux specific: ensure binary is executable
+          if (Platform.isLinux) {
+            final exeName = definition['linux_executable'] as String?;
+            if (exeName != null) {
+              final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName);
+              if (exePath != null) {
+                await Process.run('chmod', ['+x', exePath]);
+              }
+            }
+          }
+
           controller.add(DownloadProgress(
             id: emulatorId,
             gameName: emulatorName,

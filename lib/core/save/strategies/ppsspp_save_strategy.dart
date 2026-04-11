@@ -17,7 +17,7 @@ class PpssppSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'ppsspp';
 
-  Future<String> _getPspDir() async {
+  Future<String> _getPspDir({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
     if (io.Platform.isWindows) {
       final exePath = await _directoryService.findEmulatorExecutable(
@@ -54,7 +54,7 @@ class PpssppSaveStrategy extends SaveStrategy {
     }
 
     // 2. Dynamic path resolution
-    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('ppsspp');
+    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('ppsspp', platformSlug: platformSlug);
     final pspDir = p.join(baseDir, 'PSP');
 
     if (!await io.Directory(pspDir).exists()) {
@@ -124,14 +124,14 @@ class PpssppSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final pspDir = await _getPspDir();
+    final pspDir = await _getPspDir(platformSlug: game.platformSlug);
     return p.join(pspDir, 'SAVEDATA');
   }
 
   @override
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final pspDir = await _getPspDir();
+    final pspDir = await _getPspDir(platformSlug: game.platformSlug);
     final result = <File>[];
 
     // --- Handle SAVEDATA folders ---
@@ -215,7 +215,7 @@ class PpssppSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final pspDir = await _getPspDir();
+      final pspDir = await _getPspDir(platformSlug: game.platformSlug);
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);

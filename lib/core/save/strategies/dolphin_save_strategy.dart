@@ -19,7 +19,7 @@ class DolphinSaveStrategy extends SaveStrategy {
   String get strategyId => 'dolphin';
 
   /// Returns the base user directory for Dolphin.
-  Future<String> _getUserDir() async {
+  Future<String> _getUserDir({String? platformSlug}) async {
     // 1. Check portable mode first — User folder next to exe
     final exePath = await _directoryService.findEmulatorExecutable(
         'dolphin', 'Dolphin.exe');
@@ -35,7 +35,7 @@ class DolphinSaveStrategy extends SaveStrategy {
     }
 
     // 2. Fall back to app support directory
-    final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('Dolphin');
+    final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('Dolphin', platformSlug: platformSlug);
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for Dolphin at $resolvedPath. Please launch Dolphin at least once to generate save data.');
     }
@@ -72,7 +72,7 @@ class DolphinSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final userDir = await _getUserDir();
+    final userDir = await _getUserDir(platformSlug: game.platformSlug);
 
     final isWii = game.platformSlug?.toLowerCase() == 'wii';
 

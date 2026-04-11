@@ -23,7 +23,7 @@ class Rpcs3Strategy extends EmulatorStrategy {
   String get windowsExecutable => 'rpcs3.exe';
 
   @override
-  String get linuxExecutable => 'rpcs3';
+  String get linuxExecutable => 'rpcs3.AppImage';
 
   @override
   String get macosExecutable => 'RPCS3.app/Contents/MacOS/RPCS3';

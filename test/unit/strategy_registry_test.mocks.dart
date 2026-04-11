@@ -56,6 +56,17 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
           as String);
 
   @override
+  String get linuxSyncPreset =>
+      (super.noSuchMethod(
+            Invocation.getter(#linuxSyncPreset),
+            returnValue: _i3.dummyValue<String>(
+              this,
+              Invocation.getter(#linuxSyncPreset),
+            ),
+          )
+          as String);
+
+  @override
   set romsRootPath(String? value) => super.noSuchMethod(
     Invocation.setter(#romsRootPath, value),
     returnValueForMissingStub: null,
@@ -68,9 +79,39 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
   );
 
   @override
+  set linuxSyncPreset(String? value) => super.noSuchMethod(
+    Invocation.setter(#linuxSyncPreset, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set emudeckRootPath(String? value) => super.noSuchMethod(
+    Invocation.setter(#emudeckRootPath, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i4.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> setLinuxSyncPreset(String? preset) =>
+      (super.noSuchMethod(
+            Invocation.method(#setLinuxSyncPreset, [preset]),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
+          )
+          as _i4.Future<void>);
+
+  @override
+  _i4.Future<void> setEmudeckRoot(String? path) =>
+      (super.noSuchMethod(
+            Invocation.method(#setEmudeckRoot, [path]),
             returnValue: _i4.Future<void>.value(),
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
@@ -206,41 +247,72 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
           as _i4.Future<String>);
 
   @override
-  _i4.Future<String> getEmulatorAppSupportDirectory(String? emulatorName) =>
+  _i4.Future<String> getEmulatorAppSupportDirectory(
+    String? emulatorName, {
+    String? platformSlug,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getEmulatorAppSupportDirectory, [emulatorName]),
+            Invocation.method(
+              #getEmulatorAppSupportDirectory,
+              [emulatorName],
+              {#platformSlug: platformSlug},
+            ),
             returnValue: _i4.Future<String>.value(
               _i3.dummyValue<String>(
                 this,
-                Invocation.method(#getEmulatorAppSupportDirectory, [
-                  emulatorName,
-                ]),
+                Invocation.method(
+                  #getEmulatorAppSupportDirectory,
+                  [emulatorName],
+                  {#platformSlug: platformSlug},
+                ),
               ),
             ),
           )
           as _i4.Future<String>);
 
   @override
-  _i4.Future<String> getEmulatorBiosDirectory(String? emulatorId) =>
+  _i4.Future<String> getEmulatorBiosDirectory(
+    String? emulatorId, {
+    String? platformSlug,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getEmulatorBiosDirectory, [emulatorId]),
+            Invocation.method(
+              #getEmulatorBiosDirectory,
+              [emulatorId],
+              {#platformSlug: platformSlug},
+            ),
             returnValue: _i4.Future<String>.value(
               _i3.dummyValue<String>(
                 this,
-                Invocation.method(#getEmulatorBiosDirectory, [emulatorId]),
+                Invocation.method(
+                  #getEmulatorBiosDirectory,
+                  [emulatorId],
+                  {#platformSlug: platformSlug},
+                ),
               ),
             ),
           )
           as _i4.Future<String>);
 
   @override
-  _i4.Future<String> getEmulatorSystemDirectory(String? emulatorId) =>
+  _i4.Future<String> getEmulatorSystemDirectory(
+    String? emulatorId, {
+    String? platformSlug,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getEmulatorSystemDirectory, [emulatorId]),
+            Invocation.method(
+              #getEmulatorSystemDirectory,
+              [emulatorId],
+              {#platformSlug: platformSlug},
+            ),
             returnValue: _i4.Future<String>.value(
               _i3.dummyValue<String>(
                 this,
-                Invocation.method(#getEmulatorSystemDirectory, [emulatorId]),
+                Invocation.method(
+                  #getEmulatorSystemDirectory,
+                  [emulatorId],
+                  {#platformSlug: platformSlug},
+                ),
               ),
             ),
           )

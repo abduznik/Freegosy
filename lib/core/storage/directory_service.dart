@@ -10,6 +10,8 @@ import 'package:freegosy/core/romm/romm_models.dart';
 class DirectoryService {
   static const String _romsRootPathKey = 'romsRootPath';
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
+  static const String _linuxSyncPresetKey = 'linuxSyncPreset';
+  static const String _emudeckRootPathKey = 'emudeckRootPath';
 
   // Known extensions per platform slug
   static const Map<String, List<String>> _platformExtensions = {
@@ -37,12 +39,17 @@ class DirectoryService {
 
   late String romsRootPath;
   late String emulatorsRootPath;
+  String linuxSyncPreset = 'default';
+  String? emudeckRootPath;
   final Map<String, String> _emulatorPathOverrides = {};
 
   DirectoryService();
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
+    linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
+    emudeckRootPath = prefs.getString(_emudeckRootPathKey);
+
     final String defaultBase;
     if (defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux) {
@@ -53,11 +60,38 @@ class DirectoryService {
       defaultBase = docsDir.path;
     }
 
-    romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
-    emulatorsRootPath = prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
+    if (defaultTargetPlatform == TargetPlatform.linux &&
+        linuxSyncPreset == 'emudeck' &&
+        emudeckRootPath != null) {
+      romsRootPath =
+          prefs.getString(_romsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/roms');
+      emulatorsRootPath =
+          prefs.getString(_emulatorsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/tools');
+    } else {
+      romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
+      emulatorsRootPath =
+          prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
+    }
+
     await _ensureDirectoryExists(romsRootPath);
     await _ensureDirectoryExists(emulatorsRootPath);
     await loadEmulatorPathOverrides();
+  }
+
+  Future<void> setLinuxSyncPreset(String preset) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_linuxSyncPresetKey, preset);
+    linuxSyncPreset = preset;
+    // Re-initialize to update paths based on new preset
+    await initialize();
+  }
+
+  Future<void> setEmudeckRoot(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_emudeckRootPathKey, path);
+    emudeckRootPath = path;
+    // Re-initialize to update paths based on new root
+    await initialize();
   }
 
   Future<void> loadEmulatorPathOverrides() async {
@@ -280,7 +314,7 @@ class DirectoryService {
     return dirPath;
   }
 
-  Future<String> getEmulatorAppSupportDirectory(String emulatorName) async {
+  Future<String> getEmulatorAppSupportDirectory(String emulatorName, {String? platformSlug}) async {
     if (io.Platform.isMacOS) {
       final appSupport = await getApplicationSupportDirectory();
       // On macOS, getApplicationSupportDirectory() returns ~/Library/Application Support/com.example.app
@@ -290,21 +324,33 @@ class DirectoryService {
       final appData = io.Platform.environment['APPDATA'] ?? '';
       return p.join(appData, emulatorName);
     } else if (io.Platform.isLinux) {
+      if (linuxSyncPreset == 'emudeck' && emudeckRootPath != null) {
+        // EmuDeck standard saves path: Emulation/saves/[emulator]/[platform]
+        // If platform is not provided, we might have to guess or return a base
+        final base = p.join(emudeckRootPath!, 'Emulation', 'saves', emulatorName.toLowerCase());
+        if (platformSlug != null) {
+          return p.join(base, platformSlug);
+        }
+        return base;
+      }
       final home = io.Platform.environment['HOME'] ?? '';
       return p.join(home, '.config', emulatorName);
     }
     throw UnsupportedError('Platform not supported for save path resolution');
   }
 
-  Future<String> getEmulatorBiosDirectory(String emulatorId) async {
+  Future<String> getEmulatorBiosDirectory(String emulatorId, {String? platformSlug}) async {
+    if (io.Platform.isLinux && linuxSyncPreset == 'emudeck' && emudeckRootPath != null) {
+      return p.join(emudeckRootPath!, 'Emulation', 'bios');
+    }
     final emuDir = await getEmulatorDirectory(emulatorId);
     final dirPath = p.join(emuDir, 'BIOS');
     await _ensureDirectoryExists(dirPath);
     return dirPath;
   }
 
-  Future<String> getEmulatorSystemDirectory(String emulatorId) async {
-    return await getEmulatorBiosDirectory(emulatorId);
+  Future<String> getEmulatorSystemDirectory(String emulatorId, {String? platformSlug}) async {
+    return await getEmulatorBiosDirectory(emulatorId, platformSlug: platformSlug);
   }
 
   Future<void> deleteEmulator(String emulatorId) async {

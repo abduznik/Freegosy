@@ -441,10 +441,10 @@ class EdenSaveStrategy extends SaveStrategy {
   //  Platform-specific save base path
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<String> _getEdenSaveBase() async {
+  Future<String> _getEdenSaveBase({String? platformSlug}) async {
     final String resolvedPath;
     if (io.Platform.isMacOS || io.Platform.isLinux) {
-      resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('eden');
+      resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('eden', platformSlug: platformSlug);
     } else if (io.Platform.isWindows) {
       final appData = io.Platform.environment['APPDATA'] ?? '';
       resolvedPath = p.join(appData, 'eden');
@@ -467,7 +467,7 @@ class EdenSaveStrategy extends SaveStrategy {
   Future<String?> getSaveDir(Game game, String romPath) async {
     debugPrint('=== EDEN SAVE DIR: ${game.name} ===');
 
-    final base = await _getEdenSaveBase();
+    final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
 
     final profileId = await _resolveProfileId(base);
     final titleId = await _resolveTitleId(romPath, game);
@@ -547,7 +547,7 @@ class EdenSaveStrategy extends SaveStrategy {
     try {
       debugPrint('=== EDEN RESTORE: ${game.name} ===');
 
-      final base = await _getEdenSaveBase();
+      final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
 
       final profileId = await _resolveProfileId(base);
 

@@ -153,6 +153,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 24),
                     _buildRetroArchSyncModeSection(context, ref),
                     const SizedBox(height: 24),
+                    if (defaultTargetPlatform == TargetPlatform.linux) ...[
+                      _buildLinuxSettingsSection(context, ref, directoryService),
+                      const SizedBox(height: 24),
+                    ],
                     // Call the extracted emulators section function
                     buildEmulatorsSection(
                       context, // Pass context
@@ -420,6 +424,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             await prefs.setString('retroarch_sync_mode', value);
           },
         ),
+      ],
+    );
+  }
+
+  // --- Linux Settings Section ---
+  Widget _buildLinuxSettingsSection(BuildContext context, WidgetRef ref, DirectoryService directoryService) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Linux Integration', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text('Select sync method for Linux/Steam Deck', style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 12),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'default', label: Text('Default')),
+            ButtonSegment(value: 'emudeck', label: Text('EmuDeck')),
+          ],
+          selected: {directoryService.linuxSyncPreset},
+          onSelectionChanged: (selection) async {
+            final value = selection.first;
+            await directoryService.setLinuxSyncPreset(value);
+            ref.invalidate(directoryServiceProvider);
+            if (mounted) setState(() {});
+          },
+        ),
+        if (directoryService.linuxSyncPreset == 'emudeck') ...[
+          const SizedBox(height: 16),
+          _buildPathRow(
+            label: 'EmuDeck Root Path',
+            currentPath: directoryService.emudeckRootPath ?? 'Not set',
+            onChanged: (newPath) async {
+              if (newPath != null) {
+                await directoryService.setEmudeckRoot(newPath);
+                ref.invalidate(directoryServiceProvider);
+                if (mounted) setState(() {});
+              }
+            },
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'EmuDeck integration will use Emulation/roms and Emulation/tools inside this path.',
+            style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+          ),
+        ],
       ],
     );
   }

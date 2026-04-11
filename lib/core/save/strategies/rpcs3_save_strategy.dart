@@ -83,7 +83,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }
   }
 
-  Future<String> _getRpcs3SaveRoot() async {
+  Future<String> _getRpcs3SaveRoot({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
     final exePath = await _directoryService.findEmulatorExecutable(
         'rpcs3', 'rpcs3.exe');
@@ -96,7 +96,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }
 
     // 2. Dynamic path resolution
-    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('rpcs3');
+    final baseDir = await _directoryService.getEmulatorAppSupportDirectory('rpcs3', platformSlug: platformSlug);
     final resolvedPath = p.join(baseDir, 'dev_hdd0', 'home', '00000001', 'savedata');
 
     if (!await io.Directory(resolvedPath).exists()) {
@@ -297,7 +297,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     if (_activeFolderOverride != null) {
       return _activeFolderOverride;
     }
-    final saveRoot = await _getRpcs3SaveRoot();
+    final saveRoot = await _getRpcs3SaveRoot(platformSlug: game.platformSlug);
     final dirs = await _findSaveDirs(saveRoot, game);
     return dirs.isNotEmpty ? dirs.first.path : null;
   }
@@ -305,7 +305,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   @override
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final saveRoot = await _getRpcs3SaveRoot();
+    final saveRoot = await _getRpcs3SaveRoot(platformSlug: game.platformSlug);
 
     // Manual override — wrap single dir
     List<Directory> saveDirs;
@@ -348,7 +348,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final saveRoot = await _getRpcs3SaveRoot();
+      final saveRoot = await _getRpcs3SaveRoot(platformSlug: game.platformSlug);
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);

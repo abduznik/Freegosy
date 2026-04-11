@@ -22,7 +22,7 @@ class DolphinStrategy extends EmulatorStrategy {
   String get windowsExecutable => 'Dolphin.exe';
 
   @override
-  String get linuxExecutable => 'dolphin-emu';
+  String get linuxExecutable => 'Dolphin.AppImage';
 
   @override
   String get macosExecutable => 'Dolphin.app/Contents/MacOS/Dolphin';

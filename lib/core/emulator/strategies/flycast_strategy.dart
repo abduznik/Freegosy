@@ -22,7 +22,7 @@ class FlycastStrategy extends EmulatorStrategy {
   String get windowsExecutable => 'flycast.exe';
 
   @override
-  String get linuxExecutable => 'flycast';
+  String get linuxExecutable => 'flycast.AppImage';
 
   @override
   String get macosExecutable => 'Flycast.app/Contents/MacOS/Flycast';

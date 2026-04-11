@@ -22,7 +22,7 @@ class DuckstationStrategy extends EmulatorStrategy {
   String get windowsExecutable => 'duckstation-qt-x64-ReleaseLTCG.exe';
 
   @override
-  String get linuxExecutable => 'duckstation-qt';
+  String get linuxExecutable => 'DuckStation.AppImage';
 
   @override
   String get macosExecutable => 'DuckStation.app/Contents/MacOS/DuckStation';

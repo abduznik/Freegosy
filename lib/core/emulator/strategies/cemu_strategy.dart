@@ -22,7 +22,7 @@ class CemuStrategy extends EmulatorStrategy {
   String get windowsExecutable => 'Cemu.exe';
 
   @override
-  String get linuxExecutable => 'cemu';
+  String get linuxExecutable => 'Cemu.AppImage';
 
   @override
   String get macosExecutable => 'Cemu.app/Contents/MacOS/Cemu';

@@ -27,7 +27,7 @@ class AzaharStrategy extends EmulatorStrategy {
   String get windowsExecutable => 'azahar.exe';
 
   @override
-  String get linuxExecutable => 'azahar';
+  String get linuxExecutable => 'azahar.AppImage';
 
   @override
   String get macosExecutable => 'Azahar.app/Contents/MacOS/azahar';

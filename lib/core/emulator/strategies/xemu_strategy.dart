@@ -21,7 +21,7 @@ class XemuStrategy extends EmulatorStrategy {
   String get windowsExecutable => 'xemu.exe';
 
   @override
-  String get linuxExecutable => 'xemu';
+  String get linuxExecutable => 'xemu.AppImage';
 
   @override
   bool get supportsSaveSync => false;

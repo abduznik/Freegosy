@@ -32,8 +32,8 @@ class AzaharSaveStrategy extends SaveStrategy {
     _manualMapping = mapping;
   }
 
-  Future<String> _getAzaharSystemBase() async {
-    final resolvedPath = await _directoryService.getEmulatorSystemDirectory('azahar');
+  Future<String> _getAzaharSystemBase({String? platformSlug}) async {
+    final resolvedPath = await _directoryService.getEmulatorSystemDirectory('azahar', platformSlug: platformSlug);
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for Azahar at $resolvedPath. Please launch Azahar at least once to generate save data.');
     }
@@ -49,7 +49,7 @@ class AzaharSaveStrategy extends SaveStrategy {
           'Please select the save folder manually from the sdmc directory.');
     }
 
-    final base = await _getAzaharSystemBase();
+    final base = await _getAzaharSystemBase(platformSlug: game.platformSlug);
 
     // _manualMapping is expected to be the relative path from sdmc
     final finalPath = p.join(base, 'sdmc', _manualMapping!);

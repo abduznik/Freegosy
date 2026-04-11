@@ -16,7 +16,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'duckstation';
 
-  Future<String> _getBaseDir() async {
+  Future<String> _getBaseDir({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
     final exePath = await _directoryService.findEmulatorExecutable(
         'duckstation', 'duckstation-qt-x64-ReleaseLTCG.exe');
@@ -33,7 +33,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
       final localAppData = io.Platform.environment['LOCALAPPDATA'] ?? '';
       resolvedPath = p.join(localAppData, 'DuckStation');
     } else {
-      resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('DuckStation');
+      resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('DuckStation', platformSlug: platformSlug);
     }
 
     if (!await io.Directory(resolvedPath).exists()) {
@@ -44,14 +44,14 @@ class DuckstationSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    final baseDir = await _getBaseDir();
+    final baseDir = await _getBaseDir(platformSlug: game.platformSlug);
     return p.join(baseDir, 'memcards');
   }
 
   @override
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final baseDir = await _getBaseDir();
+    final baseDir = await _getBaseDir(platformSlug: game.platformSlug);
 
     final result = <File>[];
     final stem = getRomStem(game);
@@ -91,7 +91,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final baseDir = await _getBaseDir();
+      final baseDir = await _getBaseDir(platformSlug: game.platformSlug);
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
