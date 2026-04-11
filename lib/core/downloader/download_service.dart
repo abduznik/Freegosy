@@ -51,6 +51,10 @@ class DownloadService {
 
     final controller = StreamController<DownloadProgress>();
 
+    debugPrint("[DownloadService] Starting download for: ${game.name}");
+    debugPrint("[DownloadService] URL: $downloadUrl");
+    debugPrint("[DownloadService] Save Path: $savePath");
+
     try {
       dio.download(
         downloadUrl,
@@ -135,11 +139,14 @@ class DownloadService {
         }
       }).catchError((e) {
         String errorMsg = 'Download failed: $e';
+        debugPrint("[DownloadService] Download failed: $e");
         if (e is DioException) {
+          debugPrint("[DownloadService] Dio Error Response: ${e.response?.data}");
+          debugPrint("[DownloadService] Dio Error Status: ${e.response?.statusCode}");
           if (e.response?.statusCode == 404) {
-            errorMsg = 'File not found on server (404). Check if the ROM exists in RomM.';
+            errorMsg = 'File not found on server (404). URL: $downloadUrl';
           } else if (e.response?.statusCode == 400) {
-            errorMsg = 'Server rejected request (400). Syntax error or bad parameters.';
+            errorMsg = 'Server rejected request (400). URL: $downloadUrl';
           } else if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) {
             errorMsg = 'Download timed out. Check your internet connection.';
           }

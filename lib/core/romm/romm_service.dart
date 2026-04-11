@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
 
@@ -401,12 +402,29 @@ class RommService {
   }
 
   String getDownloadUrl(Game game) {
+    // If the API already provides a download URL, use it directly
+    if (game.fileUrl != null && game.fileUrl!.isNotEmpty) {
+      final host = _normalizeBaseUrl(config.baseUrl);
+      return game.fileUrl!.startsWith('http') ? game.fileUrl! : '$host${game.fileUrl}';
+    }
+
     final baseUrl = config.baseUrl.endsWith('/') 
         ? config.baseUrl.substring(0, config.baseUrl.length - 1) 
         : config.baseUrl;
     
+    // For large files, sometimes the filename in the URL can cause issues with reverse proxies
+    // RomM actually only needs the ID to find the file, the filename is often for the client.
     final name = game.fileName ?? game.fsName ?? game.name;
-    final encoded = Uri.encodeComponent(name);
+    String encoded = Uri.encodeComponent(name);
+    
+    // Truncate if extremely long to avoid 400/404 from proxy limits
+    if (encoded.length > 100) {
+      final ext = p.extension(name);
+      final stem = p.basenameWithoutExtension(name);
+      final shortStem = stem.substring(0, min(stem.length, 50));
+      encoded = Uri.encodeComponent('$shortStem$ext');
+    }
+
     return '$baseUrl/api/roms/${game.id}/content/$encoded';
   }
 
