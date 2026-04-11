@@ -338,7 +338,7 @@ class DirectoryService {
         if (platformSlug != null) {
           final slug = platformSlug.toLowerCase();
           if (emulatorName.toLowerCase() == 'dolphin' || emulatorName.toLowerCase() == 'primehack') {
-            if (slug == 'gc' || slug == 'gamecube') return p.join(base, 'GC');
+            if (slug == 'gc' || slug == 'gamecube' || slug == 'ngc') return p.join(base, 'GC');
             if (slug == 'wii') return p.join(base, 'Wii');
           }
         }
