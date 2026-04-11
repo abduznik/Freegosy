@@ -4,10 +4,29 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v0.3.0)'
+        required: true
+        default: 'v0.3.0'
+      build_windows:
+        description: 'Build Windows'
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build macOS'
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build Linux'
+        type: boolean
+        default: true
 
 jobs:
   build-windows:
     name: Build Windows
+    if: github.event_name == 'push' || inputs.build_windows == true
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -37,6 +56,7 @@ jobs:
 
   build-macos:
     name: Build macOS
+    if: github.event_name == 'push' || inputs.build_macos == true
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -67,6 +87,7 @@ jobs:
 
   build-linux:
     name: Build Linux (AppImage)
+    if: github.event_name == 'push' || inputs.build_linux == true
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -132,25 +153,37 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-macos, build-linux]
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           merge-multiple: true
+
+      - name: Determine Tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "val=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "val=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.val }}
           files: |
             freegosy-windows.zip
             freegosy-macos.zip
             Freegosy-x86_64.AppImage
           body: |
-            # Freegosy v0.3.0
+            # Freegosy ${{ steps.tag.outputs.val }}
             
             ## New Features
             - **Native Linux Support**: Added beta support for Linux and Steam Deck (EmuDeck).
