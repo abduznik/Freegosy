@@ -106,9 +106,10 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   }
 
   Future<List<Directory>> _findSaveDirs(String saveRoot, Game game) async {
-    final gameWords = game.name
+    final cleanGameName = game.displayName;
+    final gameWords = cleanGameName
         .toLowerCase()
-        .replaceAll(RegExp(r"[^a-z0-9\s]"), '')
+        .replaceAll(RegExp(r"[^a-z0-9\s]"), ' ')
         .split(' ')
         .where((w) => w.length >= 2)
         .toList();
@@ -136,25 +137,42 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       }
     }
 
-    // Method 2: PARAM.SFO title matching
-    final bySfo = <Directory>[];
+    // Method 2: PARAM.SFO title matching with scoring
+    final sfoMatches = <Directory, int>{};
     for (final dir in allDirs) {
       final title = await _readParamSfoTitle(dir.path);
       if (title == null) continue;
-      final titleLower = title.toLowerCase();
-      debugPrint('[RPCS3] PARAM.SFO title for ${dir.path.split(p.separator).last}: $title');
-      if (gameWords.any((word) => titleLower.contains(word))) {
-        bySfo.add(dir);
+      
+      final titleLower = title.toLowerCase().replaceAll(RegExp(r"[^a-z0-9\s]"), ' ');
+      final titleWords = titleLower.split(' ').where((w) => w.length >= 2).toSet();
+      
+      int score = 0;
+      for (final word in gameWords) {
+        if (titleWords.contains(word)) {
+          score++;
+        }
+      }
+      
+      debugPrint('[RPCS3] PARAM.SFO title for ${dir.path.split(p.separator).last}: $title (Score: $score)');
+      if (score > 0) {
+        sfoMatches[dir] = score;
       }
     }
 
-    if (bySfo.isNotEmpty) {
+    if (sfoMatches.isNotEmpty) {
+      final maxScore = sfoMatches.values.reduce((a, b) => a > b ? a : b);
+      // Only keep matches with the highest score
+      final bySfo = sfoMatches.entries
+          .where((e) => e.value == maxScore)
+          .map((e) => e.key)
+          .toList();
+
       if (bySfo.length == 1) {
-        debugPrint('[RPCS3] Method 2 PARAM.SFO single match: ${bySfo.first.path}');
+        debugPrint('[RPCS3] Method 2 PARAM.SFO single best match: ${bySfo.first.path}');
         return bySfo;
       }
-      // Multiple SFO matches — fall through to recency/conflict logic below
-      // using bySfo as the candidate list instead of byName
+      
+      // Multiple SFO matches with same score — fall through to recency/conflict logic
       final withTimes = <Map<String, dynamic>>[];
       for (final dir in bySfo) {
         DateTime? latestFile;
@@ -177,6 +195,9 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       if (withTimes.isNotEmpty) {
         withTimes.sort((a, b) => (b['newestFile'] as DateTime)
             .compareTo(a['newestFile'] as DateTime));
+        
+        if (withTimes.length == 1) return [withTimes[0]['dir'] as Directory];
+
         final winner = withTimes[0];
         final runnerUp = withTimes[1];
         final gap = (winner['newestFile'] as DateTime)
@@ -194,11 +215,11 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       }
     }
 
-
-
     final byName = allDirs.where((d) {
       final folderLower = d.path.split(p.separator).last.toLowerCase();
-      return gameWords.any((word) => folderLower.contains(word));
+      // Use whole word matching for folder names too
+      final folderWords = folderLower.replaceAll(RegExp(r"[^a-z0-9\s]"), ' ').split(' ').toSet();
+      return gameWords.any((word) => folderWords.contains(word));
     }).toList();
 
     if (byName.isEmpty) return [];
