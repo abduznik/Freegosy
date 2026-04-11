@@ -36,11 +36,17 @@ class MGBAStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'mgba', romPath], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+        return;
+      }
     }
+    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
   }
 
   @override
@@ -49,8 +55,13 @@ class MGBAStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        return await Process.start('bash', [exePath, '-e', 'mgba', romPath], mode: ProcessStartMode.normal);
+      } else if (exePath.endsWith('.sh')) {
+        return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
+      }
     }
     return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
   }
@@ -61,6 +72,16 @@ class MGBAStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'mgba'], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+        return;
+      }
+    }
 
     if (io.Platform.isMacOS) {
       // Find the .app bundle path
@@ -76,11 +97,7 @@ class MGBAStrategy extends EmulatorStrategy {
     }
 
     final exeDir = File(exePath).parent.path;
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], mode: ProcessStartMode.detached, workingDirectory: exeDir);
-    } else {
-      await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
-    }
+    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
   }
 
   @override

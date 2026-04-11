@@ -384,9 +384,15 @@ class DirectoryService {
       return direct.path;
     }
 
-    // EmuDeck support: Check for .sh launchers in [ROOT]/tools/launchers
+    // EmuDeck support: Check for master emu-launch.sh first
     if (io.Platform.isLinux && emudeckRootPath != null) {
-      // Map internal IDs to EmuDeck launcher filenames
+      final masterLauncher = File(p.join(emudeckRootPath!, 'Emulation', 'tools', 'emu-launch.sh'));
+      if (await masterLauncher.exists()) {
+        debugPrint("[DirectoryService] Found EmuDeck master launcher: ${masterLauncher.path}");
+        return masterLauncher.path;
+      }
+
+      // Fallback to specific .sh launchers in [ROOT]/tools/launchers
       final Map<String, String> emudeckMap = {
         'rpcs3': 'rpcs3.sh',
         'pcsx2': 'pcsx2-qt.sh',
@@ -517,6 +523,10 @@ class DirectoryService {
   Future<bool> isRomDownloaded(Game game) async {
     final found = await findExistingRomPath(game);
     return found != null;
+  }
+
+  bool isEmuLaunchScript(String path) {
+    return p.basename(path) == 'emu-launch.sh';
   }
 
   Future<void> deleteRom(Game game) async {

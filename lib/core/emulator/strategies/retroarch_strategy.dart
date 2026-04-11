@@ -232,6 +232,16 @@ class RetroArchStrategy extends EmulatorStrategy {
       await _ensure3dsSetup();
     }
 
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'retroarch', normalizedRomPath], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.detached);
+        return;
+      }
+    }
+
     if (coreName == null) {
       await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.detached);
       return;
@@ -249,20 +259,11 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      // EmuDeck scripts handle core selection and internal flags
-      await Process.start(
-        'bash',
-        [exePath, normalizedRomPath],
-        mode: ProcessStartMode.detached,
-      );
-    } else {
-      await Process.start(
-        exePath,
-        ['-L', corePath, normalizedRomPath],
-        mode: ProcessStartMode.detached,
-      );
-    }
+    await Process.start(
+      exePath,
+      ['-L', corePath, normalizedRomPath],
+      mode: ProcessStartMode.detached,
+    );
   }
 
   @override
@@ -287,12 +288,16 @@ class RetroArchStrategy extends EmulatorStrategy {
       await _ensure3dsSetup();
     }
 
-    if (coreName == null) {
-      if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        return await Process.start('bash', [exePath, '-e', 'retroarch', normalizedRomPath], mode: ProcessStartMode.normal);
+      } else if (exePath.endsWith('.sh')) {
         return await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.normal);
-      } else {
-        return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
       }
+    }
+
+    if (coreName == null) {
+      return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
     }
 
     final corePath = await _resolveCorePath(exePath, coreName);
@@ -307,19 +312,11 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start(
-        'bash',
-        [exePath, normalizedRomPath],
-        mode: ProcessStartMode.normal,
-      );
-    } else {
-      return await Process.start(
-        exePath,
-        ['-L', corePath, normalizedRomPath],
-        mode: ProcessStartMode.normal,
-      );
-    }
+    return await Process.start(
+      exePath,
+      ['-L', corePath, normalizedRomPath],
+      mode: ProcessStartMode.normal,
+    );
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
@@ -363,9 +360,14 @@ class RetroArchStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
-      return;
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'retroarch'], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+        return;
+      }
     }
 
     if (io.Platform.isMacOS) {

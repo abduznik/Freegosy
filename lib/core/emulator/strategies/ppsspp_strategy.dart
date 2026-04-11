@@ -36,11 +36,17 @@ class PPSSPPStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'ppsspp', romPath], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+        return;
+      }
     }
+    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
   }
 
   @override
@@ -49,11 +55,15 @@ class PPSSPPStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
-    } else {
-      return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        return await Process.start('bash', [exePath, '-e', 'ppsspp', romPath], mode: ProcessStartMode.normal);
+      } else if (exePath.endsWith('.sh')) {
+        return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
+      }
     }
+    return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
   }
 
   @override
@@ -63,9 +73,14 @@ class PPSSPPStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
-      return;
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'ppsspp'], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+        return;
+      }
     }
 
     if (io.Platform.isMacOS) {

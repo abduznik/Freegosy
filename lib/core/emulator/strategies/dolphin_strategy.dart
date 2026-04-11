@@ -39,10 +39,16 @@ class DolphinStrategy extends EmulatorStrategy {
     if (exePath == null) {
       throw Exception('$name not found. Please download it first.');
     }
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
       await Process.start(
         'bash',
-        [exePath, '-b', '-e', romPath],
+        [exePath, '-e', 'dolphin-emu', romPath],
+        mode: ProcessStartMode.detached,
+      );
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start(
+        'bash',
+        [exePath, romPath],
         mode: ProcessStartMode.detached,
       );
     } else {
@@ -63,10 +69,16 @@ class DolphinStrategy extends EmulatorStrategy {
     if (exePath == null) {
       throw Exception('$name not found. Please download it first.');
     }
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
       return await Process.start(
         'bash',
-        [exePath, '-b', '-e', romPath],
+        [exePath, '-e', 'dolphin-emu', romPath],
+        mode: ProcessStartMode.normal,
+      );
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await Process.start(
+        'bash',
+        [exePath, romPath],
         mode: ProcessStartMode.normal,
       );
     }
@@ -99,7 +111,14 @@ class DolphinStrategy extends EmulatorStrategy {
       }
     }
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start(
+        'bash',
+        [exePath, '-e', 'dolphin-emu'],
+        mode: ProcessStartMode.detached,
+        workingDirectory: exeDir,
+      );
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start(
         'bash',
         [exePath],

@@ -41,6 +41,8 @@ class Pcsx2Strategy extends EmulatorStrategy {
       final normalizedRom = romPath.replaceAll('/', '\\');
       final normalizedExe = exePath.replaceAll('/', '\\');
       await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.detached);
+    } else if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'pcsx2-Qt', romPath], mode: ProcessStartMode.detached);
     } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
     } else {
@@ -59,6 +61,8 @@ class Pcsx2Strategy extends EmulatorStrategy {
       final normalizedRom = romPath.replaceAll('/', '\\');
       final normalizedExe = exePath.replaceAll('/', '\\');
       return await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.normal);
+    } else if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      return await Process.start('bash', [exePath, '-e', 'pcsx2-Qt', romPath], mode: ProcessStartMode.normal);
     } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
     } else {
@@ -73,7 +77,10 @@ class Pcsx2Strategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'pcsx2-Qt'], mode: ProcessStartMode.detached);
+      return;
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
       return;
     }

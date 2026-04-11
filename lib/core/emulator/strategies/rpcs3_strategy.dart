@@ -39,7 +39,9 @@ class Rpcs3Strategy extends EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
     final normalizedRomPath = p.normalize(romPath);
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'rpcs3', normalizedRomPath], mode: ProcessStartMode.detached);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.detached);
     } else {
       await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.detached);
@@ -54,7 +56,9 @@ class Rpcs3Strategy extends EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
     final normalizedRomPath = p.normalize(romPath);
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      return await Process.start('bash', [exePath, '-e', 'rpcs3', normalizedRomPath], mode: ProcessStartMode.normal);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       return await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.normal);
     } else {
       return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
@@ -68,7 +72,10 @@ class Rpcs3Strategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'rpcs3'], mode: ProcessStartMode.detached);
+      return;
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
       return;
     }

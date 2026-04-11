@@ -37,11 +37,17 @@ class MelonDSStrategy extends EmulatorStrategy {
       getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'melonds', romPath], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+        return;
+      }
     }
+    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
   }
 
   @override
@@ -52,15 +58,15 @@ class MelonDSStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     final workingDir = File(exePath).parent.path;
-    final Process process;
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      process = await Process.start('bash', [exePath, romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
-    } else {
-      process = await Process.start(exePath, [romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        return await Process.start('bash', [exePath, '-e', 'melonds', romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
+      } else if (exePath.endsWith('.sh')) {
+        return await Process.start('bash', [exePath, romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
+      }
     }
-    process.stdout.drain();
-    process.stderr.drain();
-    return process;
+    return await Process.start(exePath, [romPath], workingDirectory: workingDir, mode: ProcessStartMode.normal);
   }
 
   @override
@@ -69,6 +75,16 @@ class MelonDSStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'melonds'], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+        return;
+      }
+    }
 
     if (io.Platform.isMacOS) {
       // Find the .app bundle path
@@ -84,11 +100,7 @@ class MelonDSStrategy extends EmulatorStrategy {
     }
 
     final exeDir = File(exePath).parent.path;
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], workingDirectory: exeDir, mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, [], workingDirectory: exeDir, mode: ProcessStartMode.detached);
-    }
+    await Process.start(exePath, [], workingDirectory: exeDir, mode: ProcessStartMode.detached);
   }
 
   @override

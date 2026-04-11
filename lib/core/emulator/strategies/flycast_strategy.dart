@@ -37,7 +37,9 @@ class FlycastStrategy extends EmulatorStrategy {
       getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'flycast', romPath], mode: ProcessStartMode.detached);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
     } else {
       await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
@@ -51,7 +53,9 @@ class FlycastStrategy extends EmulatorStrategy {
       getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      return await Process.start('bash', [exePath, '-e', 'flycast', romPath], mode: ProcessStartMode.normal);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
     }
     return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
@@ -78,7 +82,9 @@ class FlycastStrategy extends EmulatorStrategy {
     }
 
     final exeDir = File(exePath).parent.path;
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'flycast'], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath], mode: ProcessStartMode.detached, workingDirectory: exeDir);
     } else {
       await Process.start(

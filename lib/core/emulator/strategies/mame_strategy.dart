@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -28,40 +29,38 @@ class MAMEStrategy extends EmulatorStrategy {
 
   @override
   Future<void> launch(Game game, String romPath) async {
-    final emulatorDir = await _directoryService.getEmulatorDirectory(emulatorId);
-    final mameExePath = await _directoryService.findEmulatorExecutable(
-      emulatorId, windowsExecutable,
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
     );
-
-    if (mameExePath == null) {
-      // Check for self-extracting exe in the emulator directory
-      final dir = Directory(emulatorDir);
-      if (await dir.exists()) {
-        final files = await dir.list().toList();
-        final setupExe = files.firstWhere(
-          (f) => f is File && f.path.toLowerCase().endsWith('.exe') && !f.path.toLowerCase().endsWith('mame.exe'),
-          orElse: () => File(''),
-        );
-
-        if (setupExe.path.isNotEmpty) {
-          // It's a self-extracting exe, run it to extract
-          // We run it with current directory set to emulatorDir so it extracts there
-          await Process.run(setupExe.path, [], workingDirectory: emulatorDir);
-          
-          // Try finding mame.exe again
-          final retryPath = await _directoryService.findEmulatorExecutable(
-            emulatorId, windowsExecutable,
-          );
-          if (retryPath != null) {
-            await Process.start(retryPath, [romPath], mode: ProcessStartMode.detached);
-            return;
-          }
-        }
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'mame', romPath], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+        return;
       }
-      throw Exception('$name not found. Please download it first.');
     }
+    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+  }
 
-    await Process.start(mameExePath, [romPath], mode: ProcessStartMode.detached);
+  @override
+  Future<Process?> launchWithHandle(Game game, String romPath) async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+    
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        return await Process.start('bash', [exePath, '-e', 'mame', romPath], mode: ProcessStartMode.normal);
+      } else if (exePath.endsWith('.sh')) {
+        return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
+      }
+    }
+    return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
   }
 
   @override
@@ -70,6 +69,16 @@ class MAMEStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isLinux) {
+      if (_directoryService.isEmuLaunchScript(exePath)) {
+        await Process.start('bash', [exePath, '-e', 'mame'], mode: ProcessStartMode.detached);
+        return;
+      } else if (exePath.endsWith('.sh')) {
+        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+        return;
+      }
+    }
 
     final exeDir = File(exePath).parent.path;
     await Process.start(

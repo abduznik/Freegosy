@@ -88,7 +88,9 @@ class AzaharStrategy extends EmulatorStrategy {
     }
 
     await _ensure3dsSetup();
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'azahar', romPath], mode: ProcessStartMode.detached);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
     } else {
       await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
@@ -108,7 +110,9 @@ class AzaharStrategy extends EmulatorStrategy {
     }
 
     await _ensure3dsSetup();
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      return await Process.start('bash', [exePath, '-e', 'azahar', romPath], mode: ProcessStartMode.normal);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
     }
     return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
@@ -135,7 +139,9 @@ class AzaharStrategy extends EmulatorStrategy {
     }
 
     final exeDir = io.File(exePath).parent.path;
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'azahar'], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath], mode: ProcessStartMode.detached, workingDirectory: exeDir);
     } else {
       await Process.start(

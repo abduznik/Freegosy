@@ -33,8 +33,10 @@ class XeniaStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'xenia', romPath], mode: ProcessStartMode.detached);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
     } else {
       await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
@@ -47,8 +49,10 @@ class XeniaStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      return await Process.start('bash', [exePath, '-e', 'xenia', romPath], mode: ProcessStartMode.normal);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
     } else {
       return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
@@ -61,12 +65,14 @@ class XeniaStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    
-    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+
+    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
+      await Process.start('bash', [exePath, '-e', 'xenia'], mode: ProcessStartMode.detached);
+      return;
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
       return;
     }
-
     final exeDir = File(exePath).parent.path;
     await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
   }
