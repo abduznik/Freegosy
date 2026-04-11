@@ -33,6 +33,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       ref.read(showTitleLoaderProvider.future),
       ref.read(showButtonsOnHoverLoaderProvider.future),
       ref.read(activePresetLoaderProvider.future),
+      ref.read(rpcs3ArchitectureLoaderProvider.future),
     ]).then((_) {
       if (mounted) {
         setState(() => _settingsLoaded = true);

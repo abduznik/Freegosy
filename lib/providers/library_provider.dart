@@ -319,6 +319,14 @@ final retroarchSyncModeLoaderProvider = FutureProvider<void>((ref) async {
   ref.read(retroarchSyncModeProvider.notifier).state = saved;
 });
 
+final rpcs3ArchitectureProvider = StateProvider<String>((ref) => 'x64');
+
+final rpcs3ArchitectureLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString('rpcs3_macos_architecture') ?? 'x64';
+  ref.read(rpcs3ArchitectureProvider.notifier).state = saved;
+});
+
 final platformLogoCacheProvider = FutureProvider.family<Uint8List?, String>((ref, logoUrl) async {
   if (logoUrl.isEmpty) return null;
   try {

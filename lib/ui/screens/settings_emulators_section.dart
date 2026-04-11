@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/strategy_registry.dart';
 import '../../core/emulator/firmware_service.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/library_provider.dart';
 
 // Function to build the Emulators section
 Widget buildEmulatorsSection(
@@ -81,6 +83,29 @@ Widget buildEmulatorsSection(
                     ],
                   ),
                 ),
+                if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) ...[
+                  const Text('Arch: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final arch = ref.watch(rpcs3ArchitectureProvider);
+                      return DropdownButton<String>(
+                        value: arch,
+                        style: const TextStyle(fontSize: 12, color: Colors.blue),
+                        items: const [
+                          DropdownMenuItem(value: 'x64', child: Text('x64')),
+                          DropdownMenuItem(value: 'arm64', child: Text('ARM64')),
+                        ],
+                        onChanged: (value) async {
+                          if (value != null) {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('rpcs3_macos_architecture', value);
+                            ref.read(rpcs3ArchitectureProvider.notifier).state = value;
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ],
                 IconButton(
                   icon: const Icon(Icons.folder_open, size: 20),
                   tooltip: 'Set custom directory',
@@ -175,21 +200,62 @@ Widget buildEmulatorsSection(
   );
 }
 
-void _startDownload(
+Future<void> _startDownload(
   BuildContext context,
   WidgetRef ref,
   String emulatorId,
   String emulatorName,
   Map<String, bool> emulatorInstallStates,
   Function(void Function()) setState,
-) {
+) async {
   final messenger = ScaffoldMessenger.of(context);
+  String? architecture;
+
+  if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) {
+    // Check if preference already set
+    final prefs = await SharedPreferences.getInstance();
+    final hasPreference = prefs.containsKey('rpcs3_macos_architecture');
+    
+    if (!hasPreference) {
+      // Show choice dialog
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Select Architecture"),
+          content: const Text("Choose the variant of RPCS3 to download for macOS:"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'arm64'),
+              child: const Text("ARM64 (Apple Silicon Native)"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'x64'),
+              child: const Text("x64 (Rosetta 2 - Default)"),
+            ),
+          ],
+        ),
+      );
+      
+      if (choice == null) return; // Cancelled
+      architecture = choice;
+      
+      // Save preference
+      await prefs.setString('rpcs3_macos_architecture', architecture);
+      ref.read(rpcs3ArchitectureProvider.notifier).state = architecture;
+    } else {
+      architecture = ref.read(rpcs3ArchitectureProvider);
+    }
+  }
 
   messenger.showSnackBar(SnackBar(
-    content: Text('Starting download for $emulatorName...'),
+    content: Text('Starting download for $emulatorName${architecture != null ? " ($architecture)" : ""}...'),
   ));
 
-  ref.read(downloadProvider.notifier).startEmulatorDownload(emulatorId, emulatorName);
+  ref.read(downloadProvider.notifier).startEmulatorDownload(
+    emulatorId, 
+    emulatorName,
+    architecture: architecture,
+  );
 
   // Listen for download completion and update state
   StreamSubscription? sub;

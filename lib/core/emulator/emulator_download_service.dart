@@ -19,7 +19,7 @@ class EmulatorDownloadService {
     _githubService = GithubReleaseService(_dio);
   }
 
-  Stream<DownloadProgress> downloadEmulator(String emulatorId) async* {
+  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture}) async* {
     final definition = kEmulatorDefinitions.firstWhere(
       (d) => d['id'] == emulatorId,
       orElse: () => {},
@@ -39,7 +39,39 @@ class EmulatorDownloadService {
 
     // Resolve download URL based on type
     String? downloadUrl;
-    if (type == 'github') {
+    
+    // RPCS3 Special Case for macOS
+    if (emulatorId == 'rpcs3' && Platform.isMacOS) {
+      final arch = architecture ?? 'x64';
+      String repo;
+      List<String> required;
+      List<String> excluded = ['debug'];
+
+      if (arch == 'x64') {
+        repo = 'RPCS3/rpcs3-binaries-mac';
+        required = ['macos', '.7z'];
+      } else {
+        // arm64
+        // TODO: ARM64 (Apple Silicon native) - source from RPCS3 macOS binaries releases page
+        // The ARM64 URL is not yet known — add a TODO placeholder for it in the code and leave a comment saying it needs to be sourced from the RPCS3 macOS binaries releases page.
+        repo = definition['github_repo_macos'] as String? ?? 'RPCS3/rpcs3-binaries-mac-arm64';
+        required = List<String>.from(definition['github_asset_required_macos'] ?? ['macos', 'aarch64', '.7z']);
+      }
+
+      yield DownloadProgress(
+        id: emulatorId,
+        gameName: emulatorName,
+        status: 'Fetching latest $arch release...',
+      );
+
+      downloadUrl = await _githubService.getLatestReleaseUrl(
+        repo: repo,
+        required: required,
+        excluded: excluded,
+      );
+    }
+
+    if (downloadUrl == null && type == 'github') {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
@@ -94,7 +126,7 @@ class EmulatorDownloadService {
         );
         return;
       }
-    } else {
+    } else if (downloadUrl == null) {
       if (Platform.isWindows) {
         downloadUrl = definition['windows_url'] as String?;
       } else if (Platform.isMacOS) {
