@@ -41,6 +41,8 @@ class Pcsx2Strategy extends EmulatorStrategy {
       final normalizedRom = romPath.replaceAll('/', '\\');
       final normalizedExe = exePath.replaceAll('/', '\\');
       await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.detached);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
     } else {
       await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
     }
@@ -57,6 +59,8 @@ class Pcsx2Strategy extends EmulatorStrategy {
       final normalizedRom = romPath.replaceAll('/', '\\');
       final normalizedExe = exePath.replaceAll('/', '\\');
       return await Process.start(normalizedExe, [normalizedRom], mode: ProcessStartMode.normal);
+    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
     } else {
       return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
     }
@@ -68,6 +72,11 @@ class Pcsx2Strategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+      return;
+    }
 
     if (io.Platform.isMacOS) {
       // Find the .app bundle path

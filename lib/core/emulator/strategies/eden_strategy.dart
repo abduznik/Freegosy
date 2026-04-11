@@ -41,12 +41,21 @@ class EdenStrategy extends EmulatorStrategy {
     }
 
     final args = [resolvedPath];
-    await io.Process.start(
-      exePath,
-      args,
-      mode: io.ProcessStartMode.detached,
-      workingDirectory: workingDir,
-    );
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await io.Process.start(
+        'bash',
+        [exePath, ...args],
+        mode: io.ProcessStartMode.detached,
+        workingDirectory: workingDir,
+      );
+    } else {
+      await io.Process.start(
+        exePath,
+        args,
+        mode: io.ProcessStartMode.detached,
+        workingDirectory: workingDir,
+      );
+    }
   }
 
   @override
@@ -61,6 +70,14 @@ class EdenStrategy extends EmulatorStrategy {
     }
 
     final args = [resolvedPath];
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await io.Process.start(
+        'bash',
+        [exePath, ...args],
+        mode: io.ProcessStartMode.normal,
+        workingDirectory: workingDir,
+      );
+    }
     return await io.Process.start(
       exePath,
       args,
@@ -110,12 +127,21 @@ class EdenStrategy extends EmulatorStrategy {
       }
     }
 
-    await io.Process.start(
-      exePath,
-      [],
-      mode: io.ProcessStartMode.detached,
-      workingDirectory: exeDir,
-    );
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await io.Process.start(
+        'bash',
+        [exePath],
+        mode: io.ProcessStartMode.detached,
+        workingDirectory: exeDir,
+      );
+    } else {
+      await io.Process.start(
+        exePath,
+        [],
+        mode: io.ProcessStartMode.detached,
+        workingDirectory: exeDir,
+      );
+    }
   }
 
   @override

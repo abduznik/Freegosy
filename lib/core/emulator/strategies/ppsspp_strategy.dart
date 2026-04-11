@@ -36,7 +36,11 @@ class PPSSPPStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+    } else {
+      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    }
   }
 
   @override
@@ -45,7 +49,11 @@ class PPSSPPStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
+    } else {
+      return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    }
   }
 
   @override
@@ -54,6 +62,11 @@ class PPSSPPStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+      return;
+    }
 
     if (io.Platform.isMacOS) {
       final parts = exePath.split('/');

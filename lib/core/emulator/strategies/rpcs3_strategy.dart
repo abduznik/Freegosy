@@ -39,7 +39,11 @@ class Rpcs3Strategy extends EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
     final normalizedRomPath = p.normalize(romPath);
-    await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.detached);
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.detached);
+    } else {
+      await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.detached);
+    }
   }
 
   @override
@@ -50,7 +54,11 @@ class Rpcs3Strategy extends EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
     final normalizedRomPath = p.normalize(romPath);
-    return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.normal);
+    } else {
+      return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
+    }
   }
 
   @override
@@ -60,7 +68,10 @@ class Rpcs3Strategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isMacOS) {
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+      return;
+    }
       // Find the .app bundle path
       final parts = exePath.split('/');
       final appIdx = parts.indexWhere((p) => p.endsWith('.app'));

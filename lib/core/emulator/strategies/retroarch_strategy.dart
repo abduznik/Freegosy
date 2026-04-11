@@ -249,11 +249,19 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    await Process.start(
-      exePath,
-      ['-L', corePath, normalizedRomPath],
-      mode: ProcessStartMode.detached,
-    );
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start(
+        'bash',
+        [exePath, '-L', corePath, normalizedRomPath],
+        mode: ProcessStartMode.detached,
+      );
+    } else {
+      await Process.start(
+        exePath,
+        ['-L', corePath, normalizedRomPath],
+        mode: ProcessStartMode.detached,
+      );
+    }
   }
 
   @override
@@ -279,7 +287,11 @@ class RetroArchStrategy extends EmulatorStrategy {
     }
 
     if (coreName == null) {
-      return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
+      if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+        return await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.normal);
+      } else {
+        return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
+      }
     }
 
     final corePath = await _resolveCorePath(exePath, coreName);
@@ -294,11 +306,19 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    return await Process.start(
-      exePath,
-      ['-L', corePath, normalizedRomPath],
-      mode: ProcessStartMode.normal,
-    );
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await Process.start(
+        'bash',
+        [exePath, '-L', corePath, normalizedRomPath],
+        mode: ProcessStartMode.normal,
+      );
+    } else {
+      return await Process.start(
+        exePath,
+        ['-L', corePath, normalizedRomPath],
+        mode: ProcessStartMode.normal,
+      );
+    }
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
@@ -341,6 +361,11 @@ class RetroArchStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
+      return;
+    }
 
     if (io.Platform.isMacOS) {
       // Find the .app bundle path

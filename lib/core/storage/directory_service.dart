@@ -384,6 +384,16 @@ class DirectoryService {
       return direct.path;
     }
 
+    // EmuDeck support: Check for .sh launchers in [ROOT]/tools/launchers
+    if (io.Platform.isLinux && emudeckRootPath != null) {
+      final launcherName = '${emulatorId}.sh';
+      final launcherFile = File(p.join(emudeckRootPath!, 'Emulation', 'tools', 'launchers', launcherName));
+      if (await launcherFile.exists()) {
+        debugPrint("[DirectoryService] Found EmuDeck launcher: ${launcherFile.path}");
+        return launcherFile.path;
+      }
+    }
+
     if (executableName.contains('/')) {
       final parts = executableName.split('/');
       final firstPart = parts.first; // e.g. "PCSX2.app"

@@ -36,7 +36,11 @@ class MGBAStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
-    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+    } else {
+      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    }
   }
 
   @override
@@ -45,6 +49,9 @@ class MGBAStrategy extends EmulatorStrategy {
       emulatorId, getExecutableForPlatform(),
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
+    }
     return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
   }
 
@@ -69,7 +76,11 @@ class MGBAStrategy extends EmulatorStrategy {
     }
 
     final exeDir = File(exePath).parent.path;
-    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      await Process.start('bash', [exePath], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    } else {
+      await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    }
   }
 
   @override
