@@ -18,7 +18,7 @@ class RommService {
       : _dio = Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(config.baseUrl),
           connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(minutes: 2),
+          receiveTimeout: const Duration(minutes: 10),
         )),
         _authOptions = _computeAuthOptions(config) {
     // If the server rejects the Bearer token with 403, retry once with Basic auth.

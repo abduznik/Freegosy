@@ -9,8 +9,18 @@ import 'romm_provider.dart';
 final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
   final directoryService = await ref.watch(directoryServiceProvider.future);
   if (directoryService == null) return null;
+  
+  // Use a dedicated Dio instance for downloads with long timeouts
+  final dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 60),
+    receiveTimeout: const Duration(hours: 4), // Allow up to 4 hours for large ROMs
+    headers: {
+      'Accept-Encoding': 'identity', // Disable compression for large downloads to avoid proxy issues
+    },
+  ));
+
   return DownloadService(
-    dio: Dio(),
+    dio: dio,
     directoryService: directoryService,
     extractionService: ExtractionService(directoryService),
   );
@@ -20,8 +30,17 @@ final emulatorDownloadServiceProvider =
     FutureProvider<EmulatorDownloadService?>((ref) async {
   final directoryService = await ref.watch(directoryServiceProvider.future);
   if (directoryService == null) return null;
+
+  final dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 60),
+    receiveTimeout: const Duration(minutes: 30),
+    headers: {
+      'Accept-Encoding': 'identity',
+    },
+  ));
+
   return EmulatorDownloadService(
-    Dio(),
+    dio,
     directoryService,
     ExtractionService(directoryService),
   );

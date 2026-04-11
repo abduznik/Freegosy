@@ -134,7 +134,17 @@ class DownloadService {
           controller.close();
         }
       }).catchError((e) {
-        controller.add(DownloadProgress(id: game.id, gameName: game.name, error: 'Download failed: $e'));
+        String errorMsg = 'Download failed: $e';
+        if (e is DioException) {
+          if (e.response?.statusCode == 404) {
+            errorMsg = 'File not found on server (404). Check if the ROM exists in RomM.';
+          } else if (e.response?.statusCode == 400) {
+            errorMsg = 'Server rejected request (400). Syntax error or bad parameters.';
+          } else if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) {
+            errorMsg = 'Download timed out. Check your internet connection.';
+          }
+        }
+        controller.add(DownloadProgress(id: game.id, gameName: game.name, error: errorMsg));
         controller.close();
       });
 
