@@ -35,7 +35,8 @@ class XemuStrategy extends EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
     if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath, '-dvd_path', romPath], mode: ProcessStartMode.detached);
+      // EmuDeck scripts expect the ROM path directly
+      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
     } else {
       await Process.start(exePath, ['-dvd_path', romPath], mode: ProcessStartMode.detached);
     }
@@ -49,7 +50,7 @@ class XemuStrategy extends EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
     if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start('bash', [exePath, '-dvd_path', romPath], mode: ProcessStartMode.normal);
+      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
     } else {
       return await Process.start(exePath, ['-dvd_path', romPath], mode: ProcessStartMode.normal);
     }

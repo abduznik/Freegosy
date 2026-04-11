@@ -250,9 +250,10 @@ class RetroArchStrategy extends EmulatorStrategy {
     }
 
     if (io.Platform.isLinux && exePath.endsWith('.sh')) {
+      // EmuDeck scripts handle core selection and internal flags
       await Process.start(
         'bash',
-        [exePath, '-L', corePath, normalizedRomPath],
+        [exePath, normalizedRomPath],
         mode: ProcessStartMode.detached,
       );
     } else {
@@ -309,7 +310,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     if (io.Platform.isLinux && exePath.endsWith('.sh')) {
       return await Process.start(
         'bash',
-        [exePath, '-L', corePath, normalizedRomPath],
+        [exePath, normalizedRomPath],
         mode: ProcessStartMode.normal,
       );
     } else {

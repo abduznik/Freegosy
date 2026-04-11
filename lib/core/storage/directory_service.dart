@@ -386,7 +386,28 @@ class DirectoryService {
 
     // EmuDeck support: Check for .sh launchers in [ROOT]/tools/launchers
     if (io.Platform.isLinux && emudeckRootPath != null) {
-      final launcherName = '$emulatorId.sh';
+      // Map internal IDs to EmuDeck launcher filenames
+      final Map<String, String> emudeckMap = {
+        'rpcs3': 'rpcs3.sh',
+        'pcsx2': 'pcsx2-qt.sh',
+        'dolphin': 'dolphin-emu.sh',
+        'xemu': 'xemu-emu.sh',
+        'xenia_canary': 'xenia.sh',
+        'citra': 'citra.sh',
+        'azahar': 'azahar.sh',
+        'duckstation': 'duckstation.sh',
+        'melonds': 'melonds.sh',
+        'mgba': 'mgba.sh',
+        'ppsspp': 'ppsspp.sh',
+        'retroarch': 'retroarch.sh',
+        'mame': 'mame.sh',
+        'cemu': 'cemu.sh',
+        'flycast': 'flycast.sh',
+        'vita3k': 'vita3k.sh',
+        'ryujinx': 'ryujinx.sh',
+      };
+
+      final launcherName = emudeckMap[emulatorId] ?? '$emulatorId.sh';
       final launcherFile = File(p.join(emudeckRootPath!, 'Emulation', 'tools', 'launchers', launcherName));
       if (await launcherFile.exists()) {
         debugPrint("[DirectoryService] Found EmuDeck launcher: ${launcherFile.path}");
