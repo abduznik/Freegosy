@@ -58,7 +58,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/downloader/download_service.dart` — Stream-based HTTP ROM downloader.
 
 ### Core — Storage
-- `lib/core/storage/directory_service.dart` — Manages paths. Added getAllDownloadedFileNamesByPlatform() for cache mapping.
+- `lib/core/storage/directory_service.dart` — Manages paths. Added Linux Sync Presets (Default/EmuDeck) and EmuDeck root path management.
 - `lib/core/storage/download_cache_service.dart` — Manages and persists a set of downloaded filenames mapped by platform slug. Uses SharedPreferences.
 
 ### Core — Windows

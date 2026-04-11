@@ -23,32 +23,32 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## Current Features (v0.2.x)
+## Current Features (v0.3.x)
 
-- **Native Multi-Platform Support**: Robust implementation for **macOS** (ARM64/Intel) and **Windows**, with deep integration for local file systems.
+- **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** integration).
 - **RomM Integration**: 
-    - Browse and filter your entire library with server-side pagination (50 games at a time).
+    - Browse and filter your entire library with server-side pagination.
     - Download ROMs directly via HTTP with real-time progress tracking.
-    - **New**: Personal game properties support (rating, status, completion).
+    - Personal game properties support (rating, status, completion).
 - **Advanced Emulator Management**: 
     - Download, update, and uninstall emulators directly from Settings.
-    - Automatic extraction of `.zip`, `.7z`, `.dmg`, `.tar.gz`, and `.tar.xz`.
-    - Smart `.app` bundle detection and canonical renaming on macOS.
-- **Save Sync**: Bidirectional local-to-cloud save synchronization with RomM, featuring cross-platform path resolution and automated backups.
+    - Automatic extraction of `.zip`, `.7z`, `.dmg`, `.tar.gz`, `.tar.xz`, and `.AppImage`.
+    - Smart binary detection and canonical naming across all platforms.
+    - **New**: Dynamic architecture selection for RPCS3 on macOS (ARM64 vs x64).
+- **BIOS Management**: Fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
+- **Save Sync**: Bidirectional local-to-cloud save synchronization with RomM, featuring cross-platform path resolution and automated backups. Optimized for EmuDeck's platform-specific save structure.
 - **Refined UI/UX**:
-    - **Game Cards**: Visual-first interface with detailed metadata and screenshots.
+    - **Visual-First Grid**: Interactive game cards with detailed metadata.
     - **Recently Played**: Quick access to your latest games.
-    - **Multi-Disc Support**: Integrated picker for games with multiple files.
-    - **Centralized Error Handling**: Improved stability with user-friendly notifications.
+    - **Screenshot Gallery**: Interactive, zoomable screenshot viewer.
+    - **Multi-Disc Support**: Integrated picker for multi-file games.
 
-## Roadmap: Version 0.3.0 (Coming Soon)
+## Roadmap: Version 0.4.0 (Upcoming)
 
-- **BIOS Management**: Ability to fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
-- **Linux Support (Beta)**: Starting with a skeleton/shell for **Steam Deck (EmuDeck)** integration.
-- **Enhanced macOS Support**: Further refinements to the native implementation and bug fixes.
-- **Save Sync Improvements**: Polishing the push/pull logic for edge cases.
-- **Better Screenshot Handling**: Improved performance and display of game gallery images.
-- **API v4.8.2 Readiness**: Shells are already in place for updating game data like completion status and progression bars; full functionality will be unlocked with the RomM 4.8.2 API release.
+- **Android Support**: Bringing the Freegosy experience to mobile devices.
+- **Cloud Configuration**: Syncing app settings across multiple devices.
+- **Better Offline Mode**: Improved metadata caching for browsing without a connection.
+- **API v4.8.2 Readiness**: Full support for progression bars and advanced completion tracking as RomM updates.
 
 ## Calling All Testers!
 I am currently searching for testers on **macOS** and **Windows** to help polish the experience. 

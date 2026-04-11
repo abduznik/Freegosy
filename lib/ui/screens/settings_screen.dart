@@ -495,7 +495,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             showLicensePage(
               context: context,
               applicationName: 'Freegosy',
-              applicationVersion: '0.2.2',
+              applicationVersion: '0.3.0',
               applicationLegalese: '© 2026 Freegosy Contributors.\nRedistributes 7-Zip binaries under LGPL.',
             );
           },

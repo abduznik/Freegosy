@@ -35,9 +35,99 @@ jobs:
           name: windows-release
           path: freegosy-windows.zip
 
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS
+        run: flutter build macos --release
+
+      - name: Archive macOS build
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r ../../../../../freegosy-macos.zip Freegosy.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: freegosy-macos.zip
+
+  build-linux:
+    name: Build Linux (AppImage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install AppImageBuilder
+        run: |
+          sudo wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          sudo chmod +x /usr/local/bin/appimagetool
+
+      - name: Build Linux
+        run: |
+          flutter pub get
+          flutter build linux --release
+
+      - name: Prepare AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+          
+          # Create Desktop Entry
+          cat > AppDir/usr/share/applications/freegosy.desktop <<EOF
+          [Desktop Entry]
+          Name=Freegosy
+          Exec=freegosy
+          Icon=freegosy
+          Type=Application
+          Categories=Game;
+          EOF
+          
+          # Use placeholder icon (or copy from assets if available)
+          cp web/icons/Icon-192.png AppDir/usr/share/icons/hicolor/256x256/apps/freegosy.png
+          cp web/icons/Icon-192.png AppDir/freegosy.png
+
+      - name: Build AppImage
+        run: |
+          ARCH=x86_64 /usr/local/bin/appimagetool AppDir Freegosy-x86_64.AppImage
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: Freegosy-x86_64.AppImage
+
   release:
     name: Create GitHub Release
-    needs: [build-windows]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,7 +142,17 @@ jobs:
         with:
           files: |
             freegosy-windows.zip
+            freegosy-macos.zip
+            Freegosy-x86_64.AppImage
           body: |
-            See CHANGELOG for details.
+            # Freegosy v0.3.0
+            
+            ## New Features
+            - **Native Linux Support**: Added beta support for Linux and Steam Deck (EmuDeck).
+            - **EmuDeck Integration**: Automated path discovery for ROMs, emulators, and saves on Steam Deck.
+            - **BIOS Management**: Download BIOS files directly from RomM.
+            - **Enhanced RPCS3 Support**: Choose between ARM64 and x64 architectures on macOS.
+            - **Interactive Gallery**: New screenshot viewer with zoom and swipe support.
+            - **Stability**: Numerous bug fixes and performance improvements.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
