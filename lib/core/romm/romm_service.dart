@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -20,8 +20,23 @@ class RommService {
           baseUrl: _normalizeBaseUrl(config.baseUrl),
           connectTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(minutes: 10),
+          headers: {
+            'Expect': '', // Suppress 100-continue which chokes many reverse proxies
+          },
         )),
         _authOptions = _computeAuthOptions(config) {
+    
+    // Add logging for Linux diagnostics
+    if (kDebugMode || io.Platform.isLinux) {
+      _dio.interceptors.add(LogInterceptor(
+        requestHeader: true,
+        requestBody: false,
+        responseHeader: true,
+        responseBody: false,
+        logPrint: (obj) => debugPrint('[RomM-Network] $obj'),
+      ));
+    }
+
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
@@ -439,20 +454,29 @@ class RommService {
   // ─── Save sync ─────────────────────────────────────────────────────────────
 
   /// Uploads [saveFile] for [gameId] to RomM via POST /api/saves.
-  Future<bool> uploadSave(String gameId, File saveFile, {String? slot}) async {
+  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot}) async {
     try {
       final now = DateTime.now();
       final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
       final effectiveSlot = slot ?? 'freegosy-srm_$ts';
       final fileName = saveFile.uri.pathSegments.last;
+      
+      // Explicitly set a clean boundary to avoid Linux dart:io quirks
+      final boundary = '----FreegosyBoundary${DateTime.now().millisecondsSinceEpoch}';
       final formData = FormData.fromMap({
         'saveFile': await MultipartFile.fromFile(saveFile.path, filename: fileName),
       });
+      
       final response = await _dio.post(
         '/api/saves',
         queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot},
         data: formData,
-        options: _authOptions,
+        options: _authOptions.copyWith(
+          headers: {
+            ..._authOptions.headers ?? {},
+            'Content-Type': 'multipart/form-data; boundary=$boundary',
+          },
+        ),
       );
       final ok = response.statusCode != null &&
           response.statusCode! >= 200 &&

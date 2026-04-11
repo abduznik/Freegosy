@@ -35,6 +35,7 @@ final emulatorDownloadServiceProvider =
     connectTimeout: const Duration(seconds: 60),
     receiveTimeout: const Duration(minutes: 30),
     headers: {
+      'Expect': '', // Suppress 100-continue
       'Accept-Encoding': 'identity',
     },
   ));
