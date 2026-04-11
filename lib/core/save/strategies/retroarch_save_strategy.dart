@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:typed_data';
 
 import '../../romm/romm_models.dart';
@@ -44,12 +44,18 @@ class RetroArchSaveStrategy extends SaveStrategy {
     final coreInfo = _coreMap[slug];
     if (coreInfo == null) return null;
 
+    if (io.Platform.isLinux) {
+      final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+      // EmuDeck mapping returns the folder containing the actual saves
+      return p.join(baseDir, coreInfo.saveFolder);
+    }
+
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
     if (exePath == null) return null;
 
-    String exeDir = File(exePath).parent.path;
+    String exeDir = io.File(exePath).parent.path;
     // If exePath points to a folder instead of an exe, use it directly
-    if (await FileSystemEntity.isDirectory(exePath)) {
+    if (await io.FileSystemEntity.isDirectory(exePath)) {
       exeDir = exePath;
     }
     // The saveFolder in _coreMap is relative to the RetroArch installation directory.
@@ -57,29 +63,40 @@ class RetroArchSaveStrategy extends SaveStrategy {
   }
 
   @override
-  Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
+  Future<List<io.File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
     final coreInfo = _coreMap[slug];
     if (coreInfo == null) return [];
 
-    final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
-    if (exePath == null) return [];
-    
-    String exeDir = File(exePath).parent.path;
-    // If exePath points to a folder instead of an exe, use it directly
-    if (await FileSystemEntity.isDirectory(exePath)) {
-      exeDir = exePath;
+    String? rootSaveDir;
+    String? statesRoot;
+
+    if (io.Platform.isLinux) {
+      rootSaveDir = await getSaveDir(game, romPath);
+      final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+      // states folder is next to saves folder in EmuDeck structure
+      statesRoot = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
+    } else {
+      final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+      if (exePath == null) return [];
+      
+      String exeDir = io.File(exePath).parent.path;
+      if (await io.FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
+      rootSaveDir = p.join(exeDir, 'saves', coreInfo.saveFolder);
+      statesRoot = p.join(exeDir, 'states', coreInfo.statesFolder);
     }
 
-    final stem = getRomStem(game); // Assuming getRomStem is available and correct for generating base filename
+    if (rootSaveDir == null) return [];
 
-    final List<File> filesToReturn = [];
+    final stem = getRomStem(game);
+    final List<io.File> filesToReturn = [];
 
     // Special case for PSP saves
     if (slug == 'psp' || slug == 'playstation-portable') {
       if (syncMode == 'saves' || syncMode == 'both') {
-        final pspPath = '$exeDir\\saves\\PPSSPP\\PSP'.replaceAll('/', '\\');
-        final pspDir = Directory(pspPath);
+        final pspDir = io.Directory(rootSaveDir);
         if (await pspDir.exists()) {
           bool hasFiles = false;
           await for (final _ in pspDir.list(recursive: true)) {
@@ -87,20 +104,18 @@ class RetroArchSaveStrategy extends SaveStrategy {
             break;
           }
           if (hasFiles) {
-            filesToReturn.add(File(pspPath));
+            filesToReturn.add(io.File(rootSaveDir));
           }
         }
       }
     } else {
-      // Existing logic for non-PSP saves (e.g., SRM files)
       if (syncMode == 'saves' || syncMode == 'both') {
-        final savesDir = p.join(exeDir, 'saves', coreInfo.saveFolder);
-        final savesDirObj = Directory(savesDir);
+        final savesDirObj = io.Directory(rootSaveDir);
         if (await savesDirObj.exists()) {
           final stemLower = stem.toLowerCase();
           bool found = false;
           await for (final entity in savesDirObj.list()) {
-            if (entity is! File) continue;
+            if (entity is! io.File) continue;
             final fname = p.basename(entity.path).toLowerCase();
             if (fname.startsWith(stemLower) && fname.endsWith('.srm')) {
               filesToReturn.add(entity);
@@ -109,9 +124,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
             }
           }
           if (!found) {
-            // Also try scanning for any .srm that fuzzy matches the stem
             await for (final entity in savesDirObj.list()) {
-              if (entity is! File) continue;
+              if (entity is! io.File) continue;
               final fname = p.basename(entity.path).toLowerCase();
               if (fname.endsWith('.srm')) {
                 final stemWords = stemLower
@@ -128,35 +142,30 @@ class RetroArchSaveStrategy extends SaveStrategy {
             }
           }
           if (!found) {
-            filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
+            filesToReturn.add(io.File(p.join(rootSaveDir, '$stem.srm')));
           }
         } else {
-          filesToReturn.add(File(p.join(savesDir, '$stem.srm')));
+          filesToReturn.add(io.File(p.join(rootSaveDir, '$stem.srm')));
         }
       }
     }
 
-    // Handle States (regardless of platform)
-    if (syncMode == 'states' || syncMode == 'both') {
-      final statesDir = p.join(exeDir, 'states', coreInfo.statesFolder);
-
-      // Derive stem from romPath as fallback
-      final romStem = File(romPath).uri.pathSegments.last.replaceAll(RegExp(r'\.[^.]+$'), '');
-
-      // Check state files for both stems
+    // Handle States
+    if ((syncMode == 'states' || syncMode == 'both')) {
+      final romStem = io.File(romPath).uri.pathSegments.last.replaceAll(RegExp(r'\.[^.]+$'), '');
       for (final checkStem in [stem, romStem]) {
-        filesToReturn.add(File('$statesDir/$checkStem.state.auto'));
+        filesToReturn.add(io.File('$statesRoot/$checkStem.state.auto'));
         for (int i = 0; i <= 9; i++) {
-          filesToReturn.add(File('$statesDir/$checkStem.state$i'));
+          filesToReturn.add(io.File('$statesRoot/$checkStem.state$i'));
         }
       }
     }
 
     // Filter out non-existent files and apply sessionStart filter
-    final finalResult = <File>[];
+    final finalResult = <io.File>[];
     for (final f in filesToReturn) {
       final existsAsFile = await f.exists();
-      final existsAsDir = await Directory(f.path).exists();
+      final existsAsDir = await io.Directory(f.path).exists();
       if (!existsAsFile && !existsAsDir) continue;
       if (sessionStart != null && existsAsFile) {
         final stat = await f.stat();
@@ -174,26 +183,33 @@ class RetroArchSaveStrategy extends SaveStrategy {
       final coreInfo = _coreMap[slug];
       if (coreInfo == null) return false;
 
-      final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
-      if (exePath == null) return false;
-      
-      String exeDir = File(exePath).parent.path;
-      // If exePath points to a folder instead of an exe, use it directly
-      if (await FileSystemEntity.isDirectory(exePath)) {
-        exeDir = exePath;
+      String? targetDir;
+      final isState = filename.contains('.state');
+
+      if (io.Platform.isLinux) {
+        final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+        targetDir = isState
+            ? p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder)
+            : p.join(baseDir, coreInfo.saveFolder);
+      } else {
+        final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+        if (exePath == null) return false;
+        
+        String exeDir = io.File(exePath).parent.path;
+        if (await io.FileSystemEntity.isDirectory(exePath)) {
+          exeDir = exePath;
+        }
+        targetDir = isState
+            ? p.join(exeDir, 'states', coreInfo.statesFolder)
+            : p.join(exeDir, 'saves', coreInfo.saveFolder);
       }
 
-      final isState = filename.contains('.state');
-      final targetDir = isState
-          ? p.join(exeDir, 'states', coreInfo.statesFolder)
-          : p.join(exeDir, 'saves', coreInfo.saveFolder);
-
-      final dir = Directory(targetDir);
+      final dir = io.Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
       final targetPath = p.join(targetDir, filename);
       await backupSave(targetPath); // Backup existing file
-      await File(targetPath).writeAsBytes(data);
+      await io.File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
       return false;

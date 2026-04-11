@@ -97,7 +97,14 @@ class Rpcs3SaveStrategy extends SaveStrategy {
 
     // 2. Dynamic path resolution
     final baseDir = await _directoryService.getEmulatorAppSupportDirectory('rpcs3', platformSlug: platformSlug);
-    final resolvedPath = p.join(baseDir, 'dev_hdd0', 'home', '00000001', 'savedata');
+    
+    String resolvedPath;
+    if (io.Platform.isLinux && p.basename(baseDir) == 'saves') {
+      // EmuDeck mapping already points to the saves (savedata) symlink
+      resolvedPath = baseDir;
+    } else {
+      resolvedPath = p.join(baseDir, 'dev_hdd0', 'home', '00000001', 'savedata');
+    }
 
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for RPCS3 at $resolvedPath. Please launch RPCS3 at least once to generate save data.');

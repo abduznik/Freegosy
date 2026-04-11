@@ -2,24 +2,35 @@ import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
+import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
 
 /// Save strategy for mGBA (GBA/GBC/GB).
 class MgbaSaveStrategy extends SaveStrategy {
+  final DirectoryService _directoryService;
+
+  MgbaSaveStrategy(this._directoryService);
+
   @override
   String get strategyId => 'mgba';
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
+    if (io.Platform.isLinux) {
+      final emuDir = await _directoryService.getEmulatorAppSupportDirectory('mgba');
+      if (await io.Directory(emuDir).exists()) return emuDir;
+    }
     return io.File(romPath).parent.path;
   }
 
   @override
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
-    final romFile = io.File(romPath);
-    final romStem = p.basenameWithoutExtension(romFile.path);
-    final saveFile = io.File(p.join(romFile.parent.path, '$romStem.sav'));
+    final saveDir = await getSaveDir(game, romPath);
+    if (saveDir == null) return [];
+
+    final romStem = p.basenameWithoutExtension(romPath);
+    final saveFile = io.File(p.join(saveDir, '$romStem.sav'));
 
     if (await saveFile.exists()) {
       if (sessionStart != null) {
@@ -30,7 +41,7 @@ class MgbaSaveStrategy extends SaveStrategy {
     } else {
       // Fallback to getRomStem(game)
       final fallbackStem = getRomStem(game);
-      final fallbackSaveFile = io.File(p.join(romFile.parent.path, '$fallbackStem.sav'));
+      final fallbackSaveFile = io.File(p.join(saveDir, '$fallbackStem.sav'));
       if (await fallbackSaveFile.exists()) {
         if (sessionStart != null) {
           final stat = await fallbackSaveFile.stat();
@@ -46,11 +57,19 @@ class MgbaSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      final romFile = io.File(destPath);
-      final romStem = p.basenameWithoutExtension(romFile.path);
-      final targetPath = p.join(romFile.parent.path, '$romStem.sav');
+      final saveDir = await getSaveDir(game, destPath);
+      if (saveDir == null) return false;
 
-      // Prefer matching the actual ROM filename stem
+      final romStem = p.basenameWithoutExtension(destPath);
+      String targetPath = p.join(saveDir, '$romStem.sav');
+
+      if (!await io.File(targetPath).exists()) {
+        // Fallback to getRomStem(game)
+        final fallbackStem = getRomStem(game);
+        targetPath = p.join(saveDir, '$fallbackStem.sav');
+      }
+
+      await io.Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);
       return true;

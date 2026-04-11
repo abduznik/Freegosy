@@ -50,8 +50,8 @@ class SaveSyncService {
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
     _xenia = XeniaSaveStrategy(_directoryService);
     _duckstation = DuckstationSaveStrategy(_directoryService);
-    _melonds = MelonDsSaveStrategy();
-    _mgba = MgbaSaveStrategy();
+    _melonds = MelonDsSaveStrategy(_directoryService);
+    _mgba = MgbaSaveStrategy(_directoryService);
     _ppsspp = PpssppSaveStrategy(_directoryService);
     _cemu = CemuSaveStrategy(_directoryService);
     _azahar = AzaharSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);

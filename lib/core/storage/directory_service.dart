@@ -325,13 +325,25 @@ class DirectoryService {
       return p.join(appData, emulatorName);
     } else if (io.Platform.isLinux) {
       if (linuxSyncPreset == 'emudeck' && emudeckRootPath != null) {
-        // EmuDeck standard saves path: Emulation/saves/[emulator]/[platform]
-        // If platform is not provided, we might have to guess or return a base
-        final base = p.join(emudeckRootPath!, 'Emulation', 'saves', emulatorName.toLowerCase());
+        // EmuDeck folder names mapping (some are capitalized)
+        final Map<String, String> emudeckSavesMap = {
+          'cemu': 'Cemu',
+          'vita3k': 'Vita3K',
+          'mame': 'MAME',
+        };
+
+        final emuFolderName = emudeckSavesMap[emulatorName.toLowerCase()] ?? emulatorName.toLowerCase();
+        final base = p.join(emudeckRootPath!, 'Emulation', 'saves', emuFolderName);
+
         if (platformSlug != null) {
-          return p.join(base, platformSlug);
+          final slug = platformSlug.toLowerCase();
+          if (emulatorName.toLowerCase() == 'dolphin' || emulatorName.toLowerCase() == 'primehack') {
+            if (slug == 'gc' || slug == 'gamecube') return p.join(base, 'GC');
+            if (slug == 'wii') return p.join(base, 'Wii');
+          }
         }
-        return base;
+
+        return platformSlug != null ? p.join(base, platformSlug) : base;
       }
       final home = io.Platform.environment['HOME'] ?? '';
       return p.join(home, '.config', emulatorName);

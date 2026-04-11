@@ -43,7 +43,22 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       }
     }
 
-    // 2. macOS: ~/Library/Application Support/PCSX2
+    // 2. Linux & EmuDeck prioritized
+    if (io.Platform.isLinux) {
+      final baseDir = await _directoryService.getEmulatorAppSupportDirectory('pcsx2');
+      if (p.basename(baseDir) == 'saves') {
+        // EmuDeck mapping returns the folder containing the actual saves/cards
+        return baseDir;
+      }
+      
+      final home = io.Platform.environment['HOME'] ?? '';
+      final linuxPath = p.join(home, '.config', 'PCSX2');
+      if (await io.Directory(p.join(linuxPath, 'memcards')).exists()) {
+        return linuxPath;
+      }
+    }
+
+    // 3. macOS: ~/Library/Application Support/PCSX2
     if (io.Platform.isMacOS) {
       final home = io.Platform.environment['HOME'] ?? '';
       final macPath = p.join(home, 'Library', 'Application Support', 'PCSX2');
@@ -52,18 +67,9 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       }
     }
 
-    // 3. Linux: ~/.config/PCSX2
-    if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'] ?? '';
-      final linuxPath = p.join(home, '.config', 'PCSX2');
-      if (await io.Directory(p.join(linuxPath, 'memcards')).exists()) {
-        return linuxPath;
-      }
-    }
-
     // 4. Fall back to app support directory
-    final resolvedPath = await _directoryService.getEmulatorSystemDirectory('pcsx2');
-    if (!await io.Directory(resolvedPath).exists()) {
+    final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('pcsx2');
+    if (!await io.Directory(resolvedPath).exists() && !resolvedPath.contains('Emulation/saves')) {
       throw Exception('Save directory not found for PCSX2 at $resolvedPath. Please launch PCSX2 at least once to generate save data.');
     }
     return resolvedPath;
@@ -72,6 +78,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final root = await _getSaveRoot();
+    if (p.basename(root) == 'saves') return root; // EmuDeck direct
     return p.join(root, 'memcards');
   }
 
@@ -79,18 +86,17 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final root = await _getSaveRoot();
+    final bool isEmuDeck = p.basename(root) == 'saves';
 
     final result = <io.File>[];
 
-    // Memory cards — scan all .ps2 files in memcards folder
-    // Note: This matches the existing behavior of syncing entire cards.
-    final memcardsDir = io.Directory(p.join(root, 'memcards'));
+    // Memory cards
+    final memcardsDir = io.Directory(isEmuDeck ? root : p.join(root, 'memcards'));
     if (await memcardsDir.exists()) {
       await for (final entity in memcardsDir.list()) {
         if (entity is! io.File) continue;
         final basename = p.basename(entity.path);
         if (!basename.toLowerCase().endsWith('.ps2')) continue;
-        // Skip timestamped backup copies like "Mcd001 [2026-03-26_09-18-21].ps2"
         if (basename.contains('[') || basename.contains(']')) continue;
         if (sessionStart != null) {
           final stat = await entity.stat();
@@ -100,9 +106,9 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       }
     }
 
-    // Save states — named after ROM stem
+    // Save states
     final stem = getRomStem(game);
-    final statesDir = io.Directory(p.join(root, 'sstates'));
+    final statesDir = io.Directory(isEmuDeck ? p.join(p.dirname(root), 'states') : p.join(root, 'sstates'));
     if (await statesDir.exists()) {
       await for (final entity in statesDir.list()) {
         if (entity is! io.File) continue;
@@ -123,16 +129,16 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       Game game, String destPath, Uint8List data, String filename) async {
     try {
       final root = await _getSaveRoot();
+      final bool isEmuDeck = p.basename(root) == 'saves';
 
-      // Cloud saves come as zips — extract into the appropriate directory
+      // Cloud saves come as zips
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
-          // Determine target dir by file extension
           final entryLower = entry.name.toLowerCase();
           final targetDir = entryLower.endsWith('.ps2')
-              ? p.join(root, 'memcards')
-              : p.join(root, 'sstates');
+              ? (isEmuDeck ? root : p.join(root, 'memcards'))
+              : (isEmuDeck ? p.join(p.dirname(root), 'states') : p.join(root, 'sstates'));
 
           if (entry.isFile) {
             final targetFilename = entryLower.endsWith('.ps2')
@@ -151,7 +157,10 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       // Single file fallback
       final isState = filename.contains('.') &&
           int.tryParse(filename.split('.').last) != null;
-      final targetDir = isState ? p.join(root, 'sstates') : p.join(root, 'memcards');
+      final targetDir = isState 
+          ? (isEmuDeck ? p.join(p.dirname(root), 'states') : p.join(root, 'sstates'))
+          : (isEmuDeck ? root : p.join(root, 'memcards'));
+      
       await io.Directory(targetDir).create(recursive: true);
       final normalizedFilename = filename.toLowerCase().endsWith('.ps2')
           ? _normalizeMemcardFilename(filename)

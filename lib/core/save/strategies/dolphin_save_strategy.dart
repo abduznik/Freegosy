@@ -73,35 +73,40 @@ class DolphinSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final userDir = await _getUserDir(platformSlug: game.platformSlug);
+    final bool isEmuDeck = io.Platform.isLinux && userDir.contains('Emulation/saves');
 
     final isWii = game.platformSlug?.toLowerCase() == 'wii';
 
     if (isWii) {
       // Wii saves are in Wii/title/00010000/[TITLE_ID_HEX]
-      // We need to find the title ID.
       String? titleId = _extractGameId(p.basename(romPath));
+      
+      final String wiiBase = (isEmuDeck && p.basename(userDir) == 'Wii')
+          ? userDir
+          : p.join(userDir, 'Wii');
+
       if (titleId != null && titleId.length >= 4) {
-        // Dolphin uses the 4-char ID in hex format for the folder name
-        // e.g. RMCE (Mario Kart Wii) -> 524d4345
         final hexId = titleId.substring(0, 4).codeUnits
             .map((e) => e.toRadixString(16).padLeft(2, '0'))
             .join();
-        final wiiPath = p.join(userDir, 'Wii', 'title', '00010000', hexId);
+        final wiiPath = p.join(wiiBase, 'title', '00010000', hexId);
         if (await io.Directory(wiiPath).exists()) return wiiPath;
       }
       
-      // Fallback: search title directory for modified folders if sessionStart is known
-      return p.join(userDir, 'Wii', 'title', '00010000');
+      return p.join(wiiBase, 'title', '00010000');
     } else {
       // GameCube
       final region = _detectRegion(romPath);
+      final String gcBase = (isEmuDeck && p.basename(userDir) == 'GC')
+          ? userDir
+          : p.join(userDir, 'GC');
       
       // First, check for GCI folder (preferred for sync)
-      final gciPath = p.join(userDir, 'GC', region, 'Card A');
+      final gciPath = p.join(gcBase, region, 'Card A');
       if (await io.Directory(gciPath).exists()) return gciPath;
 
       // Fallback to the general GC folder for memory cards
-      return p.join(userDir, 'GC');
+      return gcBase;
     }
   }
 
