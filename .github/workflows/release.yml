@@ -111,13 +111,18 @@ jobs:
           Categories=Game;
           EOF
           
-          # Use placeholder icon (or copy from assets if available)
+          # Use icon
           cp web/icons/Icon-192.png AppDir/usr/share/icons/hicolor/256x256/apps/freegosy.png
           cp web/icons/Icon-192.png AppDir/freegosy.png
+          
+          # Mandatory files for AppImage
+          cp AppDir/usr/share/applications/freegosy.desktop AppDir/
+          ln -s usr/bin/freegosy AppDir/AppRun
+          chmod +x AppDir/AppRun
 
       - name: Build AppImage
         run: |
-          ARCH=x86_64 /usr/local/bin/appimagetool AppDir Freegosy-x86_64.AppImage
+          ARCH=x86_64 /usr/local/bin/appimagetool --appimage-extract-and-run AppDir Freegosy-x86_64.AppImage
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -127,7 +132,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
