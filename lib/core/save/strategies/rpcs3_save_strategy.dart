@@ -171,8 +171,22 @@ class Rpcs3SaveStrategy extends SaveStrategy {
         debugPrint('[RPCS3] Method 2 PARAM.SFO single best match: ${bySfo.first.path}');
         return bySfo;
       }
+
+      // If all matches share the same Title ID prefix (first 9 chars), return all of them.
+      // RPCS3 often uses multiple folders for the same game (e.g. BLUS12345, BLUS12345F, BLUS12345L01).
+      final titleIdRegExp = RegExp(r'^([A-Z]{4}\d{5})');
+      final titleIds = bySfo.map((d) {
+        final folderName = d.path.split(p.separator).last.toUpperCase();
+        final match = titleIdRegExp.firstMatch(folderName);
+        return match?.group(1) ?? folderName;
+      }).toSet();
+
+      if (titleIds.length == 1) {
+        debugPrint('[RPCS3] Method 2 multiple matches for same Title ID ${titleIds.first}: returning all');
+        return bySfo;
+      }
       
-      // Multiple SFO matches with same score — fall through to recency/conflict logic
+      // Multiple SFO matches with same score but different Title IDs — fall through to recency/conflict logic
       final withTimes = <Map<String, dynamic>>[];
       for (final dir in bySfo) {
         DateTime? latestFile;
