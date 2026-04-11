@@ -4,12 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/storage/secure_storage_service.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
-// import '../../core/extraction/extraction_service.dart'; // Removed unused import
 import '../../providers/romm_provider.dart';
-import '../../providers/library_provider.dart'; // Assuming this file contains the display providers and kDisplayPresets
+import '../../providers/library_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import 'settings_emulators_section.dart';
@@ -289,8 +288,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       final password = _passwordController.text;
                       final apiKey = _apiKeyController.text.trim(); // Get API Key value
 
-                      final secureStorage = const FlutterSecureStorage();
-
                       // Try Bearer token (OAuth2). If the server doesn't support
                       // it over HTTP or at all, fall back to Basic auth silently.
                       try {
@@ -299,22 +296,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         final prefs = await SharedPreferences.getInstance();
                         final token = prefs.getString('rommAuthToken');
                         if (token != null) {
-                          await secureStorage.write(key: 'rommAuthToken', value: token);
+                          await SecureStorageService.write('rommAuthToken', token);
                           await prefs.remove('rommAuthToken');
                         }
                       } catch (e) {
                         // Clear any stale token so Basic auth is used instead.
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.remove('rommAuthToken');
-                        await secureStorage.delete(key: 'rommAuthToken');
+                        await SecureStorageService.delete('rommAuthToken');
                       }
 
                       // Save credentials regardless of whether token fetch succeeded.
                       final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);
-                      await secureStorage.write(key: 'rommPassword', value: password);
-                      await secureStorage.write(key: 'rommApiKey', value: apiKey);
+                      await SecureStorageService.write('rommPassword', password);
+                      await SecureStorageService.write('rommApiKey', apiKey);
 
                       // Invalidate providers to refresh RomM service and config
                       ref.invalidate(rommConfigProvider);

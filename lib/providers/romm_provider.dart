@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
@@ -12,7 +11,7 @@ import 'package:freegosy/core/storage/download_cache_service.dart';
 
 import 'package:freegosy/core/emulator/firmware_service.dart';
 
-final _secureStorage = const FlutterSecureStorage();
+import 'package:freegosy/core/storage/secure_storage_service.dart';
 
 final firmwareServiceProvider = FutureProvider<FirmwareService?>((ref) async {
   final rommService = ref.watch(rommServiceProvider);
@@ -31,9 +30,9 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   final baseUrl = prefs.getString('rommBaseUrl') ?? 'https://api.romm.example.com';
   final username = prefs.getString('rommUsername') ?? 'guest';
-  final password = await _secureStorage.read(key: 'rommPassword') ?? '';
-  final token = await _secureStorage.read(key: 'rommAuthToken');
-  final apiKey = await _secureStorage.read(key: 'rommApiKey') ?? '';
+  final password = await SecureStorageService.read('rommPassword') ?? '';
+  final token = await SecureStorageService.read('rommAuthToken');
+  final apiKey = await SecureStorageService.read('rommApiKey') ?? '';
 
   return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token, apiKey: apiKey);
 });
