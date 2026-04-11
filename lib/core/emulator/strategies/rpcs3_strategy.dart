@@ -72,6 +72,8 @@ class Rpcs3Strategy extends EmulatorStrategy {
       await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
       return;
     }
+
+    if (io.Platform.isMacOS) {
       // Find the .app bundle path
       final parts = exePath.split('/');
       final appIdx = parts.indexWhere((p) => p.endsWith('.app'));

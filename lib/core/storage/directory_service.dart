@@ -386,7 +386,7 @@ class DirectoryService {
 
     // EmuDeck support: Check for .sh launchers in [ROOT]/tools/launchers
     if (io.Platform.isLinux && emudeckRootPath != null) {
-      final launcherName = '${emulatorId}.sh';
+      final launcherName = '$emulatorId.sh';
       final launcherFile = File(p.join(emudeckRootPath!, 'Emulation', 'tools', 'launchers', launcherName));
       if (await launcherFile.exists()) {
         debugPrint("[DirectoryService] Found EmuDeck launcher: ${launcherFile.path}");
