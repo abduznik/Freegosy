@@ -217,6 +217,7 @@ Future<void> _startDownload(
     final hasPreference = prefs.containsKey('rpcs3_macos_architecture');
     
     if (!hasPreference) {
+      if (!context.mounted) return;
       // Show choice dialog
       final choice = await showDialog<String>(
         context: context,
