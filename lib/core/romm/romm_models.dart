@@ -148,6 +148,31 @@ class Game {
       'file_size_bytes': fileSize,
       'multi_file_path': multiFilePath,
       'has_multiple_files': hasMultipleFiles,
+      'files': files,
+      'summary': summary,
+      'metadatum': {
+        'genres': genres,
+        'companies': companies,
+        'player_count': playerCount,
+        'first_release_date': firstReleaseDate,
+        'average_rating': averageRating,
+      },
+      'regions': regions,
+      'languages': languages,
+      'tags': tags,
+      'merged_screenshots': mergedScreenshots,
+      'ss_metadata': {
+        'screenshot_url': screenshotUrl,
+        'fanart_url': fanartUrl,
+      },
+      'rom_user': {
+        'last_played': lastPlayed?.toIso8601String(),
+        'rating': userRating,
+        'completion': completion,
+        'status': status,
+        'backlogged': backlogged,
+        'now_playing': nowPlaying,
+      },
     };
   }
 }

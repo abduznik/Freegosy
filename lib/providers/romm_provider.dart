@@ -10,6 +10,7 @@ import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
 
 import 'package:freegosy/core/storage/download_cache_service.dart';
+import 'package:freegosy/core/storage/metadata_cache_service.dart';
 
 import 'package:freegosy/core/emulator/firmware_service.dart';
 
@@ -138,4 +139,10 @@ final rommServiceProvider = Provider<RommService?>((ref) {
     }
   }
   return null;
+});
+
+final metadataCacheServiceProvider = FutureProvider<MetadataCacheService>((ref) async {
+  final service = MetadataCacheService();
+  await service.load();
+  return service;
 });

@@ -137,10 +137,13 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
     // No cache — show loading and fetch
     state = const PaginatedGamesState(isLoading: true);
     final service = _ref.read(rommServiceProvider);
+    
     if (service == null) {
-      state = state.copyWith(isLoading: false, error: 'Not connected');
+      // Fallback to offline cache
+      await _loadOffline(platformId, search);
       return;
     }
+
     try {
       final result = await service.getGamesPage(
         offset: 0,
@@ -153,6 +156,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         collections: _activeFilters.collections,
         statuses: _activeFilters.statuses,
       );
+      
       _cache[key] = result.games;
       _offsets[key] = result.games.length;
       _totals[key] = result.total;
@@ -162,9 +166,40 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         hasMore: result.games.length < result.total,
         isLoading: false,
       );
+
+      // Persist results for offline use
+      final cacheService = _ref.read(metadataCacheServiceProvider).value;
+      if (cacheService != null) {
+        await cacheService.saveGames(result.games);
+      }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      // On error, also try fallback
+      await _loadOffline(platformId, search, error: e.toString());
     }
+  }
+
+  Future<void> _loadOffline(String? platformId, String? search, {String? error}) async {
+    final cacheService = _ref.read(metadataCacheServiceProvider).value;
+    if (cacheService == null) {
+      state = state.copyWith(isLoading: false, error: error ?? 'Not connected');
+      return;
+    }
+
+    final offlineGames = cacheService.getOfflineGames(
+      platformId: platformId,
+      search: search,
+      genres: _activeFilters.genres,
+      regions: _activeFilters.regions,
+      languages: _activeFilters.languages,
+    );
+
+    state = PaginatedGamesState(
+      games: offlineGames,
+      total: offlineGames.length,
+      hasMore: false,
+      isLoading: false,
+      error: error != null ? 'Offline Mode (Server: $error)' : 'Offline Mode',
+    );
   }
 
   Future<void> _backgroundRefresh({
@@ -197,6 +232,12 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
           hasMore: result.games.length < result.total,
           isLoading: false,
         );
+        
+        // Update cache
+        final cacheService = _ref.read(metadataCacheServiceProvider).value;
+        if (cacheService != null) {
+          await cacheService.saveGames(result.games);
+        }
       }
     } catch (_) {}
   }
@@ -230,6 +271,12 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         hasMore: merged.length < result.total,
         isLoadingMore: false,
       );
+
+      // Update cache
+      final cacheService = _ref.read(metadataCacheServiceProvider).value;
+      if (cacheService != null) {
+        await cacheService.saveGames(result.games);
+      }
     } catch (e) {
       state = state.copyWith(isLoadingMore: false, error: e.toString());
     }

@@ -446,15 +446,71 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     ],
                   ),
                 ),
+              if (paginatedState.error != null && paginatedState.error!.contains('Offline Mode'))
+                Container(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cloud_off, color: Colors.orange),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Offline Mode',
+                              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              paginatedState.error!,
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          ref.invalidate(rommServiceProvider);
+                          ref.read(paginatedGamesProvider.notifier).loadInitial(
+                            platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+                            search: ref.read(searchQueryProvider),
+                          );
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: paginatedState.isLoading
                     ? buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing, context)
-                    : paginatedState.error != null
+                    : (paginatedState.error != null && !paginatedState.error!.contains('Offline Mode'))
                         ? Center(
-                            child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text('Error: ${paginatedState.error}', style: const TextStyle(color: Colors.red)),
-                          ))
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Error: ${paginatedState.error}',
+                                  style: const TextStyle(color: Colors.red),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    ref.invalidate(rommServiceProvider);
+                                    ref.read(paginatedGamesProvider.notifier).loadInitial(
+                                      platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+                                      search: ref.read(searchQueryProvider),
+                                    );
+                                  },
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          )
                         : Column(
                             children: [
                               Padding(
