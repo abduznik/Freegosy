@@ -171,6 +171,24 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     }
   }
 
+  void _viewNote(RomNote note) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(note.title.isNotEmpty ? note.title : 'Note'),
+        content: SingleChildScrollView(
+          child: Text(note.content),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveProps(BuildContext context) async {
     if (widget.rommService == null) return;
     
@@ -524,29 +542,23 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     ..._currentGame.notes.map((note) => Card(
                       color: Colors.white10,
                       margin: const EdgeInsets.only(bottom: 8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                if (note.title.isNotEmpty)
-                                  Expanded(
-                                    child: Text(note.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 18),
-                                  onPressed: () => _deleteNote(note.id),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                ),
-                              ],
-                            ),
-                            if (note.title.isNotEmpty) const SizedBox(height: 4),
-                            Text(note.content, style: const TextStyle(color: Colors.white70)),
-                          ],
+                      child: ListTile(
+                        onTap: () => _viewNote(note),
+                        title: Text(
+                          note.title.isNotEmpty ? note.title : 'Note',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          note.content,
+                          style: const TextStyle(color: Colors.white70),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 18),
+                          onPressed: () => _deleteNote(note.id),
                         ),
                       ),
                     )),
