@@ -28,6 +28,10 @@ void main() {
     // Default preferred emulator is null to use built-in fallbacks
     when(mockStrategyRegistry.getPreferredEmulatorId(any)).thenReturn(null);
     
+    // Ensure that on Linux tests we don't accidentally pick up a real system directory or a mock that returns empty string
+    when(mockDirectoryService.getEmulatorAppSupportDirectory(any))
+        .thenAnswer((_) async => '/nonexistent_directory_for_testing');
+    
     service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry);
   });
 
