@@ -46,8 +46,6 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   late String? _status;
   late int _completion;
   bool _isSaving = false;
-  List<RomNote> _notes = [];
-  bool _isLoadingNotes = true;
 
   @override
   void initState() {
@@ -55,8 +53,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     _currentGame = widget.game;
     _isDownloaded = widget.isDownloaded;
     _syncStateWithGame(_currentGame);
-    _fetchNotes();
     _checkDownloadStatus();
+    // Initial refresh to get latest notes and status
+    _refreshGame();
   }
 
   void _syncStateWithGame(Game game) {
@@ -89,21 +88,6 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         _checkDownloadStatus();
       }
     } catch (_) {}
-  }
-
-  Future<void> _fetchNotes() async {
-    if (widget.rommService == null) return;
-    try {
-      final notes = await widget.rommService!.getRomNotes(_currentGame.id);
-      if (mounted) {
-        setState(() {
-          _notes = notes;
-          _isLoadingNotes = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoadingNotes = false);
-    }
   }
 
   Future<void> _addNote() async {
@@ -145,12 +129,43 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       if (title.isNotEmpty || content.isNotEmpty) {
         final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
         if (success) {
-          _fetchNotes();
+          _refreshGame();
         } else {
           if (mounted) {
             // ignore: use_build_context_synchronously
             ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
           }
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteNote(int noteId) async {
+    if (widget.rommService == null) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Note'),
+        content: const Text('Are you sure you want to delete this note?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await widget.rommService!.deleteRomNote(_currentGame.id, noteId);
+      if (success) {
+        _refreshGame();
+      } else {
+        if (mounted) {
+          // ignore: use_build_context_synchronously
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete note')));
         }
       }
     }
@@ -212,6 +227,16 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(downloadProvider, (prev, next) {
+      final progress = next[_currentGame.id];
+      if (progress != null && progress.isComplete) {
+        // Download just finished
+        _checkDownloadStatus();
+        // Remove from progress map so we show the action buttons instead of "100% Done"
+        ref.read(downloadProvider.notifier).removeDownload(_currentGame.id);
+      }
+    });
+
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
     final headerHeight = size.height * 0.4;
@@ -493,12 +518,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  if (_isLoadingNotes)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_notes.isEmpty)
+                  if (_currentGame.notes.isEmpty)
                     const Text('No notes added yet.', style: TextStyle(color: Colors.white54, fontSize: 13))
                   else
-                    ..._notes.map((note) => Card(
+                    ..._currentGame.notes.map((note) => Card(
                       color: Colors.white10,
                       margin: const EdgeInsets.only(bottom: 8),
                       child: Padding(
@@ -506,8 +529,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (note.title.isNotEmpty)
-                              Text(note.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                if (note.title.isNotEmpty)
+                                  Expanded(
+                                    child: Text(note.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 18),
+                                  onPressed: () => _deleteNote(note.id),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              ],
+                            ),
                             if (note.title.isNotEmpty) const SizedBox(height: 4),
                             Text(note.content, style: const TextStyle(color: Colors.white70)),
                           ],

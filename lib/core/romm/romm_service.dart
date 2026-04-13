@@ -762,4 +762,16 @@ class RommService {
       return false;
     }
   }
+
+  Future<bool> deleteRomNote(String romId, int noteId) async {
+    try {
+      final response = await _dio.delete(
+        '/api/roms/$romId/notes/$noteId',
+        options: _authOptions,
+      );
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      return false;
+    }
+  }
 }

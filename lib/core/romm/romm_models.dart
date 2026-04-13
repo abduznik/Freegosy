@@ -34,6 +34,7 @@ class Game {
   final String? status; // from rom_user.status
   final bool backlogged; // from rom_user.backlogged, default false
   final bool nowPlaying; // from rom_user.now_playing, default false
+  final List<RomNote> notes; // from all_user_notes
 
   bool get isMultiFile => hasMultipleFiles;
 
@@ -92,6 +93,7 @@ class Game {
     this.status,
     this.backlogged = false,
     this.nowPlaying = false,
+    this.notes = const [],
   });
 
   factory Game.fromJson(Map<String, dynamic> json) {
@@ -129,6 +131,7 @@ class Game {
       status: json['rom_user']?['status']?.toString(),
       backlogged: json['rom_user']?['backlogged'] as bool? ?? false,
       nowPlaying: json['rom_user']?['now_playing'] as bool? ?? false,
+      notes: (json['all_user_notes'] as List<dynamic>?)?.map((e) => RomNote.fromJson(e)).toList() ?? [],
     );
   }
 
@@ -173,6 +176,13 @@ class Game {
         'backlogged': backlogged,
         'now_playing': nowPlaying,
       },
+      'all_user_notes': notes.map((n) => {
+        'id': n.id,
+        'title': n.title,
+        'content': n.content,
+        'created_at': n.createdAt?.toIso8601String(),
+        'updated_at': n.updatedAt?.toIso8601String(),
+      }).toList(),
     };
   }
 }
