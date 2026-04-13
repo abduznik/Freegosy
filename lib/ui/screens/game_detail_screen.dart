@@ -609,16 +609,25 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       const Text('Status', style: TextStyle(color: Colors.white54, fontSize: 13)),
                       const Spacer(),
                       DropdownButton<String>(
-                        value: _status,
+                        value: const [
+                          'never_played',
+                          'playing',
+                          'incomplete',
+                          'completed',
+                          'completed_100',
+                          'dropped'
+                        ].contains(_status) ? _status : null,
                         dropdownColor: Colors.grey[900],
                         style: const TextStyle(color: Colors.white),
                         hint: const Text('Not set', style: TextStyle(color: Colors.white54)),
                         underline: const SizedBox(),
                         items: const [
                           DropdownMenuItem(value: 'never_played', child: Text('Never Played')),
+                          DropdownMenuItem(value: 'playing', child: Text('Playing')),
                           DropdownMenuItem(value: 'incomplete', child: Text('Incomplete')),
-                          DropdownMenuItem(value: 'finished', child: Text('Finished')),
-                          DropdownMenuItem(value: 'fully_completed', child: Text('100% Completed')),
+                          DropdownMenuItem(value: 'completed', child: Text('Finished')),
+                          DropdownMenuItem(value: 'completed_100', child: Text('100% Completed')),
+                          DropdownMenuItem(value: 'dropped', child: Text('Dropped')),
                         ],
                         onChanged: (val) => setState(() => _status = val),
                       ),
