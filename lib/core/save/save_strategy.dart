@@ -26,6 +26,13 @@ abstract class SaveStrategy {
   /// If [sessionStart] is provided, only files modified after that time are returned.
   Future<List<File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'});
 
+  /// Returns all save files associated with [game], optionally paired with screenshots.
+  /// If [sessionStart] is provided, only files modified after that time are returned.
+  Future<Map<File, File?>> getSaveFilesWithScreenshots(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
+    final files = await getSaveFiles(game, romPath, sessionStart: sessionStart, syncMode: syncMode);
+    return {for (var f in files) f: null};
+  }
+
   /// Restores save [data] named [filename] for [game] at [destPath].
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename);
 

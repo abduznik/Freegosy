@@ -184,9 +184,14 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
     String? gameId,
     _i6.File? saveFile, {
     String? slot,
+    _i6.File? screenshotFile,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#uploadSave, [gameId, saveFile], {#slot: slot}),
+            Invocation.method(
+              #uploadSave,
+              [gameId, saveFile],
+              {#slot: slot, #screenshotFile: screenshotFile},
+            ),
             returnValue: _i5.Future<bool>.value(false),
           )
           as _i5.Future<bool>);
@@ -285,6 +290,26 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
                 #completion: completion,
               },
             ),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<List<_i2.RomNote>> getRomNotes(String? romId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getRomNotes, [romId]),
+            returnValue: _i5.Future<List<_i2.RomNote>>.value(<_i2.RomNote>[]),
+          )
+          as _i5.Future<List<_i2.RomNote>>);
+
+  @override
+  _i5.Future<bool> createRomNote(
+    String? romId,
+    String? title,
+    String? content,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#createRomNote, [romId, title, content]),
             returnValue: _i5.Future<bool>.value(false),
           )
           as _i5.Future<bool>);

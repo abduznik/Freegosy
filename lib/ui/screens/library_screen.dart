@@ -409,6 +409,43 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                 loading: () => const LinearProgressIndicator(),
                 error: (e, s) => Text('Error loading platforms: $e'),
               ),
+              if (directoryServiceAsync.value?.status.hasError == true)
+                Container(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Storage Error',
+                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '${directoryServiceAsync.value!.status.message} (${directoryServiceAsync.value!.status.failedPath})',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          // Navigate to settings (it's the 3rd tab, index 2)
+                          // Assuming we can find the parent Scaffold or similar
+                          // For now, let's just use a simple Navigator.push to SettingsScreen if possible, 
+                          // but the app uses a bottom bar.
+                          // Let's just provide a Retry for now as it's more direct.
+                          ref.invalidate(directoryServiceProvider);
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: paginatedState.isLoading
                     ? buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing, context)

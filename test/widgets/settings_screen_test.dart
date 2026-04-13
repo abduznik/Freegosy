@@ -31,6 +31,7 @@ void main() {
     
     when(mockDirectoryService.romsRootPath).thenReturn('/roms');
     when(mockDirectoryService.emulatorsRootPath).thenReturn('/emulators');
+    when(mockDirectoryService.status).thenReturn(const StorageStatus());
     when(mockDirectoryService.isEmulatorInstalled(any, any)).thenAnswer((_) async => true);
     when(mockDirectoryService.getEmulatorPathOverride(any)).thenReturn(null);
     when(mockRommService.getPlatforms()).thenAnswer((_) async => []);

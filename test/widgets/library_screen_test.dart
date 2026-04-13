@@ -24,6 +24,7 @@ void main() {
     when(mockRommService.config).thenReturn(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
     when(mockRommService.resolveCoverUrl(any)).thenReturn(null);
     when(mockRommService.getRecentlyPlayed(limit: anyNamed('limit'))).thenAnswer((_) async => []);
+    when(mockDirectoryService.status).thenReturn(const StorageStatus());
   });
 
   group('LibraryScreen', () {

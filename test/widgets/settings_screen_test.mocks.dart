@@ -9,9 +9,9 @@ import 'dart:typed_data' as _i8;
 
 import 'package:freegosy/core/emulator/emulator_strategy.dart' as _i10;
 import 'package:freegosy/core/emulator/strategy_registry.dart' as _i9;
-import 'package:freegosy/core/romm/romm_models.dart' as _i2;
+import 'package:freegosy/core/romm/romm_models.dart' as _i3;
 import 'package:freegosy/core/romm/romm_service.dart' as _i6;
-import 'package:freegosy/core/storage/directory_service.dart' as _i3;
+import 'package:freegosy/core/storage/directory_service.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
 
@@ -30,15 +30,20 @@ import 'package:mockito/src/dummies.dart' as _i4;
 // ignore_for_file: subtype_of_sealed_class
 // ignore_for_file: invalid_use_of_internal_member
 
-class _FakeRomMConfig_0 extends _i1.SmartFake implements _i2.RomMConfig {
-  _FakeRomMConfig_0(Object parent, Invocation parentInvocation)
+class _FakeStorageStatus_0 extends _i1.SmartFake implements _i2.StorageStatus {
+  _FakeStorageStatus_0(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeRomMConfig_1 extends _i1.SmartFake implements _i3.RomMConfig {
+  _FakeRomMConfig_1(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
 /// A class which mocks [DirectoryService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
+class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
   MockDirectoryService() {
     _i1.throwOnMissingStub(this);
   }
@@ -77,6 +82,14 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as String);
 
   @override
+  _i2.StorageStatus get status =>
+      (super.noSuchMethod(
+            Invocation.getter(#status),
+            returnValue: _FakeStorageStatus_0(this, Invocation.getter(#status)),
+          )
+          as _i2.StorageStatus);
+
+  @override
   set romsRootPath(String? value) => super.noSuchMethod(
     Invocation.setter(#romsRootPath, value),
     returnValueForMissingStub: null,
@@ -101,13 +114,20 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
   );
 
   @override
-  _i5.Future<void> initialize() =>
+  set status(_i2.StorageStatus? value) => super.noSuchMethod(
+    Invocation.setter(#status, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i5.Future<_i2.StorageStatus> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i5.Future<_i2.StorageStatus>.value(
+              _FakeStorageStatus_0(this, Invocation.method(#initialize, [])),
+            ),
           )
-          as _i5.Future<void>);
+          as _i5.Future<_i2.StorageStatus>);
 
   @override
   _i5.Future<void> setLinuxSyncPreset(String? preset) =>
@@ -202,7 +222,7 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i5.Future<Map<String, Set<String>>>);
 
   @override
-  _i5.Future<String> getRomDirectory(_i2.Game? game) =>
+  _i5.Future<String> getRomDirectory(_i3.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#getRomDirectory, [game]),
             returnValue: _i5.Future<String>.value(
@@ -215,7 +235,7 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i5.Future<String>);
 
   @override
-  _i5.Future<String> getRomFilePath(_i2.Game? game) =>
+  _i5.Future<String> getRomFilePath(_i3.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#getRomFilePath, [game]),
             returnValue: _i5.Future<String>.value(
@@ -228,7 +248,7 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i5.Future<String>);
 
   @override
-  _i5.Future<String?> findExistingRomPath(_i2.Game? game) =>
+  _i5.Future<String?> findExistingRomPath(_i3.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#findExistingRomPath, [game]),
             returnValue: _i5.Future<String?>.value(),
@@ -388,7 +408,7 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i5.Future<bool>);
 
   @override
-  _i5.Future<bool> isRomDownloaded(_i2.Game? game) =>
+  _i5.Future<bool> isRomDownloaded(_i3.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#isRomDownloaded, [game]),
             returnValue: _i5.Future<bool>.value(false),
@@ -396,7 +416,15 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i5.Future<bool>);
 
   @override
-  _i5.Future<void> deleteRom(_i2.Game? game) =>
+  bool isEmuLaunchScript(String? path) =>
+      (super.noSuchMethod(
+            Invocation.method(#isEmuLaunchScript, [path]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  _i5.Future<void> deleteRom(_i3.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#deleteRom, [game]),
             returnValue: _i5.Future<void>.value(),
@@ -414,12 +442,12 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
   }
 
   @override
-  _i2.RomMConfig get config =>
+  _i3.RomMConfig get config =>
       (super.noSuchMethod(
             Invocation.getter(#config),
-            returnValue: _FakeRomMConfig_0(this, Invocation.getter(#config)),
+            returnValue: _FakeRomMConfig_1(this, Invocation.getter(#config)),
           )
-          as _i2.RomMConfig);
+          as _i3.RomMConfig);
 
   @override
   String get authHeader =>
@@ -442,12 +470,12 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<List<_i2.Platform>> getPlatforms() =>
+  _i5.Future<List<_i3.Platform>> getPlatforms() =>
       (super.noSuchMethod(
             Invocation.method(#getPlatforms, []),
-            returnValue: _i5.Future<List<_i2.Platform>>.value(<_i2.Platform>[]),
+            returnValue: _i5.Future<List<_i3.Platform>>.value(<_i3.Platform>[]),
           )
-          as _i5.Future<List<_i2.Platform>>);
+          as _i5.Future<List<_i3.Platform>>);
 
   @override
   _i5.Future<List<Map<String, dynamic>>> getCollections() =>
@@ -460,36 +488,36 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
           as _i5.Future<List<Map<String, dynamic>>>);
 
   @override
-  String? resolveCoverUrl(_i2.Game? game) =>
+  String? resolveCoverUrl(_i3.Game? game) =>
       (super.noSuchMethod(Invocation.method(#resolveCoverUrl, [game]))
           as String?);
 
   @override
-  _i5.Future<List<_i2.Game>> getGames(String? platformId) =>
+  _i5.Future<List<_i3.Game>> getGames(String? platformId) =>
       (super.noSuchMethod(
             Invocation.method(#getGames, [platformId]),
-            returnValue: _i5.Future<List<_i2.Game>>.value(<_i2.Game>[]),
+            returnValue: _i5.Future<List<_i3.Game>>.value(<_i3.Game>[]),
           )
-          as _i5.Future<List<_i2.Game>>);
+          as _i5.Future<List<_i3.Game>>);
 
   @override
-  _i5.Future<List<_i2.Game>> getAllGames({String? platformId}) =>
+  _i5.Future<List<_i3.Game>> getAllGames({String? platformId}) =>
       (super.noSuchMethod(
             Invocation.method(#getAllGames, [], {#platformId: platformId}),
-            returnValue: _i5.Future<List<_i2.Game>>.value(<_i2.Game>[]),
+            returnValue: _i5.Future<List<_i3.Game>>.value(<_i3.Game>[]),
           )
-          as _i5.Future<List<_i2.Game>>);
+          as _i5.Future<List<_i3.Game>>);
 
   @override
-  _i5.Future<List<_i2.Game>> getRecentlyPlayed({int? limit = 15}) =>
+  _i5.Future<List<_i3.Game>> getRecentlyPlayed({int? limit = 15}) =>
       (super.noSuchMethod(
             Invocation.method(#getRecentlyPlayed, [], {#limit: limit}),
-            returnValue: _i5.Future<List<_i2.Game>>.value(<_i2.Game>[]),
+            returnValue: _i5.Future<List<_i3.Game>>.value(<_i3.Game>[]),
           )
-          as _i5.Future<List<_i2.Game>>);
+          as _i5.Future<List<_i3.Game>>);
 
   @override
-  _i5.Future<({List<_i2.Game> games, int total})> getGamesPage({
+  _i5.Future<({List<_i3.Game> games, int total})> getGamesPage({
     int? offset = 0,
     int? limit = 50,
     String? platformId,
@@ -518,31 +546,31 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
               #withCharIndex: withCharIndex,
               #withFilterValues: withFilterValues,
             }),
-            returnValue: _i5.Future<({List<_i2.Game> games, int total})>.value((
-              games: <_i2.Game>[],
+            returnValue: _i5.Future<({List<_i3.Game> games, int total})>.value((
+              games: <_i3.Game>[],
               total: 0,
             )),
           )
-          as _i5.Future<({List<_i2.Game> games, int total})>);
+          as _i5.Future<({List<_i3.Game> games, int total})>);
 
   @override
-  _i5.Future<_i2.Game?> getRandomGame() =>
+  _i5.Future<_i3.Game?> getRandomGame() =>
       (super.noSuchMethod(
             Invocation.method(#getRandomGame, []),
-            returnValue: _i5.Future<_i2.Game?>.value(),
+            returnValue: _i5.Future<_i3.Game?>.value(),
           )
-          as _i5.Future<_i2.Game?>);
+          as _i5.Future<_i3.Game?>);
 
   @override
-  _i5.Future<List<_i2.SaveFile>> getSaves(String? gameId) =>
+  _i5.Future<List<_i3.SaveFile>> getSaves(String? gameId) =>
       (super.noSuchMethod(
             Invocation.method(#getSaves, [gameId]),
-            returnValue: _i5.Future<List<_i2.SaveFile>>.value(<_i2.SaveFile>[]),
+            returnValue: _i5.Future<List<_i3.SaveFile>>.value(<_i3.SaveFile>[]),
           )
-          as _i5.Future<List<_i2.SaveFile>>);
+          as _i5.Future<List<_i3.SaveFile>>);
 
   @override
-  String getDownloadUrl(_i2.Game? game) =>
+  String getDownloadUrl(_i3.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#getDownloadUrl, [game]),
             returnValue: _i4.dummyValue<String>(
@@ -557,9 +585,14 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
     String? gameId,
     _i7.File? saveFile, {
     String? slot,
+    _i7.File? screenshotFile,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#uploadSave, [gameId, saveFile], {#slot: slot}),
+            Invocation.method(
+              #uploadSave,
+              [gameId, saveFile],
+              {#slot: slot, #screenshotFile: screenshotFile},
+            ),
             returnValue: _i5.Future<bool>.value(false),
           )
           as _i5.Future<bool>);
@@ -604,15 +637,15 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
           as _i5.Future<_i8.Uint8List?>);
 
   @override
-  _i5.Future<List<_i2.Firmware>> getFirmware({String? platformId}) =>
+  _i5.Future<List<_i3.Firmware>> getFirmware({String? platformId}) =>
       (super.noSuchMethod(
             Invocation.method(#getFirmware, [], {#platformId: platformId}),
-            returnValue: _i5.Future<List<_i2.Firmware>>.value(<_i2.Firmware>[]),
+            returnValue: _i5.Future<List<_i3.Firmware>>.value(<_i3.Firmware>[]),
           )
-          as _i5.Future<List<_i2.Firmware>>);
+          as _i5.Future<List<_i3.Firmware>>);
 
   @override
-  String getFirmwareDownloadUrl(_i2.Firmware? firmware) =>
+  String getFirmwareDownloadUrl(_i3.Firmware? firmware) =>
       (super.noSuchMethod(
             Invocation.method(#getFirmwareDownloadUrl, [firmware]),
             returnValue: _i4.dummyValue<String>(
@@ -624,7 +657,7 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
 
   @override
   _i5.Future<_i8.Uint8List?> downloadFirmware(
-    _i2.Firmware? firmware, {
+    _i3.Firmware? firmware, {
     void Function(int, int)? onProgress,
   }) =>
       (super.noSuchMethod(
@@ -658,6 +691,26 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
                 #completion: completion,
               },
             ),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<List<_i3.RomNote>> getRomNotes(String? romId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getRomNotes, [romId]),
+            returnValue: _i5.Future<List<_i3.RomNote>>.value(<_i3.RomNote>[]),
+          )
+          as _i5.Future<List<_i3.RomNote>>);
+
+  @override
+  _i5.Future<bool> createRomNote(
+    String? romId,
+    String? title,
+    String? content,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#createRomNote, [romId, title, content]),
             returnValue: _i5.Future<bool>.value(false),
           )
           as _i5.Future<bool>);

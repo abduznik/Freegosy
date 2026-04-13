@@ -7,6 +7,18 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
+enum StorageError { none, pathNotFound, permissionDenied, unknown }
+
+class StorageStatus {
+  final StorageError error;
+  final String? message;
+  final String? failedPath;
+
+  const StorageStatus({this.error = StorageError.none, this.message, this.failedPath});
+
+  bool get hasError => error != StorageError.none;
+}
+
 class DirectoryService {
   static const String _romsRootPathKey = 'romsRootPath';
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
@@ -42,40 +54,58 @@ class DirectoryService {
   String linuxSyncPreset = 'default';
   String? emudeckRootPath;
   final Map<String, String> _emulatorPathOverrides = {};
+  StorageStatus status = const StorageStatus();
 
   DirectoryService();
 
-  Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
-    emudeckRootPath = prefs.getString(_emudeckRootPathKey);
+  Future<StorageStatus> initialize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
+      emudeckRootPath = prefs.getString(_emudeckRootPathKey);
 
-    final String defaultBase;
-    if (defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux) {
-      final appSupport = await getApplicationSupportDirectory();
-      defaultBase = appSupport.path;
-    } else {
-      final docsDir = await getApplicationDocumentsDirectory();
-      defaultBase = docsDir.path;
+      final String defaultBase;
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux) {
+        final appSupport = await getApplicationSupportDirectory();
+        defaultBase = appSupport.path;
+      } else {
+        final docsDir = await getApplicationDocumentsDirectory();
+        defaultBase = docsDir.path;
+      }
+
+      if (defaultTargetPlatform == TargetPlatform.linux &&
+          linuxSyncPreset == 'emudeck' &&
+          emudeckRootPath != null) {
+        romsRootPath =
+            prefs.getString(_romsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/roms');
+        emulatorsRootPath =
+            prefs.getString(_emulatorsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/tools');
+      } else {
+        romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
+        emulatorsRootPath =
+            prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
+      }
+
+      final romsStatus = await _ensureDirectoryExists(romsRootPath);
+      if (romsStatus.hasError) {
+        status = romsStatus;
+        return status;
+      }
+
+      final emusStatus = await _ensureDirectoryExists(emulatorsRootPath);
+      if (emusStatus.hasError) {
+        status = emusStatus;
+        return status;
+      }
+
+      await loadEmulatorPathOverrides();
+      status = const StorageStatus();
+      return status;
+    } catch (e) {
+      status = StorageStatus(error: StorageError.unknown, message: e.toString());
+      return status;
     }
-
-    if (defaultTargetPlatform == TargetPlatform.linux &&
-        linuxSyncPreset == 'emudeck' &&
-        emudeckRootPath != null) {
-      romsRootPath =
-          prefs.getString(_romsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/roms');
-      emulatorsRootPath =
-          prefs.getString(_emulatorsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/tools');
-    } else {
-      romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
-      emulatorsRootPath =
-          prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
-    }
-
-    await _ensureDirectoryExists(romsRootPath);
-    await _ensureDirectoryExists(emulatorsRootPath);
-    await loadEmulatorPathOverrides();
   }
 
   Future<void> setLinuxSyncPreset(String preset) async {
@@ -115,10 +145,46 @@ class DirectoryService {
 
   String? getEmulatorPathOverride(String emulatorId) => _emulatorPathOverrides[emulatorId];
 
-  Future<void> _ensureDirectoryExists(String path) async {
-    final directory = Directory(path);
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
+  Future<StorageStatus> _ensureDirectoryExists(String path) async {
+    try {
+      final directory = Directory(path);
+      if (!await directory.exists()) {
+        try {
+          await directory.create(recursive: true);
+        } catch (e) {
+          if (e is io.FileSystemException && 
+              (e.message.contains('Permission denied') || e.osError?.errorCode == 13)) {
+            return StorageStatus(
+              error: StorageError.permissionDenied,
+              message: 'Permission denied to create or access directory.',
+              failedPath: path,
+            );
+          }
+          return StorageStatus(
+            error: StorageError.pathNotFound,
+            message: 'Path not found or drive disconnected.',
+            failedPath: path,
+          );
+        }
+      } else {
+        // Double check if we can list it (verifies drive is actually mounted/accessible)
+        try {
+          await directory.list().first.catchError((_) => Directory(''));
+        } catch (e) {
+          return StorageStatus(
+            error: StorageError.pathNotFound,
+            message: 'Directory exists but is not accessible. Drive may be disconnected.',
+            failedPath: path,
+          );
+        }
+      }
+      return const StorageStatus();
+    } catch (e) {
+      return StorageStatus(
+        error: StorageError.unknown,
+        message: e.toString(),
+        failedPath: path,
+      );
     }
   }
 
@@ -126,14 +192,14 @@ class DirectoryService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_romsRootPathKey, path);
     romsRootPath = path;
-    await _ensureDirectoryExists(path);
+    status = await _ensureDirectoryExists(path);
   }
 
   Future<void> setEmulatorsRoot(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_emulatorsRootPathKey, path);
     emulatorsRootPath = path;
-    await _ensureDirectoryExists(path);
+    status = await _ensureDirectoryExists(path);
   }
 
   Future<String> getRomsDirectory() async => romsRootPath;

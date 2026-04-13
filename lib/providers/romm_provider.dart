@@ -79,7 +79,10 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
     await service.initialize();
     return service;
   } catch (e) {
-    return null;
+    // Return service even on error so UI can access service.status
+    final service = DirectoryService();
+    service.status = StorageStatus(error: StorageError.unknown, message: e.toString());
+    return service;
   }
 });
 

@@ -64,9 +64,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   @override
   Future<List<io.File>> getSaveFiles(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
+    final map = await getSaveFilesWithScreenshots(game, romPath, sessionStart: sessionStart, syncMode: syncMode);
+    return map.keys.toList();
+  }
+
+  @override
+  Future<Map<io.File, io.File?>> getSaveFilesWithScreenshots(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
     final coreInfo = _coreMap[slug];
-    if (coreInfo == null) return [];
+    if (coreInfo == null) return {};
 
     String? rootSaveDir;
     String? statesRoot;
@@ -78,7 +84,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
       statesRoot = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
     } else {
       final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
-      if (exePath == null) return [];
+      if (exePath == null) return {};
       
       String exeDir = io.File(exePath).parent.path;
       if (await io.FileSystemEntity.isDirectory(exePath)) {
@@ -88,10 +94,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
       statesRoot = p.join(exeDir, 'states', coreInfo.statesFolder);
     }
 
-    if (rootSaveDir == null) return [];
+    if (rootSaveDir == null) return {};
 
     final stem = getRomStem(game);
-    final List<io.File> filesToReturn = [];
+    final List<io.File> filesToCheck = [];
 
     // Special case for PSP saves
     if (slug == 'psp' || slug == 'playstation-portable') {
@@ -104,7 +110,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
             break;
           }
           if (hasFiles) {
-            filesToReturn.add(io.File(rootSaveDir));
+            filesToCheck.add(io.File(rootSaveDir));
           }
         }
       }
@@ -118,7 +124,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
             if (entity is! io.File) continue;
             final fname = p.basename(entity.path).toLowerCase();
             if (fname.startsWith(stemLower) && fname.endsWith('.srm')) {
-              filesToReturn.add(entity);
+              filesToCheck.add(entity);
               found = true;
               break;
             }
@@ -134,7 +140,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
                     .where((w) => w.length >= 3)
                     .toList();
                 if (stemWords.any((word) => fname.contains(word))) {
-                  filesToReturn.add(entity);
+                  filesToCheck.add(entity);
                   found = true;
                   break;
                 }
@@ -142,10 +148,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
             }
           }
           if (!found) {
-            filesToReturn.add(io.File(p.join(rootSaveDir, '$stem.srm')));
+            filesToCheck.add(io.File(p.join(rootSaveDir, '$stem.srm')));
           }
         } else {
-          filesToReturn.add(io.File(p.join(rootSaveDir, '$stem.srm')));
+          filesToCheck.add(io.File(p.join(rootSaveDir, '$stem.srm')));
         }
       }
     }
@@ -154,16 +160,16 @@ class RetroArchSaveStrategy extends SaveStrategy {
     if ((syncMode == 'states' || syncMode == 'both')) {
       final romStem = io.File(romPath).uri.pathSegments.last.replaceAll(RegExp(r'\.[^.]+$'), '');
       for (final checkStem in [stem, romStem]) {
-        filesToReturn.add(io.File('$statesRoot/$checkStem.state.auto'));
+        filesToCheck.add(io.File('$statesRoot/$checkStem.state.auto'));
         for (int i = 0; i <= 9; i++) {
-          filesToReturn.add(io.File('$statesRoot/$checkStem.state$i'));
+          filesToCheck.add(io.File('$statesRoot/$checkStem.state$i'));
         }
       }
     }
 
     // Filter out non-existent files and apply sessionStart filter
-    final finalResult = <io.File>[];
-    for (final f in filesToReturn) {
+    final finalResult = <io.File, io.File?>{};
+    for (final f in filesToCheck) {
       final existsAsFile = await f.exists();
       final existsAsDir = await io.Directory(f.path).exists();
       if (!existsAsFile && !existsAsDir) continue;
@@ -171,7 +177,18 @@ class RetroArchSaveStrategy extends SaveStrategy {
         final stat = await f.stat();
         if (stat.modified.isBefore(sessionStart)) continue;
       }
-      finalResult.add(f);
+      
+      // Check for screenshots if it's a state file
+      io.File? screenshot;
+      if (f.path.contains('.state')) {
+        final screenshotPath = '${f.path}.png';
+        final screenFile = io.File(screenshotPath);
+        if (await screenFile.exists()) {
+          screenshot = screenFile;
+        }
+      }
+      
+      finalResult[f] = screenshot;
     }
     return finalResult;
   }

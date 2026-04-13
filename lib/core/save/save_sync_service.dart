@@ -238,15 +238,17 @@ class SaveSyncService {
         strategy.setManualMapping(mapping);
       }
 
-      final files = await strategy.getSaveFiles(
+      final filesMap = await strategy.getSaveFilesWithScreenshots(
         game, romPath,
         sessionStart: sessionStart,
         syncMode: syncMode,
       );
-      if (files.isEmpty) return false;
+      if (filesMap.isEmpty) return false;
 
       int uploaded = 0;
-      for (final file in files) {
+      for (final entry in filesMap.entries) {
+        final file = entry.key;
+        final screenshotFile = entry.value;
         File uploadFile = file;
         bool isTempZip = false;
 
@@ -280,7 +282,7 @@ class SaveSyncService {
           continue;
         }
 
-        final ok = await _rommService.uploadSave(game.id, uploadFile);
+        final ok = await _rommService.uploadSave(game.id, uploadFile, screenshotFile: screenshotFile);
         if (ok) {
           uploaded++;
           await _storeHash(game.id, filename, localHash);

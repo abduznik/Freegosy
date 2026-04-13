@@ -25,6 +25,11 @@ import 'package:mockito/src/dummies.dart' as _i3;
 // ignore_for_file: subtype_of_sealed_class
 // ignore_for_file: invalid_use_of_internal_member
 
+class _FakeStorageStatus_0 extends _i1.SmartFake implements _i2.StorageStatus {
+  _FakeStorageStatus_0(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
 /// A class which mocks [DirectoryService].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -67,6 +72,14 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
           as String);
 
   @override
+  _i2.StorageStatus get status =>
+      (super.noSuchMethod(
+            Invocation.getter(#status),
+            returnValue: _FakeStorageStatus_0(this, Invocation.getter(#status)),
+          )
+          as _i2.StorageStatus);
+
+  @override
   set romsRootPath(String? value) => super.noSuchMethod(
     Invocation.setter(#romsRootPath, value),
     returnValueForMissingStub: null,
@@ -91,13 +104,20 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
   );
 
   @override
-  _i4.Future<void> initialize() =>
+  set status(_i2.StorageStatus? value) => super.noSuchMethod(
+    Invocation.setter(#status, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i4.Future<_i2.StorageStatus> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i4.Future<_i2.StorageStatus>.value(
+              _FakeStorageStatus_0(this, Invocation.method(#initialize, [])),
+            ),
           )
-          as _i4.Future<void>);
+          as _i4.Future<_i2.StorageStatus>);
 
   @override
   _i4.Future<void> setLinuxSyncPreset(String? preset) =>
@@ -384,6 +404,14 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
             returnValue: _i4.Future<bool>.value(false),
           )
           as _i4.Future<bool>);
+
+  @override
+  bool isEmuLaunchScript(String? path) =>
+      (super.noSuchMethod(
+            Invocation.method(#isEmuLaunchScript, [path]),
+            returnValue: false,
+          )
+          as bool);
 
   @override
   _i4.Future<void> deleteRom(_i5.Game? game) =>

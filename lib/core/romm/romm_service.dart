@@ -454,7 +454,7 @@ class RommService {
   // ─── Save sync ─────────────────────────────────────────────────────────────
 
   /// Uploads [saveFile] for [gameId] to RomM via POST /api/saves.
-  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot}) async {
+  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot, io.File? screenshotFile}) async {
     try {
       final now = DateTime.now();
       final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
@@ -463,9 +463,16 @@ class RommService {
       
       // Explicitly set a clean boundary to avoid Linux dart:io quirks
       final boundary = '----FreegosyBoundary${DateTime.now().millisecondsSinceEpoch}';
-      final formData = FormData.fromMap({
+      final formDataMap = <String, dynamic>{
         'saveFile': await MultipartFile.fromFile(saveFile.path, filename: fileName),
-      });
+      };
+
+      if (screenshotFile != null && await screenshotFile.exists()) {
+        final screenshotName = screenshotFile.uri.pathSegments.last;
+        formDataMap['stateScreenshot'] = await MultipartFile.fromFile(screenshotFile.path, filename: screenshotName);
+      }
+
+      final formData = FormData.fromMap(formDataMap);
       
       final response = await _dio.post(
         '/api/saves',
