@@ -5,6 +5,7 @@ import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
 import '../../providers/download_provider.dart';
+import '../../providers/romm_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
 import '../widgets/download_progress_indicator.dart';
 
@@ -37,6 +38,8 @@ class GameDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
+  late Game _currentGame;
+  late bool _isDownloaded;
   late bool _backlogged;
   late bool _nowPlaying;
   late int _rating;
@@ -49,18 +52,49 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _backlogged = widget.game.backlogged;
-    _nowPlaying = widget.game.nowPlaying;
-    _rating = widget.game.userRating;
-    _status = widget.game.status;
-    _completion = widget.game.completion;
+    _currentGame = widget.game;
+    _isDownloaded = widget.isDownloaded;
+    _syncStateWithGame(_currentGame);
     _fetchNotes();
+    _checkDownloadStatus();
+  }
+
+  void _syncStateWithGame(Game game) {
+    _backlogged = game.backlogged;
+    _nowPlaying = game.nowPlaying;
+    _rating = game.userRating;
+    _status = game.status;
+    _completion = game.completion;
+  }
+
+  Future<void> _checkDownloadStatus() async {
+    final ds = ref.read(directoryServiceProvider).value;
+    if (ds != null) {
+      final exists = await ds.isRomDownloaded(_currentGame);
+      if (mounted) {
+        setState(() => _isDownloaded = exists);
+      }
+    }
+  }
+
+  Future<void> _refreshGame() async {
+    if (widget.rommService == null) return;
+    try {
+      final updated = await widget.rommService!.getGame(_currentGame.id);
+      if (updated != null && mounted) {
+        setState(() {
+          _currentGame = updated;
+          _syncStateWithGame(updated);
+        });
+        _checkDownloadStatus();
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchNotes() async {
     if (widget.rommService == null) return;
     try {
-      final notes = await widget.rommService!.getRomNotes(widget.game.id);
+      final notes = await widget.rommService!.getRomNotes(_currentGame.id);
       if (mounted) {
         setState(() {
           _notes = notes;
@@ -109,7 +143,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       final title = titleController.text.trim();
       final content = contentController.text.trim();
       if (title.isNotEmpty || content.isNotEmpty) {
-        final success = await widget.rommService!.createRomNote(widget.game.id, title, content);
+        final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
         if (success) {
           _fetchNotes();
         } else {
@@ -123,21 +157,30 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
   Future<void> _saveProps(BuildContext context) async {
     if (widget.rommService == null) return;
+    
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSaving = true);
+    
     final success = await widget.rommService!.updateRomProps(
-      widget.game.id,
+      _currentGame.id,
       backlogged: _backlogged,
       nowPlaying: _nowPlaying,
       rating: _rating,
       status: _status,
       completion: _completion,
     );
-    setState(() => _isSaving = false);
-    if (context.mounted) {
+    
+    if (mounted) {
+      setState(() => _isSaving = false);
       if (success) {
-        ErrorHandler.showSuccess(context, 'Saved', message: 'Game status updated.');
+        _refreshGame();
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Properties saved successfully')),
+        );
       } else {
-        ErrorHandler.showException(context, Exception('Failed to update'), contextLabel: 'Update Status');
+        if (mounted) {
+          ErrorHandler.showException(context, Exception('Failed to update properties'), contextLabel: 'Update Status');
+        }
       }
     }
   }
@@ -170,10 +213,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     final headerHeight = size.height * 0.4;
 
     String? backgroundUrl;
-    if (widget.game.screenshotUrl != null && widget.game.screenshotUrl!.isNotEmpty) {
-      backgroundUrl = _normalizeUrl(widget.game.screenshotUrl);
-    } else if (widget.game.mergedScreenshots.isNotEmpty) {
-      backgroundUrl = _normalizeUrl(widget.game.mergedScreenshots.first);
+    if (_currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty) {
+      backgroundUrl = _normalizeUrl(_currentGame.screenshotUrl);
+    } else if (_currentGame.mergedScreenshots.isNotEmpty) {
+      backgroundUrl = _normalizeUrl(_currentGame.mergedScreenshots.first);
     }
 
     return Scaffold(
@@ -237,7 +280,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       children: [
                         // Cover Image
                         Hero(
-                          tag: 'game_cover_${widget.game.id}',
+                          tag: 'game_cover_${_currentGame.id}',
                           child: Container(
                             width: 130,
                             height: 180,
@@ -254,7 +297,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(
-                                imageUrl: _normalizeUrl(widget.game.pathCoverLarge),
+                                imageUrl: _normalizeUrl(_currentGame.pathCoverLarge),
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => Container(color: Colors.grey[800]),
                                 errorWidget: (context, url, error) => const Icon(Icons.image_not_supported),
@@ -270,7 +313,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                widget.game.name,
+                                _currentGame.name,
                                 style: theme.textTheme.headlineSmall?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -278,9 +321,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              if (widget.game.platformDisplayName != null)
+                              if (_currentGame.platformDisplayName != null)
                                 Text(
-                                  widget.game.platformDisplayName!,
+                                  _currentGame.platformDisplayName!,
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     color: Colors.white70,
                                   ),
@@ -304,12 +347,12 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   Consumer(
                     builder: (context, ref, _) {
                       final downloads = ref.watch(downloadProvider);
-                      final downloadProgress = downloads[widget.game.id];
+                      final downloadProgress = downloads[_currentGame.id];
 
                       return Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          if (!widget.isDownloaded)
+                          if (!_isDownloaded)
                             if (downloadProgress != null)
                               Expanded(
                                 child: Padding(
@@ -324,7 +367,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                               _ActionButton(
                                 icon: Icons.download,
                                 label: 'Download',
-                                onPressed: widget.onDownload,
+                                onPressed: () {
+                                  widget.onDownload();
+                                  _checkDownloadStatus();
+                                },
                               )
                           else ...[
                             _ActionButton(
@@ -345,7 +391,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                             _ActionButton(
                               icon: Icons.delete,
                               label: 'Delete',
-                              onPressed: widget.onDelete,
+                              onPressed: () {
+                                widget.onDelete();
+                                _checkDownloadStatus();
+                              },
                               color: Colors.red,
                             ),
                           ],
@@ -361,23 +410,23 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     runSpacing: 8,
                     children: [
                       // Genres (first 2)
-                      ...widget.game.genres.take(2).map((g) => _MetadataChip(label: g)),
+                      ..._currentGame.genres.take(2).map((g) => _MetadataChip(label: g)),
                       // Player Count
-                      if (widget.game.playerCount != null && widget.game.playerCount!.isNotEmpty)
+                      if (_currentGame.playerCount != null && _currentGame.playerCount!.isNotEmpty)
                         _MetadataChip(
-                          label: widget.game.playerCount!,
+                          label: _currentGame.playerCount!,
                           icon: Icons.people_outline,
                         ),
                       // Average Rating
-                      if (widget.game.averageRating != null)
+                      if (_currentGame.averageRating != null)
                         _MetadataChip(
-                          label: '${widget.game.averageRating!.toStringAsFixed(0)}/100',
+                          label: '${_currentGame.averageRating!.toStringAsFixed(0)}/100',
                           icon: Icons.star_outline,
                         ),
                       // Release Year
-                      if (widget.game.firstReleaseDate != null)
+                      if (_currentGame.firstReleaseDate != null)
                         _MetadataChip(
-                          label: DateTime.fromMillisecondsSinceEpoch(widget.game.firstReleaseDate!).year.toString(),
+                          label: DateTime.fromMillisecondsSinceEpoch(_currentGame.firstReleaseDate!).year.toString(),
                           icon: Icons.calendar_today_outlined,
                         ),
                     ],
@@ -394,7 +443,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.game.summary ?? 'No description available',
+                    _currentGame.summary ?? 'No description available',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white70,
                       height: 1.5,
@@ -411,7 +460,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _DetailsGrid(game: widget.game),
+                  _DetailsGrid(game: _currentGame),
                   const SizedBox(height: 24),
 
                   // SECTION 6 - Notes
@@ -456,7 +505,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   const SizedBox(height: 24),
 
                   // SECTION 7 - Screenshots
-                  if (widget.game.mergedScreenshots.isNotEmpty) ...[
+                  if (_currentGame.mergedScreenshots.isNotEmpty) ...[
                     Text(
                       'Screenshots',
                       style: theme.textTheme.titleLarge?.copyWith(
@@ -469,13 +518,13 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       height: 120,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
-                        itemCount: widget.game.mergedScreenshots.length,
+                        itemCount: _currentGame.mergedScreenshots.length,
                         separatorBuilder: (context, index) => const SizedBox(width: 12),
                         itemBuilder: (context, index) {
-                          final imageUrl = _normalizeUrl(widget.game.mergedScreenshots[index]);
+                          final imageUrl = _normalizeUrl(_currentGame.mergedScreenshots[index]);
                           return GestureDetector(
                             onTap: () {
-                              final allUrls = widget.game.mergedScreenshots
+                              final allUrls = _currentGame.mergedScreenshots
                                   .map((path) => _normalizeUrl(path))
                                   .toList();
                               _showScreenshotFullscreen(context, index, allUrls);

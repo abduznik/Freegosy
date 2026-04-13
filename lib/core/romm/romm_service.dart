@@ -47,7 +47,7 @@ class RommService {
 
         // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related
         final statusCode = e.response?.statusCode;
-        if (statusCode == 401 || (statusCode == 500 && e.requestOptions.path != '/api/token')) {
+        if ((statusCode == 401 || (statusCode == 500 && e.requestOptions.path != '/api/token')) && config.apiKey.isEmpty) {
           try {
             // Re-fetch token using stored credentials
             final prefs = await SharedPreferences.getInstance();
@@ -183,6 +183,18 @@ class RommService {
     final authHeader = _authOptions.headers?['Authorization']?.toString() ?? '';
     if (!authHeader.startsWith('Bearer ')) {
       await refreshToken();
+    }
+  }
+
+  Future<Game?> getGame(String id) async {
+    try {
+      final response = await _dio.get('/api/roms/$id', options: _authOptions);
+      if (response.statusCode == 200) {
+        return Game.fromJson(response.data);
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -693,7 +705,11 @@ class RommService {
 
       final response = await _dio.put(
         '/api/roms/$romId/props',
-        data: jsonEncode({'data': data}),
+        data: {
+          'data': data,
+          'update_last_played': false,
+          'remove_last_played': false,
+        },
         options: Options(
           headers: {
             'Authorization': _authOptions.headers?['Authorization'],
