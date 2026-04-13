@@ -701,4 +701,40 @@ class RommService {
       return false;
     }
   }
+
+  Future<List<RomNote>> getRomNotes(String romId) async {
+    try {
+      final response = await _dio.get('/api/roms/$romId/notes', options: _authOptions);
+      if (response.statusCode == 200) {
+        final List<dynamic> items;
+        if (response.data is Map && response.data.containsKey('items')) {
+          items = response.data['items'] as List<dynamic>;
+        } else {
+          items = response.data as List<dynamic>;
+        }
+        return items.map((item) => RomNote.fromJson(item)).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<bool> createRomNote(String romId, String title, String content) async {
+    try {
+      final response = await _dio.post(
+        '/api/roms/$romId/notes',
+        data: {
+          'title': title,
+          'content': content,
+        },
+        options: _authOptions.copyWith(
+          contentType: 'application/json',
+        ),
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
 }

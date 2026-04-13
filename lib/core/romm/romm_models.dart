@@ -215,6 +215,8 @@ class Platform {
   final List<Firmware> firmware;
   final int firmwareCount;
 
+  String get nameForDisplay => displayName.isNotEmpty ? displayName : name;
+
   Platform({
     required this.id,
     required this.name,
@@ -238,6 +240,32 @@ class Platform {
                   (json['games_count'] as int?) ?? 0,
       firmware: (json['firmware'] as List<dynamic>?)?.map((e) => Firmware.fromJson(e)).toList() ?? [],
       firmwareCount: json['firmware_count'] as int? ?? 0,
+    );
+  }
+}
+
+class RomNote {
+  final int id;
+  final String title;
+  final String content;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  RomNote({
+    required this.id,
+    required this.title,
+    required this.content,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory RomNote.fromJson(Map<String, dynamic> json) {
+    return RomNote(
+      id: json['id'] as int? ?? 0,
+      title: json['title']?.toString() ?? '',
+      content: json['content']?.toString() ?? '',
+      createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) : null,
+      updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'].toString()) : null,
     );
   }
 }

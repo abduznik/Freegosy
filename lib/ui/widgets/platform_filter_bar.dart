@@ -53,7 +53,7 @@ class PlatformFilterBar extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(right: 8.0),
                 child: FilterChip(
-                  label: Text(platform.name),
+                  label: Text(platform.nameForDisplay),
                   selected: isSelected,
                   onSelected: (selected) {
                     onSelected(selected ? platform : null);

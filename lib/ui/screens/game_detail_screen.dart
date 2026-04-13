@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
+import '../../providers/download_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
+import '../widgets/download_progress_indicator.dart';
 
-class GameDetailScreen extends StatefulWidget {
+class GameDetailScreen extends ConsumerStatefulWidget {
   final Game game;
   final String rommBaseUrl;
   final bool isDownloaded;
@@ -30,16 +33,18 @@ class GameDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<GameDetailScreen> createState() => _GameDetailScreenState();
+  ConsumerState<GameDetailScreen> createState() => _GameDetailScreenState();
 }
 
-class _GameDetailScreenState extends State<GameDetailScreen> {
+class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   late bool _backlogged;
   late bool _nowPlaying;
   late int _rating;
   late String? _status;
   late int _completion;
   bool _isSaving = false;
+  List<RomNote> _notes = [];
+  bool _isLoadingNotes = true;
 
   @override
   void initState() {
@@ -49,6 +54,71 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     _rating = widget.game.userRating;
     _status = widget.game.status;
     _completion = widget.game.completion;
+    _fetchNotes();
+  }
+
+  Future<void> _fetchNotes() async {
+    if (widget.rommService == null) return;
+    try {
+      final notes = await widget.rommService!.getRomNotes(widget.game.id);
+      if (mounted) {
+        setState(() {
+          _notes = notes;
+          _isLoadingNotes = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingNotes = false);
+    }
+  }
+
+  Future<void> _addNote() async {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Note'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: contentController,
+              decoration: const InputDecoration(labelText: 'Content'),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && widget.rommService != null) {
+      final title = titleController.text.trim();
+      final content = contentController.text.trim();
+      if (title.isNotEmpty || content.isNotEmpty) {
+        final success = await widget.rommService!.createRomNote(widget.game.id, title, content);
+        if (success) {
+          _fetchNotes();
+        } else {
+          if (mounted) {
+            ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
+          }
+        }
+      }
+    }
   }
 
   Future<void> _saveProps(BuildContext context) async {
@@ -231,39 +301,57 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // SECTION 2 - Action buttons row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      if (!widget.isDownloaded)
-                        _ActionButton(
-                          icon: Icons.download,
-                          label: 'Download',
-                          onPressed: widget.onDownload,
-                        )
-                      else ...[
-                        _ActionButton(
-                          icon: Icons.play_arrow,
-                          label: 'Play',
-                          onPressed: widget.onLaunch,
-                        ),
-                        _ActionButton(
-                          icon: Icons.cloud_upload,
-                          label: 'Push',
-                          onPressed: widget.onPushSaves,
-                        ),
-                        _ActionButton(
-                          icon: Icons.cloud_download,
-                          label: 'Pull',
-                          onPressed: widget.onPullSaves,
-                        ),
-                        _ActionButton(
-                          icon: Icons.delete,
-                          label: 'Delete',
-                          onPressed: widget.onDelete,
-                          color: Colors.red,
-                        ),
-                      ],
-                    ],
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final downloads = ref.watch(downloadProvider);
+                      final downloadProgress = downloads[widget.game.id];
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          if (!widget.isDownloaded)
+                            if (downloadProgress != null)
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  child: DownloadProgressIndicator(
+                                    progress: downloadProgress,
+                                    compact: true,
+                                  ),
+                                ),
+                              )
+                            else
+                              _ActionButton(
+                                icon: Icons.download,
+                                label: 'Download',
+                                onPressed: widget.onDownload,
+                              )
+                          else ...[
+                            _ActionButton(
+                              icon: Icons.play_arrow,
+                              label: 'Play',
+                              onPressed: widget.onLaunch,
+                            ),
+                            _ActionButton(
+                              icon: Icons.cloud_upload,
+                              label: 'Push',
+                              onPressed: widget.onPushSaves,
+                            ),
+                            _ActionButton(
+                              icon: Icons.cloud_download,
+                              label: 'Pull',
+                              onPressed: widget.onPullSaves,
+                            ),
+                            _ActionButton(
+                              icon: Icons.delete,
+                              label: 'Delete',
+                              onPressed: widget.onDelete,
+                              color: Colors.red,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 24),
 
@@ -326,7 +414,48 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                   _DetailsGrid(game: widget.game),
                   const SizedBox(height: 24),
 
-                  // SECTION 6 - Screenshots
+                  // SECTION 6 - Notes
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Notes',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_comment, color: Colors.blue),
+                        onPressed: _addNote,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (_isLoadingNotes)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_notes.isEmpty)
+                    const Text('No notes added yet.', style: TextStyle(color: Colors.white54, fontSize: 13))
+                  else
+                    ..._notes.map((note) => Card(
+                      color: Colors.white10,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (note.title.isNotEmpty)
+                              Text(note.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            if (note.title.isNotEmpty) const SizedBox(height: 4),
+                            Text(note.content, style: const TextStyle(color: Colors.white70)),
+                          ],
+                        ),
+                      ),
+                    )),
+                  const SizedBox(height: 24),
+
+                  // SECTION 7 - Screenshots
                   if (widget.game.mergedScreenshots.isNotEmpty) ...[
                     Text(
                       'Screenshots',

@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/storage/directory_service.dart';
-import '../../core/emulator/emulator_registry_data.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../core/romm/romm_service.dart';
@@ -27,8 +26,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _passwordController;
   late TextEditingController _apiKeyController; // Added API Key controller
   bool _isSaving = false;
-  Map<String, bool> _emulatorInstallStates = {};
-  bool _emulatorsLoaded = false; // This state is managed here
   bool _preferencesLoaded = false;
 
   @override
@@ -57,43 +54,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
-  // This method should remain in the state class to manage its own state.
-  Future<void> _loadEmulatorStates(DirectoryService directoryService) async {
-    if (_emulatorsLoaded) return;
-    final states = <String, bool>{};
-    for (final def in kEmulatorDefinitions) {
-      final id = def['id'] as String;
-      final String exe;
-      if (defaultTargetPlatform == TargetPlatform.macOS) {
-        exe = (def['macos_executable'] as String?) ?? (def['windows_executable'] as String? ?? '');
-      } else if (defaultTargetPlatform == TargetPlatform.linux) {
-        exe = (def['linux_executable'] as String?) ?? '';
-      } else {
-        exe = (def['windows_executable'] as String?) ?? '';
-      }
-      if (exe.isEmpty) {
-        states[id] = true; // Assume installed if no executable is defined
-        debugPrint("Emulator $id installed state: ${states[id]} (Target exe: $exe)");
-        continue;
-      }
-      // Check if emulator is installed using the directory service
-      states[id] = await directoryService.isEmulatorInstalled(id, exe);
-      debugPrint("Emulator $id installed state: ${states[id]} (Target exe: $exe)");
-    }
-    if (mounted) {
-      setState(() {
-        _emulatorInstallStates = states;
-        _emulatorsLoaded = true;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final rommService = ref.watch(rommServiceProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
     final strategyRegistry = ref.watch(strategyRegistryProvider).asData?.value;
+    final emulatorStatusAsync = ref.watch(emulatorStatusProvider);
 
     // Display section providers
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
@@ -126,9 +93,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (rommService == null) {
                 return const Center(child: CircularProgressIndicator());
               }
-              
-              // Load emulator states if directory service is available
-              _loadEmulatorStates(directoryService);
 
               return ExcludeSemantics(
                 child: ListView(
@@ -157,13 +121,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 24),
                     ],
                     // Call the extracted emulators section function
-                    buildEmulatorsSection(
-                      context, // Pass context
-                      directoryService,
-                      _emulatorsLoaded, // Pass loaded state
-                      _emulatorInstallStates, // Pass the states map
-                      setState, // Pass the setState callback
-                      ref, // Pass ref
+                    emulatorStatusAsync.when(
+                      data: (states) => buildEmulatorsSection(
+                        context,
+                        directoryService,
+                        true,
+                        states,
+                        setState,
+                        ref,
+                      ),
+                      loading: () => buildEmulatorsSection(
+                        context,
+                        directoryService,
+                        false,
+                        {},
+                        setState,
+                        ref,
+                      ),
+                      error: (e, s) => Center(child: Text('Error loading emulators: $e')),
                     ),
                     if (strategyRegistry != null) ...[
                       const SizedBox(height: 24),

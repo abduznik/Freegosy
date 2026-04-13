@@ -92,5 +92,29 @@ void main() {
       expect(save.gameId, '123');
       expect(save.url, 'https://example.com/save');
     });
+
+    test('RomNote.fromJson parses all fields', () {
+      final json = {
+        'id': 789,
+        'title': 'Test Note',
+        'content': 'This is a test note.',
+        'created_at': '2023-01-01T12:00:00Z',
+        'updated_at': '2023-01-02T12:00:00Z',
+      };
+      final note = RomNote.fromJson(json);
+      expect(note.id, 789);
+      expect(note.title, 'Test Note');
+      expect(note.content, 'This is a test note.');
+      expect(note.createdAt, DateTime.parse('2023-01-01T12:00:00Z'));
+      expect(note.updatedAt, DateTime.parse('2023-01-02T12:00:00Z'));
+    });
+
+    test('Platform.nameForDisplay uses displayName when available', () {
+      final p1 = Platform(id: 1, name: 'SFC', slug: 'sfc', displayName: 'Super Nintendo');
+      expect(p1.nameForDisplay, 'Super Nintendo');
+
+      final p2 = Platform(id: 2, name: 'GBA', slug: 'gba', displayName: '');
+      expect(p2.nameForDisplay, 'GBA');
+    });
   });
 }

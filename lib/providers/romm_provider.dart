@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -6,12 +7,37 @@ import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
+import 'package:freegosy/core/emulator/emulator_registry_data.dart';
 
 import 'package:freegosy/core/storage/download_cache_service.dart';
 
 import 'package:freegosy/core/emulator/firmware_service.dart';
 
 import 'package:freegosy/core/storage/secure_storage_service.dart';
+
+final emulatorStatusProvider = FutureProvider<Map<String, bool>>((ref) async {
+  final directoryService = ref.watch(directoryServiceProvider).asData?.value;
+  if (directoryService == null) return {};
+
+  final states = <String, bool>{};
+  for (final def in kEmulatorDefinitions) {
+    final id = def['id'] as String;
+    final String exe;
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      exe = (def['macos_executable'] as String?) ?? (def['windows_executable'] as String? ?? '');
+    } else if (defaultTargetPlatform == TargetPlatform.linux) {
+      exe = (def['linux_executable'] as String?) ?? '';
+    } else {
+      exe = (def['windows_executable'] as String?) ?? '';
+    }
+    if (exe.isEmpty) {
+      states[id] = true;
+      continue;
+    }
+    states[id] = await directoryService.isEmulatorInstalled(id, exe);
+  }
+  return states;
+});
 
 final firmwareServiceProvider = FutureProvider<FirmwareService?>((ref) async {
   final rommService = ref.watch(rommServiceProvider);

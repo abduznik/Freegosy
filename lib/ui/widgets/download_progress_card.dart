@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/downloader/download_service.dart';
+import 'download_progress_indicator.dart';
 
 class DownloadProgressCard extends StatelessWidget {
   final String gameName;
@@ -16,26 +17,8 @@ class DownloadProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      title: Text(gameName),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: progress.percent),
-          const SizedBox(height: 4),
-          Text(
-            '${progress.status} — ${(progress.percent * 100).toStringAsFixed(1)}% - '
-            '${(progress.bytesReceived / 1024 / 1024).toStringAsFixed(1)} MB / '
-            '${(progress.totalBytes / 1024 / 1024).toStringAsFixed(1)} MB',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (progress.error != null)
-            Text(
-              'Error: ${progress.error}',
-              style: const TextStyle(color: Colors.red),
-            ),
-        ],
-      ),
+      title: Text(gameName, overflow: TextOverflow.ellipsis),
+      subtitle: DownloadProgressIndicator(progress: progress),
       trailing: IconButton(
         icon: const Icon(Icons.close),
         onPressed: onCancel,

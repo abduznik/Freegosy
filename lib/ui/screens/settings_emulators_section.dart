@@ -39,12 +39,24 @@ Widget buildEmulatorsSection(
         children: [
           const Text('Emulators',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.sync),
-            label: const Text('Sync BIOS from RomM'),
-            onPressed: () async {
-              _syncAllBios(context, ref);
-            },
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh installation status',
+                onPressed: () {
+                  ref.invalidate(emulatorStatusProvider);
+                },
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.sync),
+                label: const Text('Sync BIOS'),
+                onPressed: () async {
+                  _syncAllBios(context, ref);
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -175,8 +187,7 @@ Widget buildEmulatorsSection(
 
                         if (confirm == true) {
                           await directoryService.deleteEmulator(emulatorId);
-                          emulatorInstallStates[emulatorId] = false;
-                          setState(() {});
+                          ref.invalidate(emulatorStatusProvider);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text("$emulatorName uninstalled.")),
@@ -264,11 +275,12 @@ Future<void> _startDownload(
     final progress = downloads[emulatorId];
     if (progress != null && (progress.isComplete || progress.error != null)) {
       if (progress.isComplete) {
-        emulatorInstallStates[emulatorId] = true;
-        if (context.mounted) setState(() {});
-        messenger.showSnackBar(SnackBar(
-          content: Text('$emulatorName downloaded successfully.'),
-        ));
+        ref.invalidate(emulatorStatusProvider);
+        if (context.mounted) {
+          messenger.showSnackBar(SnackBar(
+            content: Text('$emulatorName downloaded successfully.'),
+          ));
+        }
       } else if (progress.error != null) {
         if (context.mounted) setState(() {});
         messenger.showSnackBar(SnackBar(
