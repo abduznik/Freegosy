@@ -349,6 +349,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ref.invalidate(directoryServiceProvider);
             }
           },
+          onReset: () async {
+            await directoryService.resetRomsRoot();
+            ref.invalidate(directoryServiceProvider);
+          },
         ),
         const SizedBox(height: 12),
         _buildPathRow(
@@ -361,12 +365,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ref.invalidate(directoryServiceProvider);
             }
           },
+          onReset: () async {
+            await directoryService.resetEmulatorsRoot();
+            ref.invalidate(directoryServiceProvider);
+          },
         ),
       ],
     );
   }
 
-  Widget _buildPathRow({required String label, required String currentPath, required Function(String?) onChanged}) {
+  Widget _buildPathRow({required String label, required String currentPath, required Function(String?) onChanged, VoidCallback? onReset}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -382,6 +390,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
             const SizedBox(width: 8),
+            if (onReset != null)
+              IconButton(
+                onPressed: onReset,
+                icon: const Icon(Icons.restore),
+                tooltip: 'Reset to default',
+              ),
             ElevatedButton(
               onPressed: () async {
                 String? selectedDirectory = await FilePicker.platform.getDirectoryPath();

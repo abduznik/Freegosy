@@ -136,9 +136,9 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'github_asset_required': ['windows'],
     'github_asset_excluded': ['debugoptimized', 'debug', 'pdb'],
     'windows_executable': 'xenia_canary.exe',
-    'linux_executable': 'xenia_canary',
+    'linux_executable': 'xenia_canary.exe', // Linux users use via Wine/Proton
     'platform_slugs': ['xbox360', 'xbla'],
-    'supported_platforms': ['windows'],
+    'supported_platforms': ['windows', 'linux'],
   },
   {
     'id': 'duckstation',
@@ -223,6 +223,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'type': 'github',
     'github_repo': 'mamedev/mame',
     'github_asset_required': ['x64.exe'],
+    'github_asset_required_linux': ['linux', 'x86_64', '.tar.gz'],
     'github_asset_excluded': ['debug', 'symbols', 'sources', 'tools'],
     'extraction_type': 'self_extracting',
     'windows_executable': 'mame.exe',

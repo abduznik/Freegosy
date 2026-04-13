@@ -29,8 +29,10 @@ class ExtractionService {
         await _handleZip(archivePath, destDir);
       } else if (pathLower.endsWith('.7z')) {
         await _handleSevenZip(archivePath, destDir);
-      } else if (pathLower.endsWith('.exe')) {
+      } else if (pathLower.endsWith('.exe') && !Platform.isLinux) {
         await _handleExe(archivePath, destDir);
+      } else if (pathLower.endsWith('.appimage')) {
+        await _handleAppImage(archivePath, destDir);
       } else {
         await _handleGeneric(archivePath, destDir);
       }
@@ -38,6 +40,20 @@ class ExtractionService {
       debugPrint('Extraction failed for $archivePath: $e');
       rethrow;
     }
+  }
+
+  Future<void> _handleAppImage(String archivePath, String destDir) async {
+    if (!Platform.isLinux) {
+      throw Exception('AppImage is only supported on Linux');
+    }
+    // For AppImage, we don't necessarily extract it, but we move it to the destDir
+    // and make it executable.
+    final fileName = p.basename(archivePath);
+    final destPath = p.join(destDir, fileName);
+    
+    final file = File(archivePath);
+    await file.copy(destPath);
+    await Process.run('chmod', ['+x', destPath]);
   }
 
   Future<void> _handleTar(String archivePath, String destDir) async {

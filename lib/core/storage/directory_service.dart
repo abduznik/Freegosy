@@ -64,15 +64,7 @@ class DirectoryService {
       linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
       emudeckRootPath = prefs.getString(_emudeckRootPathKey);
 
-      final String defaultBase;
-      if (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux) {
-        final appSupport = await getApplicationSupportDirectory();
-        defaultBase = appSupport.path;
-      } else {
-        final docsDir = await getApplicationDocumentsDirectory();
-        defaultBase = docsDir.path;
-      }
+      final String defaultBase = await getDefaultBase();
 
       if (defaultTargetPlatform == TargetPlatform.linux &&
           linuxSyncPreset == 'emudeck' &&
@@ -106,6 +98,45 @@ class DirectoryService {
       status = StorageStatus(error: StorageError.unknown, message: e.toString());
       return status;
     }
+  }
+
+  Future<String> getDefaultBase() async {
+    if (defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      final appSupport = await getApplicationSupportDirectory();
+      return appSupport.path;
+    } else {
+      final docsDir = await getApplicationDocumentsDirectory();
+      return docsDir.path;
+    }
+  }
+
+  Future<void> resetRomsRoot() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_romsRootPathKey);
+    final base = await getDefaultBase();
+    if (defaultTargetPlatform == TargetPlatform.linux &&
+        linuxSyncPreset == 'emudeck' &&
+        emudeckRootPath != null) {
+      romsRootPath = p.join(emudeckRootPath!, 'Emulation/roms');
+    } else {
+      romsRootPath = '$base/ROMs';
+    }
+    status = await _ensureDirectoryExists(romsRootPath);
+  }
+
+  Future<void> resetEmulatorsRoot() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_emulatorsRootPathKey);
+    final base = await getDefaultBase();
+    if (defaultTargetPlatform == TargetPlatform.linux &&
+        linuxSyncPreset == 'emudeck' &&
+        emudeckRootPath != null) {
+      emulatorsRootPath = p.join(emudeckRootPath!, 'Emulation/tools');
+    } else {
+      emulatorsRootPath = '$base/Emulators';
+    }
+    status = await _ensureDirectoryExists(emulatorsRootPath);
   }
 
   Future<void> setLinuxSyncPreset(String preset) async {
