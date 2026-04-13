@@ -677,16 +677,16 @@ class RommService {
   }) async {
     try {
       await _ensureBearerToken(); // ensure we have Bearer token
-      final body = <String, dynamic>{};
-      if (backlogged != null) body['backlogged'] = backlogged;
-      if (nowPlaying != null) body['now_playing'] = nowPlaying;
-      if (rating != null) body['rating'] = rating;
-      if (status != null) body['status'] = status;
-      if (completion != null) body['completion'] = completion;
+      final data = <String, dynamic>{};
+      if (backlogged != null) data['backlogged'] = backlogged;
+      if (nowPlaying != null) data['now_playing'] = nowPlaying;
+      if (rating != null) data['rating'] = rating;
+      if (status != null) data['status'] = status;
+      if (completion != null) data['completion'] = completion;
 
       final response = await _dio.put(
         '/api/roms/$romId/props',
-        data: jsonEncode(body),
+        data: jsonEncode({'data': data}),
         options: Options(
           headers: {
             'Authorization': _authOptions.headers?['Authorization'],
