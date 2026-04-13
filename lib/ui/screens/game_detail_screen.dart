@@ -13,11 +13,11 @@ class GameDetailScreen extends ConsumerStatefulWidget {
   final Game game;
   final String rommBaseUrl;
   final bool isDownloaded;
-  final VoidCallback onLaunch;
-  final VoidCallback onDownload;
-  final VoidCallback onPushSaves;
-  final VoidCallback onPullSaves;
-  final VoidCallback onDelete;
+  final dynamic onLaunch;
+  final dynamic onDownload;
+  final dynamic onPushSaves;
+  final dynamic onPullSaves;
+  final dynamic onDelete;
   final RommService? rommService;
 
   const GameDetailScreen({
@@ -148,6 +148,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           _fetchNotes();
         } else {
           if (mounted) {
+            // ignore: use_build_context_synchronously
             ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
           }
         }
@@ -178,7 +179,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           const SnackBar(content: Text('Properties saved successfully')),
         );
       } else {
+        // Safe to use ErrorHandler here if it's a global/static UI helper
+        // but let's be double sure and check mounted again
         if (mounted) {
+          // ignore: use_build_context_synchronously
           ErrorHandler.showException(context, Exception('Failed to update properties'), contextLabel: 'Update Status');
         }
       }
@@ -367,8 +371,8 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                               _ActionButton(
                                 icon: Icons.download,
                                 label: 'Download',
-                                onPressed: () {
-                                  widget.onDownload();
+                                onPressed: () async {
+                                  await widget.onDownload();
                                   _checkDownloadStatus();
                                 },
                               )
@@ -376,23 +380,31 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                             _ActionButton(
                               icon: Icons.play_arrow,
                               label: 'Play',
-                              onPressed: widget.onLaunch,
+                              onPressed: () async {
+                                await widget.onLaunch();
+                              },
                             ),
                             _ActionButton(
                               icon: Icons.cloud_upload,
                               label: 'Push',
-                              onPressed: widget.onPushSaves,
+                              onPressed: () async {
+                                await widget.onPushSaves();
+                              },
                             ),
                             _ActionButton(
                               icon: Icons.cloud_download,
                               label: 'Pull',
-                              onPressed: widget.onPullSaves,
+                              onPressed: () async {
+                                await widget.onPullSaves();
+                              },
                             ),
                             _ActionButton(
                               icon: Icons.delete,
                               label: 'Delete',
-                              onPressed: () {
-                                widget.onDelete();
+                              onPressed: () async {
+                                await widget.onDelete();
+                                // Invalidate download provider to clear "100% done" sticky state
+                                ref.invalidate(downloadProvider);
                                 _checkDownloadStatus();
                               },
                               color: Colors.red,

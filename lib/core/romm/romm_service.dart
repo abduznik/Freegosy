@@ -750,6 +750,8 @@ class RommService {
         data: {
           'title': title,
           'content': content,
+          'is_public': true,
+          'tags': [],
         },
         options: _authOptions.copyWith(
           contentType: 'application/json',

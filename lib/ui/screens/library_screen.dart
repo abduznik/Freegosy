@@ -220,12 +220,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     }
   }
 
-  void _handleGameTap(BuildContext context, WidgetRef ref, Game game) {
+  Future<void> _handleGameTap(BuildContext context, WidgetRef ref, Game game) async {
     final config = ref.read(rommConfigProvider).value;
     final baseUrl = config?.baseUrl ?? '';
     final isDownloaded = _downloadedStates[game.id] ?? false;
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => GameDetailScreen(
@@ -241,6 +241,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
         ),
       ),
     );
+    
+    if (mounted) {
+      await _refreshAllDownloadStates();
+    }
   }
 
   Future<void> _openFilterSheet(BuildContext context, WidgetRef ref) async {
