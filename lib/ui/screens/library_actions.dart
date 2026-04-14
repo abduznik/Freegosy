@@ -8,6 +8,7 @@ import '../../core/error/error_handler.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/save/save_strategy.dart';
@@ -39,9 +40,8 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final dirService = ref.read(directoryServiceProvider).asData?.value;
     if (dirService != null) {
       Future.delayed(const Duration(seconds: 2), () {
-        refreshDownloadState(dirService, game);
-        // Add to cache on completion (approximated here by refreshing)
-        ref.read(downloadCacheServiceProvider).addFile(game.fsName ?? game.fileName ?? '');
+        // Refresh the new background cache
+        ref.read(downloadedGamesCacheProvider.notifier).refresh();
       });
     }
   }
@@ -387,8 +387,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     try {
       await dirService.deleteRom(game);
       if (!context.mounted) return;
-      refreshDownloadState(dirService, game);
-      ref.read(downloadCacheServiceProvider).removeFile(game.fsName ?? game.fileName ?? '');
+      
+      // Refresh the new background cache
+      ref.read(downloadedGamesCacheProvider.notifier).refresh();
+      
       ErrorHandler.showSuccess(context, 'ROM Deleted', message: 'Local files for ${game.name} were removed.');
     } catch (e) {
       ErrorHandler.showException(context, e, contextLabel: 'Delete Failed');

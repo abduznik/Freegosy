@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/paginated_games_provider.dart';
+import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../widgets/game_card.dart';
@@ -24,28 +25,11 @@ class LibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActionsMixin {
-  final Map<String, bool> _downloadedStates = {};
-  Set<String> _allDownloadedFileNames = {};
-  List<Game> _downloadedGames = [];
-  bool _isLoadingDownloaded = false;
   late TextEditingController _searchController;
   final FocusNode _focusNode = FocusNode();
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
   late ScrollController _scrollController;
-
-  @override
-  Map<String, bool> get downloadedStates => _downloadedStates;
-
-  @override
-  void refreshDownloadState(DirectoryService dirService, Game game) {
-    _refreshDownloadState(dirService, game);
-  }
-
-  @override
-  void refreshAllDownloadStates() {
-    _refreshAllDownloadStates();
-  }
 
   @override
   void initState() {
@@ -55,108 +39,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
-      _loadAllDownloadedFileNames().then((names) {
-        // Load persisted cache first for instant availability
-        final cache = ref.read(downloadCacheServiceProvider);
-        cache.load().then((_) {
-          // Then rescan filesystem and update cache
-          if (_allDownloadedFileNames.isNotEmpty) {
-            final dirService = ref.read(directoryServiceProvider).asData?.value;
-            if (dirService != null) {
-              dirService.getAllDownloadedFileNamesByPlatform().then((platformMap) {
-                cache.rescanFromPlatformMap(platformMap);
-                _refreshAllDownloadStates();
-              });
-            } else {
-              cache.rescanFromDirectory(_allDownloadedFileNames);
-              _refreshAllDownloadStates();
-            }
-          } else {
-            _refreshAllDownloadStates();
-          }
-        });
-      });
     });
-  }
-
-  Future<void> _loadAllDownloadedFileNames() async {
-    final dirService = ref.read(directoryServiceProvider).asData?.value;
-    if (dirService == null) return;
-    final platformMap = await dirService.getAllDownloadedFileNamesByPlatform();
-    final cache = ref.read(downloadCacheServiceProvider);
-    cache.rescanFromPlatformMap(platformMap);
-    // Also keep _allDownloadedFileNames for backward compat
-    final allNames = platformMap.values.expand((s) => s).toSet();
-    if (mounted) {
-      setState(() {
-        _allDownloadedFileNames = allNames;
-      });
-    }
-  }
-
-  Future<void> _loadDownloadedGames() async {
-    if (mounted) setState(() => _isLoadingDownloaded = true);
-    
-    // Always rescan filesystem first to get fresh data
-    await _loadAllDownloadedFileNames();
-    
-    final cache = ref.read(downloadCacheServiceProvider);
-    final service = ref.read(rommServiceProvider);
-    if (service == null) {
-      if (mounted) setState(() => _isLoadingDownloaded = false);
-      return;
-    }
-
-    final platformMap = cache.filesByPlatform;
-    if (platformMap.isEmpty) {
-      if (mounted) setState(() => _isLoadingDownloaded = false);
-      return;
-    }
-
-    final platforms = ref.read(platformsProvider).value ?? [];
-    final List<Game> allDownloaded = [];
-
-    for (final entry in platformMap.entries) {
-      final slug = entry.key;
-      if (slug.isEmpty) continue;
-
-      final platform = platforms.firstWhere(
-        (p) => p.slug == slug || p.fsSlug == slug,
-        orElse: () => platforms.firstWhere(
-          (p) => p.slug.contains(slug) || slug.contains(p.slug),
-          orElse: () => Platform(id: -1, name: '', slug: '', fsSlug: '', displayName: ''),
-        ),
-      );
-      if (platform.id == -1) continue;
-
-      try {
-        int offset = 0;
-        const pageSize = 50;
-        while (true) {
-          final result = await service.getGamesPage(
-            offset: offset,
-            limit: pageSize,
-            platformId: platform.id.toString(),
-          );
-          final downloaded = result.games.where((g) =>
-            cache.isDownloaded(g.fsName) || cache.isDownloaded(g.fileName)
-          ).toList();
-          allDownloaded.addAll(downloaded);
-          if (offset + pageSize >= result.total) break;
-          offset += pageSize;
-        }
-      } catch (_) {}
-    }
-
-    if (mounted) {
-      setState(() {
-        _downloadedGames = allDownloaded;
-        _isLoadingDownloaded = false;
-        for (final game in allDownloaded) {
-          _downloadedStates[game.id] = true;
-        }
-      });
-    }
   }
 
   @override
@@ -174,19 +57,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     }
   }
 
-  Future<void> _refreshDownloadState(
-      DirectoryService dirService, Game game) async {
-    final isDownloaded = await dirService.isRomDownloaded(game);
-    if (mounted) {
-      setState(() {
-        _downloadedStates[game.id] = isDownloaded;
-      });
-      if (ref.read(activeFiltersProvider).downloadedOnly) {
-        _loadDownloadedGames();
-      }
-    }
-  }
-
   Future<void> _refreshLibrary() async {
     ref.invalidate(platformsProvider);
     ref.read(paginatedGamesProvider.notifier).reset();
@@ -194,36 +64,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       platformId: ref.read(selectedPlatformIdProvider)?.toString(),
       search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
     );
-    await _refreshAllDownloadStates();
-    await _loadAllDownloadedFileNames();
-  }
-
-  Future<void> _refreshAllDownloadStates() async {
-    final dirService = ref.read(directoryServiceProvider).asData?.value;
-    if (dirService == null) return;
-    
-    final games = ref.read(paginatedGamesProvider).games;
-    final recentGames = ref.read(recentlyPlayedProvider).value ?? [];
-    final allGames = {...games, ...recentGames}.toList();
-    
-    if (allGames.isEmpty) return;
-    
-    final results = await Future.wait(
-      allGames.map((g) async => MapEntry(g.id, await dirService.isRomDownloaded(g))),
-    );
-    if (mounted) {
-      setState(() {
-        for (final entry in results) {
-          _downloadedStates[entry.key] = entry.value;
-        }
-      });
-    }
+    await ref.read(downloadedGamesCacheProvider.notifier).refresh();
   }
 
   Future<void> _handleGameTap(BuildContext context, WidgetRef ref, Game game) async {
     final config = ref.read(rommConfigProvider).value;
     final baseUrl = config?.baseUrl ?? '';
-    final isDownloaded = _downloadedStates[game.id] ?? false;
+    final isDownloaded = ref.read(downloadedGamesCacheProvider)[game.id] ?? false;
 
     await Navigator.push(
       context,
@@ -243,17 +90,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     );
     
     if (mounted) {
-      await _refreshAllDownloadStates();
+      await ref.read(downloadedGamesCacheProvider.notifier).refresh();
     }
   }
 
   Future<void> _openFilterSheet(BuildContext context, WidgetRef ref) async {
-    // Get available filter values from the platforms filter_values
-    // Use the filter_values we already have from the last API response
     final currentFilters = ref.read(activeFiltersProvider);
     final collections = await ref.read(rommServiceProvider)?.getCollections() ?? [];
 
-    // Extract available genres/regions/languages from currently loaded games
     final games = ref.read(paginatedGamesProvider).games;
     final genres = games.expand((g) => g.genres).toSet().toList()..sort();
     final regions = games.expand((g) => g.regions).toSet().toList()..sort();
@@ -268,7 +112,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       availableRegions: regions,
       availableLanguages: languages,
       availableCollections: collections,
-      downloadedStates: _downloadedStates,
       onApply: (newFilters) {
         ref.read(activeFiltersProvider.notifier).state = newFilters;
         ref.read(paginatedGamesProvider.notifier).reset();
@@ -277,11 +120,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           platformId: ref.read(selectedPlatformIdProvider)?.toString(),
           search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
         );
-        if (newFilters.downloadedOnly) {
-          _loadDownloadedGames();
-        }
       },
     );
+  }
+
+  @override
+  Map<String, bool> get downloadedStates => ref.watch(downloadedGamesCacheProvider);
+
+  @override
+  void refreshDownloadState(DirectoryService dirService, Game game) {
+    ref.read(downloadedGamesCacheProvider.notifier).refresh();
+  }
+
+  @override
+  void refreshAllDownloadStates() {
+    ref.read(downloadedGamesCacheProvider.notifier).refresh();
   }
 
   @override
@@ -296,6 +149,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
+    final downloadedCache = ref.watch(downloadedGamesCacheProvider);
+    final isDeepScanning = ref.watch(downloadedGamesCacheProvider.notifier).isDeepScanning;
 
     // Trigger initial load once service becomes available
     ref.listen(rommServiceProvider, (prev, next) {
@@ -384,6 +239,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
         child: ExcludeSemantics(
           child: Column(
             children: [
+              if (isDeepScanning)
+                const LinearProgressIndicator(
+                  minHeight: 2,
+                  backgroundColor: Colors.transparent,
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: TextField(
@@ -544,23 +404,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
                                       final recentAsync = ref.watch(recentlyPlayedProvider);
 
-                                      final downloadCache = ref.read(downloadCacheServiceProvider);
-                                      final displayGames = activeFilters.downloadedOnly
-                                          ? _downloadedGames
-                                          : activeFilters.notDownloadedOnly
-                                              ? paginatedState.games.where((game) {
-                                                  final isDownloaded = downloadCache.isDownloaded(game.fsName) ||
-                                                      downloadCache.isDownloaded(game.fileName) ||
-                                                      _downloadedStates[game.id] == true;
-                                                  return !isDownloaded;
-                                                }).toList()
-                                              : paginatedState.games;
+                                      final displayGames = paginatedState.games;
 
-                                      if (activeFilters.downloadedOnly && _isLoadingDownloaded) {
-                                        return const Center(child: CircularProgressIndicator());
-                                      }
-
-                                      if (paginatedState.games.isEmpty && !activeFilters.downloadedOnly) {
+                                      if (paginatedState.games.isEmpty) {
                                         return const CustomScrollView(slivers: [
                                           SliverFillRemaining(child: Center(child: Text('No games found'))),
                                         ]);
@@ -582,11 +428,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                                 loading: () => const SizedBox.shrink(),
                                                 error: (e, s) => const SizedBox.shrink(),
                                                 data: (games) {
-                                                  // Refresh download states for recently played games
-                                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                                    if (mounted) _refreshAllDownloadStates();
-                                                  });
-
                                                   if (games.isEmpty) return const SizedBox.shrink();
                                                   return Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -677,37 +518,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                                     ));
                                                   }
                                                   final game = displayGames[index];
-
-                                                  if (_downloadedStates[game.id] == null) {
-                                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                                      _refreshAllDownloadStates();
-                                                    });
-                                                  }
-                                                  final dirService = directoryServiceAsync.asData?.value;
+                                                  final isDownloaded = downloadedCache[game.id] ?? false;
                                                   final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
                                                   final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
-                                                  if (dirService == null) {
-                                                    return GestureDetector(
-                                                      onTap: () => _handleGameTap(context, ref, game),
-                                                      child: GestureDetector(
-                                                        onLongPress: isWindowsGame ? () => handleWindowsConfig(context, ref, game) : null,
-                                                        child: GameCard(
-                                                          game: game,
-                                                          coverUrl: coverUrl,
-                                                          showTitle: showTitle,
-                                                          platformLogoUrl: game.platformSlug != null
-                                                              ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
-                                                              : null,
-                                                          showButtonsOnHover: showButtonsOnHover,
-                                                          onDownload: () => startDownload(context, ref, game),
-                                                          onLaunch: () => handleLaunch(context, ref, game),
-                                                          onDelete: () => handleDeleteRom(context, ref, game),
-                                                          onPushSaves: () => handlePushSaves(context, ref, game),
-                                                          onPullSaves: () => handlePullSaves(context, ref, game),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
+                                                  
                                                   return GestureDetector(
                                                     onTap: () => _handleGameTap(context, ref, game),
                                                     child: GestureDetector(
@@ -715,7 +529,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                                       child: GameCard(
                                                         game: game,
                                                         coverUrl: coverUrl,
-                                                        isDownloaded: _downloadedStates[game.id] ?? false,
+                                                        isDownloaded: isDownloaded,
                                                         platformLogoUrl: game.platformSlug != null
                                                             ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
                                                             : null,

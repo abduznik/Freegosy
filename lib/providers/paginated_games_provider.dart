@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
+import 'downloaded_games_cache_provider.dart';
 
 class ActiveFilters {
   final List<String> genres;
@@ -145,6 +146,37 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
     }
 
     try {
+      // SPECIAL CASE: If filtering for 'Downloaded Only', we use the local cache
+      // because RomM doesn't support this filter and we want it to be "instant".
+      if (_activeFilters.downloadedOnly) {
+        final downloadedMap = _ref.read(downloadedGamesCacheProvider);
+        final metadataCache = _ref.read(metadataCacheServiceProvider).asData?.value;
+        
+        if (metadataCache != null) {
+          final allDownloaded = metadataCache.cachedGames.where((g) => downloadedMap[g.id] == true).toList();
+          
+          // Apply other filters locally
+          final filtered = allDownloaded.where((game) {
+            if (platformId != null && game.platformId.toString() != platformId) return false;
+            if (search != null && search.isNotEmpty) {
+              final query = search.toLowerCase();
+              if (!game.name.toLowerCase().contains(query)) return false;
+            }
+            if (_activeFilters.genres.isNotEmpty && !_activeFilters.genres.any((g) => game.genres.contains(g))) return false;
+            if (_activeFilters.regions.isNotEmpty && !_activeFilters.regions.any((r) => game.regions.contains(r))) return false;
+            return true;
+          }).toList();
+
+          state = PaginatedGamesState(
+            games: filtered,
+            total: filtered.length,
+            hasMore: false,
+            isLoading: false,
+          );
+          return;
+        }
+      }
+
       final result = await service.getGamesPage(
         offset: 0,
         limit: _pageSize,
@@ -157,11 +189,23 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         statuses: _activeFilters.statuses,
       );
       
+      // Filter locally for instant response
+      List<Game> filteredGames = result.games;
+      if (_activeFilters.downloadedOnly || _activeFilters.notDownloadedOnly) {
+        final downloadedCache = _ref.read(downloadedGamesCacheProvider);
+        filteredGames = result.games.where((game) {
+          final isDownloaded = downloadedCache[game.id] ?? false;
+          if (_activeFilters.downloadedOnly) return isDownloaded;
+          if (_activeFilters.notDownloadedOnly) return !isDownloaded;
+          return true;
+        }).toList();
+      }
+
       _cache[key] = result.games;
       _offsets[key] = result.games.length;
       _totals[key] = result.total;
       state = PaginatedGamesState(
-        games: result.games,
+        games: filteredGames,
         total: result.total,
         hasMore: result.games.length < result.total,
         isLoading: false,
@@ -193,9 +237,21 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
       languages: _activeFilters.languages,
     );
 
+    // Filter by download status locally
+    List<Game> filteredOffline = offlineGames;
+    if (_activeFilters.downloadedOnly || _activeFilters.notDownloadedOnly) {
+      final downloadedCache = _ref.read(downloadedGamesCacheProvider);
+      filteredOffline = offlineGames.where((game) {
+        final isDownloaded = downloadedCache[game.id] ?? false;
+        if (_activeFilters.downloadedOnly) return isDownloaded;
+        if (_activeFilters.notDownloadedOnly) return !isDownloaded;
+        return true;
+      }).toList();
+    }
+
     state = PaginatedGamesState(
-      games: offlineGames,
-      total: offlineGames.length,
+      games: filteredOffline,
+      total: filteredOffline.length,
       hasMore: false,
       isLoading: false,
       error: error != null ? 'Offline Mode (Server: $error)' : 'Offline Mode',
@@ -265,8 +321,21 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
       _cache[key] = merged;
       _offsets[key] = merged.length;
       _totals[key] = result.total;
+
+      // Filter by download status locally
+      List<Game> filteredMerged = merged;
+      if (_activeFilters.downloadedOnly || _activeFilters.notDownloadedOnly) {
+        final downloadedCache = _ref.read(downloadedGamesCacheProvider);
+        filteredMerged = merged.where((game) {
+          final isDownloaded = downloadedCache[game.id] ?? false;
+          if (_activeFilters.downloadedOnly) return isDownloaded;
+          if (_activeFilters.notDownloadedOnly) return !isDownloaded;
+          return true;
+        }).toList();
+      }
+
       state = PaginatedGamesState(
-        games: merged,
+        games: filteredMerged,
         total: result.total,
         hasMore: merged.length < result.total,
         isLoadingMore: false,

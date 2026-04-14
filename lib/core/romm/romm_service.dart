@@ -8,23 +8,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'romm_models.dart';
 
 class RommService {
-  final RomMConfig config;
+  RomMConfig _config;
   final Dio _dio;
   Options _authOptions;
+
+  RomMConfig get config => _config;
+
+  void updateConfig(RomMConfig newConfig) {
+    _config = newConfig;
+    _dio.options.baseUrl = _normalizeBaseUrl(newConfig.baseUrl);
+    _authOptions = _computeAuthOptions(newConfig);
+  }
 
   static String _normalizeBaseUrl(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
-  RommService(this.config)
+  RommService(this._config)
       : _dio = Dio(BaseOptions(
-          baseUrl: _normalizeBaseUrl(config.baseUrl),
+          baseUrl: _normalizeBaseUrl(_config.baseUrl),
           connectTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(minutes: 10),
           headers: {
             'Expect': '', // Suppress 100-continue which chokes many reverse proxies
           },
         )),
-        _authOptions = _computeAuthOptions(config) {
+        _authOptions = _computeAuthOptions(_config) {
     
     // Add logging for Linux diagnostics
     if (kDebugMode || io.Platform.isLinux) {
@@ -41,18 +49,18 @@ class RommService {
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
         // Check for 401 with API Key
-        if (e.response?.statusCode == 401 && config.apiKey.isNotEmpty) {
+        if (e.response?.statusCode == 401 && _config.apiKey.isNotEmpty) {
           throw Exception('Invalid API key. Please check your token in RomM Settings → Client API Tokens.');
         }
 
         // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related
         final statusCode = e.response?.statusCode;
-        if ((statusCode == 401 || (statusCode == 500 && e.requestOptions.path != '/api/token')) && config.apiKey.isEmpty) {
+        if ((statusCode == 401 || (statusCode == 500 && e.requestOptions.path != '/api/token')) && _config.apiKey.isEmpty) {
           try {
             // Re-fetch token using stored credentials
             final prefs = await SharedPreferences.getInstance();
-            final username = prefs.getString('romm_username') ?? config.username;
-            final password = prefs.getString('romm_password') ?? config.password;
+            final username = prefs.getString('romm_username') ?? _config.username;
+            final password = prefs.getString('romm_password') ?? _config.password;
 
             if (username.isNotEmpty && password.isNotEmpty) {
               final tokenResponse = await _dio.post(
@@ -91,9 +99,9 @@ class RommService {
         if (e.response?.statusCode == 403 &&
           e.requestOptions.extra['_basicRetry'] != true &&
           e.requestOptions.data is! FormData &&
-          config.token != null &&
-          config.token!.isNotEmpty) {
-          final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
+          _config.token != null &&
+          _config.token!.isNotEmpty) {
+          final basic = 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
           final opts = e.requestOptions
             ..headers['Authorization'] = basic
             ..extra['_basicRetry'] = true;
@@ -159,17 +167,17 @@ class RommService {
 
   Future<void> refreshToken() async {
     // Don't refresh if API key is already configured - it takes priority
-    if (config.apiKey.isNotEmpty) {
+    if (_config.apiKey.isNotEmpty) {
       debugPrint('[RomM] refreshToken: skipping - API key already set');
       return;
     }
     try {
-      final username = config.username;
-      final password = config.password;
+      final username = _config.username;
+      final password = _config.password;
       if (username.isEmpty || password.isEmpty) {
         return;
       }
-      final newToken = await fetchToken(config.baseUrl, username, password);
+      final newToken = await fetchToken(_config.baseUrl, username, password);
       _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
     } catch (e) {
       // Silence errors
@@ -178,7 +186,7 @@ class RommService {
 
   Future<void> _ensureBearerToken() async {
     // API key is already a valid Bearer token - no need to refresh
-    if (config.apiKey.isNotEmpty) return;
+    if (_config.apiKey.isNotEmpty) return;
 
     final authHeader = _authOptions.headers?['Authorization']?.toString() ?? '';
     if (!authHeader.startsWith('Bearer ')) {
@@ -230,7 +238,7 @@ class RommService {
   }
 
   String? resolveCoverUrl(Game game) {
-    final host = _normalizeBaseUrl(config.baseUrl);
+    final host = _normalizeBaseUrl(_config.baseUrl);
     String? path = game.pathCoverLarge ?? game.pathCoverSmall;
     if (path != null && path.isNotEmpty) {
       return path.startsWith('http') ? path : "$host$path";
@@ -431,13 +439,13 @@ class RommService {
   String getDownloadUrl(Game game) {
     // If the API already provides a download URL, use it directly
     if (game.fileUrl != null && game.fileUrl!.isNotEmpty) {
-      final host = _normalizeBaseUrl(config.baseUrl);
+      final host = _normalizeBaseUrl(_config.baseUrl);
       return game.fileUrl!.startsWith('http') ? game.fileUrl! : '$host${game.fileUrl}';
     }
 
-    final baseUrl = config.baseUrl.endsWith('/') 
-        ? config.baseUrl.substring(0, config.baseUrl.length - 1) 
-        : config.baseUrl;
+    final baseUrl = _config.baseUrl.endsWith('/') 
+        ? _config.baseUrl.substring(0, _config.baseUrl.length - 1) 
+        : _config.baseUrl;
     
     // For large files, sometimes the filename in the URL can cause issues with reverse proxies
     // RomM actually only needs the ID to find the file, the filename is often for the client.
@@ -457,10 +465,10 @@ class RommService {
 
   /// Returns the Authorization header value for downloads (Bearer if available, else Basic).
   String get authHeader {
-    if (config.apiKey.isNotEmpty) return 'Bearer ${config.apiKey}';
-    final token = config.token;
+    if (_config.apiKey.isNotEmpty) return 'Bearer ${_config.apiKey}';
+    final token = _config.token;
     if (token != null && token.isNotEmpty) return 'Bearer $token';
-    return 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
+    return 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
   }
 
   // ─── Save sync ─────────────────────────────────────────────────────────────
@@ -621,7 +629,7 @@ class RommService {
       // Resolve relative paths against the base URL
       final url = saveUrl.startsWith('http')
           ? saveUrl
-          : '${_normalizeBaseUrl(config.baseUrl)}$saveUrl';
+          : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
 
       final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
 
@@ -663,7 +671,7 @@ class RommService {
   }
 
   String getFirmwareDownloadUrl(Firmware firmware) {
-    final baseUrl = _normalizeBaseUrl(config.baseUrl);
+    final baseUrl = _normalizeBaseUrl(_config.baseUrl);
     return '$baseUrl/api/firmware/${firmware.id}/content/${Uri.encodeComponent(firmware.fileName)}';
   }
 

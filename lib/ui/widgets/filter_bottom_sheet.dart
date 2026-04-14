@@ -7,7 +7,6 @@ class FilterBottomSheet extends StatefulWidget {
   final List<String> availableRegions;
   final List<String> availableLanguages;
   final List<Map<String, dynamic>> availableCollections;
-  final Map<String, bool> downloadedStates; // gameId -> isDownloaded
   final Function(ActiveFilters) onApply;
 
   const FilterBottomSheet({
@@ -17,7 +16,6 @@ class FilterBottomSheet extends StatefulWidget {
     required this.availableRegions,
     required this.availableLanguages,
     required this.availableCollections,
-    required this.downloadedStates,
     required this.onApply,
   });
 
@@ -28,7 +26,6 @@ class FilterBottomSheet extends StatefulWidget {
     required List<String> availableRegions,
     required List<String> availableLanguages,
     required List<Map<String, dynamic>> availableCollections,
-    required Map<String, bool> downloadedStates,
     required Function(ActiveFilters) onApply,
   }) {
     return showModalBottomSheet(
@@ -41,7 +38,6 @@ class FilterBottomSheet extends StatefulWidget {
         availableRegions: availableRegions,
         availableLanguages: availableLanguages,
         availableCollections: availableCollections,
-        downloadedStates: downloadedStates,
         onApply: onApply,
       ),
     );

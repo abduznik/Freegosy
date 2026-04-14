@@ -27,6 +27,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _apiKeyController; // Added API Key controller
   bool _isSaving = false;
   bool _preferencesLoaded = false;
+  bool _isLegacyAuth = false;
 
   @override
   void initState() {
@@ -79,11 +80,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(title: const Text('Settings')),
       body: rommConfigAsync.when(
         data: (rommConfig) {
-          // Update controllers with loaded config
-          _baseUrlController.text = rommConfig.baseUrl;
-          _usernameController.text = rommConfig.username;
-          _passwordController.text = rommConfig.password;
-          _apiKeyController.text = rommConfig.apiKey; // Load API Key into controller
+          // Update controllers with loaded config if not already loaded
+          if (!_preferencesLoaded) {
+            _baseUrlController.text = rommConfig.baseUrl;
+            _usernameController.text = rommConfig.username;
+            _passwordController.text = rommConfig.password;
+            _apiKeyController.text = rommConfig.apiKey;
+            _isLegacyAuth = rommConfig.apiKey.isEmpty && 
+                           (rommConfig.username.isNotEmpty || rommConfig.password.isNotEmpty);
+          }
 
           return directoryServiceAsync.when(
             data: (directoryService) {
@@ -181,39 +186,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           keyboardType: TextInputType.url,
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _usernameController,
-          decoration: const InputDecoration(
-            labelText: 'Username',
-            border: OutlineInputBorder(),
+        if (_isLegacyAuth) ...[
+          TextField(
+            controller: _usernameController,
+            decoration: const InputDecoration(
+              labelText: 'Username',
+              border: OutlineInputBorder(),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _passwordController,
-          decoration: const InputDecoration(
-            labelText: 'Password',
-            border: OutlineInputBorder(),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _passwordController,
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              border: OutlineInputBorder(),
+            ),
+            obscureText: true,
           ),
-          obscureText: true,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _apiKeyController,
-          decoration: const InputDecoration(
-            labelText: 'API Key (RomM 4.8+)',
-            hintText: 'rmm_...',
-            border: OutlineInputBorder(),
-            helperText: 'Recommended. Generate in RomM Settings → Client API Tokens',
-            helperMaxLines: 2,
+        ] else
+          TextField(
+            controller: _apiKeyController,
+            decoration: const InputDecoration(
+              labelText: 'API Key (RomM 4.8+)',
+              hintText: 'rmm_...',
+              border: OutlineInputBorder(),
+              helperText: 'Recommended. Generate in RomM Settings → Client API Tokens',
+              helperMaxLines: 2,
+            ),
+            keyboardType: TextInputType.text,
+            obscureText: true,
           ),
-          keyboardType: TextInputType.text,
-          obscureText: true,
-        ),
         const SizedBox(height: 16),
-        const Divider(), // Add divider
-        const SizedBox(height: 8),
-        const Text('Legacy Authentication (RomM 4.7 and below)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)), // Add label
+        Row(
+          children: [
+            const Text('Legacy Authentication', style: TextStyle(fontSize: 14)),
+            const Spacer(),
+            Switch(
+              value: _isLegacyAuth,
+              onChanged: (val) => setState(() => _isLegacyAuth = val),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -229,10 +242,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   return;
                 }
                 try {
+                  // Temporarily update service config for testing
+                  final currentConfig = RomMConfig(
+                    baseUrl: _baseUrlController.text.trim(),
+                    username: _isLegacyAuth ? _usernameController.text.trim() : '',
+                    password: _isLegacyAuth ? _passwordController.text : '',
+                    apiKey: !_isLegacyAuth ? _apiKeyController.text.trim() : '',
+                  );
+                  rommService.updateConfig(currentConfig);
+
                   // Test connection by fetching platforms
                   final platforms = await rommService.getPlatforms();
                   String message;
-                  if (rommConfig.apiKey.isNotEmpty) {
+                  if (currentConfig.apiKey.isNotEmpty) {
                     message = 'Connected via API key. ${platforms.length} platforms found.';
                   } else {
                     message = 'Connected via username/password. ${platforms.length} platforms found.';
@@ -259,23 +281,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   : () async {
                       setState(() => _isSaving = true);
                       final baseUrl = _baseUrlController.text.trim();
-                      final username = _usernameController.text.trim();
-                      final password = _passwordController.text;
-                      final apiKey = _apiKeyController.text.trim(); // Get API Key value
+                      final String username;
+                      final String password;
+                      final String apiKey;
 
-                      // Try Bearer token (OAuth2). If the server doesn't support
-                      // it over HTTP or at all, fall back to Basic auth silently.
-                      try {
-                        await RommService.fetchToken(baseUrl, username, password);
-                        // If successful, fetch token from preferences and move to secure storage
-                        final prefs = await SharedPreferences.getInstance();
-                        final token = prefs.getString('rommAuthToken');
-                        if (token != null) {
-                          await SecureStorageService.write('rommAuthToken', token);
+                      if (_isLegacyAuth) {
+                        username = _usernameController.text.trim();
+                        password = _passwordController.text;
+                        apiKey = '';
+                        
+                        // Try Bearer token (OAuth2). If the server doesn't support
+                        // it over HTTP or at all, fall back to Basic auth silently.
+                        try {
+                          await RommService.fetchToken(baseUrl, username, password);
+                          // If successful, fetch token from preferences and move to secure storage
+                          final prefs = await SharedPreferences.getInstance();
+                          final token = prefs.getString('rommAuthToken');
+                          if (token != null) {
+                            await SecureStorageService.write('rommAuthToken', token);
+                            await prefs.remove('rommAuthToken');
+                          }
+                        } catch (e) {
+                          // Clear any stale token so Basic auth is used instead.
+                          final prefs = await SharedPreferences.getInstance();
                           await prefs.remove('rommAuthToken');
+                          await SecureStorageService.delete('rommAuthToken');
                         }
-                      } catch (e) {
-                        // Clear any stale token so Basic auth is used instead.
+                      } else {
+                        username = '';
+                        password = '';
+                        apiKey = _apiKeyController.text.trim();
+                        // Clear any legacy tokens when switching to API Key
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.remove('rommAuthToken');
                         await SecureStorageService.delete('rommAuthToken');
