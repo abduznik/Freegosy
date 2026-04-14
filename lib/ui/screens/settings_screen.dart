@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/storage/directory_service.dart';
 import '../../providers/romm_provider.dart';
@@ -523,8 +524,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Legal', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text('Legal & Support', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.favorite, color: Colors.red),
+          title: const Text('Support Development'),
+          subtitle: const Text('Become a GitHub Sponsor to support Freegosy'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => launchUrl(Uri.parse('https://github.com/sponsors/abduznik'), mode: LaunchMode.externalApplication),
+        ),
+        const Divider(height: 32),
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Third-Party Licenses'),

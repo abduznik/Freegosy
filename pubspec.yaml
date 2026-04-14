@@ -47,6 +47,7 @@ dependencies:
   file_picker: ^8.0.0+1
   path: ^1.9.0
   flutter_secure_storage: ^9.2.4
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

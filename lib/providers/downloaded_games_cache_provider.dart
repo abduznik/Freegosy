@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   final Ref _ref;
   bool _isDeepScanning = false;
+  Timer? _scanTimer;
+  Timer? _periodicTimer;
   
   DownloadedGamesCache(this._ref) : super({}) {
     _init();
@@ -37,10 +39,18 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     });
 
     // Start deep scan in background after a short delay
-    Future.delayed(const Duration(seconds: 5), () => startDeepScan());
+    _scanTimer = Timer(const Duration(seconds: 5), () => startDeepScan());
 
     // Periodical refresh every 2 minutes to catch external filesystem changes
-    Timer.periodic(const Duration(minutes: 2), (_) => refresh());
+    _periodicTimer = Timer.periodic(const Duration(minutes: 2), (_) => refresh());
+  }
+
+  @override
+  void dispose() {
+    _scanTimer?.cancel();
+    _periodicTimer?.cancel();
+    _isDeepScanning = false;
+    super.dispose();
   }
 
   /// Quickly refreshes the download status for games currently in the metadata cache.
