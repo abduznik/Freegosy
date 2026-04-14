@@ -26,8 +26,10 @@ No pressure at all — the app is and will always be free.
 ## Current Features (v0.3.x)
 
 - **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** integration).
+- **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
 - **RomM Integration**: 
     - Browse and filter your entire library with server-side pagination.
+    - **New**: Instant "Downloaded" games filter with background deep collection scanning.
     - Download ROMs directly via HTTP with real-time progress tracking.
     - Personal game properties support (rating, status, completion).
 - **Advanced Emulator Management**: 
@@ -47,7 +49,6 @@ No pressure at all — the app is and will always be free.
 
 - **Android Support**: Bringing the Freegosy experience to mobile devices.
 - **Cloud Configuration**: Syncing app settings across multiple devices.
-- **Better Offline Mode**: Improved metadata caching for browsing without a connection.
 - **API v4.8.2 Readiness**: Full support for progression bars and advanced completion tracking as RomM updates.
 
 ## Calling All Testers!
