@@ -59,6 +59,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
   flutter_native_splash: ^2.4.4
+  inno_bundle: ^0.10.1
 
 flutter_launcher_icons:
   android: "launcher_icon"
@@ -86,6 +87,14 @@ flutter_native_splash:
   android: true
   ios: true
   web: true
+
+inno_bundle:
+  name: "Freegosy"
+  id: "com.freegosy.app"
+  image_path: "freegosy_logo.png"
+  executable_name: "freegosy"
+  url: "https://github.com/abduznik/Freegosy"
+  publisher: "abduznik"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -1,196 +1,127 @@
-name: Release
+name: Build and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. v0.3.0)'
+        description: 'Version tag (e.g. v1.0.0)'
         required: true
-        default: 'v0.3.0'
-      build_windows:
-        description: 'Build Windows'
-        type: boolean
-        default: true
-      build_macos:
-        description: 'Build macOS'
-        type: boolean
-        default: true
-      build_linux:
-        description: 'Build Linux'
-        type: boolean
-        default: true
+        default: 'v1.0.0'
 
 jobs:
-  build-windows:
-    name: Build Windows
-    if: github.event_name == 'push' || inputs.build_windows == true
-    runs-on: windows-latest
+  build_android:
+    name: Build Android
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v3
         with:
-          channel: stable
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
           cache: true
-
       - name: Install dependencies
         run: flutter pub get
+      - name: Build APK
+        run: flutter build apk --release --build-name=${{ github.event.inputs.version }} --build-number=${{ github.run_number }}
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Build Windows
-        run: flutter build windows --release
-
-      - name: Archive Windows build
-        shell: pwsh
-        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath freegosy-windows.zip
-
-      - name: Upload Windows artifact
+  build_windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build Windows Installer
+        run: dart run inno_bundle:build --release
+      - name: Upload Windows Installer
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: freegosy-windows.zip
+          path: build/windows/x64/installer/Release/*.exe
 
-  build-macos:
-    name: Build macOS
-    if: github.event_name == 'push' || inputs.build_macos == true
+  build_macos:
+    name: Build macOS DMG
     runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          channel: 'stable'
           cache: true
-
       - name: Install dependencies
         run: flutter pub get
-
       - name: Build macOS
-        run: flutter build macos --release
-
-      - name: Archive macOS build
+        env:
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: ""
         run: |
-          cd build/macos/Build/Products/Release
-          zip -r ../../../../../freegosy-macos.zip Freegosy.app
-
-      - name: Upload macOS artifact
+          flutter build macos --release \
+            --build-name=${{ github.event.inputs.version }} \
+            --build-number=${{ github.run_number }}
+      - name: Ad-hoc sign macOS app
+        run: |
+          # Ad-hoc sign all frameworks and the app itself
+          find build/macos/Build/Products/Release/freegosy.app/Contents/Frameworks -name "*.framework" -exec codesign --force --sign - {} + || true
+          find build/macos/Build/Products/Release/freegosy.app/Contents/Frameworks -name "*.dylib" -exec codesign --force --sign - {} + || true
+          codesign --force --sign - build/macos/Build/Products/Release/freegosy.app/Contents/MacOS/freegosy
+          codesign --force --sign - build/macos/Build/Products/Release/freegosy.app
+      - name: Create DMG
+        run: |
+          npx create-dmg build/macos/Build/Products/Release/freegosy.app --overwrite --no-code-sign
+          mv *.dmg freegosy-macos.dmg
+      - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: freegosy-macos.zip
-
-  build-linux:
-    name: Build Linux (AppImage)
-    if: github.event_name == 'push' || inputs.build_linux == true
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install AppImageBuilder
-        run: |
-          sudo wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
-          sudo chmod +x /usr/local/bin/appimagetool
-
-      - name: Build Linux
-        run: |
-          flutter pub get
-          flutter build linux --release
-
-      - name: Prepare AppDir
-        run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          
-          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
-          
-          # Create Desktop Entry
-          cat > AppDir/usr/share/applications/freegosy.desktop <<EOF
-          [Desktop Entry]
-          Name=Freegosy
-          Exec=freegosy
-          Icon=freegosy
-          Type=Application
-          Categories=Game;
-          EOF
-          
-          # Use icon
-          cp web/icons/Icon-192.png AppDir/usr/share/icons/hicolor/256x256/apps/freegosy.png
-          cp web/icons/Icon-192.png AppDir/freegosy.png
-          
-          # Mandatory files for AppImage
-          cp AppDir/usr/share/applications/freegosy.desktop AppDir/
-          ln -s usr/bin/freegosy AppDir/AppRun
-          chmod +x AppDir/AppRun
-
-      - name: Build AppImage
-        run: |
-          ARCH=x86_64 /usr/local/bin/appimagetool --appimage-extract-and-run AppDir Freegosy-x86_64.AppImage
-
-      - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-release
-          path: Freegosy-x86_64.AppImage
+          path: freegosy-macos.dmg
 
   release:
-    name: Create GitHub Release
-    needs: [build-windows, build-macos, build-linux]
-    if: always()
+    name: Create Release
+    needs: [build_android, build_windows, build_macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download all artifacts
+      - name: Download Android Artifact
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
-          merge-multiple: true
-
-      - name: Determine Tag
-        id: tag
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "val=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "val=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          fi
-
+          name: android-release
+          path: artifacts/
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: artifacts/
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release
+          path: artifacts/
+      - name: Rename APK
+        run: mv artifacts/app-release.apk artifacts/freegosy-android.apk
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.val }}
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
           files: |
-            freegosy-windows.zip
-            freegosy-macos.zip
-            Freegosy-x86_64.AppImage
-          body: |
-            # Freegosy ${{ steps.tag.outputs.val }}
-            
-            ## New Features
-            - **Native Linux Support**: Added beta support for Linux and Steam Deck (EmuDeck).
-            - **EmuDeck Integration**: Automated path discovery for ROMs, emulators, and saves on Steam Deck.
-            - **BIOS Management**: Download BIOS files directly from RomM.
-            - **Enhanced RPCS3 Support**: Choose between ARM64 and x64 architectures on macOS.
-            - **Interactive Gallery**: New screenshot viewer with zoom and swipe support.
-            - **Stability**: Numerous bug fixes and performance improvements.
+            artifacts/freegosy-android.apk
+            artifacts/*.exe
+            artifacts/freegosy-macos.dmg
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

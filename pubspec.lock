@@ -480,6 +480,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.8.0"
+  inno_bundle:
+    dependency: "direct dev"
+    description:
+      name: inno_bundle
+      sha256: "33d671053d14d67bf298fa88d360c01ac05ee8fa731ec2cbb6c88b1dd72bb240"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.10.1"
   io:
     dependency: transitive
     description:
