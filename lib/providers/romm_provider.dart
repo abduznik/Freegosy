@@ -55,13 +55,28 @@ final downloadCacheServiceProvider = Provider<DownloadCacheService>((ref) {
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final prefs = await SharedPreferences.getInstance();
-  final baseUrl = prefs.getString('rommBaseUrl') ?? 'https://api.romm.example.com';
-  final username = prefs.getString('rommUsername') ?? 'guest';
+  
+  String baseUrl = prefs.getString('rommBaseUrl') ?? '';
+  if (baseUrl.isEmpty) baseUrl = 'https://api.romm.example.com';
+  
+  final username = prefs.getString('rommUsername') ?? '';
   final password = await SecureStorageService.read('rommPassword') ?? '';
   final token = await SecureStorageService.read('rommAuthToken');
   final apiKey = await SecureStorageService.read('rommApiKey') ?? '';
 
-  return RomMConfig(baseUrl: baseUrl, username: username, password: password, token: token, apiKey: apiKey);
+  debugPrint('[RomM-Init] Loading config:');
+  debugPrint('  - Base URL: $baseUrl');
+  debugPrint('  - Username: ${username.isEmpty ? "EMPTY" : username}');
+  debugPrint('  - Password: ${password.isEmpty ? "EMPTY" : "LOADED"}');
+  debugPrint('  - API Key: ${apiKey.isEmpty ? "EMPTY" : "LOADED"}');
+
+  return RomMConfig(
+    baseUrl: baseUrl, 
+    username: username, 
+    password: password, 
+    token: token, 
+    apiKey: apiKey
+  );
 });
 
 // Exposes a login function that fetches a Bearer token and refreshes the config/service providers.
@@ -128,13 +143,16 @@ final rommServiceProvider = Provider<RommService?>((ref) {
 
   if (config != null && directoryService != null) {
     try {
+      debugPrint('[RomM-Init] Initializing RommService with config for ${config.baseUrl}');
       final service = RommService(config);
       // Refresh token on startup to ensure latest scopes
       if (config.username.isNotEmpty && config.password.isNotEmpty) {
+        debugPrint('[RomM-Init] Triggering background token refresh...');
         service.refreshToken();
       }
       return service;
     } catch (e) {
+      debugPrint('[RomM-Init] FAILED to initialize RommService: $e');
       return null;
     }
   }

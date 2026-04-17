@@ -7,10 +7,23 @@ on:
         description: 'Version tag (e.g. v1.0.0)'
         required: true
         default: 'v1.0.0'
+      build_linux:
+        description: 'Build Linux?'
+        type: boolean
+        default: true
+      build_windows:
+        description: 'Build Windows?'
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build macOS?'
+        type: boolean
+        default: true
 
 jobs:
   build_linux:
     name: Build Linux
+    if: ${{ inputs.build_linux }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +50,7 @@ jobs:
 
   build_windows:
     name: Build Windows Installer
+    if: ${{ inputs.build_windows }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +70,7 @@ jobs:
 
   build_macos:
     name: Build macOS DMG
+    if: ${{ inputs.build_macos }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,25 +109,35 @@ jobs:
   release:
     name: Create Release
     needs: [build_linux, build_windows, build_macos]
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Create artifacts directory
+        run: mkdir artifacts
+
       - name: Download Linux Artifact
+        if: ${{ inputs.build_linux }}
         uses: actions/download-artifact@v4
         with:
           name: linux-release
           path: artifacts/
+          
       - name: Download Windows Artifact
+        if: ${{ inputs.build_windows }}
         uses: actions/download-artifact@v4
         with:
           name: windows-release
           path: artifacts/
+          
       - name: Download macOS Artifact
+        if: ${{ inputs.build_macos }}
         uses: actions/download-artifact@v4
         with:
           name: macos-release
           path: artifacts/
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -122,6 +147,7 @@ jobs:
             artifacts/freegosy-linux-x64.tar.gz
             artifacts/*.exe
             artifacts/freegosy-macos.dmg
+          fail_on_unmatched_files: false
           draft: false
           prerelease: false
         env:

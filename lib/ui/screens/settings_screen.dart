@@ -38,14 +38,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
     _apiKeyController = TextEditingController(); // Initialize API Key controller
-
-    // Mark preferences as loaded (they are now awaited by the provider)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final registry = ref.read(strategyRegistryProvider).asData?.value;
-      if (registry != null && !_preferencesLoaded) {
-        if (mounted) setState(() => _preferencesLoaded = true);
-      }
-    });
   }
 
   @override
@@ -73,11 +65,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final activePreset = ref.watch(activePresetProvider);
 
-    // Mark preferences as loaded (they are awaited by the provider)
-    if (strategyRegistry != null && !_preferencesLoaded) {
-      if (mounted) setState(() => _preferencesLoaded = true);
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -94,14 +81,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
       body: rommConfigAsync.when(
         data: (rommConfig) {
-          // Update controllers with loaded config if not already loaded
+          // Robust initialization: only sync once when data is ready
           if (!_preferencesLoaded) {
+            debugPrint('[Settings] Data loaded from provider. Syncing controllers...');
+            debugPrint('  - BaseURL: ${rommConfig.baseUrl}');
+            debugPrint('  - User: ${rommConfig.username}');
+            debugPrint('  - API Key exists: ${rommConfig.apiKey.isNotEmpty}');
+            
             _baseUrlController.text = rommConfig.baseUrl;
             _usernameController.text = rommConfig.username;
             _passwordController.text = rommConfig.password;
             _apiKeyController.text = rommConfig.apiKey;
             _isLegacyAuth = rommConfig.apiKey.isEmpty && 
                            (rommConfig.username.isNotEmpty || rommConfig.password.isNotEmpty);
+            
+            _preferencesLoaded = true;
           }
 
           return directoryServiceAsync.when(

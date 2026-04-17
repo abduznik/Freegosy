@@ -5,7 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../constants/app_constants.dart';
+import '../storage/secure_storage_service.dart';
 import 'romm_models.dart';
 
 class RommService {
@@ -14,6 +14,8 @@ class RommService {
   Options _authOptions;
 
   RomMConfig get config => _config;
+
+  static const String _ua = 'Freegosy/0.3.2';
 
   void updateConfig(RomMConfig newConfig) {
     _config = newConfig;
@@ -30,247 +32,147 @@ class RommService {
           connectTimeout: const Duration(seconds: 30),
           receiveTimeout: const Duration(minutes: 10),
           headers: {
-            'Expect': '', // Suppress 100-continue which chokes many reverse proxies
-            'User-Agent': 'Freegosy/${AppConstants.version} (Flutter; ${io.Platform.operatingSystem})',
+            'User-Agent': _ua,
+            'Accept': 'application/json',
           },
         )),
         _authOptions = _computeAuthOptions(_config) {
     
-    // Add logging for Linux diagnostics
-    if (kDebugMode || io.Platform.isLinux) {
+    if (kDebugMode || io.Platform.isLinux || io.Platform.isMacOS) {
       _dio.interceptors.add(LogInterceptor(
         requestHeader: true,
-        requestBody: false,
+        requestBody: true,
         responseHeader: true,
-        responseBody: true, // Enable response body logging for better diagnostics
+        responseBody: true,
         logPrint: (obj) => debugPrint('[RomM-Network] $obj'),
       ));
     }
 
-    // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
-        // Log detailed error info for badResponse on Linux
-        if (e.type == DioExceptionType.badResponse && io.Platform.isLinux) {
-          debugPrint('[RomM-Network] Bad Response Error: ${e.response?.statusCode}');
-          debugPrint('[RomM-Network] Error Data: ${e.response?.data}');
-        }
+        final statusCode = e.response?.statusCode;
+        final path = e.requestOptions.path;
+        final isAuthRetry = e.requestOptions.extra['_isAuthRetry'] == true;
 
-        // Check for 401 with API Key
-        if (e.response?.statusCode == 401 && _config.apiKey.isNotEmpty) {
-          throw Exception('Invalid API key or session expired. Please check your token in RomM Settings.');
-        }
-
-    // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related
-    final statusCode = e.response?.statusCode;
-    final path = e.requestOptions.path;
-    final isAuthRetry = e.requestOptions.extra['_isAuthRetry'] == true;
-
-    if (!isAuthRetry && (statusCode == 401 || (statusCode == 500 && path != '/api/token'))) {
-      try {
-        // If we have an API key, we can't really "refresh" it if it's 401,
-        // but we can try basic auth once as a fallback if creds exist.
-        if (_config.apiKey.isNotEmpty && statusCode == 401) {
-          final basic = 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
+        if (!isAuthRetry && (statusCode == 401 || statusCode == 403 || statusCode == 500) && path != '/api/token') {
           if (_config.username.isNotEmpty && _config.password.isNotEmpty) {
-             final opts = e.requestOptions
-              ..headers['Authorization'] = basic
-              ..extra['_isAuthRetry'] = true;
-            final retryResponse = await _dio.fetch(opts);
-            return handler.resolve(retryResponse);
-          }
-          throw Exception('API key rejected (401). Please check your RomM API token.');
-        }
-
-        // Token refresh logic for username/password logins
-        if (_config.apiKey.isEmpty && _config.username.isNotEmpty && _config.password.isNotEmpty) {
-          debugPrint('[RomM] Attempting silent token refresh after $statusCode on $path');
-          
-          final prefs = await SharedPreferences.getInstance();
-          final username = _config.username;
-          final password = _config.password;
-
-          final tokenResponse = await _dio.post(
-            '/api/token',
-            data: {
-              'username': username,
-              'password': password,
-              'grant_type': 'password',
-            },
-            options: Options(
-              contentType: 'application/x-www-form-urlencoded',
-              validateStatus: (status) => status != null && status < 500,
-            ),
-          );
-
-          if (tokenResponse.statusCode == 200) {
-            final newToken = tokenResponse.data['access_token']?.toString() ?? '';
-            if (newToken.isNotEmpty) {
-              await prefs.setString('rommAuthToken', newToken);
-              _config = _config.copyWith(token: newToken);
-              _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
-              
-              final opts = e.requestOptions
-                ..headers['Authorization'] = 'Bearer $newToken'
-                ..extra['_isAuthRetry'] = true;
-              final retryResponse = await _dio.fetch(opts);
-              return handler.resolve(retryResponse);
-            }
+            debugPrint('[RomM] Auth error ($statusCode), attempting fresh login...');
+            try {
+              final newToken = await fetchToken(_config.baseUrl, _config.username, _config.password);
+              if (newToken.isNotEmpty) {
+                _config = _config.copyWith(token: newToken, apiKey: '');
+                _authOptions = _computeAuthOptions(_config);
+                
+                final opts = e.requestOptions.copyWith(
+                  headers: Map<String, dynamic>.from(e.requestOptions.headers)
+                    ..remove('X-Api-Key')
+                    ..['Authorization'] = 'Bearer $newToken',
+                )..extra['_isAuthRetry'] = true;
+                
+                final retryResponse = await _dio.fetch(opts);
+                return handler.resolve(retryResponse);
+              }
+            } catch (_) {}
           }
         }
-      } catch (reAuthErr) {
-        debugPrint('[RomM] Silent re-auth failed: $reAuthErr');
-      }
-    }
-
-        // If the server rejects the Bearer token with 403, retry once with Basic auth.
-        if (e.response?.statusCode == 403 &&
-          e.requestOptions.extra['_basicRetry'] != true &&
-          e.requestOptions.data is! FormData &&
-          _config.token != null &&
-          _config.token!.isNotEmpty) {
-          final basic = 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
-          final opts = e.requestOptions
-            ..headers['Authorization'] = basic
-            ..extra['_basicRetry'] = true;
-          try {
-            final response = await _dio.fetch(opts);
-            handler.resolve(response);
-            return;
-          } catch (_) {}
-        }
-        handler.next(e);
-      },
-    ));
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
-        handler.next(options);
+        return handler.next(e);
       },
     ));
   }
 
-  /// Returns the appropriate auth Options for each request.
-  /// Uses Bearer token if available, falls back to Basic auth.
+  /// Use standard Bearer format for both API keys and JWTs, as it's the most widely supported.
   static Options _computeAuthOptions(RomMConfig config) {
-    // Check for API Key first
+    final headers = <String, dynamic>{};
+    
     if (config.apiKey.isNotEmpty) {
-      return Options(headers: {'Authorization': 'Bearer ${config.apiKey}'});
+      // Standard RomM API keys work best as a Bearer token in most Nginx configs
+      headers['Authorization'] = 'Bearer ${config.apiKey}';
+    } else if (config.token != null && config.token!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer ${config.token}';
+    } else if (config.username.isNotEmpty && config.password.isNotEmpty) {
+      final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
+      headers['Authorization'] = basic;
     }
-    // Fallback to existing token logic
-    final token = config.token;
-    if (token != null && token.isNotEmpty) {
-      return Options(headers: {'Authorization': 'Bearer $token'});
-    }
-    // Fallback to Basic auth
-    final basic = 'Basic ${base64Encode(utf8.encode('${config.username}:${config.password}'))}';
-    return Options(headers: {'Authorization': basic});
+    
+    return Options(headers: headers);
   }
 
-  /// Calls /api/token with username/password (OAuth2 password flow),
-  /// stores the Bearer token in SharedPreferences, and returns it.
   static Future<String> fetchToken(String baseUrl, String username, String password) async {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(minutes: 2),
+      headers: {'User-Agent': _ua},
     ));
+
     final response = await dio.post(
       '/api/token',
-      data: {
-        'username': username,
-        'password': password,
-        'grant_type': 'password',
-      },
+      data: {'username': username, 'password': password, 'grant_type': 'password'},
       options: Options(contentType: 'application/x-www-form-urlencoded'),
     );
+
     final token = response.data['access_token'] as String?;
-    if (token == null || token.isEmpty) {
-      throw Exception('Login failed: no access_token in response');
-    }
+    if (token == null || token.isEmpty) throw Exception('Login failed: no access_token');
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rommAuthToken', token);
+    await SecureStorageService.write('rommAuthToken', token);
+    
     return token;
   }
 
   Future<void> refreshToken() async {
-    // Don't refresh if API key is already configured - it takes priority
-    if (_config.apiKey.isNotEmpty) {
-      debugPrint('[RomM] refreshToken: skipping - API key already set');
-      return;
-    }
     try {
-      final username = _config.username;
-      final password = _config.password;
-      if (username.isEmpty || password.isEmpty) {
-        return;
-      }
-      final newToken = await fetchToken(_config.baseUrl, username, password);
-      _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
-    } catch (e) {
-      // Silence errors
-    }
+      if (_config.username.isEmpty || _config.password.isEmpty) return;
+      final newToken = await fetchToken(_config.baseUrl, _config.username, _config.password);
+      _config = _config.copyWith(token: newToken);
+      _authOptions = _computeAuthOptions(_config);
+    } catch (_) {}
   }
 
   Future<void> _ensureBearerToken() async {
-    // API key is already a valid Bearer token - no need to refresh
-    if (_config.apiKey.isNotEmpty) return;
-
     final authHeader = _authOptions.headers?['Authorization']?.toString() ?? '';
     if (!authHeader.startsWith('Bearer ')) {
       await refreshToken();
     }
   }
 
+  // --- API Methods ---
+
   Future<Game?> getGame(String id) async {
     try {
-      final response = await _dio.get('/api/roms/$id', options: _authOptions);
-      if (response.statusCode == 200) {
-        return Game.fromJson(response.data);
-      }
+      final response = await _dio.get('/api/roms/$id/', options: _authOptions);
+      if (response.statusCode == 200) return Game.fromJson(response.data);
       return null;
-    } catch (e) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
   Future<List<Platform>> getPlatforms() async {
-    final response = await _dio.get('/api/platforms', options: _authOptions);
+    final response = await _dio.get('/api/platforms/', options: _authOptions);
     if (response.statusCode == 200) {
-      final List<dynamic> items;
-      if (response.data is Map && response.data.containsKey('items')) {
-        items = response.data['items'] as List<dynamic>;
-      } else {
-        items = response.data as List<dynamic>;
-      }
+      final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) 
+          ? response.data['items'] : response.data as List<dynamic>;
       return items.map((item) => Platform.fromJson(item)).toList();
     }
-    throw DioException(
-      requestOptions: response.requestOptions,
-      response: response,
-      type: DioExceptionType.badResponse,
-    );
+    throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
   }
 
   Future<List<Map<String, dynamic>>> getCollections() async {
     try {
-      final response = await _dio.get('/api/collections', options: _authOptions);
+      final response = await _dio.get('/api/collections/', options: _authOptions);
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data is List ? response.data : [];
         return data.map((e) => e as Map<String, dynamic>).toList();
       }
       return [];
-    } catch (e) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   String? resolveCoverUrl(Game game) {
     final host = _normalizeBaseUrl(_config.baseUrl);
     String? path = game.pathCoverLarge ?? game.pathCoverSmall;
-    if (path != null && path.isNotEmpty) {
-      return path.startsWith('http') ? path : "$host$path";
-    }
+    if (path != null && path.isNotEmpty) return path.startsWith('http') ? path : "$host$path";
     String? url = game.urlCover;
     if (url != null && url.isNotEmpty) {
       if (url.startsWith('//')) return "https:$url";
@@ -284,61 +186,23 @@ class RommService {
   }
 
   Future<List<Game>> getAllGames({String? platformId}) async {
-    final params = <String, dynamic>{};
-    if (platformId != null) {
-      params['platform_id'] = int.parse(platformId);
-    }
+    final params = platformId != null ? {'platform_id': int.parse(platformId)} : <String, dynamic>{};
     return _fetchPaginatedGames(params);
   }
 
   Future<List<Game>> getRecentlyPlayed({int limit = 15}) async {
     try {
-      final params = <String, dynamic>{
-        'limit': limit,
-        'order_by': 'last_played',
-        'order_dir': 'desc',
-        'last_played': true,
-        'with_char_index': false,
-        'with_filter_values': false,
-      };
-      final response = await _dio.get(
-        '/api/roms',
-        queryParameters: params,
-        options: _authOptions,
-      );
+      final response = await _dio.get('/api/roms/', queryParameters: {'limit': limit, 'order_by': 'last_played', 'order_dir': 'desc', 'last_played': true, 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
       if (response.statusCode == 200) {
-        final data = response.data;
-        final List<dynamic> items = data is Map ? (data['items'] ?? []) : (data is List ? data : []);
+        final List<dynamic> items = response.data is Map ? (response.data['items'] ?? []) : (response.data is List ? response.data : []);
         return items.map((e) => Game.fromJson(e as Map<String, dynamic>)).toList();
       }
       return [];
-    } catch (e) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
-  Future<({List<Game> games, int total})> getGamesPage({
-    int offset = 0,
-    int limit = 50,
-    String? platformId,
-    String? search,
-    List<String> genres = const [],
-    List<String> regions = const [],
-    List<String> languages = const [],
-    List<String> collections = const [],
-    List<String> statuses = const [],
-    bool? lastPlayed,
-    bool withCharIndex = false,
-    bool withFilterValues = false,
-  }) async {
-    final params = <String, dynamic>{
-      'limit': limit,
-      'offset': offset,
-    };
-    params['order_by'] = 'name';
-    params['order_dir'] = 'asc';
-    params['with_char_index'] = withCharIndex;
-    params['with_filter_values'] = withFilterValues;
+  Future<({List<Game> games, int total})> getGamesPage({int offset = 0, int limit = 50, String? platformId, String? search, List<String> genres = const [], List<String> regions = const [], List<String> languages = const [], List<String> collections = const [], List<String> statuses = const [], bool? lastPlayed, bool withCharIndex = false, bool withFilterValues = false}) async {
+    final params = <String, dynamic>{'limit': limit, 'offset': offset, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': withCharIndex, 'with_filter_values': withFilterValues};
     if (lastPlayed != null) params['last_played'] = lastPlayed;
     if (platformId != null) params['platform_ids'] = [int.parse(platformId)];
     if (search != null && search.isNotEmpty) params['search_term'] = search;
@@ -346,356 +210,136 @@ class RommService {
     if (regions.isNotEmpty) params['regions'] = regions;
     if (languages.isNotEmpty) params['languages'] = languages;
     if (collections.isNotEmpty) params['collection_id'] = int.tryParse(collections.first);
-    if (statuses.isNotEmpty) {
-      params['statuses'] = statuses;
-      params['statuses_logic'] = 'any';
-    }
+    if (statuses.isNotEmpty) { params['statuses'] = statuses; params['statuses_logic'] = 'any'; }
 
-    final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+    final response = await _dio.get('/api/roms/', queryParameters: params, options: _authOptions);
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
       final List<dynamic> items = data['items'] ?? [];
-      final int total = data['total'] ?? items.length;
-      return (games: items.map((e) => Game.fromJson(e)).toList(), total: total);
+      final int totalCount = (data['total'] as num?)?.toInt() ?? items.length;
+      return (games: items.map((e) => Game.fromJson(e)).toList(), total: totalCount);
     }
     throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
   }
 
   Future<List<Game>> _fetchPaginatedGames(Map<String, dynamic> params) async {
-    int offset = 0;
-    const int limit = 100;
-    List<Game> allGames = [];
-    int total = 0;
-
+    int offset = 0; const int limit = 100; List<Game> allGames = []; int total = 0;
     do {
-      final response = await _dio.get(
-        '/api/roms',
-        queryParameters: {
-          ...params,
-          'limit': limit,
-          'offset': offset,
-        },
-        options: _authOptions,
-      );
-
+      final response = await _dio.get('/api/roms/', queryParameters: {...params, 'limit': limit, 'offset': offset}, options: _authOptions);
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
         final List<dynamic> items = data['items'] ?? [];
         total = data['total'] ?? items.length;
         allGames.addAll(items.map((item) => Game.fromJson(item)).toList());
         offset += limit;
-      } else {
-        throw DioException(
-          requestOptions: response.requestOptions,
-          response: response,
-          type: DioExceptionType.badResponse,
-        );
-      }
+      } else { throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse); }
     } while (allGames.length < total && offset < total);
-
     return allGames;
   }
 
   Future<Game?> getRandomGame() async {
     try {
-      // Get total count with required params
-      final countResponse = await _dio.get(
-        '/api/roms',
-        queryParameters: {
-          'limit': 1,
-          'offset': 0,
-          'order_by': 'name',
-          'order_dir': 'asc',
-          'with_char_index': false,
-          'with_filter_values': false,
-        },
-        options: _authOptions,
-      );
+      final countResponse = await _dio.get('/api/roms/', queryParameters: {'limit': 1, 'offset': 0, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
       if (countResponse.statusCode != 200) return null;
-      final data = countResponse.data;
-      final total = (data is Map ? data['total'] : null) as int? ?? 0;
+      final total = (countResponse.data is Map ? countResponse.data['total'] : null) as int? ?? 0;
       if (total == 0) return null;
-
-      // Pick truly random offset
-      final randomOffset = Random().nextInt(total);
-
-      // Fetch that single game
-      final response = await _dio.get(
-        '/api/roms',
-        queryParameters: {
-          'limit': 1,
-          'offset': randomOffset,
-          'order_by': 'name',
-          'order_dir': 'asc',
-          'with_char_index': false,
-          'with_filter_values': false,
-        },
-        options: _authOptions,
-      );
-      if (response.statusCode != 200) return null;
-      final responseData = response.data;
-      final items = (responseData is Map ? responseData['items'] : null) as List<dynamic>? ?? [];
-      if (items.isEmpty) return null;
-      return Game.fromJson(items.first as Map<String, dynamic>);
-    } catch (e) {
-      return null;
-    }
+      final response = await _dio.get('/api/roms/', queryParameters: {'limit': 1, 'offset': Random().nextInt(total), 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
+      final items = (response.data is Map ? response.data['items'] : null) as List<dynamic>? ?? [];
+      return items.isEmpty ? null : Game.fromJson(items.first as Map<String, dynamic>);
+    } catch (_) { return null; }
   }
 
   Future<List<SaveFile>> getSaves(String gameId) async {
-    final response = await _dio.get(
-      '/api/saves',
-      queryParameters: {'game_id': gameId},
-      options: _authOptions,
-    );
+    final response = await _dio.get('/api/saves/', queryParameters: {'game_id': gameId}, options: _authOptions);
     if (response.statusCode == 200) {
-      final List<dynamic> items;
-      if (response.data is Map && response.data.containsKey('items')) {
-        items = response.data['items'] as List<dynamic>;
-      } else {
-        items = response.data as List<dynamic>;
-      }
+      final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : response.data as List<dynamic>;
       return items.map((item) => SaveFile.fromJson(item)).toList();
     }
-    throw DioException(
-      requestOptions: response.requestOptions,
-      response: response,
-      type: DioExceptionType.badResponse,
-    );
+    throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
   }
 
   String getDownloadUrl(Game game) {
-    // If the API already provides a download URL, use it directly
     if (game.fileUrl != null && game.fileUrl!.isNotEmpty) {
       final host = _normalizeBaseUrl(_config.baseUrl);
       return game.fileUrl!.startsWith('http') ? game.fileUrl! : '$host${game.fileUrl}';
     }
-
-    final baseUrl = _config.baseUrl.endsWith('/') 
-        ? _config.baseUrl.substring(0, _config.baseUrl.length - 1) 
-        : _config.baseUrl;
-    
-    // For large files, sometimes the filename in the URL can cause issues with reverse proxies
-    // RomM actually only needs the ID to find the file, the filename is often for the client.
+    final baseUrl = _normalizeBaseUrl(_config.baseUrl);
     final name = game.fileName ?? game.fsName ?? game.name;
     String encoded = Uri.encodeComponent(name);
-    
-    // Truncate if extremely long to avoid 400/404 from proxy limits
     if (encoded.length > 100) {
-      final ext = p.extension(name);
-      final stem = p.basenameWithoutExtension(name);
-      final shortStem = stem.substring(0, min(stem.length, 50));
-      encoded = Uri.encodeComponent('$shortStem$ext');
+      final ext = p.extension(name); final stem = p.basenameWithoutExtension(name);
+      encoded = Uri.encodeComponent('${stem.substring(0, min(stem.length, 50))}$ext');
     }
-
     return '$baseUrl/api/roms/${game.id}/content/$encoded';
   }
 
-  /// Returns the Authorization header value for downloads (Bearer if available, else Basic).
   String get authHeader {
     if (_config.apiKey.isNotEmpty) return 'Bearer ${_config.apiKey}';
-    final token = _config.token;
-    if (token != null && token.isNotEmpty) return 'Bearer $token';
+    if (_config.token != null && _config.token!.isNotEmpty) return 'Bearer ${_config.token}';
     return 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
   }
 
-  // ─── Save sync ─────────────────────────────────────────────────────────────
-
-  /// Uploads [saveFile] for [gameId] to RomM via POST /api/saves.
   Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot, io.File? screenshotFile}) async {
     try {
-      final now = DateTime.now();
-      final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
+      final now = DateTime.now(); final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
       final effectiveSlot = slot ?? 'freegosy-srm_$ts';
-      final fileName = saveFile.uri.pathSegments.last;
-      
-      // Explicitly set a clean boundary to avoid Linux dart:io quirks
       final boundary = '----FreegosyBoundary${DateTime.now().millisecondsSinceEpoch}';
-      final formDataMap = <String, dynamic>{
-        'saveFile': await MultipartFile.fromFile(saveFile.path, filename: fileName),
-      };
-
+      final formDataMap = {'saveFile': await MultipartFile.fromFile(saveFile.path, filename: saveFile.uri.pathSegments.last)};
       if (screenshotFile != null && await screenshotFile.exists()) {
-        final screenshotName = screenshotFile.uri.pathSegments.last;
-        formDataMap['stateScreenshot'] = await MultipartFile.fromFile(screenshotFile.path, filename: screenshotName);
+        formDataMap['stateScreenshot'] = await MultipartFile.fromFile(screenshotFile.path, filename: screenshotFile.uri.pathSegments.last);
       }
-
-      final formData = FormData.fromMap(formDataMap);
-      
-      final response = await _dio.post(
-        '/api/saves',
-        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot},
-        data: formData,
-        options: _authOptions.copyWith(
-          headers: {
-            ..._authOptions.headers ?? {},
-            'Content-Type': 'multipart/form-data; boundary=$boundary',
-          },
-        ),
-      );
-      final ok = response.statusCode != null &&
-          response.statusCode! >= 200 &&
-          response.statusCode! < 300;
-      if (ok) {
-        debugPrint('[RomM] Uploaded save: slot=$effectiveSlot');
-      }
-      return ok;
-    } catch (e) {
-      debugPrint('[RomM] Upload error: $e');
-      return false;
-    }
+      final response = await _dio.post('/api/saves/', queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot}, data: FormData.fromMap(formDataMap), options: _authOptions.copyWith(headers: {..._authOptions.headers ?? {}, 'Content-Type': 'multipart/form-data; boundary=$boundary'}));
+      return response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+    } catch (_) { return false; }
   }
 
   Future<void> pruneOldSaves(String gameId, {int keepCount = 5}) async {
     try {
       final saves = await getSavesList(gameId);
-      final freegosySaves = saves.where((s) =>
-        (s['emulator']?.toString() ?? '') == 'freegosy'
-      ).toList();
+      final freegosySaves = saves.where((s) => (s['emulator']?.toString() ?? '') == 'freegosy').toList();
       if (freegosySaves.length <= keepCount) return;
-      final toDelete = freegosySaves.sublist(keepCount);
-      for (final save in toDelete) {
-        final saveId = save['id'];
-        if (saveId == null) continue;
-        try {
-          await _dio.delete('/api/saves/$saveId', options: _authOptions);
-          debugPrint('[RomM] Pruned old save: id=$saveId');
-        } catch (_) {}
+      for (final save in freegosySaves.sublist(keepCount)) {
+        if (save['id'] != null) await _dio.delete('/api/saves/${save['id']}/', options: _authOptions);
       }
-    } catch (e) {
-      debugPrint('[RomM] Prune error: $e');
-    }
+    } catch (_) {}
   }
 
-  /// Returns all save objects for [gameId], sorted newest first.
   Future<List<Map<String, dynamic>>> getSavesList(String gameId) async {
     try {
-      final opts = _authOptions;
-      final response = await _dio.get(
-        '/api/saves',
-        queryParameters: {'rom_id': gameId},
-        options: opts,
-      );
-
+      final response = await _dio.get('/api/saves/', queryParameters: {'rom_id': gameId}, options: _authOptions);
       if (response.statusCode != 200) return [];
-
-      final List<dynamic> items;
-      if (response.data is Map && response.data.containsKey('items')) {
-        items = response.data['items'] as List<dynamic>;
-      } else if (response.data is List) {
-        items = response.data as List<dynamic>;
-      } else {
-        return [];
-      }
-
-      final sorted = List<Map<String, dynamic>>.from(
-        items.whereType<Map<String, dynamic>>(),
-      );
-      
-      // Sort by created_at descending (newest first)
+      final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : (response.data is List ? response.data : []);
+      final sorted = List<Map<String, dynamic>>.from(items.whereType<Map<String, dynamic>>());
       sorted.sort((a, b) {
         final ta = DateTime.tryParse(a['created_at']?.toString() ?? a['updated_at']?.toString() ?? '') ?? DateTime(0);
         final tb = DateTime.tryParse(b['created_at']?.toString() ?? b['updated_at']?.toString() ?? '') ?? DateTime(0);
         return tb.compareTo(ta);
       });
-
-      if (sorted.isEmpty) {
-        debugPrint("WARNING: Parsed saves list is empty.");
-      }
-
       return sorted;
-    } catch (e) {
-      debugPrint("ERROR in getSavesList: $e");
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
-  /// Returns the most recently updated save object for [gameId], or null.
   Future<Map<String, dynamic>?> getLatestSave(String gameId) async {
-    try {
-      final opts = _authOptions;
-      final response = await _dio.get(
-        '/api/saves',
-        queryParameters: {'rom_id': gameId},
-        options: opts,
-      );
-
-      if (response.statusCode != 200) return null;
-
-      final List<dynamic> items;
-      if (response.data is Map && response.data.containsKey('items')) {
-        items = response.data['items'] as List<dynamic>;
-      } else if (response.data is List) {
-        items = response.data as List<dynamic>;
-      } else {
-        return null;
-      }
-
-      if (items.isEmpty) {
-        return null;
-      }
-
-      // Sort by updated_at descending, return the most recent
-      final sorted = List<Map<String, dynamic>>.from(
-        items.whereType<Map<String, dynamic>>(),
-      );
-      sorted.sort((a, b) {
-        final ta = DateTime.tryParse(a['updated_at']?.toString() ?? '') ?? DateTime(0);
-        final tb = DateTime.tryParse(b['updated_at']?.toString() ?? '') ?? DateTime(0);
-        return tb.compareTo(ta);
-      });
-      return sorted.first;
-    } catch (e) {
-      debugPrint("ERROR in getLatestSave: $e");
-      return null;
-    }
+    final items = await getSavesList(gameId);
+    return items.isEmpty ? null : items.first;
   }
 
-  /// Downloads save bytes from [saveUrl]. Returns null on failure.
   Future<Uint8List?> downloadSave(String saveUrl) async {
     try {
-      // Resolve relative paths against the base URL
-      final url = saveUrl.startsWith('http')
-          ? saveUrl
-          : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
-
-      final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
-
-      final response = await _dio.get<List<int>>(
-        url,
-        options: opts,
-      );
-
-      if (response.statusCode == 200 && response.data != null) {
-        return Uint8List.fromList(response.data!);
-      }
-      return null;
-    } catch (e) {
-      debugPrint("ERROR in downloadSave: $e");
-      return null;
-    }
+      final url = saveUrl.startsWith('http') ? saveUrl : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
+      final response = await _dio.get<List<int>>(url, options: _authOptions.copyWith(responseType: ResponseType.bytes));
+      return (response.statusCode == 200 && response.data != null) ? Uint8List.fromList(response.data!) : null;
+    } catch (_) { return null; }
   }
 
   Future<List<Firmware>> getFirmware({String? platformId}) async {
-    final params = <String, dynamic>{};
-    if (platformId != null) {
-      params['platform_id'] = platformId;
-    }
-    final response = await _dio.get('/api/firmware', queryParameters: params, options: _authOptions);
+    final params = platformId != null ? {'platform_id': platformId} : <String, dynamic>{};
+    final response = await _dio.get('/api/firmware/', queryParameters: params, options: _authOptions);
     if (response.statusCode == 200) {
-      final List<dynamic> items;
-      if (response.data is Map && response.data.containsKey('items')) {
-        items = response.data['items'] as List<dynamic>;
-      } else {
-        items = response.data as List<dynamic>;
-      }
+      final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : response.data as List<dynamic>;
       return items.map((item) => Firmware.fromJson(item)).toList();
     }
-    throw DioException(
-      requestOptions: response.requestOptions,
-      response: response,
-      type: DioExceptionType.badResponse,
-    );
+    throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
   }
 
   String getFirmwareDownloadUrl(Firmware firmware) {
@@ -706,108 +350,47 @@ class RommService {
   Future<Uint8List?> downloadFirmware(Firmware firmware, {void Function(int received, int total)? onProgress}) async {
     try {
       final url = getFirmwareDownloadUrl(firmware);
-      final opts = _authOptions.copyWith(responseType: ResponseType.bytes);
-      final response = await _dio.get<List<int>>(
-        url,
-        options: opts,
-        onReceiveProgress: onProgress,
-      );
-      if (response.statusCode == 200 && response.data != null) {
-        return Uint8List.fromList(response.data!);
-      }
-      return null;
-    } catch (e) {
-      debugPrint("ERROR in downloadFirmware: $e");
-      return null;
-    }
+      final response = await _dio.get<List<int>>(url, options: _authOptions.copyWith(responseType: ResponseType.bytes), onReceiveProgress: onProgress);
+      return (response.statusCode == 200 && response.data != null) ? Uint8List.fromList(response.data!) : null;
+    } catch (_) { return null; }
   }
 
-  Future<bool> updateRomProps(
-    String romId, {
-    bool? backlogged,
-    bool? nowPlaying,
-    int? rating,
-    String? status,
-    int? completion,
-  }) async {
+  Future<bool> updateRomProps(String romId, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
     try {
-      await _ensureBearerToken(); // ensure we have Bearer token
+      await _ensureBearerToken();
       final data = <String, dynamic>{};
       if (backlogged != null) data['backlogged'] = backlogged;
       if (nowPlaying != null) data['now_playing'] = nowPlaying;
       if (rating != null) data['rating'] = rating;
       if (status != null) data['status'] = status;
       if (completion != null) data['completion'] = completion;
-
-      final response = await _dio.put(
-        '/api/roms/$romId/props',
-        data: {
-          'data': data,
-          'update_last_played': false,
-          'remove_last_played': false,
-        },
-        options: Options(
-          headers: {
-            'Authorization': _authOptions.headers?['Authorization'],
-            'Content-Type': 'application/json',
-          },
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
-
+      final response = await _dio.put('/api/roms/$romId/props/', data: {'data': data, 'update_last_played': false, 'remove_last_played': false}, options: Options(headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json', validateStatus: (status) => status != null && status < 500));
       return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
-      return false;
-    }
+    } catch (_) { return false; }
   }
 
   Future<List<RomNote>> getRomNotes(String romId) async {
     try {
-      final response = await _dio.get('/api/roms/$romId/notes', options: _authOptions);
+      final response = await _dio.get('/api/roms/$romId/notes/', options: _authOptions);
       if (response.statusCode == 200) {
-        final List<dynamic> items;
-        if (response.data is Map && response.data.containsKey('items')) {
-          items = response.data['items'] as List<dynamic>;
-        } else {
-          items = response.data as List<dynamic>;
-        }
+        final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : response.data as List<dynamic>;
         return items.map((item) => RomNote.fromJson(item)).toList();
       }
       return [];
-    } catch (e) {
-      return [];
-    }
+    } catch (_) { return []; }
   }
 
   Future<bool> createRomNote(String romId, String title, String content) async {
     try {
-      final response = await _dio.post(
-        '/api/roms/$romId/notes',
-        data: {
-          'title': title,
-          'content': content,
-          'is_public': true,
-          'tags': [],
-        },
-        options: _authOptions.copyWith(
-          contentType: 'application/json',
-        ),
-      );
+      final response = await _dio.post('/api/roms/$romId/notes/', data: {'title': title, 'content': content, 'is_public': true, 'tags': []}, options: _authOptions.copyWith(contentType: 'application/json'));
       return response.statusCode == 200 || response.statusCode == 201;
-    } catch (e) {
-      return false;
-    }
+    } catch (_) { return false; }
   }
 
   Future<bool> deleteRomNote(String romId, int noteId) async {
     try {
-      final response = await _dio.delete(
-        '/api/roms/$romId/notes/$noteId',
-        options: _authOptions,
-      );
+      final response = await _dio.delete('/api/roms/$romId/notes/$noteId/', options: _authOptions);
       return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
-      return false;
-    }
+    } catch (_) { return false; }
   }
 }
