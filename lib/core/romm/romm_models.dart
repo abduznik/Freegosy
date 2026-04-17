@@ -359,4 +359,20 @@ class RomMConfig {
       'apiKey': apiKey, // Added apiKey to toJson
     };
   }
+
+  RomMConfig copyWith({
+    String? baseUrl,
+    String? username,
+    String? password,
+    String? token,
+    String? apiKey,
+  }) {
+    return RomMConfig(
+      baseUrl: baseUrl ?? this.baseUrl,
+      username: username ?? this.username,
+      password: password ?? this.password,
+      token: token ?? this.token,
+      apiKey: apiKey ?? this.apiKey,
+    );
+  }
 }

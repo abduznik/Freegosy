@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../constants/app_constants.dart';
 import 'romm_models.dart';
 
 class RommService {
@@ -30,7 +31,7 @@ class RommService {
           receiveTimeout: const Duration(minutes: 10),
           headers: {
             'Expect': '', // Suppress 100-continue which chokes many reverse proxies
-            'User-Agent': 'Freegosy/0.3.1 (Flutter; ${io.Platform.operatingSystem})',
+            'User-Agent': 'Freegosy/${AppConstants.version} (Flutter; ${io.Platform.operatingSystem})',
           },
         )),
         _authOptions = _computeAuthOptions(_config) {
@@ -60,47 +61,67 @@ class RommService {
           throw Exception('Invalid API key or session expired. Please check your token in RomM Settings.');
         }
 
-        // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related
-        final statusCode = e.response?.statusCode;
-        if ((statusCode == 401 || (statusCode == 500 && e.requestOptions.path != '/api/token')) && _config.apiKey.isEmpty) {
-          try {
-            // Re-fetch token using stored credentials
-            final prefs = await SharedPreferences.getInstance();
-            final username = prefs.getString('romm_username') ?? _config.username;
-            final password = prefs.getString('romm_password') ?? _config.password;
+    // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related
+    final statusCode = e.response?.statusCode;
+    final path = e.requestOptions.path;
+    final isAuthRetry = e.requestOptions.extra['_isAuthRetry'] == true;
 
-            if (username.isNotEmpty && password.isNotEmpty) {
-              final tokenResponse = await _dio.post(
-                '/api/token',
-                data: {
-                  'username': username,
-                  'password': password,
-                  'grant_type': 'password',
-                },
-                options: Options(
-                  contentType: 'application/x-www-form-urlencoded',
-                  validateStatus: (_) => true,
-                ),
-              );
+    if (!isAuthRetry && (statusCode == 401 || (statusCode == 500 && path != '/api/token'))) {
+      try {
+        // If we have an API key, we can't really "refresh" it if it's 401,
+        // but we can try basic auth once as a fallback if creds exist.
+        if (_config.apiKey.isNotEmpty && statusCode == 401) {
+          final basic = 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
+          if (_config.username.isNotEmpty && _config.password.isNotEmpty) {
+             final opts = e.requestOptions
+              ..headers['Authorization'] = basic
+              ..extra['_isAuthRetry'] = true;
+            final retryResponse = await _dio.fetch(opts);
+            return handler.resolve(retryResponse);
+          }
+          throw Exception('API key rejected (401). Please check your RomM API token.');
+        }
 
-              if (tokenResponse.statusCode == 200) {
-                final newToken = tokenResponse.data['access_token']?.toString() ?? '';
-                if (newToken.isNotEmpty) {
-                  // Save new token
-                  await prefs.setString('rommAuthToken', newToken);
-                  // Update auth options
-                  _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
-                  // Retry original request
-                  final retryResponse = await _dio.fetch(e.requestOptions
-                    ..headers['Authorization'] = 'Bearer $newToken');
-                  return handler.resolve(retryResponse);
-                }
-              }
+        // Token refresh logic for username/password logins
+        if (_config.apiKey.isEmpty && _config.username.isNotEmpty && _config.password.isNotEmpty) {
+          debugPrint('[RomM] Attempting silent token refresh after $statusCode on $path');
+          
+          final prefs = await SharedPreferences.getInstance();
+          final username = _config.username;
+          final password = _config.password;
+
+          final tokenResponse = await _dio.post(
+            '/api/token',
+            data: {
+              'username': username,
+              'password': password,
+              'grant_type': 'password',
+            },
+            options: Options(
+              contentType: 'application/x-www-form-urlencoded',
+              validateStatus: (status) => status != null && status < 500,
+            ),
+          );
+
+          if (tokenResponse.statusCode == 200) {
+            final newToken = tokenResponse.data['access_token']?.toString() ?? '';
+            if (newToken.isNotEmpty) {
+              await prefs.setString('rommAuthToken', newToken);
+              _config = _config.copyWith(token: newToken);
+              _authOptions = Options(headers: {'Authorization': 'Bearer $newToken'});
+              
+              final opts = e.requestOptions
+                ..headers['Authorization'] = 'Bearer $newToken'
+                ..extra['_isAuthRetry'] = true;
+              final retryResponse = await _dio.fetch(opts);
+              return handler.resolve(retryResponse);
             }
-          } catch (reAuthErr) {
-            debugPrint('[RomM] Silent re-auth failed: $reAuthErr');
           }
         }
+      } catch (reAuthErr) {
+        debugPrint('[RomM] Silent re-auth failed: $reAuthErr');
+      }
+    }
 
         // If the server rejects the Bearer token with 403, retry once with Basic auth.
         if (e.response?.statusCode == 403 &&

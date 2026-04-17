@@ -1,9 +1,11 @@
+import 'dart:io' as io;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../core/downloader/download_service.dart';
 import '../core/emulator/emulator_download_service.dart';
 import '../core/extraction/extraction_service.dart';
 import '../core/romm/romm_models.dart';
+import '../core/constants/app_constants.dart';
 import 'romm_provider.dart';
 
 final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
@@ -16,6 +18,7 @@ final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
     receiveTimeout: const Duration(hours: 4), // Allow up to 4 hours for large ROMs
     headers: {
       'Accept-Encoding': 'identity', // Disable compression for large downloads to avoid proxy issues
+      'User-Agent': 'Freegosy/${AppConstants.version} (Flutter; ${io.Platform.operatingSystem})',
     },
   ));
 
@@ -37,6 +40,7 @@ final emulatorDownloadServiceProvider =
     headers: {
       'Expect': '', // Suppress 100-continue
       'Accept-Encoding': 'identity',
+      'User-Agent': 'Freegosy/${AppConstants.version} (Flutter; ${io.Platform.operatingSystem})',
     },
   ));
 

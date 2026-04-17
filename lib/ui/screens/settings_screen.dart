@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/storage/directory_service.dart';
+import '../../core/constants/app_constants.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../core/romm/romm_service.dart';
@@ -582,7 +583,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             showLicensePage(
               context: context,
               applicationName: 'Freegosy',
-              applicationVersion: '0.3.1',
+              applicationVersion: AppConstants.version,
               applicationLegalese: '© 2026 Freegosy Contributors.\nRedistributes 7-Zip binaries under LGPL.',
             );
           },
