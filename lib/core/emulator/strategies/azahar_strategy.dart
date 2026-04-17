@@ -66,35 +66,10 @@ class AzaharStrategy extends EmulatorStrategy {
     final exePath = await _directoryService.findEmulatorExecutable(
       emulatorId, getExecutableForPlatform(),
     );
-
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isMacOS) {
-      if (exePath.endsWith('.dylib')) {
-        throw Exception('Found Azahar Libretro core. Please switch to RetroArch in Settings to play this game.');
-      }
-
-      // On macOS, launching via 'open -a App.app --args rom' is much more stable than launching internal binary
-      final parts = exePath.split('/');
-      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
-      if (appIdx != -1) {
-        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await Directory(appBundlePath).exists()) {
-          await _ensure3dsSetup();
-          await io.Process.run('open', [appBundlePath, '--args', romPath]);
-          return;
-        }
-      }
-    }
-
     await _ensure3dsSetup();
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await Process.start('bash', [exePath, '-e', 'azahar', romPath], mode: ProcessStartMode.detached);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
-    }
+    await _directoryService.launchGame(game, romPath, emulatorId, exePath);
   }
 
   @override
@@ -102,20 +77,10 @@ class AzaharStrategy extends EmulatorStrategy {
     final exePath = await _directoryService.findEmulatorExecutable(
       emulatorId, getExecutableForPlatform(),
     );
-
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isMacOS && exePath.endsWith('.dylib')) {
-      throw Exception('Found Azahar Libretro core. Please switch to RetroArch in Settings to play this game.');
-    }
-
     await _ensure3dsSetup();
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      return await Process.start('bash', [exePath, '-e', 'azahar', romPath], mode: ProcessStartMode.normal);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
-    }
-    return await Process.start(exePath, [romPath], mode: ProcessStartMode.normal);
+    return await _directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath);
   }
 
   @override
@@ -125,32 +90,7 @@ class AzaharStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isMacOS) {
-      // Find the .app bundle path
-      final parts = exePath.split('/');
-      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
-      if (appIdx != -1) {
-        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await io.Directory(appBundlePath).exists()) {
-          await io.Process.run('open', [appBundlePath]);
-          return;
-        }
-      }
-    }
-
-    final exeDir = io.File(exePath).parent.path;
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await Process.start('bash', [exePath, '-e', 'azahar'], mode: ProcessStartMode.detached, workingDirectory: exeDir);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], mode: ProcessStartMode.detached, workingDirectory: exeDir);
-    } else {
-      await Process.start(
-        exePath,
-        [],
-        mode: ProcessStartMode.detached,
-        workingDirectory: exeDir,
-      );
-    }
+    await _directoryService.launchStandalone(emulatorId, exePath);
   }
 
   @override

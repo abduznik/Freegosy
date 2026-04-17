@@ -43,11 +43,15 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       }
     }
 
-    // 2. Linux & EmuDeck prioritized
+    // 2. Linux integration (EmuDeck / RetroDECK)
     if (io.Platform.isLinux) {
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('pcsx2');
-      if (p.basename(baseDir) == 'saves') {
+      final bool isSteamDeckEnv = _directoryService.linuxSyncPreset == 'emudeck' || 
+                                 _directoryService.linuxSyncPreset == 'retrodeck';
+
+      if (isSteamDeckEnv && (p.basename(baseDir) == 'saves' || p.basename(baseDir) == 'PCSX2')) {
         // EmuDeck mapping returns the folder containing the actual saves/cards
+        // RetroDECK mapping returns the PCSX2 folder which also contains memcards/sstates
         return baseDir;
       }
       
@@ -91,6 +95,9 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     final result = <io.File>[];
 
     // Memory cards
+    // EmuDeck: saves/pcsx2/ (mapped as root)
+    // RetroDECK: PCSX2/memcards/
+    // Native: PCSX2/memcards/
     final memcardsDir = io.Directory(isEmuDeck ? root : p.join(root, 'memcards'));
     if (await memcardsDir.exists()) {
       await for (final entity in memcardsDir.list()) {

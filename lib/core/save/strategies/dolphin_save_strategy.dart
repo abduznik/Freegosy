@@ -73,7 +73,9 @@ class DolphinSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final userDir = await _getUserDir(platformSlug: game.platformSlug);
-    final bool isEmuDeck = io.Platform.isLinux && userDir.contains('Emulation/saves');
+    final bool isIntegratedEnv = io.Platform.isLinux && 
+                                (_directoryService.linuxSyncPreset == 'emudeck' || 
+                                 _directoryService.linuxSyncPreset == 'retrodeck');
 
     final isWii = game.platformSlug?.toLowerCase() == 'wii';
 
@@ -81,7 +83,7 @@ class DolphinSaveStrategy extends SaveStrategy {
       // Wii saves are in Wii/title/00010000/[TITLE_ID_HEX]
       String? titleId = _extractGameId(p.basename(romPath));
       
-      final String wiiBase = (isEmuDeck && p.basename(userDir) == 'Wii')
+      final String wiiBase = (isIntegratedEnv && p.basename(userDir).toLowerCase() == 'wii')
           ? userDir
           : p.join(userDir, 'Wii');
 
@@ -97,7 +99,7 @@ class DolphinSaveStrategy extends SaveStrategy {
     } else {
       // GameCube
       final region = _detectRegion(romPath);
-      final String gcBase = (isEmuDeck && p.basename(userDir) == 'GC')
+      final String gcBase = (isIntegratedEnv && p.basename(userDir).toLowerCase() == 'gc')
           ? userDir
           : p.join(userDir, 'GC');
       

@@ -32,72 +32,38 @@ class EdenStrategy extends EmulatorStrategy {
   @override
   Future<void> launch(Game game, String romPath) async {
     final resolvedPath = _resolveRomPath(romPath);
-    final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
-    if (exePath == null) return;
-
-    String? workingDir;
-    if (io.Platform.isMacOS) {
-      workingDir = io.File(exePath).parent.path;
-    }
-
-    final args = [resolvedPath];
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await io.Process.start(
-        'bash',
-        [exePath, '-e', 'eden', ...args],
-        mode: io.ProcessStartMode.detached,
-        workingDirectory: workingDir,
-      );
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await io.Process.start(
-        'bash',
-        [exePath, ...args],
-        mode: io.ProcessStartMode.detached,
-        workingDirectory: workingDir,
-      );
-    } else {
-      await io.Process.start(
-        exePath,
-        args,
-        mode: io.ProcessStartMode.detached,
-        workingDirectory: workingDir,
-      );
-    }
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+    
+    await _directoryService.launchGame(game, resolvedPath, emulatorId, exePath);
   }
 
   @override
   Future<io.Process?> launchWithHandle(Game game, String romPath) async {
     final resolvedPath = _resolveRomPath(romPath);
-    final exePath = await _directoryService.findEmulatorExecutable(emulatorId, getExecutableForPlatform());
-    if (exePath == null) return null;
-
-    String? workingDir;
-    if (io.Platform.isMacOS) {
-      workingDir = io.File(exePath).parent.path;
-    }
-
-    final args = [resolvedPath];
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      return await io.Process.start(
-        'bash',
-        [exePath, '-e', 'eden', ...args],
-        mode: io.ProcessStartMode.normal,
-        workingDirectory: workingDir,
-      );
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await io.Process.start(
-        'bash',
-        [exePath, ...args],
-        mode: io.ProcessStartMode.normal,
-        workingDirectory: workingDir,
-      );
-    }
-    return await io.Process.start(
-      exePath,
-      args,
-      mode: io.ProcessStartMode.normal,
-      workingDirectory: workingDir,
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
     );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+    
+    return await _directoryService.launchGameWithHandle(game, resolvedPath, emulatorId, exePath);
+  }
+
+  @override
+  Future<void> launchStandalone() async {
+    final exePath = await _directoryService.findEmulatorExecutable(
+      emulatorId, getExecutableForPlatform(),
+    );
+    if (exePath == null) throw Exception('$name not found. Please download it first.');
+
+    await _directoryService.launchStandalone(emulatorId, exePath);
+  }
+
+  @override
+  String resolveSavePath(Game game) {
+    return "";
   }
 
   String _resolveRomPath(String romPath) {
@@ -117,56 +83,5 @@ class EdenStrategy extends EmulatorStrategy {
       return files.first.path;
     }
     return romPath;
-  }
-
-  @override
-  Future<void> launchStandalone() async {
-    final exePath = await _directoryService.findEmulatorExecutable(
-      emulatorId, getExecutableForPlatform(),
-    );
-    if (exePath == null) throw Exception('$name not found. Please download it first.');
-
-    final exeDir = io.File(exePath).parent.path;
-
-    if (io.Platform.isMacOS) {
-      // Find the .app bundle path
-      final parts = exePath.split('/');
-      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
-      if (appIdx != -1) {
-        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await io.Directory(appBundlePath).exists()) {
-          await io.Process.run('open', [appBundlePath]);
-          return;
-        }
-      }
-    }
-
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await io.Process.start(
-        'bash',
-        [exePath, '-e', 'eden'],
-        mode: io.ProcessStartMode.detached,
-        workingDirectory: exeDir,
-      );
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await io.Process.start(
-        'bash',
-        [exePath],
-        mode: io.ProcessStartMode.detached,
-        workingDirectory: exeDir,
-      );
-    } else {
-      await io.Process.start(
-        exePath,
-        [],
-        mode: io.ProcessStartMode.detached,
-        workingDirectory: exeDir,
-      );
-    }
-  }
-
-  @override
-  String resolveSavePath(Game game) {
-    return "";
   }
 }

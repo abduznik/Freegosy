@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -514,6 +516,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           segments: const [
             ButtonSegment(value: 'default', label: Text('Default')),
             ButtonSegment(value: 'emudeck', label: Text('EmuDeck')),
+            ButtonSegment(value: 'retrodeck', label: Text('RetroDECK')),
           ],
           selected: {directoryService.linuxSyncPreset},
           onSelectionChanged: (selection) async {
@@ -542,7 +545,92 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
           ),
         ],
+        if (directoryService.linuxSyncPreset == 'retrodeck') ...[
+          const SizedBox(height: 16),
+          const Text(
+            'RetroDECK integration is active. Games will be launched via flatpak.',
+            style: TextStyle(fontSize: 14, color: Colors.deepPurpleAccent),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Default paths: ~/retrodeck/roms/ for ROMs and ~/.var/app/net.retrodeck.retrodeck/config/ for saves.',
+            style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+          ),
+        ],
+        // Detection suggestions
+        _buildDetectionSuggestions(directoryService),
       ],
+    );
+  }
+
+  Widget _buildDetectionSuggestions(DirectoryService directoryService) {
+    return FutureBuilder<Map<String, bool>>(
+      future: () async {
+        if (defaultTargetPlatform != TargetPlatform.linux) return <String, bool>{};
+        
+        bool retrodeckFound = false;
+        try {
+          final result = await io.Process.run('flatpak', ['info', 'net.retrodeck.retrodeck']);
+          retrodeckFound = result.exitCode == 0;
+        } catch (_) {}
+
+        final home = io.Platform.environment['HOME'] ?? '';
+        final emudeckFound = await io.Directory(p.join(home, 'Emulation', 'roms')).exists();
+
+        return <String, bool>{'retrodeck': retrodeckFound, 'emudeck': emudeckFound};
+      }(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+        
+        final found = snapshot.data!;
+        if (!found['retrodeck']! && !found['emudeck']!) return const SizedBox.shrink();
+
+        final current = directoryService.linuxSyncPreset;
+        String? suggestion;
+        String? suggestionId;
+
+        if (found['retrodeck']! && current != 'retrodeck') {
+          suggestion = 'RetroDECK';
+          suggestionId = 'retrodeck';
+        } else if (found['emudeck']! && current == 'default') {
+          suggestion = 'EmuDeck';
+          suggestionId = 'emudeck';
+        }
+
+        if (suggestion == null) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.deepPurple.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.deepPurple.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, size: 20, color: Colors.deepPurpleAccent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'We detected $suggestion on your system. Would you like to switch?',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await directoryService.setLinuxSyncPreset(suggestionId!);
+                    ref.invalidate(directoryServiceProvider);
+                    if (mounted) setState(() {});
+                  },
+                  child: const Text('Switch'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

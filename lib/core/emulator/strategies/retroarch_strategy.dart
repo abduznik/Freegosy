@@ -1,5 +1,5 @@
 import 'dart:io' as io show Platform, File, Directory;
-import 'dart:io' show Process, ProcessStartMode;
+import 'dart:io' show Process;
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -243,18 +243,8 @@ class RetroArchStrategy extends EmulatorStrategy {
       await _ensure3dsSetup();
     }
 
-    if (io.Platform.isLinux) {
-      if (_directoryService.isEmuLaunchScript(exePath)) {
-        await Process.start('bash', [exePath, '-e', 'retroarch', normalizedRomPath], mode: ProcessStartMode.detached);
-        return;
-      } else if (exePath.endsWith('.sh')) {
-        await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.detached);
-        return;
-      }
-    }
-
     if (coreName == null) {
-      await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.detached);
+      await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath);
       return;
     }
 
@@ -270,11 +260,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    await Process.start(
-      exePath,
-      ['-L', corePath, normalizedRomPath],
-      mode: ProcessStartMode.detached,
-    );
+    await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: ['-L', corePath]);
   }
 
   @override
@@ -299,16 +285,8 @@ class RetroArchStrategy extends EmulatorStrategy {
       await _ensure3dsSetup();
     }
 
-    if (io.Platform.isLinux) {
-      if (_directoryService.isEmuLaunchScript(exePath)) {
-        return await Process.start('bash', [exePath, '-e', 'retroarch', normalizedRomPath], mode: ProcessStartMode.normal);
-      } else if (exePath.endsWith('.sh')) {
-        return await Process.start('bash', [exePath, normalizedRomPath], mode: ProcessStartMode.normal);
-      }
-    }
-
     if (coreName == null) {
-      return await Process.start(exePath, [normalizedRomPath], mode: ProcessStartMode.normal);
+      return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath);
     }
 
     final corePath = await _resolveCorePath(exePath, coreName);
@@ -323,11 +301,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    return await Process.start(
-      exePath,
-      ['-L', corePath, normalizedRomPath],
-      mode: ProcessStartMode.normal,
-    );
+    return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: ['-L', corePath]);
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
@@ -371,31 +345,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux) {
-      if (_directoryService.isEmuLaunchScript(exePath)) {
-        await Process.start('bash', [exePath, '-e', 'retroarch'], mode: ProcessStartMode.detached);
-        return;
-      } else if (exePath.endsWith('.sh')) {
-        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
-        return;
-      }
-    }
-
-    if (io.Platform.isMacOS) {
-      // Find the .app bundle path
-      final parts = exePath.split('/');
-      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
-      if (appIdx != -1) {
-        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await io.Directory(appBundlePath).exists()) {
-          await Process.run('open', [appBundlePath]);
-          return;
-        }
-      }
-    }
-
-    final exeDir = io.File(exePath).parent.path;
-    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    await _directoryService.launchStandalone(emulatorId, exePath);
   }
 
   @override

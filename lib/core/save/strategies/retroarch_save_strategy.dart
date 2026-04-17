@@ -101,8 +101,18 @@ class RetroArchSaveStrategy extends SaveStrategy {
     if (io.Platform.isLinux) {
       rootSaveDir = await getSaveDir(game, romPath);
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
-      // states folder is next to saves folder in EmuDeck structure
-      statesRoot = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
+      
+      if (_directoryService.linuxSyncPreset == 'emudeck') {
+        // EmuDeck: saves are in Emulation/saves/retroarch, states in Emulation/states/retroarch
+        // baseDir is .../Emulation/saves/retroarch
+        final emulationRoot = p.dirname(p.dirname(baseDir));
+        statesRoot = p.join(emulationRoot, 'states', 'retroarch', coreInfo.statesFolder);
+      } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
+        // RetroDECK: baseDir is .../retroarch/
+        statesRoot = p.join(baseDir, 'states', coreInfo.statesFolder);
+      } else {
+        statesRoot = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
+      }
     } else {
       final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
       if (exePath == null) return {};
@@ -234,9 +244,23 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
       if (io.Platform.isLinux) {
         final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
-        targetDir = isState
-            ? p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder)
-            : p.join(baseDir, coreInfo.saveFolder);
+        
+        if (_directoryService.linuxSyncPreset == 'emudeck') {
+          if (isState) {
+            final emulationRoot = p.dirname(p.dirname(baseDir));
+            targetDir = p.join(emulationRoot, 'states', 'retroarch', coreInfo.statesFolder);
+          } else {
+            targetDir = p.join(baseDir, coreInfo.saveFolder);
+          }
+        } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
+          targetDir = isState
+              ? p.join(baseDir, 'states', coreInfo.statesFolder)
+              : p.join(baseDir, 'saves', coreInfo.saveFolder);
+        } else {
+          targetDir = isState
+              ? p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder)
+              : p.join(baseDir, coreInfo.saveFolder);
+        }
       } else {
         final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
         if (exePath == null) return false;

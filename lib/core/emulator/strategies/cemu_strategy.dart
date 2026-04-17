@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -37,13 +36,7 @@ class CemuStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await Process.start('bash', [exePath, '-e', 'cemu', romPath], mode: ProcessStartMode.detached);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, ['-g', romPath], mode: ProcessStartMode.detached);
-    }
+    await _directoryService.launchGame(game, romPath, emulatorId, exePath, args: ['-g']);
   }
 
   @override
@@ -53,12 +46,7 @@ class CemuStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      return await Process.start('bash', [exePath, '-e', 'cemu', romPath], mode: ProcessStartMode.normal);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
-    }
-    return await Process.start(exePath, ['-g', romPath], mode: ProcessStartMode.normal);
+    return await _directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: ['-g']);
   }
 
   @override
@@ -68,32 +56,7 @@ class CemuStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isMacOS) {
-      // Find the .app bundle path
-      final parts = exePath.split('/');
-      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
-      if (appIdx != -1) {
-        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await Directory(appBundlePath).exists()) {
-          await io.Process.run('open', [appBundlePath]);
-          return;
-        }
-      }
-    }
-
-    final exeDir = File(exePath).parent.path;
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await Process.start('bash', [exePath, '-e', 'cemu'], mode: ProcessStartMode.detached, workingDirectory: exeDir);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], mode: ProcessStartMode.detached, workingDirectory: exeDir);
-    } else {
-      await Process.start(
-        exePath,
-        [],
-        mode: ProcessStartMode.detached,
-        workingDirectory: exeDir,
-      );
-    }
+    await _directoryService.launchStandalone(emulatorId, exePath);
   }
 
   @override

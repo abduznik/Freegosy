@@ -37,16 +37,7 @@ class DuckstationStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
-    if (io.Platform.isLinux) {
-      if (_directoryService.isEmuLaunchScript(exePath)) {
-        await Process.start('bash', [exePath, '-e', 'duckstation', romPath], mode: ProcessStartMode.detached);
-        return;
-      } else if (exePath.endsWith('.sh')) {
-        await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-        return;
-      }
-    }
-    await Process.start(exePath, ['-batch', romPath], mode: ProcessStartMode.detached);
+    await _directoryService.launchGame(game, romPath, emulatorId, exePath, args: ['-batch']);
   }
 
   @override
@@ -56,14 +47,7 @@ class DuckstationStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
-    if (io.Platform.isLinux) {
-      if (_directoryService.isEmuLaunchScript(exePath)) {
-        return await Process.start('bash', [exePath, '-e', 'duckstation', romPath], mode: ProcessStartMode.normal);
-      } else if (exePath.endsWith('.sh')) {
-        return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
-      }
-    }
-    return await Process.start(exePath, ['-batch', romPath], mode: ProcessStartMode.normal);
+    return await _directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: ['-batch']);
   }
 
   @override
@@ -73,36 +57,7 @@ class DuckstationStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isLinux) {
-      if (_directoryService.isEmuLaunchScript(exePath)) {
-        await Process.start('bash', [exePath, '-e', 'duckstation'], mode: ProcessStartMode.detached);
-        return;
-      } else if (exePath.endsWith('.sh')) {
-        await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
-        return;
-      }
-    }
-
-    if (io.Platform.isMacOS) {
-      // Find the .app bundle path
-      final parts = exePath.split('/');
-      final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
-      if (appIdx != -1) {
-        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
-        if (await Directory(appBundlePath).exists()) {
-          await io.Process.run('open', [appBundlePath]);
-          return;
-        }
-      }
-    }
-
-    final exeDir = File(exePath).parent.path;
-    await Process.start(
-      exePath,
-      [],
-      mode: ProcessStartMode.detached,
-      workingDirectory: exeDir,
-    );
+    await _directoryService.launchStandalone(emulatorId, exePath);
   }
 
   @override

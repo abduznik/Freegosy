@@ -6,6 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart';
+import 'package:freegosy/core/emulator/linux_strategies/native_linux_strategy.dart';
+import 'package:freegosy/core/emulator/linux_strategies/emudeck_strategy.dart';
+import 'package:freegosy/core/emulator/linux_strategies/retrodeck_strategy.dart';
 
 enum StorageError { none, pathNotFound, permissionDenied, unknown }
 
@@ -55,24 +59,45 @@ class DirectoryService {
   String? emudeckRootPath;
   final Map<String, String> _emulatorPathOverrides = {};
   StorageStatus status = const StorageStatus();
+  
+  LinuxEnvironmentStrategy? _linuxStrategy;
 
   DirectoryService();
+
+  LinuxEnvironmentStrategy get activeLinuxEnvironment {
+    if (_linuxStrategy != null) return _linuxStrategy!;
+    
+    switch (linuxSyncPreset) {
+      case 'emudeck':
+        _linuxStrategy = EmuDeckStrategy();
+        break;
+      case 'retrodeck':
+        _linuxStrategy = RetroDeckStrategy();
+        break;
+      default:
+        _linuxStrategy = NativeLinuxStrategy();
+    }
+    return _linuxStrategy!;
+  }
 
   Future<StorageStatus> initialize() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
       emudeckRootPath = prefs.getString(_emudeckRootPathKey);
+      
+      // Reset strategy to force re-instantiation with correct preset
+      _linuxStrategy = null;
 
       final String defaultBase = await getDefaultBase();
+      final home = io.Platform.environment['HOME'] ?? '';
 
-      if (defaultTargetPlatform == TargetPlatform.linux &&
-          linuxSyncPreset == 'emudeck' &&
-          emudeckRootPath != null) {
-        romsRootPath =
-            prefs.getString(_romsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/roms');
-        emulatorsRootPath =
-            prefs.getString(_emulatorsRootPathKey) ?? p.join(emudeckRootPath!, 'Emulation/tools');
+      if (defaultTargetPlatform == TargetPlatform.linux) {
+        final customRoms = prefs.getString(_romsRootPathKey);
+        final customEmus = prefs.getString(_emulatorsRootPathKey);
+        
+        romsRootPath = activeLinuxEnvironment.getRomsRoot(home, customRoms, emudeckRootPath);
+        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, customEmus, emudeckRootPath);
       } else {
         romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
         emulatorsRootPath =
@@ -115,10 +140,10 @@ class DirectoryService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_romsRootPathKey);
     final base = await getDefaultBase();
-    if (defaultTargetPlatform == TargetPlatform.linux &&
-        linuxSyncPreset == 'emudeck' &&
-        emudeckRootPath != null) {
-      romsRootPath = p.join(emudeckRootPath!, 'Emulation/roms');
+    final home = io.Platform.environment['HOME'] ?? '';
+
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      romsRootPath = activeLinuxEnvironment.getRomsRoot(home, null, emudeckRootPath);
     } else {
       romsRootPath = '$base/ROMs';
     }
@@ -129,10 +154,10 @@ class DirectoryService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_emulatorsRootPathKey);
     final base = await getDefaultBase();
-    if (defaultTargetPlatform == TargetPlatform.linux &&
-        linuxSyncPreset == 'emudeck' &&
-        emudeckRootPath != null) {
-      emulatorsRootPath = p.join(emudeckRootPath!, 'Emulation/tools');
+    final home = io.Platform.environment['HOME'] ?? '';
+
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, null, emudeckRootPath);
     } else {
       emulatorsRootPath = '$base/Emulators';
     }
@@ -421,36 +446,16 @@ class DirectoryService {
       final appData = io.Platform.environment['APPDATA'] ?? '';
       return p.join(appData, emulatorName);
     } else if (io.Platform.isLinux) {
-      if (linuxSyncPreset == 'emudeck' && emudeckRootPath != null) {
-        // EmuDeck folder names mapping (some are capitalized)
-        final Map<String, String> emudeckSavesMap = {
-          'cemu': 'Cemu',
-          'vita3k': 'Vita3K',
-          'mame': 'MAME',
-        };
-
-        final emuFolderName = emudeckSavesMap[emulatorName.toLowerCase()] ?? emulatorName.toLowerCase();
-        final base = p.join(emudeckRootPath!, 'Emulation', 'saves', emuFolderName);
-
-        if (platformSlug != null) {
-          final slug = platformSlug.toLowerCase();
-          if (emulatorName.toLowerCase() == 'dolphin' || emulatorName.toLowerCase() == 'primehack') {
-            if (slug == 'gc' || slug == 'gamecube' || slug == 'ngc') return p.join(base, 'GC');
-            if (slug == 'wii') return p.join(base, 'Wii');
-          }
-        }
-
-        return platformSlug != null ? p.join(base, platformSlug) : base;
-      }
       final home = io.Platform.environment['HOME'] ?? '';
-      return p.join(home, '.config', emulatorName);
+      return activeLinuxEnvironment.getEmulatorAppSupportDirectory(home, emulatorName, emudeckRootPath, platformSlug: platformSlug);
     }
     throw UnsupportedError('Platform not supported for save path resolution');
   }
 
   Future<String> getEmulatorBiosDirectory(String emulatorId, {String? platformSlug}) async {
-    if (io.Platform.isLinux && linuxSyncPreset == 'emudeck' && emudeckRootPath != null) {
-      return p.join(emudeckRootPath!, 'Emulation', 'bios');
+    if (io.Platform.isLinux) {
+      final home = io.Platform.environment['HOME'] ?? '';
+      return activeLinuxEnvironment.getBiosPath(home, emudeckRootPath);
     }
     final emuDir = await getEmulatorDirectory(emulatorId);
     final dirPath = p.join(emuDir, 'BIOS');
@@ -493,41 +498,9 @@ class DirectoryService {
       return direct.path;
     }
 
-    // EmuDeck support: Check for master emu-launch.sh first
-    if (io.Platform.isLinux && emudeckRootPath != null) {
-      final masterLauncher = File(p.join(emudeckRootPath!, 'Emulation', 'tools', 'emu-launch.sh'));
-      if (await masterLauncher.exists()) {
-        debugPrint("[DirectoryService] Found EmuDeck master launcher: ${masterLauncher.path}");
-        return masterLauncher.path;
-      }
-
-      // Fallback to specific .sh launchers in [ROOT]/tools/launchers
-      final Map<String, String> emudeckMap = {
-        'rpcs3': 'rpcs3.sh',
-        'pcsx2': 'pcsx2-qt.sh',
-        'dolphin': 'dolphin-emu.sh',
-        'xemu': 'xemu-emu.sh',
-        'xenia_canary': 'xenia.sh',
-        'citra': 'citra.sh',
-        'azahar': 'azahar.sh',
-        'duckstation': 'duckstation.sh',
-        'melonds': 'melonds.sh',
-        'mgba': 'mgba.sh',
-        'ppsspp': 'ppsspp.sh',
-        'retroarch': 'retroarch.sh',
-        'mame': 'mame.sh',
-        'cemu': 'cemu.sh',
-        'flycast': 'flycast.sh',
-        'vita3k': 'vita3k.sh',
-        'ryujinx': 'ryujinx.sh',
-      };
-
-      final launcherName = emudeckMap[emulatorId] ?? '$emulatorId.sh';
-      final launcherFile = File(p.join(emudeckRootPath!, 'Emulation', 'tools', 'launchers', launcherName));
-      if (await launcherFile.exists()) {
-        debugPrint("[DirectoryService] Found EmuDeck launcher: ${launcherFile.path}");
-        return launcherFile.path;
-      }
+    if (io.Platform.isLinux) {
+      final envPath = await activeLinuxEnvironment.findExecutable(emulatorId, executableName, emulatorsRootPath, emudeckRootPath);
+      if (envPath != null) return envPath;
     }
 
     if (executableName.contains('/')) {
@@ -636,6 +609,62 @@ class DirectoryService {
 
   bool isEmuLaunchScript(String path) {
     return p.basename(path) == 'emu-launch.sh';
+  }
+
+  Future<void> launchGame(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
+    if (io.Platform.isLinux) {
+      await activeLinuxEnvironment.launch(game, romPath, emulatorId, exePath, args: args);
+    } else {
+      if (io.Platform.isWindows) {
+        final normalizedRom = romPath.replaceAll('/', '\\');
+        final normalizedExe = exePath.replaceAll('/', '\\');
+        await Process.start(normalizedExe, [...args, normalizedRom], mode: io.ProcessStartMode.detached);
+      } else {
+        await Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.detached);
+      }
+    }
+  }
+
+  Future<Process?> launchGameWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
+    if (io.Platform.isLinux) {
+      return await activeLinuxEnvironment.launchWithHandle(game, romPath, emulatorId, exePath, args: args);
+    } else {
+      if (io.Platform.isWindows) {
+        final normalizedRom = romPath.replaceAll('/', '\\');
+        final normalizedExe = exePath.replaceAll('/', '\\');
+        return await Process.start(normalizedExe, [...args, normalizedRom], mode: io.ProcessStartMode.normal);
+      } else {
+        return await Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal);
+      }
+    }
+  }
+
+  Future<void> launchStandalone(String emulatorId, String exePath, {List<String> args = const []}) async {
+    if (io.Platform.isLinux) {
+      await activeLinuxEnvironment.launchStandalone(emulatorId, exePath, args: args);
+    } else {
+      if (io.Platform.isMacOS) {
+        // Find the .app bundle path
+        final parts = exePath.split('/');
+        final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+        if (appIdx != -1) {
+          final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+          if (await Directory(appBundlePath).exists()) {
+            await io.Process.run('open', [appBundlePath]);
+            return;
+          }
+        }
+      }
+
+      final exeDir = File(exePath).parent.path;
+      if (io.Platform.isWindows) {
+        final normalizedExe = exePath.replaceAll('/', '\\');
+        final normalizedDir = exeDir.replaceAll('/', '\\');
+        await Process.start(normalizedExe, args, mode: io.ProcessStartMode.detached, workingDirectory: normalizedDir);
+      } else {
+        await Process.start(exePath, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
+      }
+    }
   }
 
   Future<void> deleteRom(Game game) async {

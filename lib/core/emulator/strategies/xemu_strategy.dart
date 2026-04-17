@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:io' as io show Platform;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -34,14 +33,7 @@ class XemuStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await Process.start('bash', [exePath, '-e', 'xemu-emu', '-dvd_path', romPath], mode: ProcessStartMode.detached);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      // EmuDeck scripts expect the ROM path directly
-      await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start(exePath, ['-dvd_path', romPath], mode: ProcessStartMode.detached);
-    }
+    await _directoryService.launchGame(game, romPath, emulatorId, exePath, args: ['-dvd_path']);
   }
 
   @override
@@ -51,13 +43,7 @@ class XemuStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      return await Process.start('bash', [exePath, '-e', 'xemu-emu', '-dvd_path', romPath], mode: ProcessStartMode.normal);
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      return await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.normal);
-    } else {
-      return await Process.start(exePath, ['-dvd_path', romPath], mode: ProcessStartMode.normal);
-    }
+    return await _directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: ['-dvd_path']);
   }
 
   @override
@@ -67,16 +53,7 @@ class XemuStrategy extends EmulatorStrategy {
     );
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     
-    if (io.Platform.isLinux && _directoryService.isEmuLaunchScript(exePath)) {
-      await Process.start('bash', [exePath, '-e', 'xemu-emu'], mode: ProcessStartMode.detached);
-      return;
-    } else if (io.Platform.isLinux && exePath.endsWith('.sh')) {
-      await Process.start('bash', [exePath], mode: ProcessStartMode.detached);
-      return;
-    }
-
-    final exeDir = File(exePath).parent.path;
-    await Process.start(exePath, [], mode: ProcessStartMode.detached, workingDirectory: exeDir);
+    await _directoryService.launchStandalone(emulatorId, exePath);
   }
 
   @override
