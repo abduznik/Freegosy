@@ -132,7 +132,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 24),
                     _buildStorageSection(directoryService),
                     const SizedBox(height: 24),
-                    _buildRetroArchSyncModeSection(context, ref),
+                    _buildRetroArchSettingsSection(context, ref),
                     const SizedBox(height: 24),
                     if (defaultTargetPlatform == TargetPlatform.linux) ...[
                       _buildLinuxSettingsSection(context, ref, directoryService),
@@ -458,15 +458,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // --- RetroArch Sync Mode Section ---
-  Widget _buildRetroArchSyncModeSection(BuildContext context, WidgetRef ref) {
+  // --- RetroArch Settings Section ---
+  Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) {
     final syncMode = ref.watch(retroarchSyncModeProvider);
+    final ndsCore = ref.watch(retroarchNdsCoreProvider);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('RetroArch Save Sync', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        const Text('What to sync with RomM cloud', style: TextStyle(color: Colors.grey)),
+        const Text('RetroArch Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        const Text('Save Sync Mode', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const Text('What to sync with RomM cloud', style: TextStyle(color: Colors.grey, fontSize: 13)),
         const SizedBox(height: 12),
         SegmentedButton<String>(
           segments: const [
@@ -480,6 +483,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ref.read(retroarchSyncModeProvider.notifier).state = value;
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('retroarch_sync_mode', value);
+          },
+        ),
+        const SizedBox(height: 20),
+        const Text('Nintendo DS Core', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const Text('Preferred core for DS games', style: TextStyle(color: Colors.grey, fontSize: 13)),
+        const SizedBox(height: 12),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'melonds', label: Text('MelonDS')),
+            ButtonSegment(value: 'desmume', label: Text('DeSmuME')),
+          ],
+          selected: {ndsCore},
+          onSelectionChanged: (selection) async {
+            final value = selection.first;
+            ref.read(retroarchNdsCoreProvider.notifier).state = value;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('retroarch_nds_core', value);
           },
         ),
       ],

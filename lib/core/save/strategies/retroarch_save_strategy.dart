@@ -12,8 +12,13 @@ import 'package:path/path.dart' as p; // Import path package
 /// Core name mapping is derived from the platform slug.
 class RetroArchSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  String _ndsCore = 'melonds'; // Default NDS core
 
   RetroArchSaveStrategy(this._directoryService);
+
+  void setNdsCore(String core) {
+    _ndsCore = core;
+  }
 
   @override
   String get strategyId => 'retroarch';
@@ -41,7 +46,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
-    final coreInfo = _coreMap[slug];
+    _CoreInfo? coreInfo = _coreMap[slug];
+    
+    // Dynamic override for NDS based on user preference
+    if (slug == 'nds' || slug == 'nintendo-ds') {
+      coreInfo = _ndsCore == 'desmume'
+          ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
+          : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
+    }
+
     if (coreInfo == null) return null;
 
     if (io.Platform.isLinux) {
@@ -71,7 +84,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   Future<Map<io.File, io.File?>> getSaveFilesWithScreenshots(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
-    final coreInfo = _coreMap[slug];
+    _CoreInfo? coreInfo = _coreMap[slug];
+    
+    // Dynamic override for NDS based on user preference
+    if (slug == 'nds' || slug == 'nintendo-ds') {
+      coreInfo = _ndsCore == 'desmume'
+          ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
+          : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
+    }
+
     if (coreInfo == null) return {};
 
     String? rootSaveDir;
@@ -123,7 +144,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
           await for (final entity in savesDirObj.list()) {
             if (entity is! io.File) continue;
             final fname = p.basename(entity.path).toLowerCase();
-            if (fname.startsWith(stemLower) && fname.endsWith('.srm')) {
+            if (fname.startsWith(stemLower) && (fname.endsWith('.srm') || fname.endsWith('.sav'))) {
               filesToCheck.add(entity);
               found = true;
               break;
@@ -133,7 +154,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
             await for (final entity in savesDirObj.list()) {
               if (entity is! io.File) continue;
               final fname = p.basename(entity.path).toLowerCase();
-              if (fname.endsWith('.srm')) {
+              if (fname.endsWith('.srm') || fname.endsWith('.sav')) {
                 final stemWords = stemLower
                     .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
                     .split(' ')
@@ -197,7 +218,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
       final slug = game.platformSlug?.toLowerCase() ?? '';
-      final coreInfo = _coreMap[slug];
+      _CoreInfo? coreInfo = _coreMap[slug];
+      
+      // Dynamic override for NDS based on user preference
+      if (slug == 'nds' || slug == 'nintendo-ds') {
+        coreInfo = _ndsCore == 'desmume'
+            ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
+            : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
+      }
+
       if (coreInfo == null) return false;
 
       String? targetDir;
@@ -224,7 +253,13 @@ class RetroArchSaveStrategy extends SaveStrategy {
       final dir = io.Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      final targetPath = p.join(targetDir, filename);
+      // Handle .sav to .srm renaming for RetroArch NDS cores
+      String targetFilename = filename;
+      if (!isState && filename.toLowerCase().endsWith('.sav')) {
+        targetFilename = '${p.basenameWithoutExtension(filename)}.srm';
+      }
+
+      final targetPath = p.join(targetDir, targetFilename);
       await backupSave(targetPath); // Backup existing file
       await io.File(targetPath).writeAsBytes(data);
       return true;

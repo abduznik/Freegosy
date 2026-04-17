@@ -424,21 +424,27 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                               icon: Icons.play_arrow,
                               label: 'Play',
                               onPressed: () async {
-                                await widget.onLaunch();
+                                if (_isDownloaded) {
+                                  await widget.onLaunch();
+                                }
                               },
                             ),
                             _ActionButton(
                               icon: Icons.cloud_upload,
                               label: 'Push',
                               onPressed: () async {
-                                await widget.onPushSaves();
+                                if (_isDownloaded) {
+                                  await widget.onPushSaves();
+                                }
                               },
                             ),
                             _ActionButton(
                               icon: Icons.cloud_download,
                               label: 'Pull',
                               onPressed: () async {
-                                await widget.onPullSaves();
+                                if (_isDownloaded) {
+                                  await widget.onPullSaves();
+                                }
                               },
                             ),
                             _ActionButton(

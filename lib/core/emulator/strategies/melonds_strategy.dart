@@ -40,14 +40,14 @@ class MelonDSStrategy extends EmulatorStrategy {
     
     if (io.Platform.isLinux) {
       if (_directoryService.isEmuLaunchScript(exePath)) {
-        await Process.start('bash', [exePath, '-e', 'melonds', romPath], mode: ProcessStartMode.detached);
+        await Process.start('bash', [exePath, '-e', 'melonds', romPath], workingDirectory: File(exePath).parent.path, mode: ProcessStartMode.detached);
         return;
       } else if (exePath.endsWith('.sh')) {
-        await Process.start('bash', [exePath, romPath], mode: ProcessStartMode.detached);
+        await Process.start('bash', [exePath, romPath], workingDirectory: File(exePath).parent.path, mode: ProcessStartMode.detached);
         return;
       }
     }
-    await Process.start(exePath, [romPath], mode: ProcessStartMode.detached);
+    await Process.start(exePath, [romPath], workingDirectory: File(exePath).parent.path, mode: ProcessStartMode.detached);
   }
 
   @override

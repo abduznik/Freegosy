@@ -30,6 +30,7 @@ class RommService {
           receiveTimeout: const Duration(minutes: 10),
           headers: {
             'Expect': '', // Suppress 100-continue which chokes many reverse proxies
+            'User-Agent': 'Freegosy/0.3.1 (Flutter; ${io.Platform.operatingSystem})',
           },
         )),
         _authOptions = _computeAuthOptions(_config) {
@@ -40,7 +41,7 @@ class RommService {
         requestHeader: true,
         requestBody: false,
         responseHeader: true,
-        responseBody: false,
+        responseBody: true, // Enable response body logging for better diagnostics
         logPrint: (obj) => debugPrint('[RomM-Network] $obj'),
       ));
     }
@@ -48,9 +49,15 @@ class RommService {
     // If the server rejects the Bearer token with 403, retry once with Basic auth.
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
+        // Log detailed error info for badResponse on Linux
+        if (e.type == DioExceptionType.badResponse && io.Platform.isLinux) {
+          debugPrint('[RomM-Network] Bad Response Error: ${e.response?.statusCode}');
+          debugPrint('[RomM-Network] Error Data: ${e.response?.data}');
+        }
+
         // Check for 401 with API Key
         if (e.response?.statusCode == 401 && _config.apiKey.isNotEmpty) {
-          throw Exception('Invalid API key. Please check your token in RomM Settings → Client API Tokens.');
+          throw Exception('Invalid API key or session expired. Please check your token in RomM Settings.');
         }
 
         // Silent re-authentication on 401 (unauthorized) or 500 that looks auth-related

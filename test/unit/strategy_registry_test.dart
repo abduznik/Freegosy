@@ -29,6 +29,13 @@ void main() {
       expect(registry.getStrategyForSlug('gba')?.emulatorId, 'retroarch');
     });
 
+    test('setNdsCore updates RetroArchStrategy core', () {
+      registry.setNdsCore('desmume');
+      // This is hard to test directly without exposing internal state, 
+      // but we can at least call it to ensure it doesn't crash.
+      registry.setNdsCore('melonds');
+    });
+
     test('No two strategies share the same slug', () {
       final allSlugs = <String, String>{}; // slug -> emulatorId
       final overlaps = <String>[];

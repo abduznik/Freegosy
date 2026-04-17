@@ -25,8 +25,13 @@ class MissingRetroArchCoreException implements Exception {
 
 class RetroArchStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
+  String _ndsCore = 'melonds'; // Default NDS core
 
   RetroArchStrategy(this._directoryService);
+
+  void setNdsCore(String core) {
+    _ndsCore = core;
+  }
 
   @override
   String get name => 'RetroArch';
@@ -64,7 +69,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     'gba':         'mgba_libretro.dll',
     'gbc':         'mgba_libretro.dll',
     'gb':          'mgba_libretro.dll',
-    'nds':         'desmume2015_libretro.dll',
+    'nds':         'melonds_libretro.dll',
     '3ds':         'azahar_libretro.dll',
     'n3ds':        'azahar_libretro.dll',
     'nintendo-3ds':'azahar_libretro.dll',
@@ -111,7 +116,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     'gba':         'mgba_libretro.dylib',
     'gbc':         'mgba_libretro.dylib',
     'gb':          'mgba_libretro.dylib',
-    'nds':         'desmume2015_libretro.dylib',
+    'nds':         'melonds_libretro.dylib',
     '3ds':         'azahar_libretro.dylib',
     'n3ds':        'azahar_libretro.dylib',
     'nintendo-3ds':'azahar_libretro.dylib',
@@ -156,6 +161,12 @@ class RetroArchStrategy extends EmulatorStrategy {
   String? _getCoreForSlug(String? slug) {
     if (slug == null) return null;
     final map = io.Platform.isWindows ? _coreMapWindows : _coreMapUnix;
+    
+    if (slug.toLowerCase() == 'nds' || slug.toLowerCase() == 'nintendo-ds') {
+      final ext = io.Platform.isWindows ? 'dll' : 'dylib';
+      return _ndsCore == 'desmume' ? 'desmume2015_libretro.$ext' : 'melonds_libretro.$ext';
+    }
+
     return map[slug.toLowerCase()];
   }
 

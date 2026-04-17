@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/library_provider.dart';
+import 'providers/romm_provider.dart';
+import 'core/emulator/strategy_registry.dart';
+import 'core/save/save_sync_service.dart';
 import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
@@ -34,6 +37,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       ref.read(showButtonsOnHoverLoaderProvider.future),
       ref.read(activePresetLoaderProvider.future),
       ref.read(rpcs3ArchitectureLoaderProvider.future),
+      ref.read(retroarchNdsCoreLoaderProvider.future),
     ]).then((_) {
       if (mounted) {
         setState(() => _settingsLoaded = true);
@@ -43,6 +47,31 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen for NDS core changes and apply them to services
+    ref.listen(retroarchNdsCoreProvider, (previous, next) {
+      final StrategyRegistry? registry = ref.read(strategyRegistryProvider).asData?.value;
+      final SaveSyncService? syncService = ref.read(saveSyncServiceProvider).asData?.value;
+      if (registry != null) {
+        registry.setNdsCore(next);
+      }
+      if (syncService != null) {
+        syncService.setNdsCore(next);
+      }
+    });
+
+    // Also apply once when building if settings are loaded
+    if (_settingsLoaded) {
+      final String core = ref.read(retroarchNdsCoreProvider);
+      final StrategyRegistry? registry = ref.read(strategyRegistryProvider).asData?.value;
+      final SaveSyncService? syncService = ref.read(saveSyncServiceProvider).asData?.value;
+      if (registry != null) {
+        registry.setNdsCore(core);
+      }
+      if (syncService != null) {
+        syncService.setNdsCore(core);
+      }
+    }
+
     if (!_settingsLoaded) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,

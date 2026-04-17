@@ -176,6 +176,13 @@ class StrategyRegistry {
 
   EmulatorStrategy? getStrategyById(String id) => _strategies.cast<EmulatorStrategy?>().firstWhere((s) => s?.emulatorId == id, orElse: () => null);
 
+  void setNdsCore(String core) {
+    final retroarch = getStrategyById('retroarch');
+    if (retroarch is RetroArchStrategy) {
+      retroarch.setNdsCore(core);
+    }
+  }
+
   Map<String, dynamic>? getDefinition(String emulatorId) {
     try {
       return kEmulatorDefinitions.firstWhere((def) => def['id'] == emulatorId);

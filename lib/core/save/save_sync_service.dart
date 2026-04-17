@@ -364,4 +364,8 @@ class SaveSyncService {
   WindowsSaveStrategy get windowsSaveStrategy => _windows;
   EdenSaveStrategy get edenSaveStrategy => _eden;
   AzaharSaveStrategy get azaharSaveStrategy => _azahar;
+
+  void setNdsCore(String core) {
+    _retroarch.setNdsCore(core);
+  }
 }

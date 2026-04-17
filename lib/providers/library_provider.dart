@@ -327,6 +327,14 @@ final rpcs3ArchitectureLoaderProvider = FutureProvider<void>((ref) async {
   ref.read(rpcs3ArchitectureProvider.notifier).state = saved;
 });
 
+final retroarchNdsCoreProvider = StateProvider<String>((ref) => 'melonds');
+
+final retroarchNdsCoreLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString('retroarch_nds_core') ?? 'melonds';
+  ref.read(retroarchNdsCoreProvider.notifier).state = saved;
+});
+
 final platformLogoCacheProvider = FutureProvider.family<Uint8List?, String>((ref, logoUrl) async {
   if (logoUrl.isEmpty) return null;
   try {
