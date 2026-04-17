@@ -9,28 +9,31 @@ on:
         default: 'v1.0.0'
 
 jobs:
-  build_android:
-    name: Build Android
+  build_linux:
+    name: Build Linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
       - name: Install dependencies
-        run: flutter pub get
-      - name: Build APK
-        run: flutter build apk --release --build-name=${{ github.event.inputs.version }} --build-number=${{ github.run_number }}
-      - name: Upload APK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev
+          flutter pub get
+      - name: Build Linux
+        run: flutter build linux --release --build-name=${{ github.event.inputs.version }} --build-number=${{ github.run_number }}
+      - name: Package Linux
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czvf ../../../../../freegosy-linux-x64.tar.gz .
+      - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: linux-release
+          path: freegosy-linux-x64.tar.gz
 
   build_windows:
     name: Build Windows Installer
@@ -90,15 +93,15 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build_android, build_windows, build_macos]
+    needs: [build_linux, build_windows, build_macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download Android Artifact
+      - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
-          name: android-release
+          name: linux-release
           path: artifacts/
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
@@ -110,15 +113,13 @@ jobs:
         with:
           name: macos-release
           path: artifacts/
-      - name: Rename APK
-        run: mv artifacts/app-release.apk artifacts/freegosy-android.apk
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
           files: |
-            artifacts/freegosy-android.apk
+            artifacts/freegosy-linux-x64.tar.gz
             artifacts/*.exe
             artifacts/freegosy-macos.dmg
           draft: false

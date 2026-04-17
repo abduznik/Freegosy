@@ -89,12 +89,17 @@ flutter_native_splash:
   web: true
 
 inno_bundle:
-  name: "Freegosy"
-  id: "com.freegosy.app"
-  image_path: "freegosy_logo.png"
-  executable_name: "freegosy"
-  url: "https://github.com/abduznik/Freegosy"
+  id: 4f7eeb80-0a89-11f1-8850-155185c17681
   publisher: "abduznik"
+  maintainer: "abduznik <https://github.com/abduznik>"
+  image_path: "freegosy_logo.png"
+  languages:
+    - english
+  app:
+    name: "Freegosy"
+    description: "Freegosy Flutter app"
+    executable_name: "freegosy"
+    url: "https://github.com/abduznik/Freegosy"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
