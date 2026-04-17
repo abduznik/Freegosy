@@ -57,6 +57,35 @@ dev_dependencies:
   http_mock_adapter: ^0.6.1
   fake_async: ^1.3.1
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.4
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "freegosy_logo.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "freegosy_logo.png"
+    background_color: "#ffffff"
+    theme_color: "#ffffff"
+  windows:
+    generate: true
+    image_path: "freegosy_logo.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "freegosy_logo.png"
+  linux: true
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: "freegosy_logo.png"
+  android: true
+  ios: true
+  web: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -64,6 +93,7 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
+    - freegosy_logo.png
     - thirdparty/7zr.exe
     - thirdparty/7zz
     - thirdparty/7zip_license.txt

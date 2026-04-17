@@ -181,7 +181,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(appBarTitle),
+        title: Row(
+          children: [
+            Image.asset(
+              'freegosy_logo.png',
+              height: 32,
+              width: 32,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(appBarTitle, overflow: TextOverflow.ellipsis)),
+          ],
+        ),
         actions: [
           Consumer(
             builder: (context, ref, _) {

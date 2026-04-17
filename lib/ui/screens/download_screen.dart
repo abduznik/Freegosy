@@ -11,7 +11,19 @@ class DownloadScreen extends ConsumerWidget {
     final downloads = ref.watch(downloadProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Downloads')),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset(
+              'freegosy_logo.png',
+              height: 32,
+              width: 32,
+            ),
+            const SizedBox(width: 12),
+            const Text('Downloads'),
+          ],
+        ),
+      ),
       body: ExcludeSemantics(
         child: downloads.isEmpty
             ? const Center(child: Text('No active downloads'))

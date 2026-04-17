@@ -44,12 +44,24 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
   @override
   Widget build(BuildContext context) {
     if (!_settingsLoaded) {
-      return const MaterialApp(
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
         home: Scaffold(
-          backgroundColor: Color(0xFF0f0f0f),
+          backgroundColor: const Color(0xFF0f0f0f),
           body: Center(
-            child: CircularProgressIndicator(
-              color: Colors.deepPurple,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'freegosy_logo.png',
+                  width: 200,
+                  height: 200,
+                ),
+                const SizedBox(height: 24),
+                const CircularProgressIndicator(
+                  color: Colors.deepPurple,
+                ),
+              ],
             ),
           ),
         ),

@@ -78,7 +78,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset(
+              'freegosy_logo.png',
+              height: 32,
+              width: 32,
+            ),
+            const SizedBox(width: 12),
+            const Text('Settings'),
+          ],
+        ),
+      ),
       body: rommConfigAsync.when(
         data: (rommConfig) {
           // Update controllers with loaded config if not already loaded
