@@ -15,6 +15,23 @@ class RomSyncResult {
   RomSyncResult(this.path, this.romId, {this.game});
 }
 
+/// TOP-LEVEL function to ensure NO capture of class instances/services in Isolate
+List<String> _topLevelDirScan(List<String> paths) {
+  final List<String> files = [];
+  for (final path in paths) {
+    final dir = Directory(path);
+    if (dir.existsSync()) {
+      try {
+        for (final entity in dir.listSync()) {
+          // Add files or directories (for Windows/PS3 games)
+          files.add(entity.path);
+        }
+      } catch (_) {}
+    }
+  }
+  return files;
+}
+
 class RomScannerService {
   final RommService _rommService;
   final RomMappingService _mappingService;
@@ -53,10 +70,9 @@ class RomScannerService {
 
     debugPrint('[RomScanner] Scanning ${dirtyDirs.length} dirty platform directories...');
 
-    // Phase 2: Identify files using an Isolate. 
-    // We pass ONLY the paths to avoid capturing unsendable service objects.
+    // Phase 2: Identify files using an Isolate with a TOP-LEVEL function.
     final List<String> dirPaths = dirtyDirs.map((d) => d.path).toList();
-    final List<String> allFiles = await Isolate.run(() => _performStaticScan(dirPaths));
+    final List<String> allFiles = await Isolate.run(() => _topLevelDirScan(dirPaths));
 
     // Phase 3: Update mtimes for scanned directories
     for (final dir in dirtyDirs) {
@@ -96,6 +112,7 @@ class RomScannerService {
           final searchResult = await _rommService.searchRoms(search: fileName);
           if (searchResult.isNotEmpty) {
             final game = searchResult.first;
+            // Immediate save to our granular Hive store
             await _mappingService.updateMapping(filePath, game.id);
             return RomSyncResult(filePath, game.id, game: game);
           }
@@ -117,25 +134,5 @@ class RomScannerService {
     if (!await file.exists()) return '';
     final bytes = await file.readAsBytes();
     return sha1.convert(bytes).toString();
-  }
-
-  /// Truly static method that can be safely run in an Isolate without capturing 'this'
-  static List<String> _performStaticScan(List<String> paths) {
-    final List<String> files = [];
-    for (final path in paths) {
-      final dir = Directory(path);
-      if (dir.existsSync()) {
-        try {
-          for (final entity in dir.listSync()) {
-            if (entity is File) {
-              files.add(entity.path);
-            } else if (entity is Directory) {
-               files.add(entity.path);
-            }
-          }
-        } catch (_) {}
-      }
-    }
-    return files;
   }
 }
