@@ -44,7 +44,6 @@ class RomScannerService {
     final rootDir = Directory(romsRoot);
     if (!await rootDir.exists()) return;
 
-    // Phase 1: Check platform directories for changes
     final List<Directory> platformDirs = [];
     await for (final entity in rootDir.list()) {
       if (entity is Directory) {
@@ -61,35 +60,50 @@ class RomScannerService {
       }
     }
 
-    if (dirtyDirs.isEmpty) {
+    // SAFETY CHECK: If mappings are very low but we have many platform dirs,
+    // something went wrong (like the deletion bug). Force a scan.
+    bool forceFullScan = mappings.length < 10 && platformDirs.length > 5;
+
+    if (dirtyDirs.isEmpty && !forceFullScan) {
       debugPrint('[RomScanner] No platform directories changed. Skipping scan.');
       return;
     }
 
-    debugPrint('[RomScanner] Scanning ${dirtyDirs.length} dirty platform directories...');
+    final dirsToScan = forceFullScan ? platformDirs : dirtyDirs;
+    debugPrint('[RomScanner] Scanning ${dirsToScan.length} directories (Force: $forceFullScan)...');
 
-    // Phase 2: Identify files using compute() with a TOP-LEVEL function.
-    final List<String> dirPaths = dirtyDirs.map((d) => d.path).toList();
-    final List<String> allFiles = await compute(_performIsolatedScan, dirPaths);
+    final List<String> dirPaths = dirsToScan.map((d) => d.path).toList();
+    final List<String> scannedFiles = await compute(_performIsolatedScan, dirPaths);
 
-    final Set<String> existingFiles = mappings.keys.toSet();
-    final Set<String> currentFilesSet = allFiles.toSet();
+    final Set<String> scannedFilesSet = scannedFiles.toSet();
+    final Set<String> existingMappedFiles = mappings.keys.toSet();
 
-    // Identify truly new files
-    final List<String> newFiles = allFiles.where((f) => !existingFiles.contains(f)).toList();
+    // 1. Identify new files (scanned but not in existing mappings)
+    final List<String> newFiles = scannedFiles.where((f) => !existingMappedFiles.contains(f)).toList();
     
-    // Clean up removed files from mappings
-    final List<String> removedFiles = existingFiles.where((f) => !currentFilesSet.contains(f)).toList();
+    // 2. Identify removed files 
+    // CRITICAL FIX: Only check for removal within the directories we ACTUALLY scanned.
+    final List<String> removedFiles = [];
+    for (final mappedPath in existingMappedFiles) {
+      // If this file belongs to one of the scanned directories...
+      bool isInScannedDir = dirsToScan.any((d) => mappedPath.startsWith(d.path));
+      // ...and it's no longer there, it's truly removed.
+      if (isInScannedDir && !scannedFilesSet.contains(mappedPath)) {
+        removedFiles.add(mappedPath);
+      }
+    }
+
     if (removedFiles.isNotEmpty) {
+      debugPrint('[RomScanner] Cleaning up ${removedFiles.length} removed files...');
       for (final f in removedFiles) {
         await _mappingService.removeMapping(f);
       }
     }
 
     if (newFiles.isEmpty) {
-      debugPrint('[RomScanner] No new files found in dirty directories.');
-      // Still update mtimes because we've confirmed nothing new is there
-      for (final dir in dirtyDirs) {
+      debugPrint('[RomScanner] No new files found.');
+      // Update mtimes even if no new files, as we've verified the state
+      for (final dir in dirsToScan) {
         final stat = await dir.stat();
         await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
       }
@@ -98,7 +112,6 @@ class RomScannerService {
 
     debugPrint('[RomScanner] Matching ${newFiles.length} new files...');
 
-    // Phase 4: Match new files via RomM API in parallel batches
     const int maxConcurrent = 5;
     for (int i = 0; i < newFiles.length; i += maxConcurrent) {
       final chunk = newFiles.sublist(i, i + maxConcurrent > newFiles.length ? newFiles.length : i + maxConcurrent);
@@ -123,8 +136,8 @@ class RomScannerService {
       }
     }
 
-    // Phase 5: Update mtimes only AFTER matching is finished
-    for (final dir in dirtyDirs) {
+    // Phase 5: Update mtimes only AFTER successful matching
+    for (final dir in dirsToScan) {
       final stat = await dir.stat();
       await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
     }
