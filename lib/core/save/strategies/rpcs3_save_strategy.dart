@@ -381,9 +381,25 @@ class Rpcs3SaveStrategy extends SaveStrategy {
         await io.Directory(resolvedRoot).create(recursive: true);
 
         for (final entry in archive) {
-          if (entry.name == 'freegosy_sync.txt') continue;
+          if (entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
           
-          final entryPath = p.join(resolvedRoot, entry.name);
+          String cleanName = entry.name.replaceAll('\\', '/');
+          final parts = cleanName.split('/');
+          
+          // Strip redundant RPCS3 prefixes
+          int skipCount = 0;
+          for (int i = 0; i < parts.length; i++) {
+            final pPart = parts[i].toLowerCase();
+            if (pPart == 'dev_hdd0' || pPart == 'home' || pPart == 'savedata' || pPart == '00000001') {
+              skipCount = i + 1;
+            }
+          }
+          if (skipCount > 0) {
+            cleanName = p.joinAll(parts.sublist(skipCount));
+          }
+          if (cleanName.isEmpty) continue;
+          
+          final entryPath = p.join(resolvedRoot, cleanName);
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);

@@ -68,13 +68,25 @@ class CemuSaveStrategy extends SaveStrategy {
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
-          if (entry.name.contains('.bak')) continue;
-          if (entry.name == 'freegosy_sync.txt') continue;
+          if (entry.name.contains('.bak') || entry.name == 'freegosy_sync.txt') continue;
           
-          final entryName = entry.name;
-          if (entryName.isEmpty) continue;
+          String cleanName = entry.name.replaceAll('\\', '/');
+          final parts = cleanName.split('/');
           
-          final targetPath = p.join(resolvedRoot, entryName);
+          // Strip redundant Wii U prefixes
+          int skipCount = 0;
+          for (int i = 0; i < parts.length; i++) {
+            final pPart = parts[i].toLowerCase();
+            if (pPart == 'mlc01' || pPart == 'usr' || pPart == 'save') {
+              skipCount = i + 1;
+            }
+          }
+          if (skipCount > 0) {
+            cleanName = p.joinAll(parts.sublist(skipCount));
+          }
+          if (cleanName.isEmpty) continue;
+          
+          final targetPath = p.join(resolvedRoot, cleanName);
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = io.File(targetPath);
