@@ -35,6 +35,7 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'vita3k': 'Vita3K',
         'mame': 'MAME',
         'pcsx2': 'pcsx2',
+        'ppsspp': 'ppsspp',
         'retroarch': 'retroarch',
       };
 

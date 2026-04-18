@@ -87,6 +87,7 @@ class RommService {
     if (config.apiKey.isNotEmpty) {
       // Standard RomM API keys work best as a Bearer token in most Nginx configs
       headers['Authorization'] = 'Bearer ${config.apiKey}';
+      headers['X-Api-Key'] = config.apiKey;
     } else if (config.token != null && config.token!.isNotEmpty) {
       headers['Authorization'] = 'Bearer ${config.token}';
     } else if (config.username.isNotEmpty && config.password.isNotEmpty) {
