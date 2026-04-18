@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -162,63 +163,72 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           ),
         ),
         SizedBox(
-          height: 220, // Increased height for larger cards
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: games.length,
-            itemBuilder: (context, index) {
-              final game = games[index];
-              final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
-              return GestureDetector(
-                onTap: () => _handleGameTap(context, ref, game),
-                child: Container(
-                  width: 150, // Increased width for larger cards
-                  margin: const EdgeInsets.only(right: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Stack(
-                            children: [
-                              coverUrl != null
-                                  ? CachedNetworkImage(
-                                      imageUrl: coverUrl,
-                                      fit: BoxFit.cover,
-                                      width: 150,
-                                      height: 200,
-                                      placeholder: (context, url) => Container(color: Colors.grey[900]),
-                                      errorWidget: (c, u, e) => Container(
+          height: 220,
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+              },
+            ),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: games.length,
+              itemBuilder: (context, index) {
+                final game = games[index];
+                final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                return GestureDetector(
+                  onTap: () => _handleGameTap(context, ref, game),
+                  child: Container(
+                    width: 150,
+                    margin: const EdgeInsets.only(right: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Stack(
+                              children: [
+                                coverUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: coverUrl,
+                                        fit: BoxFit.cover,
+                                        width: 150,
+                                        height: 200,
+                                        placeholder: (context, url) => Container(color: Colors.grey[900]),
+                                        errorWidget: (c, u, e) => Container(
+                                          color: Colors.grey[800],
+                                          child: const Icon(Icons.sports_esports, size: 40),
+                                        ),
+                                      )
+                                    : Container(
                                         color: Colors.grey[800],
                                         child: const Icon(Icons.sports_esports, size: 40),
                                       ),
-                                    )
-                                  : Container(
-                                      color: Colors.grey[800],
-                                      child: const Icon(Icons.sports_esports, size: 40),
-                                    ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        game.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        game.platformDisplayName ?? '',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        Text(
+                          game.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          game.platformDisplayName ?? '',
+                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -473,12 +483,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                       loading: () => const SizedBox.shrink(),
                                       error: (e, s) => const SizedBox.shrink(),
                                       data: (cache) {
+                                        // Filter games that are in our downloaded cache
                                         final installed = cache.cachedGames
                                             .where((g) => downloadedCache[g.id] == true)
                                             .toList();
+                                        
+                                        // Sort by name for now
+                                        installed.sort((a, b) => a.displayName.compareTo(b.displayName));
+
                                         return _buildHorizontalShelf(
                                           context: context,
-                                          title: 'Installed Games',
+                                          title: 'Installed Games (${installed.length})',
                                           icon: Icons.download_done,
                                           games: installed,
                                           ref: ref,
