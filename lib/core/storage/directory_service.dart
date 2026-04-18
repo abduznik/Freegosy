@@ -366,7 +366,7 @@ class DirectoryService {
 
   Future<String> getRomDirectory(Game game) async {
     final platformSlug = game.platformSlug ?? 'unknown';
-    final dirPath = '$romsRootPath/$platformSlug';
+    final dirPath = p.join(romsRootPath, platformSlug);
     await _ensureDirectoryExists(dirPath);
     return dirPath;
   }
@@ -374,7 +374,7 @@ class DirectoryService {
   Future<String> getRomFilePath(Game game) async {
     final romDir = await getRomDirectory(game);
     final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    return '$romDir/$fileName';
+    return p.join(romDir, fileName);
   }
 
   /// Tries to find the actual ROM file on disk.
@@ -732,18 +732,14 @@ class DirectoryService {
         final absRom = p.absolute(romPath).replaceAll('/', '\\');
         final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        // Emulators on Windows (like melonDS) often require the ROM path to be explicitly quoted 
-        // especially when launched from a shell or with detached process.
-        final quotedRom = '"$absRom"';
-        
-        debugPrint('[DirectoryService] Windows Launch: $absExe ${args.join(' ')} $quotedRom (WorkingDir: $absDir)');
+        debugPrint('[DirectoryService] Windows Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
         
         await Process.start(
           absExe, 
-          [...args, quotedRom], 
+          [...args, absRom], 
           mode: io.ProcessStartMode.detached,
           workingDirectory: absDir,
-          runInShell: true, // Use shell to ensure the quoted argument is parsed correctly by the OS
+          runInShell: true,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         // Find the .app bundle path
@@ -778,12 +774,11 @@ class DirectoryService {
         final absRom = p.absolute(romPath).replaceAll('/', '\\');
         final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        final quotedRom = '"$absRom"';
-        debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $quotedRom (WorkingDir: $absDir)');
+        debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
 
         return await Process.start(
           absExe, 
-          [...args, quotedRom], 
+          [...args, absRom], 
           mode: io.ProcessStartMode.normal,
           workingDirectory: absDir,
           runInShell: true,
