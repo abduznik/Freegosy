@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../romm/romm_models.dart';
@@ -199,7 +200,7 @@ class SaveSyncService {
     debugPrint('[SyncService] Cleared hash cache for game $gameId');
   }
 
-  Future<String> _hashFile(File file) async {
+  Future<String> _hashFile(io.File file) async {
     final bytes = await file.readAsBytes();
     return md5.convert(bytes).toString();
   }
@@ -249,8 +250,8 @@ class SaveSyncService {
       int uploaded = 0;
       final displayStem = game.displayName;
       final tempDir = await _directoryService.getEmulatorDirectory('temp');
-      if (!await Directory(tempDir).exists()) {
-        await Directory(tempDir).create(recursive: true);
+      if (!await io.Directory(tempDir).exists()) {
+        await io.Directory(tempDir).create(recursive: true);
       }
 
       for (final entry in filesMap.entries) {
@@ -273,14 +274,14 @@ class SaveSyncService {
         encoder.create(zipPath);
 
         // 1. Write fresh sync metadata
-        final metaFile = File(p.join(tempDir, 'freegosy_sync.txt'));
+        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
         await metaFile.writeAsString(DateTime.now().toIso8601String());
         await encoder.addFile(metaFile);
 
         // 2. Add the actual save content
-        if (await FileSystemEntity.isDirectory(file.path)) {
+        if (await io.FileSystemEntity.isDirectory(file.path)) {
           // It's a directory (e.g., Eden, Dolphin Wii)
-          await encoder.addDirectory(Directory(file.path), includeDirName: false);
+          await encoder.addDirectory(io.Directory(file.path), includeDirName: false);
         } else {
           // It's a file (e.g., single .sav or pre-zipped PPSSPP/PSP folder)
           await encoder.addFile(file, p.basename(file.path));
@@ -289,7 +290,7 @@ class SaveSyncService {
         encoder.close();
         if (await metaFile.exists()) await metaFile.delete();
 
-        final uploadFile = File(zipPath);
+        final uploadFile = io.File(zipPath);
         final ok = await _rommService.uploadSave(
           game.id, 
           uploadFile, 
@@ -371,10 +372,17 @@ class SaveSyncService {
 
       if (ok) {
         await _setLastPullTime(game.id);
+      } else {
+        throw Exception('Strategy [${strategy.strategyId}] failed to restore save file: $filename');
       }
       return ok;
+    } on io.FileSystemException catch (e) {
+      throw Exception('Disk Error: ${e.message} (Path: ${e.path})');
+    } on DioException catch (e) {
+      throw Exception('Network Error: ${e.message} (Status: ${e.response?.statusCode})');
     } catch (e) {
-      rethrow;
+      if (e.toString().contains('Exception: ')) rethrow;
+      throw Exception('Pull Failed: $e');
     }
   }
 

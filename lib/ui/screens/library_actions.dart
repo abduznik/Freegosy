@@ -493,7 +493,8 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             if (retryOk) {
               ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
             } else {
-              ErrorHandler.show(context, ErrorHandler.parse(Exception('Failed to download save'), context: 'Pull Saves'));
+              // Should not reach here if pullSave throws, but for safety:
+              ErrorHandler.showInfo(context, 'Sync Incomplete', message: 'Save file was downloaded but the emulator strategy could not apply it.');
             }
           }
         }
