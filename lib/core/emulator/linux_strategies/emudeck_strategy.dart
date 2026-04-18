@@ -31,20 +31,36 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
     if (emudeckRoot != null) {
       // EmuDeck folder names mapping (some are capitalized)
       final Map<String, String> emudeckSavesMap = {
-        'cemu': 'Cemu',
+        'cemu': 'cemu',
         'vita3k': 'Vita3K',
         'mame': 'MAME',
         'pcsx2': 'pcsx2',
         'ppsspp': 'ppsspp',
         'retroarch': 'retroarch',
+        'rpcs3': 'rpcs3',
+        'ryujinx': 'ryujinx',
+        'yuzu': 'yuzu',
       };
 
       final emuFolderName = emudeckSavesMap[emulatorName.toLowerCase()] ?? emulatorName.toLowerCase();
       
-      // EmuDeck usually has a subfolder named 'saves' inside the emulator folder in Emulation/saves/
-      // e.g., Emulation/saves/retroarch/saves
       String base = p.join(emudeckRoot, 'Emulation', 'saves', emuFolderName);
       
+      // RPCS3 specific HDD path
+      if (emulatorName.toLowerCase() == 'rpcs3') {
+        return p.join(base, 'dev_hdd0', 'home', '00000001', 'savedata');
+      }
+
+      // Ryujinx specific BIS path
+      if (emulatorName.toLowerCase() == 'ryujinx' || emulatorName.toLowerCase() == 'eden') {
+        return p.join(base, 'bis', 'user', 'save');
+      }
+
+      // Cemu specific MLC path
+      if (emulatorName.toLowerCase() == 'cemu') {
+        return p.join(base, 'Cemu', 'mlc01', 'usr', 'save');
+      }
+
       // Check if there is a 'saves' subfolder, if so use it as base
       if (io.Directory(p.join(base, 'saves')).existsSync()) {
         base = p.join(base, 'saves');
@@ -56,18 +72,9 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
           if (slug == 'gc' || slug == 'gamecube' || slug == 'ngc') return p.join(base, 'GC');
           if (slug == 'wii') return p.join(base, 'Wii');
         }
-        // Handle StateSaves if requested (this might be called specifically or we just return base)
-        if (io.Directory(p.join(base, 'StateSaves')).existsSync()) {
-          // If we are looking for states, we might need to return this, but Strategy handles subfolders
-        }
       }
 
       if (emulatorName.toLowerCase() == 'pcsx2') {
-        // PCSX2 saves are in /pcsx2/saves
-        if (io.Directory(p.join(base, 'saves')).existsSync()) {
-           // If we already appended saves, and there is another one? 
-           // Log says .../saves/pcsx2/saves
-        }
         return base;
       }
 
@@ -136,6 +143,8 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'azahar': 'azahar',
         'eden': 'eden',
         'ryujinx': 'ryujinx',
+        'rpcs3': 'rpcs3',
+        'cemu': 'cemu',
       };
       final emuKey = emuKeyMap[emulatorId] ?? emulatorId;
       await io.Process.start('bash', [exePath, '-e', emuKey, ...args, romPath], mode: io.ProcessStartMode.detached);
@@ -158,6 +167,8 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'azahar': 'azahar',
         'eden': 'eden',
         'ryujinx': 'ryujinx',
+        'rpcs3': 'rpcs3',
+        'cemu': 'cemu',
       };
       final emuKey = emuKeyMap[emulatorId] ?? emulatorId;
       return await io.Process.start('bash', [exePath, '-e', emuKey, ...args, romPath], mode: io.ProcessStartMode.normal);
@@ -180,6 +191,8 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'azahar': 'azahar',
         'eden': 'eden',
         'ryujinx': 'ryujinx',
+        'rpcs3': 'rpcs3',
+        'cemu': 'cemu',
       };
       final emuKey = emuKeyMap[emulatorId] ?? emulatorId;
       await io.Process.start('bash', [exePath, '-e', emuKey, ...args], mode: io.ProcessStartMode.detached);

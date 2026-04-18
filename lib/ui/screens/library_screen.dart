@@ -18,6 +18,8 @@ import 'game_detail_screen.dart';
 
 import 'library_actions.dart';
 
+import '../../providers/download_provider.dart';
+
 final isHomeSelectedProvider = StateProvider<bool>((ref) => true);
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -73,7 +75,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
   Future<void> _handleGameTap(BuildContext context, WidgetRef ref, Game game) async {
     final config = ref.read(rommConfigProvider).value;
     final baseUrl = config?.baseUrl ?? '';
-    final isDownloaded = ref.read(downloadedGamesCacheProvider)[game.id] ?? false;
+    final downloads = ref.read(downloadProvider);
+    final isActuallyDownloading = downloads.containsKey(game.id) && !downloads[game.id]!.isComplete;
+    final isDownloaded = (ref.read(downloadedGamesCacheProvider)[game.id] ?? false) && !isActuallyDownloading;
 
     await Navigator.push(
       context,
@@ -208,6 +212,48 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                         color: Colors.grey[800],
                                         child: const Icon(Icons.sports_esports, size: 40),
                                       ),
+                                // Check if downloaded AND NOT actively downloading
+                                Consumer(
+                                  builder: (context, ref, _) {
+                                    final downloadedCache = ref.watch(downloadedGamesCacheProvider);
+                                    final downloads = ref.watch(downloadProvider);
+                                    final isActuallyDownloading = downloads.containsKey(game.id) && !downloads[game.id]!.isComplete;
+                                    final isDownloaded = (downloadedCache[game.id] ?? false) && !isActuallyDownloading;
+                                    
+                                    if (isDownloaded) {
+                                      return Positioned(
+                                        top: 4,
+                                        left: 4,
+                                        child: Container(
+                                          width: 18,
+                                          height: 18,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.green,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.check, size: 12, color: Colors.white),
+                                        ),
+                                      );
+                                    }
+                                    if (isActuallyDownloading) {
+                                      return Positioned(
+                                        top: 4,
+                                        left: 4,
+                                        child: Container(
+                                          width: 18,
+                                          height: 18,
+                                          padding: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.5),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -545,7 +591,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                           ));
                                         }
                                         final game = displayGames[index];
-                                        final isDownloaded = downloadedCache[game.id] ?? false;
+                                        final downloads = ref.watch(downloadProvider);
+                                        final isActuallyDownloading = downloads.containsKey(game.id) && !downloads[game.id]!.isComplete;
+                                        final isDownloaded = (downloadedCache[game.id] ?? false) && !isActuallyDownloading;
                                         final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
                                         
                                         return GestureDetector(
