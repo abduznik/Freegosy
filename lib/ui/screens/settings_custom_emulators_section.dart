@@ -11,7 +11,6 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customEmulators = ref.watch(customEmulatorsProvider);
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +122,7 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
                 const Text('Save Sync Settings', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<CustomSaveMethod>(
-                  value: saveMethod,
+                  initialValue: saveMethod,
                   items: const [
                     DropdownMenuItem(value: CustomSaveMethod.file, child: Text('File Based')),
                     DropdownMenuItem(value: CustomSaveMethod.folder, child: Text('Folder Based')),
