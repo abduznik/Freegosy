@@ -42,11 +42,47 @@ jobs:
         run: |
           cd build/linux/x64/release/bundle
           tar -czvf ../../../../../freegosy-linux-x64.tar.gz .
+      - name: Build AppImage
+        run: |
+          # Install appimagetool
+          sudo wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          sudo chmod +x /usr/local/bin/appimagetool
+
+          # Prepare AppDir
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+          
+          # Create Desktop Entry
+          cat > AppDir/usr/share/applications/freegosy.desktop <<EOF
+          [Desktop Entry]
+          Name=Freegosy
+          Exec=freegosy
+          Icon=freegosy
+          Type=Application
+          Categories=Game;
+          EOF
+          
+          # Use icon
+          cp web/icons/Icon-192.png AppDir/usr/share/icons/hicolor/256x256/apps/freegosy.png
+          cp web/icons/Icon-192.png AppDir/freegosy.png
+          
+          # Mandatory files for AppImage
+          cp AppDir/usr/share/applications/freegosy.desktop AppDir/
+          ln -s usr/bin/freegosy AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+          # Build AppImage
+          ARCH=x86_64 /usr/local/bin/appimagetool --appimage-extract-and-run AppDir Freegosy-x86_64.AppImage
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-release
-          path: freegosy-linux-x64.tar.gz
+          path: |
+            freegosy-linux-x64.tar.gz
+            Freegosy-x86_64.AppImage
 
   build_windows:
     name: Build Windows Installer
@@ -145,6 +181,7 @@ jobs:
           name: Release ${{ github.event.inputs.version }}
           files: |
             artifacts/freegosy-linux-x64.tar.gz
+            artifacts/Freegosy-x86_64.AppImage
             artifacts/*.exe
             artifacts/freegosy-macos.dmg
           fail_on_unmatched_files: false
