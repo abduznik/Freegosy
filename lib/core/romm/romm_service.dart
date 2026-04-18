@@ -388,10 +388,14 @@ class RommService {
 
   Future<Uint8List?> downloadSave(String saveUrl) async {
     try {
+      await _ensureBearerToken();
       final url = saveUrl.startsWith('http') ? saveUrl : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
       final response = await _dio.get<List<int>>(url, options: _authOptions.copyWith(responseType: ResponseType.bytes));
       return (response.statusCode == 200 && response.data != null) ? Uint8List.fromList(response.data!) : null;
-    } catch (_) { return null; }
+    } catch (e) {
+      debugPrint('[RomM] downloadSave error: $e');
+      return null;
+    }
   }
 
   Future<List<Firmware>> getFirmware({String? platformId}) async {

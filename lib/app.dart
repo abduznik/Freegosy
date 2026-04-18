@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/library_provider.dart';
 import 'providers/romm_provider.dart';
@@ -7,6 +8,16 @@ import 'core/save/save_sync_service.dart';
 import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
+
+class CustomScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+  };
+}
 
 class FreegosyApp extends ConsumerStatefulWidget {
   const FreegosyApp({super.key});
@@ -76,6 +87,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
     if (!_settingsLoaded) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
+        scrollBehavior: CustomScrollBehavior(),
         home: Scaffold(
           backgroundColor: const Color(0xFF0f0f0f),
           body: Center(
@@ -100,6 +112,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
     return ExcludeSemantics(
       child: MaterialApp(
         title: 'Freegosy',
+        scrollBehavior: CustomScrollBehavior(),
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
