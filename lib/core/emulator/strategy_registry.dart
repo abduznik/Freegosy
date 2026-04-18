@@ -20,13 +20,17 @@ import 'package:freegosy/core/emulator/strategies/xenia_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
+import 'package:freegosy/core/emulator/custom_emulator_config.dart';
+import 'package:freegosy/core/emulator/strategies/custom_emulator_strategy.dart';
 
 class StrategyRegistry {
   final DirectoryService _directoryService;
   late final List<EmulatorStrategy> _strategies;
+  final List<CustomEmulatorConfig> _customEmulatorConfigs;
   final Map<String, String> _slugPreferences = {};
 
-  StrategyRegistry(this._directoryService) {
+  StrategyRegistry(this._directoryService, {List<CustomEmulatorConfig> customEmulators = const []}) 
+    : _customEmulatorConfigs = customEmulators {
     final List<EmulatorStrategy> allPossibleStrategies = [
       RetroArchStrategy(_directoryService),
       DolphinStrategy(_directoryService),
@@ -44,6 +48,7 @@ class StrategyRegistry {
       XemuStrategy(_directoryService),
       XeniaStrategy(_directoryService),
       WindowsStrategy(_directoryService),
+      ..._customEmulatorConfigs.map((config) => CustomEmulatorStrategy(config, _directoryService)),
     ];
 
     _strategies = allPossibleStrategies.where((strategy) {

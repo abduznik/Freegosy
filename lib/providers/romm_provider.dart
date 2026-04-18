@@ -13,6 +13,7 @@ import 'package:freegosy/core/storage/download_cache_service.dart';
 import 'package:freegosy/core/storage/metadata_cache_service.dart';
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'package:freegosy/core/romm/rom_scanner_service.dart';
+import 'package:freegosy/providers/custom_emulators_provider.dart';
 
 import 'package:freegosy/core/emulator/firmware_service.dart';
 
@@ -107,9 +108,11 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
 // Provider for StrategyRegistry
 final strategyRegistryProvider = FutureProvider<StrategyRegistry?>((ref) async {
   final directoryService = ref.watch(directoryServiceProvider).value;
+  final customEmulators = ref.watch(customEmulatorsProvider);
+  
   if (directoryService != null) {
     try {
-      final registry = StrategyRegistry(directoryService);
+      final registry = StrategyRegistry(directoryService, customEmulators: customEmulators);
       await registry.loadPreferences(); // Await preferences loading
       // Load persisted Windows exe overrides
       final winStrategy = registry.getStrategyForSlug('windows');

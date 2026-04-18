@@ -16,6 +16,7 @@ import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
+import 'settings_custom_emulators_section.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -155,6 +156,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       error: (e, s) => Center(child: Text('Error loading emulators: $e')),
                     ),
+                    const SizedBox(height: 24),
+                    const SettingsCustomEmulatorsSection(),
                     if (strategyRegistry != null) ...[
                       const SizedBox(height: 24),
                       // Call the extracted conflicts section function
