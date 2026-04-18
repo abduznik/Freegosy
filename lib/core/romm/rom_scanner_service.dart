@@ -53,9 +53,10 @@ class RomScannerService {
 
     debugPrint('[RomScanner] Scanning ${dirtyDirs.length} dirty platform directories...');
 
-    // Phase 2: Identify new/removed files in dirty directories using an Isolate
+    // Phase 2: Identify files using an Isolate. 
+    // We pass ONLY the paths to avoid capturing unsendable service objects.
     final List<String> dirPaths = dirtyDirs.map((d) => d.path).toList();
-    final List<String> allFiles = await Isolate.run(() => _scanDirectories(dirPaths));
+    final List<String> allFiles = await Isolate.run(() => _performStaticScan(dirPaths));
 
     // Phase 3: Update mtimes for scanned directories
     for (final dir in dirtyDirs) {
@@ -117,25 +118,24 @@ class RomScannerService {
     final bytes = await file.readAsBytes();
     return sha1.convert(bytes).toString();
   }
-}
 
-/// Helper function to be run in an Isolate
-List<String> _scanDirectories(List<String> paths) {
-  final List<String> files = [];
-  for (final path in paths) {
-    final dir = Directory(path);
-    if (dir.existsSync()) {
-      // Shallow scan: only files in the directory
-      // (Assuming ROMs/Platform/File structure)
-      for (final entity in dir.listSync()) {
-        if (entity is File) {
-          files.add(entity.path);
-        } else if (entity is Directory) {
-           // Handle folders that are treated as games (e.g. Windows)
-           files.add(entity.path);
-        }
+  /// Truly static method that can be safely run in an Isolate without capturing 'this'
+  static List<String> _performStaticScan(List<String> paths) {
+    final List<String> files = [];
+    for (final path in paths) {
+      final dir = Directory(path);
+      if (dir.existsSync()) {
+        try {
+          for (final entity in dir.listSync()) {
+            if (entity is File) {
+              files.add(entity.path);
+            } else if (entity is Directory) {
+               files.add(entity.path);
+            }
+          }
+        } catch (_) {}
       }
     }
+    return files;
   }
-  return files;
 }

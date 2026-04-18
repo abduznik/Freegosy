@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/romm/romm_models.dart';
 import 'download_provider.dart';
 import 'romm_provider.dart';
 import 'dart:async';
@@ -91,26 +90,26 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
 
     try {
       final romsRoot = await dirService.getRomsDirectory();
-      final List<Game> matchedGames = [];
       
       await for (final result in scanner.sync(romsRoot)) {
         if (result.romId != null) {
           // Update UI state for "pop-in" effect
           state = {...state, result.romId!: true};
-          if (result.game != null) matchedGames.add(result.game!);
+          
+          // CRITICAL: If we have the game metadata, save it IMMEDIATELY 
+          // so it shows up in the 'Installed Games' shelf on Home tab.
+          if (result.game != null) {
+            await metadataCache.saveGames([result.game!]);
+          }
         }
-      }
-
-      // Bulk persist matched games to metadata cache only once
-      if (matchedGames.isNotEmpty) {
-        debugPrint('[DownloadedGamesCache] Persisting ${matchedGames.length} matched games to metadata cache...');
-        await metadataCache.saveGames(matchedGames);
       }
     } catch (e) {
       debugPrint('[DownloadedGamesCache] Sync error: $e');
     } finally {
       _isSyncing = false;
       debugPrint('[DownloadedGamesCache] Incremental sync complete.');
+      // Final refresh to ensure UI is perfectly in sync
+      refresh();
     }
   }
 
