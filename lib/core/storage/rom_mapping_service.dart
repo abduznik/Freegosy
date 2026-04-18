@@ -1,10 +1,11 @@
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:synchronized/synchronized.dart';
 
 class RomMappingService {
   static const String _boxName = 'rom_mappings_v2';
   late Box _box;
+  final _lock = Lock();
 
-  // Prefix keys to avoid collisions
   static const String _prefixMapping = 'map_';
   static const String _prefixMTime = 'mtime_';
   static const String _keyLastSync = 'last_sync_time';
@@ -13,7 +14,6 @@ class RomMappingService {
     _box = await Hive.openBox(_boxName);
   }
 
-  /// Get all FilePath -> RomID mappings
   Map<String, String> getMappings() {
     final Map<String, String> mappings = {};
     for (var key in _box.keys) {
@@ -25,14 +25,11 @@ class RomMappingService {
   }
 
   Future<void> updateMapping(String path, String romId) async {
-    await _box.put('$_prefixMapping$path', romId);
+    await _lock.synchronized(() async {
+      await _box.put('$_prefixMapping$path', romId);
+    });
   }
 
-  Future<void> removeMapping(String path) async {
-    await _box.delete('$_prefixMapping$path');
-  }
-
-  /// Map of DirectoryPath -> LastModifiedTimestamp (ms)
   Map<String, int> getMTimes() {
     final Map<String, int> mtimes = {};
     for (var key in _box.keys) {
@@ -44,7 +41,9 @@ class RomMappingService {
   }
 
   Future<void> updateMTime(String path, int timestamp) async {
-    await _box.put('$_prefixMTime$path', timestamp);
+    await _lock.synchronized(() async {
+      await _box.put('$_prefixMTime$path', timestamp);
+    });
   }
 
   int? getLastSyncTime() {
@@ -57,6 +56,12 @@ class RomMappingService {
 
   String? getRomIdForPath(String path) {
     return _box.get('$_prefixMapping$path');
+  }
+
+  Future<void> removeMapping(String path) async {
+    await _lock.synchronized(() async {
+      await _box.delete('$_prefixMapping$path');
+    });
   }
 
   Future<void> clear() async {

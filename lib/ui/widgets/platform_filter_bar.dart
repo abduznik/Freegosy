@@ -6,22 +6,26 @@ class PlatformFilterBar extends StatelessWidget {
   final List<Platform> platforms;
   final int? selectedPlatformId;
   final bool downloadedOnly;
+  final bool isHome;
   final Function(Platform?) onSelected;
   final Function(bool) onDownloadedToggle;
+  final VoidCallback onHomeSelected;
 
   const PlatformFilterBar({
     super.key,
     required this.platforms,
     required this.selectedPlatformId,
     required this.downloadedOnly,
+    required this.isHome,
     required this.onSelected,
     required this.onDownloadedToggle,
+    required this.onHomeSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isAllSelected = selectedPlatformId == null;
+    final isAllSelected = selectedPlatformId == null && !isHome;
 
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(
@@ -36,6 +40,25 @@ class PlatformFilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Row(
           children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ChoiceChip(
+                avatar: Icon(
+                  Icons.home,
+                  size: 16,
+                  color: isHome ? Colors.white : colorScheme.primary,
+                ),
+                label: const Text('Home'),
+                selected: isHome,
+                onSelected: (selected) {
+                  if (selected) onHomeSelected();
+                },
+                backgroundColor: isHome ? colorScheme.primary : null,
+                labelStyle: TextStyle(
+                  color: isHome ? Colors.white : colorScheme.onSurface,
+                ),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: FilterChip(
@@ -72,7 +95,7 @@ class PlatformFilterBar extends StatelessWidget {
               ),
             ),
             ...platforms.map((platform) {
-              final isSelected = selectedPlatformId == platform.id;
+              final isSelected = selectedPlatformId == platform.id && !isHome;
               return Padding(
                 padding: const EdgeInsets.only(right: 8.0),
                 child: FilterChip(
@@ -81,7 +104,6 @@ class PlatformFilterBar extends StatelessWidget {
                   onSelected: (selected) {
                     onSelected(selected ? platform : null);
                   },
-                  // Styling for selected platform chip
                   backgroundColor: isSelected ? colorScheme.primary : null,
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : colorScheme.onSurface,
