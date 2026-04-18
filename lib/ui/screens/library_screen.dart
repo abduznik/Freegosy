@@ -17,6 +17,8 @@ import 'game_detail_screen.dart';
 
 import 'library_actions.dart';
 
+final isHomeSelectedProvider = StateProvider<bool>((ref) => true);
+
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
@@ -152,6 +154,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final downloadedCache = ref.watch(downloadedGamesCacheProvider);
     final isSyncing = ref.watch(downloadedGamesCacheProvider.notifier).isSyncing;
     final activeFilters = ref.watch(activeFiltersProvider);
+    final isHomeSelected = ref.watch(isHomeSelectedProvider);
 
     // Trigger initial load once service becomes available
     ref.listen(rommServiceProvider, (prev, next) {
@@ -278,8 +281,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                   platforms: platforms,
                   selectedPlatformId: selectedPlatformId,
                   downloadedOnly: activeFilters.downloadedOnly,
+                  isHome: isHomeSelected,
                   onSelected: (platform) {
+                    ref.read(isHomeSelectedProvider.notifier).state = false;
                     ref.read(selectedPlatformIdProvider.notifier).state = platform?.id;
+                  },
+                  onHomeSelected: () {
+                    ref.read(isHomeSelectedProvider.notifier).state = true;
+                    ref.read(selectedPlatformIdProvider.notifier).state = null;
                   },
                   onDownloadedToggle: (selected) {
                     final notifier = ref.read(activeFiltersProvider.notifier);
@@ -319,48 +328,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                       ),
                       TextButton(
                         onPressed: () {
-                          // Navigate to settings (it's the 3rd tab, index 2)
-                          // Assuming we can find the parent Scaffold or similar
-                          // For now, let's just use a simple Navigator.push to SettingsScreen if possible, 
-                          // but the app uses a bottom bar.
-                          // Let's just provide a Retry for now as it's more direct.
                           ref.invalidate(directoryServiceProvider);
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-              if (paginatedState.error != null && paginatedState.error!.contains('Offline Mode'))
-                Container(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.cloud_off, color: Colors.orange),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Offline Mode',
-                              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              paginatedState.error!,
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          ref.invalidate(rommServiceProvider);
-                          ref.read(paginatedGamesProvider.notifier).loadInitial(
-                            platformId: ref.read(selectedPlatformIdProvider)?.toString(),
-                            search: ref.read(searchQueryProvider),
-                          );
                         },
                         child: const Text('Retry'),
                       ),
@@ -396,186 +364,193 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                               ],
                             ),
                           )
-                        : Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    selectedPlatformId == null
-                                        ? 'Showing ${paginatedState.games.length} of ${paginatedState.total} games'
-                                        : 'Showing ${paginatedState.games.length} of ${paginatedState.total} games',
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: RefreshIndicator(
-                                  key: _refreshIndicatorKey,
-                                  onRefresh: _refreshLibrary,
-                                  child: Consumer(
-                                    builder: (context, ref, _) {
-                                      final activeFilters = ref.watch(activeFiltersProvider);
-                                      final selectedPlatform = ref.watch(selectedPlatformIdProvider);
-                                      final search = ref.watch(searchQueryProvider);
-                                      final hasFilters = activeFilters.hasActiveFilters ||
-                                          selectedPlatform != null ||
-                                          search.isNotEmpty;
+                        : RefreshIndicator(
+                            key: _refreshIndicatorKey,
+                            onRefresh: _refreshLibrary,
+                            child: Consumer(
+                              builder: (context, ref, _) {
+                                final activeFilters = ref.watch(activeFiltersProvider);
+                                final selectedPlatform = ref.watch(selectedPlatformIdProvider);
+                                final search = ref.watch(searchQueryProvider);
+                                final isHome = ref.watch(isHomeSelectedProvider);
+                                
+                                final hasFilters = activeFilters.hasActiveFilters ||
+                                    selectedPlatform != null ||
+                                    search.isNotEmpty ||
+                                    !isHome;
 
-                                      final recentAsync = ref.watch(recentlyPlayedProvider);
+                                final recentAsync = ref.watch(recentlyPlayedProvider);
+                                final displayGames = paginatedState.games;
 
-                                      final displayGames = paginatedState.games;
+                                if (displayGames.isEmpty && !isHome) {
+                                  return const CustomScrollView(slivers: [
+                                    SliverFillRemaining(child: Center(child: Text('No games found'))),
+                                  ]);
+                                }
 
-                                      if (paginatedState.games.isEmpty) {
-                                        return const CustomScrollView(slivers: [
-                                          SliverFillRemaining(child: Center(child: Text('No games found'))),
-                                        ]);
-                                      }
-
-                                      if (displayGames.isEmpty) {
-                                        return const CustomScrollView(slivers: [
-                                          SliverFillRemaining(child: Center(child: Text('No games match your filters'))),
-                                        ]);
-                                      }
-
-                                      return CustomScrollView(
-                                        controller: _scrollController,
-                                        physics: const AlwaysScrollableScrollPhysics(),
-                                        slivers: [
-                                          if (!hasFilters)
-                                            SliverToBoxAdapter(
-                                              child: recentAsync.when(
-                                                loading: () => const SizedBox.shrink(),
-                                                error: (e, s) => const SizedBox.shrink(),
-                                                data: (games) {
-                                                  if (games.isEmpty) return const SizedBox.shrink();
-                                                  return Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                return CustomScrollView(
+                                  controller: _scrollController,
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  slivers: [
+                                    if (isHome) ...[
+                                      SliverToBoxAdapter(
+                                        child: recentAsync.when(
+                                          loading: () => const SizedBox.shrink(),
+                                          error: (e, s) => const SizedBox.shrink(),
+                                          data: (games) {
+                                            if (games.isEmpty) return const SizedBox.shrink();
+                                            return Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                  child: Row(
                                                     children: [
-                                                      Padding(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                                        child: Row(
-                                                          children: [
-                                                            const Icon(Icons.play_circle_outline, size: 18),
-                                                            const SizedBox(width: 6),
-                                                            const Text('Continue Playing',
-                                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                      SizedBox(
-                                                        height: 160,
-                                                        child: ListView.builder(
-                                                          scrollDirection: Axis.horizontal,
-                                                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                                                          itemCount: games.length,
-                                                          itemBuilder: (context, index) {
-                                                            final game = games[index];
-                                                            final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
-                                                            return GestureDetector(
-                                                              onTap: () => _handleGameTap(context, ref, game),
-                                                              child: Container(
-                                                                width: 100,
-                                                                margin: const EdgeInsets.only(right: 8),
-                                                                child: Column(
-                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                  children: [
-                                                                    Expanded(
-                                                                      child: ClipRRect(
-                                                                        borderRadius: BorderRadius.circular(8),
-                                                                        child: coverUrl != null
-                                                                            ? CachedNetworkImage(
-                                                                                imageUrl: coverUrl,
-                                                                                fit: BoxFit.cover,
-                                                                                width: 100,
-                                                                                errorWidget: (c, u, e) => Container(
-                                                                                  color: Colors.grey[800],
-                                                                                  child: const Icon(Icons.sports_esports),
-                                                                                ),
-                                                                              )
-                                                                            : Container(
-                                                                                color: Colors.grey[800],
-                                                                                child: const Icon(Icons.sports_esports),
-                                                                              ),
-                                                                      ),
-                                                                    ),
-                                                                    const SizedBox(height: 4),
-                                                                    Text(
-                                                                      game.displayName,
-                                                                      maxLines: 1,
-                                                                      overflow: TextOverflow.ellipsis,
-                                                                      style: const TextStyle(fontSize: 11),
-                                                                    ),
-                                                                  ],
+                                                      const Icon(Icons.play_circle_outline, size: 18),
+                                                      const SizedBox(width: 6),
+                                                      const Text('Continue Playing',
+                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                                    ],
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  height: 160,
+                                                  child: ListView.builder(
+                                                    scrollDirection: Axis.horizontal,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                    itemCount: games.length,
+                                                    itemBuilder: (context, index) {
+                                                      final game = games[index];
+                                                      final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                                                      return GestureDetector(
+                                                        onTap: () => _handleGameTap(context, ref, game),
+                                                        child: Container(
+                                                          width: 100,
+                                                          margin: const EdgeInsets.only(right: 8),
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Expanded(
+                                                                child: ClipRRect(
+                                                                  borderRadius: BorderRadius.circular(8),
+                                                                  child: coverUrl != null
+                                                                      ? CachedNetworkImage(
+                                                                          imageUrl: coverUrl,
+                                                                          fit: BoxFit.cover,
+                                                                          width: 100,
+                                                                          errorWidget: (c, u, e) => Container(
+                                                                            color: Colors.grey[800],
+                                                                            child: const Icon(Icons.sports_esports),
+                                                                          ),
+                                                                        )
+                                                                      : Container(
+                                                                          color: Colors.grey[800],
+                                                                          child: const Icon(Icons.sports_esports),
+                                                                        ),
                                                                 ),
                                                               ),
-                                                            );
-                                                          },
+                                                              const SizedBox(height: 4),
+                                                              Text(
+                                                                game.displayName,
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                                style: const TextStyle(fontSize: 11),
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                    ],
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          SliverPadding(
-                                            padding: const EdgeInsets.all(12),
-                                            sliver: SliverGrid(
-                                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: columnCount,
-                                                crossAxisSpacing: cardSpacing,
-                                                mainAxisSpacing: cardSpacing,
-                                                mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context),
-                                              ),
-                                              delegate: SliverChildBuilderDelegate(
-                                                (context, index) {
-                                                  if (index == displayGames.length) {
-                                                    return const Center(
-                                                        child: Padding(
-                                                      padding: EdgeInsets.all(16),
-                                                      child: CircularProgressIndicator(),
-                                                    ));
-                                                  }
-                                                  final game = displayGames[index];
-                                                  final isDownloaded = downloadedCache[game.id] ?? false;
-                                                  final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-                                                  final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
-                                                  
-                                                  return GestureDetector(
-                                                    onTap: () => _handleGameTap(context, ref, game),
-                                                    child: GestureDetector(
-                                                      onLongPress: isWindowsGame ? () => handleWindowsConfig(context, ref, game) : null,
-                                                      child: GameCard(
-                                                        game: game,
-                                                        coverUrl: coverUrl,
-                                                        isDownloaded: isDownloaded,
-                                                        platformLogoUrl: game.platformSlug != null
-                                                            ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
-                                                            : null,
-                                                        showTitle: showTitle,
-                                                        showButtonsOnHover: showButtonsOnHover,
-                                                        onDownload: () => startDownload(context, ref, game),
-                                                        onLaunch: () => handleLaunch(context, ref, game),
-                                                        onDelete: () => handleDeleteRom(context, ref, game),
-                                                        onPushSaves: () => handlePushSaves(context, ref, game),
-                                                        onPullSaves: () => handlePullSaves(context, ref, game),
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                                childCount: displayGames.length + (paginatedState.isLoadingMore ? 1 : 0),
-                                              ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      SliverToBoxAdapter(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.new_releases_outlined, size: 18),
+                                              const SizedBox(width: 6),
+                                              const Text('Recently Added',
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (!isHome)
+                                      SliverToBoxAdapter(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 2.0),
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
+                                            child: Text(
+                                              'Showing ${displayGames.length} of ${paginatedState.total} games',
+                                              style: const TextStyle(fontSize: 12, color: Colors.grey),
                                             ),
                                           ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
+                                        ),
+                                      ),
+                                    SliverPadding(
+                                      padding: const EdgeInsets.all(12),
+                                      sliver: SliverGrid(
+                                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: columnCount,
+                                          crossAxisSpacing: cardSpacing,
+                                          mainAxisSpacing: cardSpacing,
+                                          mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context),
+                                        ),
+                                        delegate: SliverChildBuilderDelegate(
+                                          (context, index) {
+                                            if (index == displayGames.length && !isHome) {
+                                              return const Center(
+                                                  child: Padding(
+                                                padding: EdgeInsets.all(16),
+                                                child: CircularProgressIndicator(),
+                                              ));
+                                            }
+                                            final game = displayGames[index];
+                                            final isDownloaded = downloadedCache[game.id] ?? false;
+                                            final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+                                            final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                                            
+                                            return GestureDetector(
+                                              onTap: () => _handleGameTap(context, ref, game),
+                                              child: GestureDetector(
+                                                onLongPress: isWindowsGame ? () => handleWindowsConfig(context, ref, game) : null,
+                                                child: GameCard(
+                                                  game: game,
+                                                  coverUrl: coverUrl,
+                                                  isDownloaded: isDownloaded,
+                                                  platformLogoUrl: game.platformSlug != null
+                                                      ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
+                                                      : null,
+                                                  showTitle: showTitle,
+                                                  showButtonsOnHover: showButtonsOnHover,
+                                                  onDownload: () => startDownload(context, ref, game),
+                                                  onLaunch: () => handleLaunch(context, ref, game),
+                                                  onDelete: () => handleDeleteRom(context, ref, game),
+                                                  onPushSaves: () => handlePushSaves(context, ref, game),
+                                                  onPullSaves: () => handlePullSaves(context, ref, game),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          childCount: isHome 
+                                              ? (displayGames.length > 10 ? 10 : displayGames.length)
+                                              : displayGames.length + (paginatedState.isLoadingMore ? 1 : 0),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           ),
               ),
             ],
