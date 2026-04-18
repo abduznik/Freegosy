@@ -39,27 +39,28 @@ class PpssppSaveStrategy extends SaveStrategy {
 
     // 2. Dynamic path resolution (favors EmuDeck if configured)
     final baseDir = await _directoryService.getEmulatorAppSupportDirectory('ppsspp', platformSlug: platformSlug);
-    // EmuDeck maps 'ppsspp' -> 'Emulation/saves/ppsspp/PSP' via DirectoryService update
-    // If it returns that base, we use it. If it returns .config/ppsspp, we append PSP.
     
-    String pspDir = baseDir;
-    if (!baseDir.endsWith('PSP')) {
-       pspDir = p.join(baseDir, 'PSP');
+    // Check if baseDir is a symlink (typical for EmuDeck)
+    String resolvedBase = baseDir;
+    try {
+      if (await io.FileSystemEntity.isLink(baseDir)) {
+        resolvedBase = await io.Link(baseDir).resolveSymbolicLinks();
+      }
+    } catch (_) {}
+
+    // On Steam Deck, 'saves' symlink points to .../PSP/SAVEDATA.
+    // If we resolved it, the PSP root is the parent.
+    if (resolvedBase.toUpperCase().endsWith('SAVEDATA')) {
+       return p.dirname(resolvedBase);
+    }
+    
+    // Standard folder logic
+    if (!resolvedBase.endsWith('PSP')) {
+       final pspDir = p.join(resolvedBase, 'PSP');
+       if (await io.Directory(pspDir).exists()) return pspDir;
     }
 
-    if (!await io.Directory(pspDir).exists()) {
-      // Create it if we are on EmuDeck to be safe, or fallback
-      try {
-        await io.Directory(pspDir).create(recursive: true);
-      } catch (_) {
-        // Fallback to .config if creation fails
-        final home = io.Platform.environment['HOME'];
-        if (home != null) {
-          pspDir = p.join(home, '.config', 'ppsspp', 'PSP');
-        }
-      }
-    }
-    return pspDir;
+    return resolvedBase;
   }
 
 
@@ -179,16 +180,11 @@ class PpssppSaveStrategy extends SaveStrategy {
         }
 
         if (foldersToZip.isNotEmpty) {
-          debugPrint('[PPSSPP] Zipping folders: ${foldersToZip.map((d) => d.path).toList()}');
-          final zipPath = p.join(pspDir, '${game.id}.saves.zip');
-          final encoder = ZipFileEncoder();
-          encoder.create(zipPath);
+          debugPrint('[PPSSPP] Found folders: ${foldersToZip.map((d) => d.path).toList()}');
+          // Important: We return the folders directly. SaveSyncService will bundle them.
           for (final dir in foldersToZip) {
-            // Important: we include the folder name (e.g. ULUS10001) so restore can recreate it
-            await encoder.addDirectory(dir);
+            result.add(io.File(dir.path));
           }
-          encoder.close();
-          result.add(io.File(zipPath));
         }
       }
     }
@@ -218,19 +214,25 @@ class PpssppSaveStrategy extends SaveStrategy {
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         
-        // If pspDir already ends with SAVEDATA (from symlink), use it directly.
-        // Otherwise, append SAVEDATA.
-        String targetBaseDir = pspDir;
-        if (!pspDir.toUpperCase().endsWith('SAVEDATA')) {
-          targetBaseDir = p.join(pspDir, 'SAVEDATA');
-        }
-        
-        // Ensure the leaf dir exists
-        await io.Directory(targetBaseDir).create(recursive: true);
+        // Ensure the PSP root and subdirs exist
+        final targetSaveDir = p.join(pspDir, 'SAVEDATA');
+        final targetStateDir = p.join(pspDir, 'PPSSPP_STATE');
+        await io.Directory(targetSaveDir).create(recursive: true);
+        await io.Directory(targetStateDir).create(recursive: true);
 
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
-          final targetPath = p.join(targetBaseDir, entry.name);
+          if (entry.name == 'freegosy_sync.txt') continue;
+          
+          final entryName = entry.name;
+          // Determine if this entry belongs in SAVEDATA or PPSSPP_STATE
+          String targetPath;
+          if (entryName.endsWith('.ppst')) {
+            targetPath = p.join(targetStateDir, entryName);
+          } else {
+            targetPath = p.join(targetSaveDir, entryName);
+          }
+
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = io.File(targetPath);

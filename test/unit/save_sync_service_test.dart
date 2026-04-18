@@ -98,7 +98,7 @@ void main() {
       // Second time should skip
       clearInteractions(mockRommService);
       final ok = await service.pushSaves(game, romPath);
-      expect(ok, isFalse, reason: 'Should have skipped upload due to matching hash');
+      expect(ok, isTrue, reason: 'Should return true (success) even if skipping due to matching hash');
       verifyNever(mockRommService.uploadSave(any, any));
 
       await tempDir.delete(recursive: true);

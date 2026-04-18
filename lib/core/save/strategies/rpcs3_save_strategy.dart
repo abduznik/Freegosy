@@ -365,15 +365,25 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       Game game, String destPath, Uint8List data, String filename) async {
     try {
       final saveRoot = await _getRpcs3SaveRoot(platformSlug: game.platformSlug);
+      
+      // Follow symlink if needed
+      String resolvedRoot = saveRoot;
+      try {
+        if (await io.FileSystemEntity.isLink(saveRoot)) {
+          resolvedRoot = await io.Link(saveRoot).resolveSymbolicLinks();
+        }
+      } catch (_) {}
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         
         // Ensure the leaf directory exists
-        await io.Directory(saveRoot).create(recursive: true);
+        await io.Directory(resolvedRoot).create(recursive: true);
 
         for (final entry in archive) {
-          final entryPath = p.join(saveRoot, entry.name);
+          if (entry.name == 'freegosy_sync.txt') continue;
+          
+          final entryPath = p.join(resolvedRoot, entry.name);
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);

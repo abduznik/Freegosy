@@ -254,61 +254,54 @@ class SaveSyncService {
         await io.Directory(tempDir).create(recursive: true);
       }
 
+      // --- Prepare unique bundle ZIP to bypass server-side deduplication ---
+      final bundleZipPath = p.join(tempDir, '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
+      final encoder = ZipFileEncoder();
+      encoder.create(bundleZipPath);
+
+      // 1. Write fresh sync metadata
+      final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
+      await metaFile.writeAsString(DateTime.now().toIso8601String());
+      await encoder.addFile(metaFile);
+
+      // 2. Add all files/folders from the map
       for (final entry in filesMap.entries) {
         final file = entry.key;
-        final screenshotFile = entry.value;
-        
-        final String localHash = await _hashFile(file);
-        final String uploadFilename = '$displayStem.zip';
-        final String? storedHash = await _getStoredHash(game.id, uploadFilename);
-
-        // Local deduplication check (only for automatic syncs)
-        if (!force && storedHash != null && localHash == storedHash) {
-          debugPrint('[Sync] Skipping upload for $displayStem: hash matches local cache ($localHash)');
-          continue;
-        }
-
-        // --- Prepare unique ZIP to bypass server-side deduplication ---
-        final zipPath = p.join(tempDir, '$displayStem.${DateTime.now().millisecondsSinceEpoch}.zip');
-        final encoder = ZipFileEncoder();
-        encoder.create(zipPath);
-
-        // 1. Write fresh sync metadata
-        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
-        await metaFile.writeAsString(DateTime.now().toIso8601String());
-        await encoder.addFile(metaFile);
-
-        // 2. Add the actual save content
         if (await io.FileSystemEntity.isDirectory(file.path)) {
-          // It's a directory (e.g., Eden, Dolphin Wii)
-          await encoder.addDirectory(io.Directory(file.path), includeDirName: false);
+          await encoder.addDirectory(io.Directory(file.path), includeDirName: true);
         } else {
-          // It's a file (e.g., single .sav or pre-zipped PPSSPP/PSP folder)
           await encoder.addFile(file, p.basename(file.path));
         }
-
-        encoder.close();
-        if (await metaFile.exists()) await metaFile.delete();
-
-        final uploadFile = io.File(zipPath);
-        final ok = await _rommService.uploadSave(
-          game.id, 
-          uploadFile, 
-          screenshotFile: screenshotFile,
-          overrideFilename: uploadFilename,
-        );
-        
-        if (ok) {
-          uploaded++;
-          // Store the hash of the ORIGINAL source (file or dir) to track local changes
-          await _storeHash(game.id, uploadFilename, localHash);
-          debugPrint('[Sync] Successfully pushed save for $displayStem (forced: $force)');
-        }
-
-        if (await uploadFile.exists()) {
-          await uploadFile.delete();
-        }
       }
+      encoder.close();
+
+      final uploadFile = io.File(bundleZipPath);
+      final String localHash = await _hashFile(uploadFile);
+      final String uploadFilename = '$displayStem.zip';
+      final String? storedHash = await _getStoredHash(game.id, uploadFilename);
+
+      // Local deduplication check (only for automatic syncs)
+      if (!force && storedHash != null && localHash == storedHash) {
+        debugPrint('[Sync] Skipping upload for $displayStem: hash matches local cache ($localHash)');
+        if (await uploadFile.exists()) await uploadFile.delete();
+        return true; 
+      }
+
+      final ok = await _rommService.uploadSave(
+        game.id, 
+        uploadFile, 
+        screenshotFile: filesMap.values.firstWhere((s) => s != null, orElse: () => null),
+        overrideFilename: uploadFilename,
+      );
+      
+      if (ok) {
+        uploaded++;
+        await _storeHash(game.id, uploadFilename, localHash);
+        debugPrint('[Sync] Successfully pushed save bundle for $displayStem (forced: $force)');
+      }
+
+      if (await uploadFile.exists()) await uploadFile.delete();
+      if (await metaFile.exists()) await metaFile.delete();
 
       if (uploaded > 0) {
         await _rommService.pruneOldSaves(game.id);

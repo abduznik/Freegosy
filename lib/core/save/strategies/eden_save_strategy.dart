@@ -678,7 +678,7 @@ class EdenSaveStrategy extends SaveStrategy {
   Future<bool> _extractArchive(Archive archive, String destDir) async {
     try {
       for (final entry in archive) {
-        if (entry.name.isEmpty) continue;
+        if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt') continue;
 
         // Strip leading Title ID folder from path if present.
         // e.g. "0100704000B3A000/save.bin" → "save.bin"

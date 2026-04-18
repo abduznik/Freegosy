@@ -54,18 +54,27 @@ class CemuSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
       final saveRoot = await _getSaveRoot(platformSlug: game.platformSlug);
-      await io.Directory(saveRoot).create(recursive: true);
+      
+      // Follow symlink if needed
+      String resolvedRoot = saveRoot;
+      try {
+        if (await io.FileSystemEntity.isLink(saveRoot)) {
+          resolvedRoot = await io.Link(saveRoot).resolveSymbolicLinks();
+        }
+      } catch (_) {}
+
+      await io.Directory(resolvedRoot).create(recursive: true);
       
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
+          if (entry.name == 'freegosy_sync.txt') continue;
+          
           final entryName = entry.name;
           if (entryName.isEmpty) continue;
           
-          // EmuDeck 'saves' symlink for Cemu points to .../usr/save.
-          // If the ZIP already contains '00050000/...', extraction is correct.
-          final targetPath = p.join(saveRoot, entryName);
+          final targetPath = p.join(resolvedRoot, entryName);
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = io.File(targetPath);

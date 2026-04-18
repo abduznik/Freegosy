@@ -140,7 +140,7 @@ class AzaharSaveStrategy extends SaveStrategy {
   Future<bool> _extractArchive(Archive archive, String destDir) async {
     try {
       for (final entry in archive) {
-        if (entry.name.isEmpty) continue;
+        if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt') continue;
 
         // Strip leading folder if present (e.g. "00000001/save.bin" -> "save.bin")
         final segments = entry.name.split(RegExp(r'[/\\]'));
