@@ -84,19 +84,23 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
 
     try {
       final romsRoot = await dirService.getRomsDirectory();
+      final List<Game> matchedGames = [];
+      final Map<String, bool> newEntries = {};
       
       await for (final result in scanner.sync(romsRoot)) {
         if (result.romId != null) {
-          // Found a match!
-          final newState = Map<String, bool>.from(state);
-          newState[result.romId!] = true;
-          state = newState;
-
-          // If we have the game object, cache it for offline use
-          if (result.game != null) {
-            await metadataCache.saveGames([result.game!]);
-          }
+          newEntries[result.romId!] = true;
+          if (result.game != null) matchedGames.add(result.game!);
+          
+          // Update UI state for "pop-in" effect, but sparingly
+          state = {...state, result.romId!: true};
         }
+      }
+
+      // Bulk persist to disk only once at the end
+      if (matchedGames.isNotEmpty) {
+        debugPrint('[DownloadedGamesCache] Persisting ${matchedGames.length} matched games to metadata cache...');
+        await metadataCache.saveGames(matchedGames);
       }
     } catch (e) {
       debugPrint('[DownloadedGamesCache] Sync error: $e');

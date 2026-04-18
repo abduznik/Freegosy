@@ -88,22 +88,29 @@ class RomScannerService {
 
     debugPrint('[RomScanner] Matching ${newFiles.length} new files...');
 
-    // Phase 4: Match new files via RomM API
-    for (final filePath in newFiles) {
-      final fileName = p.basename(filePath);
+    // Phase 4: Match new files via RomM API in parallel batches
+    const int maxConcurrent = 5;
+    for (int i = 0; i < newFiles.length; i += maxConcurrent) {
+      final chunk = newFiles.sublist(i, i + maxConcurrent > newFiles.length ? newFiles.length : i + maxConcurrent);
       
-      // Try filename match first (fast)
-      final searchResult = await _rommService.searchRoms(search: fileName);
-      if (searchResult.isNotEmpty) {
-        final game = searchResult.first;
-        await _mappingService.updateMapping(filePath, game.id);
-        yield RomSyncResult(filePath, game.id, game: game);
-        continue;
-      }
+      final results = await Future.wait(chunk.map((filePath) async {
+        final fileName = p.basename(filePath);
+        try {
+          final searchResult = await _rommService.searchRoms(search: fileName);
+          if (searchResult.isNotEmpty) {
+            final game = searchResult.first;
+            await _mappingService.updateMapping(filePath, game.id);
+            return RomSyncResult(filePath, game.id, game: game);
+          }
+        } catch (e) {
+          debugPrint('[RomScanner] Error matching $fileName: $e');
+        }
+        return RomSyncResult(filePath, null);
+      }));
 
-      // Optional: SHA1 match (slower, could be triggered by user or done here)
-      // For now, let's keep it simple and just yield the path if not found
-      yield RomSyncResult(filePath, null);
+      for (final result in results) {
+        yield result;
+      }
     }
   }
 
