@@ -369,16 +369,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                             onRefresh: _refreshLibrary,
                             child: Consumer(
                               builder: (context, ref, _) {
-                                final activeFilters = ref.watch(activeFiltersProvider);
-                                final selectedPlatform = ref.watch(selectedPlatformIdProvider);
-                                final search = ref.watch(searchQueryProvider);
                                 final isHome = ref.watch(isHomeSelectedProvider);
                                 
-                                final hasFilters = activeFilters.hasActiveFilters ||
-                                    selectedPlatform != null ||
-                                    search.isNotEmpty ||
-                                    !isHome;
-
                                 final recentAsync = ref.watch(recentlyPlayedProvider);
                                 final displayGames = paginatedState.games;
 
