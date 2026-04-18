@@ -29,39 +29,35 @@ class RomScannerService {
     final rootDir = Directory(romsRoot);
     if (!await rootDir.exists()) return;
 
-    // Phase 1: Check root and platform directories for changes
-    final rootStat = await rootDir.stat();
-    bool rootChanged = storedMTimes[romsRoot] != rootStat.modified.millisecondsSinceEpoch;
-
-    final List<Directory> dirtyDirs = [];
-    if (rootChanged) {
-      dirtyDirs.add(rootDir);
-    }
-
-    // Even if root mtime hasn't changed, we should check platform subdirs 
-    // because some filesystems don't propagate mtime changes upwards.
+    // Phase 1: Check platform directories for changes
+    final List<Directory> platformDirs = [];
     await for (final entity in rootDir.list()) {
       if (entity is Directory) {
-        final platformMTime = storedMTimes[entity.path];
-        final stat = await entity.stat();
-        if (platformMTime != stat.modified.millisecondsSinceEpoch) {
-          dirtyDirs.add(entity);
-        }
+        platformDirs.add(entity);
+      }
+    }
+
+    final List<Directory> dirtyDirs = [];
+    for (final dir in platformDirs) {
+      final storedMTime = storedMTimes[dir.path];
+      final stat = await dir.stat();
+      if (storedMTime != stat.modified.millisecondsSinceEpoch) {
+        dirtyDirs.add(dir);
       }
     }
 
     if (dirtyDirs.isEmpty) {
-      debugPrint('[RomScanner] No directories changed. Skipping scan.');
+      debugPrint('[RomScanner] No platform directories changed. Skipping scan.');
       return;
     }
 
-    debugPrint('[RomScanner] Scanning ${dirtyDirs.length} dirty directories...');
+    debugPrint('[RomScanner] Scanning ${dirtyDirs.length} dirty platform directories...');
 
     // Phase 2: Identify new/removed files in dirty directories using an Isolate
     final List<String> dirPaths = dirtyDirs.map((d) => d.path).toList();
     final List<String> allFiles = await Isolate.run(() => _scanDirectories(dirPaths));
 
-    // Phase 3: Update mappings and match new files
+    // Phase 3: Update mtimes for scanned directories
     final Map<String, int> newMTimes = Map.from(storedMTimes);
     for (final dir in dirtyDirs) {
       final stat = await dir.stat();
