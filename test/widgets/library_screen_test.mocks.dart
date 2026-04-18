@@ -12,6 +12,7 @@ import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strate
 import 'package:freegosy/core/romm/romm_models.dart' as _i2;
 import 'package:freegosy/core/romm/romm_service.dart' as _i5;
 import 'package:freegosy/core/storage/directory_service.dart' as _i3;
+import 'package:freegosy/core/storage/rom_mapping_service.dart' as _i10;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
 
@@ -144,6 +145,22 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
           as _i7.Future<List<_i2.Game>>);
 
   @override
+  _i7.Future<List<_i2.Game>> searchRoms({
+    String? sha1,
+    String? md5,
+    String? search,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#searchRoms, [], {
+              #sha1: sha1,
+              #md5: md5,
+              #search: search,
+            }),
+            returnValue: _i7.Future<List<_i2.Game>>.value(<_i2.Game>[]),
+          )
+          as _i7.Future<List<_i2.Game>>);
+
+  @override
   _i7.Future<({List<_i2.Game> games, int total})> getGamesPage({
     int? offset = 0,
     int? limit = 50,
@@ -225,6 +242,14 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
                 #overrideFilename: overrideFilename,
               },
             ),
+            returnValue: _i7.Future<bool>.value(false),
+          )
+          as _i7.Future<bool>);
+
+  @override
+  _i7.Future<bool> deleteSaves(List<int>? saveIds) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteSaves, [saveIds]),
             returnValue: _i7.Future<bool>.value(false),
           )
           as _i7.Future<bool>);
@@ -852,6 +877,90 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
   _i7.Future<void> deleteRom(_i2.Game? game) =>
       (super.noSuchMethod(
             Invocation.method(#deleteRom, [game]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+}
+
+/// A class which mocks [RomMappingService].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockRomMappingService extends _i1.Mock implements _i10.RomMappingService {
+  MockRomMappingService() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i7.Future<void> init() =>
+      (super.noSuchMethod(
+            Invocation.method(#init, []),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+
+  @override
+  Map<String, String> getMappings() =>
+      (super.noSuchMethod(
+            Invocation.method(#getMappings, []),
+            returnValue: <String, String>{},
+          )
+          as Map<String, String>);
+
+  @override
+  _i7.Future<void> saveMappings(Map<String, String>? mappings) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveMappings, [mappings]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+
+  @override
+  _i7.Future<void> updateMapping(String? path, String? romId) =>
+      (super.noSuchMethod(
+            Invocation.method(#updateMapping, [path, romId]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+
+  @override
+  Map<String, int> getMTimes() =>
+      (super.noSuchMethod(
+            Invocation.method(#getMTimes, []),
+            returnValue: <String, int>{},
+          )
+          as Map<String, int>);
+
+  @override
+  _i7.Future<void> saveMTimes(Map<String, int>? mtimes) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveMTimes, [mtimes]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+
+  @override
+  _i7.Future<void> setLastSyncTime(int? timestamp) =>
+      (super.noSuchMethod(
+            Invocation.method(#setLastSyncTime, [timestamp]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
+
+  @override
+  String? getRomIdForPath(String? path) =>
+      (super.noSuchMethod(Invocation.method(#getRomIdForPath, [path]))
+          as String?);
+
+  @override
+  _i7.Future<void> clear() =>
+      (super.noSuchMethod(
+            Invocation.method(#clear, []),
             returnValue: _i7.Future<void>.value(),
             returnValueForMissingStub: _i7.Future<void>.value(),
           )

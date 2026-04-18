@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/romm/romm_models.dart';
 import 'download_provider.dart';
 import 'romm_provider.dart';
 import 'dart:async';
@@ -7,18 +6,18 @@ import 'package:flutter/foundation.dart';
 
 class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   final Ref _ref;
-  bool _isDeepScanning = false;
-  Timer? _scanTimer;
+  bool _isSyncing = false;
+  Timer? _syncTimer;
   Timer? _periodicTimer;
   
   DownloadedGamesCache(this._ref) : super({}) {
     _init();
   }
 
-  bool get isDeepScanning => _isDeepScanning;
+  bool get isSyncing => _isSyncing;
 
   void _init() {
-    // Initial scan of whatever is already in memory
+    // Initial load from local mappings
     refresh();
     
     // Listen to download progress
@@ -38,136 +37,72 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
       }
     });
 
-    // Start deep scan in background after a short delay
-    _scanTimer = Timer(const Duration(seconds: 5), () => startDeepScan());
+    // Start incremental sync in background after a short delay
+    _syncTimer = Timer(const Duration(seconds: 3), () => startIncrementalSync());
 
-    // Periodical refresh every 2 minutes to catch external filesystem changes
-    _periodicTimer = Timer.periodic(const Duration(minutes: 2), (_) => refresh());
+    // Periodical refresh every 5 minutes
+    _periodicTimer = Timer.periodic(const Duration(minutes: 5), (_) => startIncrementalSync());
   }
 
   @override
   void dispose() {
-    _scanTimer?.cancel();
+    _syncTimer?.cancel();
     _periodicTimer?.cancel();
-    _isDeepScanning = false;
+    _isSyncing = false;
     super.dispose();
   }
 
-  /// Quickly refreshes the download status for games currently in the metadata cache.
+  /// Quickly populates the cache from locally stored mappings.
   Future<void> refresh() async {
-    final directoryService = _ref.read(directoryServiceProvider).asData?.value;
-    if (directoryService == null) return;
+    final mappingService = _ref.read(romMappingServiceProvider).asData?.value;
+    if (mappingService == null) return;
 
-    final downloadedByPlatform = await directoryService.getAllDownloadedFileNamesByPlatform();
-    final metadataCache = _ref.read(metadataCacheServiceProvider).asData?.value;
-    
-    final List<Game> gamesToScan = metadataCache?.cachedGames ?? [];
-    if (gamesToScan.isEmpty) return;
-
-    final Map<String, bool> newState = Map<String, bool>.from(state);
-    for (final game in gamesToScan) {
-      final platformSlug = game.platformSlug ?? '';
-      final downloadedNames = downloadedByPlatform[platformSlug] ?? {};
-      
-      final fileName = (game.fsName ?? game.fileName ?? game.name)
-          .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
-          .toLowerCase();
-      
-      newState[game.id] = downloadedNames.contains(fileName);
+    final mappings = mappingService.getMappings();
+    final Map<String, bool> newState = {};
+    for (final romId in mappings.values) {
+      newState[romId] = true;
     }
     state = newState;
   }
 
-  /// Aggressively fetches all games from RomM in the background to find EVERYTHING downloaded.
-  Future<void> startDeepScan() async {
-    if (_isDeepScanning) return;
+  /// Runs the high-performance incremental sync.
+  Future<void> startIncrementalSync() async {
+    if (_isSyncing) return;
     
-    final service = _ref.read(rommServiceProvider);
+    final scanner = _ref.read(romScannerServiceProvider);
     final dirService = _ref.read(directoryServiceProvider).asData?.value;
     final metadataCache = _ref.read(metadataCacheServiceProvider).asData?.value;
     
-    if (service == null || dirService == null || metadataCache == null) {
+    if (scanner == null || dirService == null || metadataCache == null) {
       // Retry in a bit if services aren't ready
-      Future.delayed(const Duration(seconds: 10), () => startDeepScan());
+      Future.delayed(const Duration(seconds: 10), () => startIncrementalSync());
       return;
     }
 
-    _isDeepScanning = true;
-    debugPrint('[DownloadedGamesCache] Starting background deep scan...');
+    _isSyncing = true;
+    debugPrint('[DownloadedGamesCache] Starting incremental sync...');
 
     try {
-      final platforms = await service.getPlatforms();
-      final downloadedByPlatform = await dirService.getAllDownloadedFileNamesByPlatform();
+      final romsRoot = await dirService.getRomsDirectory();
       
-      if (downloadedByPlatform.isEmpty) {
-        _isDeepScanning = false;
-        return;
-      }
+      await for (final result in scanner.sync(romsRoot)) {
+        if (result.romId != null) {
+          // Found a match!
+          final newState = Map<String, bool>.from(state);
+          newState[result.romId!] = true;
+          state = newState;
 
-      final Map<String, bool> newState = Map<String, bool>.from(state);
-      
-      for (final platform in platforms) {
-        final slug = platform.slug;
-        if (!downloadedByPlatform.containsKey(slug) && !downloadedByPlatform.containsKey(platform.name.toLowerCase())) {
-          continue;
-        }
-
-        final localFiles = downloadedByPlatform[slug] ?? downloadedByPlatform[platform.name.toLowerCase()] ?? {};
-        if (localFiles.isEmpty) continue;
-
-        debugPrint('[DownloadedGamesCache] Scanning platform ${platform.name} for ${localFiles.length} local files...');
-
-        int offset = 0;
-        const int limit = 100;
-        
-        while (true) {
-          final result = await service.getGamesPage(
-            platformId: platform.id.toString(),
-            offset: offset,
-            limit: limit,
-          );
-
-          if (result.games.isEmpty) break;
-
-          // Save to metadata cache so they are available offline
-          await metadataCache.saveGames(result.games);
-
-          for (final game in result.games) {
-            final fileName = (game.fsName ?? game.fileName ?? game.name)
-                .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')
-                .toLowerCase();
-            
-            if (localFiles.contains(fileName)) {
-              newState[game.id] = true;
-            } else {
-              // Also check without extension if local file might have different extension
-              final stem = fileName.contains('.') ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
-              bool found = false;
-              for (final localFile in localFiles) {
-                if (localFile.startsWith(stem)) {
-                  found = true;
-                  break;
-                }
-              }
-              if (found) newState[game.id] = true;
-            }
+          // If we have the game object, cache it for offline use
+          if (result.game != null) {
+            await metadataCache.saveGames([result.game!]);
           }
-
-          // Update state incrementally so UI sees progress
-          state = Map<String, bool>.from(newState);
-
-          offset += limit;
-          if (offset >= result.total) break;
-          
-          // Small gap to not overwhelm the server
-          await Future.delayed(const Duration(milliseconds: 500));
         }
       }
     } catch (e) {
-      debugPrint('[DownloadedGamesCache] Deep scan error: $e');
+      debugPrint('[DownloadedGamesCache] Sync error: $e');
     } finally {
-      _isDeepScanning = false;
-      debugPrint('[DownloadedGamesCache] Background deep scan complete.');
+      _isSyncing = false;
+      debugPrint('[DownloadedGamesCache] Incremental sync complete.');
     }
   }
 

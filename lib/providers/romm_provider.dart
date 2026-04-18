@@ -11,6 +11,8 @@ import 'package:freegosy/core/emulator/emulator_registry_data.dart';
 
 import 'package:freegosy/core/storage/download_cache_service.dart';
 import 'package:freegosy/core/storage/metadata_cache_service.dart';
+import 'package:freegosy/core/storage/rom_mapping_service.dart';
+import 'package:freegosy/core/romm/rom_scanner_service.dart';
 
 import 'package:freegosy/core/emulator/firmware_service.dart';
 
@@ -163,4 +165,20 @@ final metadataCacheServiceProvider = FutureProvider<MetadataCacheService>((ref) 
   final service = MetadataCacheService();
   await service.load();
   return service;
+});
+
+final romMappingServiceProvider = FutureProvider<RomMappingService>((ref) async {
+  final service = RomMappingService();
+  await service.init();
+  return service;
+});
+
+final romScannerServiceProvider = Provider<RomScannerService?>((ref) {
+  final rommService = ref.watch(rommServiceProvider);
+  final mappingServiceAsync = ref.watch(romMappingServiceProvider);
+  
+  if (rommService != null && mappingServiceAsync.hasValue) {
+    return RomScannerService(rommService, mappingServiceAsync.value!);
+  }
+  return null;
 });

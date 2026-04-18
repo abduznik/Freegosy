@@ -10,21 +10,27 @@ import 'package:freegosy/ui/screens/library_screen.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'library_screen_test.mocks.dart';
 
-@GenerateMocks([RommService, DirectoryService])
+@GenerateMocks([RommService, DirectoryService, RomMappingService])
 void main() {
   late MockRommService mockRommService;
   late MockDirectoryService mockDirectoryService;
+  late MockRomMappingService mockRomMappingService;
 
   setUp(() {
     mockRommService = MockRommService();
     mockDirectoryService = MockDirectoryService();
+    mockRomMappingService = MockRomMappingService();
     
     when(mockRommService.config).thenReturn(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
     when(mockRommService.resolveCoverUrl(any)).thenReturn(null);
     when(mockRommService.getRecentlyPlayed(limit: anyNamed('limit'))).thenAnswer((_) async => []);
+    when(mockRommService.searchRoms(search: anyNamed('search'))).thenAnswer((_) async => []);
     when(mockDirectoryService.status).thenReturn(const StorageStatus());
+    when(mockRomMappingService.getMappings()).thenReturn({});
+    when(mockRomMappingService.getMTimes()).thenReturn({});
   });
 
   group('LibraryScreen', () {
@@ -34,6 +40,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           rommServiceProvider.overrideWithValue(mockRommService),
+          romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
+          romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(isLoading: true)),
         ],
@@ -57,6 +65,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           rommServiceProvider.overrideWithValue(mockRommService),
+          romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
+          romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = PaginatedGamesState(games: games, total: 2, hasMore: false)),
         ],
@@ -77,6 +87,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           rommServiceProvider.overrideWithValue(mockRommService),
+          romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
+          romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(games: [], total: 0, hasMore: false)),
         ],
@@ -95,6 +107,8 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           rommServiceProvider.overrideWithValue(mockRommService),
+          romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
+          romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(error: 'Connection Failed')),
         ],

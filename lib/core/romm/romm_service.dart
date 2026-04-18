@@ -201,6 +201,31 @@ class RommService {
     } catch (_) { return []; }
   }
 
+  Future<List<Game>> searchRoms({String? sha1, String? md5, String? search}) async {
+    final params = <String, dynamic>{
+      'limit': 10,
+      'offset': 0,
+      'with_char_index': false,
+      'with_filter_values': false,
+    };
+    if (sha1 != null) params['sha1'] = sha1;
+    if (md5 != null) params['md5'] = md5;
+    if (search != null) params['search_term'] = search;
+
+    try {
+      final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
+        final List<dynamic> items = data['items'] ?? [];
+        return items.map((e) => Game.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('[RomM] searchRoms error: $e');
+      return [];
+    }
+  }
+
   Future<({List<Game> games, int total})> getGamesPage({int offset = 0, int limit = 50, String? platformId, String? search, List<String> genres = const [], List<String> regions = const [], List<String> languages = const [], List<String> collections = const [], List<String> statuses = const [], bool? lastPlayed, bool withCharIndex = false, bool withFilterValues = false}) async {
     final params = <String, dynamic>{'limit': limit, 'offset': offset, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': withCharIndex, 'with_filter_values': withFilterValues};
     if (lastPlayed != null) params['last_played'] = lastPlayed;

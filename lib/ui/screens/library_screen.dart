@@ -150,7 +150,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final rommConfigAsync = ref.watch(rommConfigProvider);
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final downloadedCache = ref.watch(downloadedGamesCacheProvider);
-    final isDeepScanning = ref.watch(downloadedGamesCacheProvider.notifier).isDeepScanning;
+    final isSyncing = ref.watch(downloadedGamesCacheProvider.notifier).isSyncing;
 
     // Trigger initial load once service becomes available
     ref.listen(rommServiceProvider, (prev, next) {
@@ -249,7 +249,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
         child: ExcludeSemantics(
           child: Column(
             children: [
-              if (isDeepScanning)
+              if (isSyncing)
                 const LinearProgressIndicator(
                   minHeight: 2,
                   backgroundColor: Colors.transparent,

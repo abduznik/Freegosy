@@ -146,6 +146,22 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
           as _i7.Future<List<_i2.Game>>);
 
   @override
+  _i7.Future<List<_i2.Game>> searchRoms({
+    String? sha1,
+    String? md5,
+    String? search,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#searchRoms, [], {
+              #sha1: sha1,
+              #md5: md5,
+              #search: search,
+            }),
+            returnValue: _i7.Future<List<_i2.Game>>.value(<_i2.Game>[]),
+          )
+          as _i7.Future<List<_i2.Game>>);
+
+  @override
   _i7.Future<({List<_i2.Game> games, int total})> getGamesPage({
     int? offset = 0,
     int? limit = 50,
@@ -227,6 +243,14 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
                 #overrideFilename: overrideFilename,
               },
             ),
+            returnValue: _i7.Future<bool>.value(false),
+          )
+          as _i7.Future<bool>);
+
+  @override
+  _i7.Future<bool> deleteSaves(List<int>? saveIds) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteSaves, [saveIds]),
             returnValue: _i7.Future<bool>.value(false),
           )
           as _i7.Future<bool>);
