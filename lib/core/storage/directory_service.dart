@@ -383,11 +383,12 @@ class DirectoryService {
   Future<String?> findExistingRomPath(Game game) async {
     final romDir = await getRomDirectory(game);
     final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final exactPath = p.normalize('$romDir/$baseName');
+    final exactPath = p.join(romDir, baseName);
 
     debugPrint('[DirectoryService] Finding ROM for ${game.name}');
     debugPrint('[DirectoryService] romDir: $romDir');
     debugPrint('[DirectoryService] baseName: $baseName');
+    debugPrint('[DirectoryService] exactPath (normalized): ${p.normalize(exactPath)}');
 
     // Check exact path first (file or directory)
     if (await File(exactPath).exists()) {
@@ -396,12 +397,12 @@ class DirectoryService {
     }
     if (await Directory(exactPath).exists()) {
       debugPrint('[DirectoryService] Found exact directory match: $exactPath');
-      return p.absolute(exactPath);
+      // If it's a directory, we might want to look inside, handled by multi-file folder logic below
     }
 
     // Check multi-file folder named after game name
     final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final multiFileDir = Directory(p.normalize('$romDir/$folderName'));
+    final multiFileDir = Directory(p.join(romDir, folderName));
     if (await multiFileDir.exists()) {
       debugPrint('[DirectoryService] Found multi-file folder: ${multiFileDir.path}');
       // Windows games: return the folder itself so WindowsStrategy can find the exe
@@ -436,40 +437,42 @@ class DirectoryService {
       }
     }
 
-    // If baseName has no extension, try known extensions for this platform
-    if (!baseName.contains('.')) {
-      final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
-      for (final ext in extensions) {
-        final candidate = p.normalize('$romDir/$baseName$ext');
-        if (await File(candidate).exists()) {
-          debugPrint('[DirectoryService] Found file with extension $ext: $candidate');
-          return p.absolute(candidate);
+    // Try common extensions for this platform
+    final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
+    for (final ext in extensions) {
+      if (baseName.toLowerCase().endsWith(ext.toLowerCase())) continue; // Already tried by exactPath
+      final candidate = p.join(romDir, '$baseName$ext');
+      if (await File(candidate).exists()) {
+        debugPrint('[DirectoryService] Found file with extension $ext: $candidate');
+        return p.absolute(candidate);
+      }
+    }
+
+    // Scan directory for fuzzy match
+    final dir = Directory(romDir);
+    if (await dir.exists()) {
+      List<File> candidates = [];
+      await for (final entity in dir.list()) {
+        if (entity is File) {
+          final fname = p.basename(entity.path);
+          if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
+            candidates.add(entity);
+          }
         }
       }
-
-      // Scan directory for any file starting with baseName
-      final dir = Directory(romDir);
-      if (await dir.exists()) {
-        List<File> candidates = [];
-        await for (final entity in dir.list()) {
-          if (entity is File) {
-            final fname = entity.uri.pathSegments.last;
-            if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
-              candidates.add(entity);
+      
+      if (candidates.isNotEmpty) {
+        // Prioritize .nds for NDS games
+        if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
+          for (final f in candidates) {
+            if (f.path.toLowerCase().endsWith('.nds')) {
+              debugPrint('[DirectoryService] Found fuzzy NDS match: ${f.path}');
+              return p.absolute(f.path);
             }
           }
         }
-        
-        if (candidates.isNotEmpty) {
-          // Prioritize .nds for NDS games
-          if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
-            try {
-              return p.absolute(candidates.firstWhere((f) => f.path.toLowerCase().endsWith('.nds')).path);
-            } catch (_) {}
-          }
-          debugPrint('[DirectoryService] Found fuzzy match: ${candidates.first.path}');
-          return p.absolute(candidates.first.path);
-        }
+        debugPrint('[DirectoryService] Found fuzzy match: ${candidates.first.path}');
+        return p.absolute(candidates.first.path);
       }
     }
 
