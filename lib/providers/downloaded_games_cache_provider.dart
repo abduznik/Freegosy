@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/romm/romm_models.dart';
 import 'download_provider.dart';
 import 'romm_provider.dart';
 import 'dart:async';
@@ -90,25 +91,40 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
 
     try {
       final romsRoot = await dirService.getRomsDirectory();
+      final List<Game> matchedMetadataBuffer = [];
+      final Map<String, bool> sessionMatches = {};
       
+      int count = 0;
       await for (final result in scanner.sync(romsRoot)) {
         if (result.romId != null) {
-          // 1. Mark as downloaded in our fast state
-          state = {...state, result.romId!: true};
-          
-          // 2. Persist metadata IMMEDIATELY so it shows up in Home shelves
+          sessionMatches[result.romId!] = true;
           if (result.game != null) {
-            await metadataCache.saveGames([result.game!]);
+            matchedMetadataBuffer.add(result.game!);
+          }
+
+          // Update UI state every 5 games to keep it smooth but responsive
+          count++;
+          if (count % 5 == 0) {
+            state = {...state, ...sessionMatches};
           }
         }
+      }
+
+      // Final state update for any remaining games
+      state = {...state, ...sessionMatches};
+
+      // CRITICAL PERF FIX: Save all metadata in ONE single disk operation
+      if (matchedMetadataBuffer.isNotEmpty) {
+        debugPrint('[DownloadedGamesCache] Batch persisting ${matchedMetadataBuffer.length} games...');
+        await metadataCache.saveGames(matchedMetadataBuffer);
       }
     } catch (e) {
       debugPrint('[DownloadedGamesCache] Sync error: $e');
     } finally {
       _isSyncing = false;
       debugPrint('[DownloadedGamesCache] Incremental sync complete.');
-      // Final refresh to ensure everything is matched up
-      refresh();
+      // Final refresh to ensure everything is flushed and matched up
+      await refresh();
     }
   }
 
