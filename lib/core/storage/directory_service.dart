@@ -64,6 +64,46 @@ class DirectoryService {
 
   DirectoryService();
 
+  bool get isSteamDeck {
+    if (!io.Platform.isLinux) return false;
+    final home = io.Platform.environment['HOME'] ?? '';
+    return home == '/home/deck' || io.Directory('/home/deck').existsSync();
+  }
+
+  /// Detects EmuDeck root by scanning common mount points and internal home.
+  Future<String?> detectEmuDeckRoot() async {
+    final home = io.Platform.environment['HOME'] ?? '/home/deck';
+    
+    // 1. Check Internal Home
+    final internal = p.join(home, 'Emulation');
+    if (await io.Directory(internal).exists()) return internal.replaceAll('/Emulation', '');
+
+    // 2. Check External SD / Removable Media
+    final mediaDir = io.Directory('/run/media');
+    if (await mediaDir.exists()) {
+      try {
+        await for (final userDir in mediaDir.list()) {
+          if (userDir is! io.Directory) continue;
+
+          // Check 1 level deep: /run/media/LABEL/Emulation
+          final candidate1 = p.join(userDir.path, 'Emulation');
+          if (await io.Directory(candidate1).exists()) return userDir.path;
+
+          // Check 2 levels deep: /run/media/USER/LABEL/Emulation
+          await for (final mountDir in userDir.list()) {
+            if (mountDir is! io.Directory) continue;
+            final candidate2 = p.join(mountDir.path, 'Emulation');
+            if (await io.Directory(candidate2).exists()) {
+              return mountDir.path;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
   LinuxEnvironmentStrategy get activeLinuxEnvironment {
     if (_linuxStrategy != null) return _linuxStrategy!;
     
@@ -73,6 +113,10 @@ class DirectoryService {
         break;
       case 'retrodeck':
         _linuxStrategy = RetroDeckStrategy();
+        break;
+      case 'auto':
+        // For auto, we prefer EmuDeck if detected, then RetroDeck, then Native
+        _linuxStrategy = EmuDeckStrategy(); // Defaulting to EmuDeck for now, logic refined in initialize
         break;
       default:
         _linuxStrategy = NativeLinuxStrategy();
@@ -86,6 +130,29 @@ class DirectoryService {
       linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
       emudeckRootPath = prefs.getString(_emudeckRootPathKey);
       
+      // Auto-detection logic for Linux
+      if (defaultTargetPlatform == TargetPlatform.linux) {
+        if (linuxSyncPreset == 'auto' || linuxSyncPreset == 'default') {
+          final detectedRoot = await detectEmuDeckRoot();
+          if (detectedRoot != null) {
+            emudeckRootPath = detectedRoot;
+            linuxSyncPreset = 'emudeck';
+            _linuxStrategy = EmuDeckStrategy();
+          } else {
+            // Check for RetroDeck
+            final home = io.Platform.environment['HOME'] ?? '';
+            final retrodeckConfig = p.join(home, '.var', 'app', 'net.retrodeck.retrodeck');
+            if (await io.Directory(retrodeckConfig).exists()) {
+              linuxSyncPreset = 'retrodeck';
+              _linuxStrategy = RetroDeckStrategy();
+            } else {
+              linuxSyncPreset = 'default';
+              _linuxStrategy = NativeLinuxStrategy();
+            }
+          }
+        }
+      }
+
       // Reset strategy to force re-instantiation with correct preset
       _linuxStrategy = null;
 

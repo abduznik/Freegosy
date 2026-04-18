@@ -32,7 +32,15 @@ class RetroDeckStrategy extends LinuxEnvironmentStrategy {
     };
 
     final folderName = retrodeckMap[emulatorName.toLowerCase()] ?? emulatorName;
-    return p.join(base, folderName);
+    final emuPath = p.join(base, folderName);
+    
+    // Most emulators in RetroDECK (Flatpak) use a 'saves' subfolder
+    final savesPath = p.join(emuPath, 'saves');
+    if (io.Directory(savesPath).existsSync()) {
+      return savesPath;
+    }
+    
+    return emuPath;
   }
 
   @override

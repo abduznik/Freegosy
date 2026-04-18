@@ -59,6 +59,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     if (io.Platform.isLinux) {
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+      
+      if (_directoryService.linuxSyncPreset == 'emudeck' || baseDir.contains('Emulation/saves')) {
+        // EmuDeck structure: Emulation/saves/retroarch/saves/CoreName
+        if (p.basename(baseDir) == 'saves') {
+          return p.join(baseDir, coreInfo.saveFolder);
+        }
+        return p.join(baseDir, 'saves', coreInfo.saveFolder);
+      }
+      
       // EmuDeck mapping returns the folder containing the actual saves
       return p.join(baseDir, coreInfo.saveFolder);
     }

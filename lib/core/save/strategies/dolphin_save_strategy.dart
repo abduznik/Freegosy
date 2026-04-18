@@ -118,54 +118,82 @@ class DolphinSaveStrategy extends SaveStrategy {
       String romPath,
       {DateTime? sessionStart,
       String syncMode = 'both'}) async {
+    final userDir = await _getUserDir(platformSlug: game.platformSlug);
     final rootSaveDir = await getSaveDir(game, romPath);
     if (rootSaveDir == null) return [];
 
     final isWii = game.platformSlug?.toLowerCase() == 'wii';
     final result = <io.File>[];
 
-    if (isWii) {
-      // For Wii, if we have the specific folder, sync it (SaveSyncService will zip it)
-      if (p.basename(rootSaveDir) != '00010000') {
-        result.add(io.File(rootSaveDir));
+    if (syncMode == 'saves' || syncMode == 'both') {
+      if (isWii) {
+        // For Wii, if we have the specific folder, sync it (SaveSyncService will zip it)
+        if (p.basename(rootSaveDir) != '00010000') {
+          result.add(io.File(rootSaveDir));
+        }
+      } else {
+        // GameCube fuzzy matching
+        final dir = io.Directory(rootSaveDir);
+        if (await dir.exists()) {
+          final gameId = _extractGameId(p.basename(romPath))?.toUpperCase();
+          final normalizedTarget = _normalizeGameName(game.displayName);
+
+          await for (final entity in dir.list()) {
+            if (entity is! io.File) continue;
+            final filename = p.basename(entity.path).toUpperCase();
+
+            // 1. Match .gci files by ID or name
+            if (filename.endsWith('.GCI')) {
+              bool match = false;
+              if (gameId != null && filename.contains(gameId)) {
+                match = true;
+              } else {
+                final normalizedGci = _normalizeGameName(filename);
+                if (normalizedGci.contains(normalizedTarget) || normalizedTarget.contains(normalizedGci)) {
+                  match = true;
+                }
+              }
+
+              if (match) {
+                if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+                  result.add(entity);
+                }
+              }
+            } 
+            
+            // 2. Match Memory Card files (.raw, .mcp) - only if they match region
+            else if (filename.startsWith('MEMORYCARDA') && (filename.endsWith('.RAW') || filename.endsWith('.MCP'))) {
+              final region = _detectRegion(romPath);
+              if (filename.contains(region)) {
+                if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+                  result.add(entity);
+                }
+              }
+            }
+          }
+        }
       }
-    } else {
-      // GameCube fuzzy matching
-      final dir = io.Directory(rootSaveDir);
-      if (!await dir.exists()) return [];
+    }
 
-      final gameId = _extractGameId(p.basename(romPath))?.toUpperCase();
-      final normalizedTarget = _normalizeGameName(game.displayName);
+    // Handle States
+    if (syncMode == 'states' || syncMode == 'both') {
+      final stateDir = p.join(userDir, 'StateSaves');
+      final stateDirObj = io.Directory(stateDir);
+      if (await stateDirObj.exists()) {
+        final gameId = _extractGameId(p.basename(romPath))?.toUpperCase();
+        final romStem = p.basenameWithoutExtension(romPath).toUpperCase();
 
-      await for (final entity in dir.list()) {
-        if (entity is! io.File) continue;
-        final filename = p.basename(entity.path).toUpperCase();
-
-        // 1. Match .gci files by ID or name
-        if (filename.endsWith('.GCI')) {
-          bool match = false;
-          if (gameId != null && filename.contains(gameId)) {
-            match = true;
-          } else {
-            final normalizedGci = _normalizeGameName(filename);
-            if (normalizedGci.contains(normalizedTarget) || normalizedTarget.contains(normalizedGci)) {
-              match = true;
-            }
-          }
-
-          if (match) {
-            if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
-              result.add(entity);
-            }
-          }
-        } 
-        
-        // 2. Match Memory Card files (.raw, .mcp) - only if they match region
-        else if (filename.startsWith('MEMORYCARDA') && (filename.endsWith('.RAW') || filename.endsWith('.MCP'))) {
-          final region = _detectRegion(romPath);
-          if (filename.contains(region)) {
-             if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
-              result.add(entity);
+        await for (final entity in stateDirObj.list()) {
+          if (entity is! io.File) continue;
+          final filename = p.basename(entity.path).toUpperCase();
+          
+          // Dolphin states are usually [GameID].s00, [GameID].sav, etc.
+          // or [Filename].s00
+          if (filename.endsWith('.SAV') || filename.contains(RegExp(r'\.S\d{2}$'))) {
+            if ((gameId != null && filename.startsWith(gameId)) || filename.startsWith(romStem)) {
+              if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+                result.add(entity);
+              }
             }
           }
         }

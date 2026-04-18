@@ -39,17 +39,29 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<void> launch(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.detached);
+    if (exePath.endsWith('.sh')) {
+      await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.detached);
+    } else {
+      await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.detached);
+    }
   }
 
   @override
   Future<io.Process?> launchWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal);
+    if (exePath.endsWith('.sh')) {
+      return await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.normal);
+    } else {
+      return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal);
+    }
   }
 
   @override
   Future<void> launchStandalone(String emulatorId, String exePath, {List<String> args = const []}) async {
     final exeDir = io.File(exePath).parent.path;
-    await io.Process.start(exePath, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
+    if (exePath.endsWith('.sh')) {
+      await io.Process.start('bash', [exePath, ...args], mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
+    } else {
+      await io.Process.start(exePath, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
+    }
   }
 }

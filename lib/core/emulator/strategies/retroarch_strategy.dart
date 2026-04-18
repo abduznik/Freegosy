@@ -29,6 +29,9 @@ class RetroArchStrategy extends EmulatorStrategy {
 
   RetroArchStrategy(this._directoryService);
 
+  @override
+  DirectoryService get directoryService => _directoryService;
+
   void setNdsCore(String core) {
     _ndsCore = core;
   }

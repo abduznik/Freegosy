@@ -34,17 +34,40 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'cemu': 'Cemu',
         'vita3k': 'Vita3K',
         'mame': 'MAME',
+        'pcsx2': 'pcsx2',
+        'retroarch': 'retroarch',
       };
 
       final emuFolderName = emudeckSavesMap[emulatorName.toLowerCase()] ?? emulatorName.toLowerCase();
-      final base = p.join(emudeckRoot, 'Emulation', 'saves', emuFolderName);
+      
+      // EmuDeck usually has a subfolder named 'saves' inside the emulator folder in Emulation/saves/
+      // e.g., Emulation/saves/retroarch/saves
+      String base = p.join(emudeckRoot, 'Emulation', 'saves', emuFolderName);
+      
+      // Check if there is a 'saves' subfolder, if so use it as base
+      if (io.Directory(p.join(base, 'saves')).existsSync()) {
+        base = p.join(base, 'saves');
+      }
 
-      if (platformSlug != null) {
-        final slug = platformSlug.toLowerCase();
-        if (emulatorName.toLowerCase() == 'dolphin' || emulatorName.toLowerCase() == 'primehack') {
+      if (emulatorName.toLowerCase() == 'dolphin' || emulatorName.toLowerCase() == 'primehack') {
+        if (platformSlug != null) {
+          final slug = platformSlug.toLowerCase();
           if (slug == 'gc' || slug == 'gamecube' || slug == 'ngc') return p.join(base, 'GC');
           if (slug == 'wii') return p.join(base, 'Wii');
         }
+        // Handle StateSaves if requested (this might be called specifically or we just return base)
+        if (io.Directory(p.join(base, 'StateSaves')).existsSync()) {
+          // If we are looking for states, we might need to return this, but Strategy handles subfolders
+        }
+      }
+
+      if (emulatorName.toLowerCase() == 'pcsx2') {
+        // PCSX2 saves are in /pcsx2/saves
+        if (io.Directory(p.join(base, 'saves')).existsSync()) {
+           // If we already appended saves, and there is another one? 
+           // Log says .../saves/pcsx2/saves
+        }
+        return base;
       }
 
       return platformSlug != null ? p.join(base, platformSlug) : base;

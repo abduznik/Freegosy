@@ -6,13 +6,17 @@ import 'package:freegosy/core/windows/windows_game_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class WindowsStrategy extends EmulatorStrategy {
+  final DirectoryService _directoryService;
   final WindowsGameService _windowsGameService;
 
   // Manual exe overrides per game id
   final Map<String, String> _exeOverrides = {};
 
-  WindowsStrategy(DirectoryService directoryService)
+  WindowsStrategy(this._directoryService)
       : _windowsGameService = WindowsGameService();
+
+  @override
+  DirectoryService get directoryService => _directoryService;
 
   @override
   String get name => 'Windows';
