@@ -327,6 +327,14 @@ final rpcs3ArchitectureLoaderProvider = FutureProvider<void>((ref) async {
   ref.read(rpcs3ArchitectureProvider.notifier).state = saved;
 });
 
+final edenBuildTypeProvider = StateProvider<String>((ref) => 'stable');
+
+final edenBuildTypeLoaderProvider = FutureProvider<void>((ref) async {
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString('eden_build_type') ?? 'stable';
+  ref.read(edenBuildTypeProvider.notifier).state = saved;
+});
+
 final retroarchNdsCoreProvider = StateProvider<String>((ref) => 'melonds');
 
 final retroarchNdsCoreLoaderProvider = FutureProvider<void>((ref) async {

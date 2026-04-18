@@ -8,18 +8,21 @@ import '../storage/directory_service.dart';
 import '../extraction/extraction_service.dart';
 import 'emulator_registry_data.dart';
 import 'github_release_service.dart';
+import 'gitea_release_service.dart';
 
 class EmulatorDownloadService {
   final Dio _dio;
   final DirectoryService _directoryService;
   final ExtractionService _extractionService;
   late final GithubReleaseService _githubService;
+  late final GiteaReleaseService _giteaService;
 
   EmulatorDownloadService(this._dio, this._directoryService, this._extractionService) {
     _githubService = GithubReleaseService(_dio);
+    _giteaService = GiteaReleaseService(_dio);
   }
 
-  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture}) async* {
+  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture, String? buildType}) async* {
     final definition = kEmulatorDefinitions.firstWhere(
       (d) => d['id'] == emulatorId,
       orElse: () => {},
@@ -40,8 +43,71 @@ class EmulatorDownloadService {
     // Resolve download URL based on type
     String? downloadUrl;
     
+    // Check for build-specific overrides (e.g., Nightly)
+    if (buildType != null && buildType.isNotEmpty) {
+      final buildTypeRepoKey = '${buildType}_repo';
+      final buildTypeTypeKey = '${buildType}_type';
+      final currentBuildType = (definition[buildTypeTypeKey] ?? 'direct') as String;
+
+      if (currentBuildType == 'gitea') {
+        final repo = definition[buildTypeRepoKey] as String;
+        List<String> required = [];
+        List<String> excluded = List<String>.from(definition['${buildType}_asset_excluded'] ?? []);
+
+        if (Platform.isWindows) {
+          required = List<String>.from(definition['${buildType}_asset_required_windows'] ?? []);
+        } else if (Platform.isMacOS) {
+          required = List<String>.from(definition['${buildType}_asset_required_macos'] ?? []);
+        } else {
+          if (_directoryService.isSteamDeck) {
+            required = List<String>.from(definition['${buildType}_asset_required_steamdeck'] ?? []);
+          } else {
+            required = List<String>.from(definition['${buildType}_asset_required_linux'] ?? []);
+          }
+        }
+
+        yield DownloadProgress(
+          id: emulatorId,
+          gameName: emulatorName,
+          status: 'Fetching latest $buildType release...',
+        );
+
+        downloadUrl = await _giteaService.getLatestReleaseUrl(
+          repo: repo,
+          required: required,
+          excluded: excluded,
+        );
+      } else {
+        final String nightlyKey;
+        if (Platform.isWindows) {
+          nightlyKey = '${buildType}_windows_url'; // Fallback
+        } else if (Platform.isMacOS) {
+          nightlyKey = '${buildType}_macos_url';
+        } else {
+          nightlyKey = '${buildType}_linux_url';
+        }
+        
+        // Specifically for Eden and other "direct" emulators that might have _nightly_url keys
+        final String specificNightlyKey;
+        if (Platform.isWindows) {
+          specificNightlyKey = 'windows_${buildType}_url';
+        } else if (Platform.isMacOS) {
+          specificNightlyKey = 'macos_${buildType}_url';
+        } else {
+          // Check for Steam Deck specific nightly if on Linux
+          if (buildType == 'nightly' && _directoryService.isSteamDeck) {
+            specificNightlyKey = 'linux_steamdeck_nightly_url';
+          } else {
+            specificNightlyKey = 'linux_${buildType}_url';
+          }
+        }
+
+        downloadUrl = (definition[specificNightlyKey] ?? definition[nightlyKey]) as String?;
+      }
+    }
+
     // RPCS3 Special Case for macOS
-    if (emulatorId == 'rpcs3' && Platform.isMacOS) {
+    if (downloadUrl == null && emulatorId == 'rpcs3' && Platform.isMacOS) {
       final arch = architecture ?? 'x64';
       String repo;
       List<String> required;

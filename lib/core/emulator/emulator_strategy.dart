@@ -25,28 +25,28 @@ abstract class EmulatorStrategy {
     return windowsExecutable;
   }
 
-  Future<void> launch(Game game, String romPath) async {
-    final exePath = await directoryService.findEmulatorExecutable(
+  Future<String?> findExecutable() async {
+    return await directoryService.findEmulatorExecutable(
       emulatorId, getExecutableForPlatform(),
     );
+  }
+
+  Future<void> launch(Game game, String romPath) async {
+    final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
     await directoryService.launchGame(game, romPath, emulatorId, exePath, args: launchArgs);
   }
 
   Future<Process?> launchWithHandle(Game game, String romPath) async {
-    final exePath = await directoryService.findEmulatorExecutable(
-      emulatorId, getExecutableForPlatform(),
-    );
+    final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
     return await directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: launchArgs);
   }
 
   Future<void> launchStandalone() async {
-    final exePath = await directoryService.findEmulatorExecutable(
-      emulatorId, getExecutableForPlatform(),
-    );
+    final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
     await directoryService.launchStandalone(emulatorId, exePath);

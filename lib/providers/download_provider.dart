@@ -69,10 +69,10 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
   }
 
   Future<void> startEmulatorDownload(
-      String emulatorId, String emulatorName, {String? architecture}) async {
+      String emulatorId, String emulatorName, {String? architecture, String? buildType}) async {
     final service = await _ref.read(emulatorDownloadServiceProvider.future);
     if (service == null) return;
-    service.downloadEmulator(emulatorId, architecture: architecture).listen((progress) {
+    service.downloadEmulator(emulatorId, architecture: architecture, buildType: buildType).listen((progress) {
       state = {...state, emulatorId: progress};
     });
   }

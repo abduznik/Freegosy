@@ -38,6 +38,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       ref.read(activePresetLoaderProvider.future),
       ref.read(rpcs3ArchitectureLoaderProvider.future),
       ref.read(retroarchNdsCoreLoaderProvider.future),
+      ref.read(edenBuildTypeLoaderProvider.future),
     ]).then((_) {
       if (mounted) {
         setState(() => _settingsLoaded = true);

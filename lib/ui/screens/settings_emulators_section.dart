@@ -118,6 +118,9 @@ Widget buildEmulatorsSection(
                     },
                   ),
                 ],
+                if (emulatorId == 'eden') ...[
+                  // Build selection moved to download dialog
+                ],
                 IconButton(
                   icon: const Icon(Icons.folder_open, size: 20),
                   tooltip: 'Set custom directory',
@@ -221,9 +224,10 @@ Future<void> _startDownload(
 ) async {
   final messenger = ScaffoldMessenger.of(context);
   String? architecture;
+  String? buildType;
 
   if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) {
-    // Check if preference already set
+    // ... (architecture logic remains the same)
     final prefs = await SharedPreferences.getInstance();
     final hasPreference = prefs.containsKey('rpcs3_macos_architecture');
     
@@ -259,14 +263,45 @@ Future<void> _startDownload(
     }
   }
 
+  if (emulatorId == 'eden') {
+    if (!context.mounted) return;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Select Eden Build"),
+        content: const Text("Choose which version of Eden to install:"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'nightly'),
+            child: const Text("Nightly (Experimental)"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'stable'),
+            child: const Text("Stable (Recommended)"),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == null) return; // Cancelled
+    buildType = choice;
+    
+    // Save preference
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('eden_build_type', buildType);
+    ref.read(edenBuildTypeProvider.notifier).state = buildType;
+  }
+
+  final String buildLabel = (buildType != null && buildType != 'stable') ? " ($buildType)" : "";
   messenger.showSnackBar(SnackBar(
-    content: Text('Starting download for $emulatorName${architecture != null ? " ($architecture)" : ""}...'),
+    content: Text('Starting download for $emulatorName${architecture != null ? " ($architecture)" : ""}$buildLabel...'),
   ));
 
   ref.read(downloadProvider.notifier).startEmulatorDownload(
     emulatorId, 
     emulatorName,
     architecture: architecture,
+    buildType: buildType,
   );
 
   // Listen for download completion and update state

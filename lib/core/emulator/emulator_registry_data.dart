@@ -45,6 +45,14 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'macos_executable': 'Eden.app/Contents/MacOS/Eden',
     'platform_slugs': ['switch', 'nintendo-switch', 'ns'],
     'supported_platforms': ['windows', 'linux', 'macos'],
+    // Nightly specific (uses Gitea dynamic resolution)
+    'nightly_type': 'gitea',
+    'nightly_repo': 'eden-ci/nightly',
+    'nightly_asset_required_windows': ['windows', 'amd64', 'msvc', '.zip'],
+    'nightly_asset_required_macos': ['macos', '.dmg'],
+    'nightly_asset_required_linux': ['linux', 'amd64', 'gcc', '.appimage'],
+    'nightly_asset_required_steamdeck': ['linux', 'steamdeck', 'gcc', '.appimage'],
+    'nightly_asset_excluded': ['zsync', 'torrent'],
   },
   {
     'id': 'rpcs3',
