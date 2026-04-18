@@ -4,44 +4,47 @@ class RomMappingService {
   static const String _boxName = 'rom_mappings_v2';
   late Box _box;
 
-  static const String _keyMappings = 'path_to_id';
-  static const String _keyMTimes = 'dir_mtimes';
+  // Prefix keys to avoid collisions
+  static const String _prefixMapping = 'map_';
+  static const String _prefixMTime = 'mtime_';
   static const String _keyLastSync = 'last_sync_time';
 
   Future<void> init() async {
     _box = await Hive.openBox(_boxName);
   }
 
-  /// Map of FilePath -> RomID
+  /// Get all FilePath -> RomID mappings
   Map<String, String> getMappings() {
-    final data = _box.get(_keyMappings);
-    if (data is Map) {
-      return Map<String, String>.from(data);
+    final Map<String, String> mappings = {};
+    for (var key in _box.keys) {
+      if (key is String && key.startsWith(_prefixMapping)) {
+        mappings[key.substring(_prefixMapping.length)] = _box.get(key);
+      }
     }
-    return {};
-  }
-
-  Future<void> saveMappings(Map<String, String> mappings) async {
-    await _box.put(_keyMappings, mappings);
+    return mappings;
   }
 
   Future<void> updateMapping(String path, String romId) async {
-    final mappings = getMappings();
-    mappings[path] = romId;
-    await saveMappings(mappings);
+    await _box.put('$_prefixMapping$path', romId);
+  }
+
+  Future<void> removeMapping(String path) async {
+    await _box.delete('$_prefixMapping$path');
   }
 
   /// Map of DirectoryPath -> LastModifiedTimestamp (ms)
   Map<String, int> getMTimes() {
-    final data = _box.get(_keyMTimes);
-    if (data is Map) {
-      return Map<String, int>.from(data);
+    final Map<String, int> mtimes = {};
+    for (var key in _box.keys) {
+      if (key is String && key.startsWith(_prefixMTime)) {
+        mtimes[key.substring(_prefixMTime.length)] = _box.get(key);
+      }
     }
-    return {};
+    return mtimes;
   }
 
-  Future<void> saveMTimes(Map<String, int> mtimes) async {
-    await _box.put(_keyMTimes, mtimes);
+  Future<void> updateMTime(String path, int timestamp) async {
+    await _box.put('$_prefixMTime$path', timestamp);
   }
 
   int? getLastSyncTime() {
@@ -53,7 +56,7 @@ class RomMappingService {
   }
 
   String? getRomIdForPath(String path) {
-    return getMappings()[path];
+    return _box.get('$_prefixMapping$path');
   }
 
   Future<void> clear() async {

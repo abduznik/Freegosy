@@ -909,18 +909,18 @@ class MockRomMappingService extends _i1.Mock implements _i10.RomMappingService {
           as Map<String, String>);
 
   @override
-  _i7.Future<void> saveMappings(Map<String, String>? mappings) =>
+  _i7.Future<void> updateMapping(String? path, String? romId) =>
       (super.noSuchMethod(
-            Invocation.method(#saveMappings, [mappings]),
+            Invocation.method(#updateMapping, [path, romId]),
             returnValue: _i7.Future<void>.value(),
             returnValueForMissingStub: _i7.Future<void>.value(),
           )
           as _i7.Future<void>);
 
   @override
-  _i7.Future<void> updateMapping(String? path, String? romId) =>
+  _i7.Future<void> removeMapping(String? path) =>
       (super.noSuchMethod(
-            Invocation.method(#updateMapping, [path, romId]),
+            Invocation.method(#removeMapping, [path]),
             returnValue: _i7.Future<void>.value(),
             returnValueForMissingStub: _i7.Future<void>.value(),
           )
@@ -935,9 +935,9 @@ class MockRomMappingService extends _i1.Mock implements _i10.RomMappingService {
           as Map<String, int>);
 
   @override
-  _i7.Future<void> saveMTimes(Map<String, int>? mtimes) =>
+  _i7.Future<void> updateMTime(String? path, int? timestamp) =>
       (super.noSuchMethod(
-            Invocation.method(#saveMTimes, [mtimes]),
+            Invocation.method(#updateMTime, [path, timestamp]),
             returnValue: _i7.Future<void>.value(),
             returnValueForMissingStub: _i7.Future<void>.value(),
           )

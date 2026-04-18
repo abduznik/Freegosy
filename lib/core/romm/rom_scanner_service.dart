@@ -58,12 +58,10 @@ class RomScannerService {
     final List<String> allFiles = await Isolate.run(() => _scanDirectories(dirPaths));
 
     // Phase 3: Update mtimes for scanned directories
-    final Map<String, int> newMTimes = Map.from(storedMTimes);
     for (final dir in dirtyDirs) {
       final stat = await dir.stat();
-      newMTimes[dir.path] = stat.modified.millisecondsSinceEpoch;
+      await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
     }
-    await _mappingService.saveMTimes(newMTimes);
 
     final Set<String> existingFiles = mappings.keys.toSet();
     final Set<String> currentFilesSet = allFiles.toSet();
@@ -74,11 +72,9 @@ class RomScannerService {
     // Clean up removed files from mappings
     final List<String> removedFiles = existingFiles.where((f) => !currentFilesSet.contains(f)).toList();
     if (removedFiles.isNotEmpty) {
-      final updatedMappings = Map<String, String>.from(mappings);
       for (final f in removedFiles) {
-        updatedMappings.remove(f);
+        await _mappingService.removeMapping(f);
       }
-      await _mappingService.saveMappings(updatedMappings);
     }
 
     if (newFiles.isEmpty) {

@@ -146,24 +146,26 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
     }
 
     try {
-      // SPECIAL CASE: If filtering for 'Downloaded Only', we use the local cache
-      // because RomM doesn't support this filter and we want it to be "instant".
+      // SPECIAL CASE: If filtering for 'Downloaded Only', we want it to be "instant"
+      // and show everything we've identified on disk.
       if (_activeFilters.downloadedOnly) {
         final downloadedMap = _ref.read(downloadedGamesCacheProvider);
         final metadataCache = _ref.read(metadataCacheServiceProvider).asData?.value;
         
         if (metadataCache != null) {
-          final allDownloaded = metadataCache.cachedGames.where((g) => downloadedMap[g.id] == true).toList();
+          // Get all cached metadata
+          final allCached = metadataCache.cachedGames;
           
-          // Apply other filters locally
+          // Only take those that are actually on disk according to our mapping
+          final allDownloaded = allCached.where((g) => downloadedMap[g.id] == true).toList();
+          
+          // Apply filters locally
           final filtered = allDownloaded.where((game) {
             if (platformId != null && game.platformId.toString() != platformId) return false;
             if (search != null && search.isNotEmpty) {
               final query = search.toLowerCase();
               if (!game.name.toLowerCase().contains(query)) return false;
             }
-            if (_activeFilters.genres.isNotEmpty && !_activeFilters.genres.any((g) => game.genres.contains(g))) return false;
-            if (_activeFilters.regions.isNotEmpty && !_activeFilters.regions.any((r) => game.regions.contains(r))) return false;
             return true;
           }).toList();
 

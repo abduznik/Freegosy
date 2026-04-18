@@ -151,6 +151,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final downloadedCache = ref.watch(downloadedGamesCacheProvider);
     final isSyncing = ref.watch(downloadedGamesCacheProvider.notifier).isSyncing;
+    final activeFilters = ref.watch(activeFiltersProvider);
 
     // Trigger initial load once service becomes available
     ref.listen(rommServiceProvider, (prev, next) {
@@ -276,8 +277,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                 data: (platforms) => PlatformFilterBar(
                   platforms: platforms,
                   selectedPlatformId: selectedPlatformId,
+                  downloadedOnly: activeFilters.downloadedOnly,
                   onSelected: (platform) {
                     ref.read(selectedPlatformIdProvider.notifier).state = platform?.id;
+                  },
+                  onDownloadedToggle: (selected) {
+                    final notifier = ref.read(activeFiltersProvider.notifier);
+                    notifier.state = notifier.state.copyWith(downloadedOnly: selected);
+                    // Refresh games list with new filter
+                    ref.read(paginatedGamesProvider.notifier).loadInitial(
+                      platformId: selectedPlatformId?.toString(),
+                      search: _searchController.text.isEmpty ? null : _searchController.text,
+                    );
                   },
                 ),
                 loading: () => const LinearProgressIndicator(),

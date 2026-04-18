@@ -18,8 +18,12 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   bool get isSyncing => _isSyncing;
 
   void _init() {
-    // Initial load from local mappings
-    refresh();
+    // Listen for mapping service to be ready, then refresh
+    _ref.listen(romMappingServiceProvider, (prev, next) {
+      if (next.hasValue) {
+        refresh();
+      }
+    }, fireImmediately: true);
     
     // Listen to download progress
     _ref.listen(downloadProvider, (prev, next) {
@@ -55,15 +59,17 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
 
   /// Quickly populates the cache from locally stored mappings.
   Future<void> refresh() async {
-    final mappingService = _ref.read(romMappingServiceProvider).asData?.value;
-    if (mappingService == null) return;
-
+    final mappingServiceAsync = _ref.read(romMappingServiceProvider);
+    if (!mappingServiceAsync.hasValue) return;
+    
+    final mappingService = mappingServiceAsync.value!;
     final mappings = mappingService.getMappings();
     final Map<String, bool> newState = {};
     for (final romId in mappings.values) {
       newState[romId] = true;
     }
     state = newState;
+    debugPrint('[DownloadedGamesCache] Loaded ${state.length} cached mappings.');
   }
 
   /// Runs the high-performance incremental sync.
@@ -86,19 +92,16 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     try {
       final romsRoot = await dirService.getRomsDirectory();
       final List<Game> matchedGames = [];
-      final Map<String, bool> newEntries = {};
       
       await for (final result in scanner.sync(romsRoot)) {
         if (result.romId != null) {
-          newEntries[result.romId!] = true;
-          if (result.game != null) matchedGames.add(result.game!);
-          
-          // Update UI state for "pop-in" effect, but sparingly
+          // Update UI state for "pop-in" effect
           state = {...state, result.romId!: true};
+          if (result.game != null) matchedGames.add(result.game!);
         }
       }
 
-      // Bulk persist to disk only once at the end
+      // Bulk persist matched games to metadata cache only once
       if (matchedGames.isNotEmpty) {
         debugPrint('[DownloadedGamesCache] Persisting ${matchedGames.length} matched games to metadata cache...');
         await metadataCache.saveGames(matchedGames);
