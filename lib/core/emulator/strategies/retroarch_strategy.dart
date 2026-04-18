@@ -233,7 +233,8 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: ['-L', corePath]);
+    final String finalCorePath = io.Platform.isWindows ? '"$corePath"' : corePath;
+    await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: ['-L', finalCorePath]);
   }
 
   @override
@@ -273,7 +274,8 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: ['-L', corePath]);
+    final String finalCorePath = io.Platform.isWindows ? '"$corePath"' : corePath;
+    return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: ['-L', finalCorePath]);
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {

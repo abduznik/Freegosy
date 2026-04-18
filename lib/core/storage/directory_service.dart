@@ -679,6 +679,7 @@ class DirectoryService {
   }
 
   Future<void> launchGame(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
+    debugPrint('[DirectoryService] Launching $emulatorId with $romPath');
     if (io.Platform.isLinux) {
       await activeLinuxEnvironment.launch(game, romPath, emulatorId, exePath, args: args);
     } else {
@@ -687,11 +688,19 @@ class DirectoryService {
         final normalizedRom = romPath.replaceAll('/', '\\');
         final normalizedExe = exePath.replaceAll('/', '\\');
         final normalizedDir = exeDir.replaceAll('/', '\\');
+        
+        // On Windows, detached processes with spaces in paths are extremely sensitive.
+        // Wrapping in double quotes manually and using runInShell is the most robust approach.
+        final List<String> cmdArgs = [...args, '"$normalizedRom"'];
+        
+        debugPrint('[DirectoryService] Windows Launch: "$normalizedExe" ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
+        
         await Process.start(
-          normalizedExe, 
-          [...args, normalizedRom], 
+          '"$normalizedExe"', 
+          cmdArgs, 
           mode: io.ProcessStartMode.detached,
           workingDirectory: normalizedDir,
+          runInShell: true,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         // Find the .app bundle path
@@ -699,10 +708,13 @@ class DirectoryService {
         final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
         final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
         
+        debugPrint('[DirectoryService] macOS App Launch: open -a "$appBundlePath" --args ${args.join(' ')} "$romPath"');
+        
         // Launch via 'open' to ensure macOS environment handles the bundle correctly.
         // Arguments to the binary itself must come after '--args'.
         await Process.run('open', ['-a', appBundlePath, '--args', ...args, romPath]);
       } else {
+        debugPrint('[DirectoryService] Unix/macOS Binary Launch: $exePath ${args.join(' ')} $romPath');
         await Process.start(
           exePath, 
           [...args, romPath], 
@@ -713,6 +725,7 @@ class DirectoryService {
   }
 
   Future<Process?> launchGameWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
+    debugPrint('[DirectoryService] Launching with handle: $emulatorId with $romPath');
     if (io.Platform.isLinux) {
       return await activeLinuxEnvironment.launchWithHandle(game, romPath, emulatorId, exePath, args: args);
     } else {
@@ -721,22 +734,27 @@ class DirectoryService {
         final normalizedRom = romPath.replaceAll('/', '\\');
         final normalizedExe = exePath.replaceAll('/', '\\');
         final normalizedDir = exeDir.replaceAll('/', '\\');
+        
+        final List<String> cmdArgs = [...args, '"$normalizedRom"'];
+        debugPrint('[DirectoryService] Windows Handle Launch: "$normalizedExe" ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
+
         return await Process.start(
-          normalizedExe, 
-          [...args, normalizedRom], 
+          '"$normalizedExe"', 
+          cmdArgs, 
           mode: io.ProcessStartMode.normal,
           workingDirectory: normalizedDir,
+          runInShell: true,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
-        // Note: For handles, we might still want direct binary access, 
-        // but 'open' doesn't return the child PID easily. 
-        // We'll stick to direct execution for handles if possible, or use 'open' if it's a bundle.
+        debugPrint('[DirectoryService] macOS App Handle Launch (via binary): $exePath ${args.join(' ')} $romPath');
+        // Note: For handles, we stick to direct execution as 'open' doesn't return child PID.
         return await Process.start(
           exePath, 
           [...args, romPath], 
           mode: io.ProcessStartMode.normal,
         );
       } else {
+        debugPrint('[DirectoryService] Unix/macOS Binary Handle Launch: $exePath ${args.join(' ')} $romPath');
         return await Process.start(
           exePath, 
           [...args, romPath], 
