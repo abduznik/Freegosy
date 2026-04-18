@@ -385,14 +385,25 @@ class DirectoryService {
     final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     final exactPath = '$romDir/$baseName';
 
+    debugPrint('[DirectoryService] Finding ROM for ${game.name}');
+    debugPrint('[DirectoryService] romDir: $romDir');
+    debugPrint('[DirectoryService] baseName: $baseName');
+
     // Check exact path first (file or directory)
-    if (await File(exactPath).exists()) return p.absolute(exactPath);
-    if (await Directory(exactPath).exists()) return p.absolute(exactPath);
+    if (await File(exactPath).exists()) {
+      debugPrint('[DirectoryService] Found exact file match: $exactPath');
+      return p.absolute(exactPath);
+    }
+    if (await Directory(exactPath).exists()) {
+      debugPrint('[DirectoryService] Found exact directory match: $exactPath');
+      return p.absolute(exactPath);
+    }
 
     // Check multi-file folder named after game name
     final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     final multiFileDir = Directory('$romDir/$folderName');
     if (await multiFileDir.exists()) {
+      debugPrint('[DirectoryService] Found multi-file folder: ${multiFileDir.path}');
       // Windows games: return the folder itself so WindowsStrategy can find the exe
       final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
       if (isWindowsGame) return p.absolute(multiFileDir.path);
@@ -401,6 +412,7 @@ class DirectoryService {
       if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
         await for (final entity in multiFileDir.list(recursive: true)) {
           if (entity is File && entity.path.toLowerCase().endsWith('.nds')) {
+            debugPrint('[DirectoryService] Found NDS file in folder: ${entity.path}');
             return p.absolute(entity.path);
           }
         }
@@ -418,7 +430,10 @@ class DirectoryService {
           }
         }
       }
-      if (largestFile != null) return p.absolute(largestFile.path);
+      if (largestFile != null) {
+        debugPrint('[DirectoryService] Found largest file in folder: ${largestFile.path}');
+        return p.absolute(largestFile.path);
+      }
     }
 
     // If baseName has no extension, try known extensions for this platform
@@ -426,23 +441,39 @@ class DirectoryService {
       final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
       for (final ext in extensions) {
         final candidate = '$romDir/$baseName$ext';
-        if (await File(candidate).exists()) return p.absolute(candidate);
+        if (await File(candidate).exists()) {
+          debugPrint('[DirectoryService] Found file with extension $ext: $candidate');
+          return p.absolute(candidate);
+        }
       }
 
       // Scan directory for any file starting with baseName
       final dir = Directory(romDir);
       if (await dir.exists()) {
+        List<File> candidates = [];
         await for (final entity in dir.list()) {
           if (entity is File) {
             final fname = entity.uri.pathSegments.last;
             if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
-              return p.absolute(entity.path);
+              candidates.add(entity);
             }
           }
+        }
+        
+        if (candidates.isNotEmpty) {
+          // Prioritize .nds for NDS games
+          if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
+            try {
+              return p.absolute(candidates.firstWhere((f) => f.path.toLowerCase().endsWith('.nds')).path);
+            } catch (_) {}
+          }
+          debugPrint('[DirectoryService] Found fuzzy match: ${candidates.first.path}');
+          return p.absolute(candidates.first.path);
         }
       }
     }
 
+    debugPrint('[DirectoryService] No ROM found for ${game.name}');
     return null;
   }
 
@@ -694,23 +725,17 @@ class DirectoryService {
     } else {
       final exeDir = io.File(exePath).parent.path;
       if (io.Platform.isWindows) {
-        final normalizedRom = romPath.replaceAll('/', '\\');
-        final normalizedExe = exePath.replaceAll('/', '\\');
-        final normalizedDir = exeDir.replaceAll('/', '\\');
+        final absExe = p.absolute(exePath).replaceAll('/', '\\');
+        final absRom = p.absolute(romPath).replaceAll('/', '\\');
+        final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        // On Windows, when using runInShell: true, the first argument (executable) 
-        // should NOT be manually quoted as Dart/CMD handles it.
-        // However, we MUST quote arguments with spaces.
-        final List<String> cmdArgs = [...args, '"$normalizedRom"'];
-        
-        debugPrint('[DirectoryService] Windows Launch: $normalizedExe ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
+        debugPrint('[DirectoryService] Windows Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
         
         await Process.start(
-          normalizedExe, 
-          cmdArgs, 
+          absExe, 
+          [...args, absRom], 
           mode: io.ProcessStartMode.detached,
-          workingDirectory: normalizedDir,
-          runInShell: true,
+          workingDirectory: absDir,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         // Find the .app bundle path
@@ -741,19 +766,17 @@ class DirectoryService {
     } else {
       final exeDir = io.File(exePath).parent.path;
       if (io.Platform.isWindows) {
-        final normalizedRom = romPath.replaceAll('/', '\\');
-        final normalizedExe = exePath.replaceAll('/', '\\');
-        final normalizedDir = exeDir.replaceAll('/', '\\');
+        final absExe = p.absolute(exePath).replaceAll('/', '\\');
+        final absRom = p.absolute(romPath).replaceAll('/', '\\');
+        final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        final List<String> cmdArgs = [...args, '"$normalizedRom"'];
-        debugPrint('[DirectoryService] Windows Handle Launch: $normalizedExe ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
+        debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
 
         return await Process.start(
-          normalizedExe, 
-          cmdArgs, 
+          absExe, 
+          [...args, absRom], 
           mode: io.ProcessStartMode.normal,
-          workingDirectory: normalizedDir,
-          runInShell: true,
+          workingDirectory: absDir,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         debugPrint('[DirectoryService] macOS App Handle Launch (via binary): $exePath ${args.join(' ')} $romPath');
