@@ -386,8 +386,8 @@ class DirectoryService {
     final exactPath = '$romDir/$baseName';
 
     // Check exact path first (file or directory)
-    if (await File(exactPath).exists()) return exactPath;
-    if (await Directory(exactPath).exists()) return exactPath;
+    if (await File(exactPath).exists()) return p.absolute(exactPath);
+    if (await Directory(exactPath).exists()) return p.absolute(exactPath);
 
     // Check multi-file folder named after game name
     final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
@@ -395,7 +395,16 @@ class DirectoryService {
     if (await multiFileDir.exists()) {
       // Windows games: return the folder itself so WindowsStrategy can find the exe
       final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-      if (isWindowsGame) return multiFileDir.path;
+      if (isWindowsGame) return p.absolute(multiFileDir.path);
+
+      // NDS specific: Prioritize .nds file in the folder
+      if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
+        await for (final entity in multiFileDir.list(recursive: true)) {
+          if (entity is File && entity.path.toLowerCase().endsWith('.nds')) {
+            return p.absolute(entity.path);
+          }
+        }
+      }
 
       // Other platforms: find largest file inside — that's the main ROM
       File? largestFile;
@@ -409,7 +418,7 @@ class DirectoryService {
           }
         }
       }
-      if (largestFile != null) return largestFile.path;
+      if (largestFile != null) return p.absolute(largestFile.path);
     }
 
     // If baseName has no extension, try known extensions for this platform
@@ -417,7 +426,7 @@ class DirectoryService {
       final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
       for (final ext in extensions) {
         final candidate = '$romDir/$baseName$ext';
-        if (await File(candidate).exists()) return candidate;
+        if (await File(candidate).exists()) return p.absolute(candidate);
       }
 
       // Scan directory for any file starting with baseName
@@ -427,7 +436,7 @@ class DirectoryService {
           if (entity is File) {
             final fname = entity.uri.pathSegments.last;
             if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
-              return entity.path;
+              return p.absolute(entity.path);
             }
           }
         }
@@ -689,14 +698,15 @@ class DirectoryService {
         final normalizedExe = exePath.replaceAll('/', '\\');
         final normalizedDir = exeDir.replaceAll('/', '\\');
         
-        // On Windows, detached processes with spaces in paths are extremely sensitive.
-        // Wrapping in double quotes manually and using runInShell is the most robust approach.
+        // On Windows, when using runInShell: true, the first argument (executable) 
+        // should NOT be manually quoted as Dart/CMD handles it.
+        // However, we MUST quote arguments with spaces.
         final List<String> cmdArgs = [...args, '"$normalizedRom"'];
         
-        debugPrint('[DirectoryService] Windows Launch: "$normalizedExe" ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
+        debugPrint('[DirectoryService] Windows Launch: $normalizedExe ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
         
         await Process.start(
-          '"$normalizedExe"', 
+          normalizedExe, 
           cmdArgs, 
           mode: io.ProcessStartMode.detached,
           workingDirectory: normalizedDir,
@@ -736,10 +746,10 @@ class DirectoryService {
         final normalizedDir = exeDir.replaceAll('/', '\\');
         
         final List<String> cmdArgs = [...args, '"$normalizedRom"'];
-        debugPrint('[DirectoryService] Windows Handle Launch: "$normalizedExe" ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
+        debugPrint('[DirectoryService] Windows Handle Launch: $normalizedExe ${cmdArgs.join(' ')} (WorkingDir: $normalizedDir)');
 
         return await Process.start(
-          '"$normalizedExe"', 
+          normalizedExe, 
           cmdArgs, 
           mode: io.ProcessStartMode.normal,
           workingDirectory: normalizedDir,

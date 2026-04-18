@@ -1,5 +1,6 @@
 ﻿import 'dart:io';
 import 'dart:io' as io;
+import 'package:path/path.dart' as p;
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
@@ -35,14 +36,16 @@ abstract class EmulatorStrategy {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    await directoryService.launchGame(game, romPath, emulatorId, exePath, args: launchArgs);
+    final normalizedRomPath = p.absolute(p.normalize(romPath));
+    await directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: launchArgs);
   }
 
   Future<Process?> launchWithHandle(Game game, String romPath) async {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    return await directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: launchArgs);
+    final normalizedRomPath = p.absolute(p.normalize(romPath));
+    return await directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: launchArgs);
   }
 
   Future<void> launchStandalone() async {

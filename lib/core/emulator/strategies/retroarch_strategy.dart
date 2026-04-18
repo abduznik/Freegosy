@@ -203,7 +203,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('$name not found. Please download it first.');
     }
 
-    final normalizedRomPath = p.normalize(romPath);
+    final normalizedRomPath = p.absolute(p.normalize(romPath));
     final coreName = _getCoreForSlug(game.platformSlug);
 
     // 1. Check if platform is 3DS-related
@@ -245,7 +245,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       throw Exception('$name not found. Please download it first.');
     }
 
-    final normalizedRomPath = p.normalize(romPath);
+    final normalizedRomPath = p.absolute(p.normalize(romPath));
     final coreName = _getCoreForSlug(game.platformSlug);
 
     // 1. Check if platform is 3DS-related
