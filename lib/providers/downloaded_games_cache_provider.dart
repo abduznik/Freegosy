@@ -96,6 +96,14 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
       
       int count = 0;
       await for (final result in scanner.sync(romsRoot)) {
+        // Handle removals IMMEDIATELY
+        if (result.isRemoved && result.romId != null) {
+          final newState = Map<String, bool>.from(state);
+          newState.remove(result.romId);
+          state = newState;
+          continue;
+        }
+
         if (result.romId != null) {
           sessionMatches[result.romId!] = true;
           if (result.game != null) {

@@ -10,8 +10,9 @@ class RomSyncResult {
   final String path;
   final String? romId;
   final Game? game;
+  final bool isRemoved;
 
-  RomSyncResult(this.path, this.romId, {this.game});
+  RomSyncResult(this.path, this.romId, {this.game, this.isRemoved = false});
 }
 
 /// TOP-LEVEL function for compute() to avoid capturing 'this'
@@ -60,8 +61,6 @@ class RomScannerService {
       }
     }
 
-    // SAFETY CHECK: If mappings are very low but we have many platform dirs,
-    // something went wrong (like the deletion bug). Force a scan.
     bool forceFullScan = mappings.length < 10 && platformDirs.length > 5;
 
     if (dirtyDirs.isEmpty && !forceFullScan) {
@@ -78,16 +77,12 @@ class RomScannerService {
     final Set<String> scannedFilesSet = scannedFiles.toSet();
     final Set<String> existingMappedFiles = mappings.keys.toSet();
 
-    // 1. Identify new files (scanned but not in existing mappings)
     final List<String> newFiles = scannedFiles.where((f) => !existingMappedFiles.contains(f)).toList();
     
-    // 2. Identify removed files 
-    // CRITICAL FIX: Only check for removal within the directories we ACTUALLY scanned.
+    // 1. Identify and yield REMOVALS immediately
     final List<String> removedFiles = [];
     for (final mappedPath in existingMappedFiles) {
-      // If this file belongs to one of the scanned directories...
       bool isInScannedDir = dirsToScan.any((d) => mappedPath.startsWith(d.path));
-      // ...and it's no longer there, it's truly removed.
       if (isInScannedDir && !scannedFilesSet.contains(mappedPath)) {
         removedFiles.add(mappedPath);
       }
@@ -96,13 +91,16 @@ class RomScannerService {
     if (removedFiles.isNotEmpty) {
       debugPrint('[RomScanner] Cleaning up ${removedFiles.length} removed files...');
       for (final f in removedFiles) {
+        final romId = mappings[f];
         await _mappingService.removeMapping(f);
+        if (romId != null) {
+          yield RomSyncResult(f, romId, isRemoved: true);
+        }
       }
     }
 
     if (newFiles.isEmpty) {
       debugPrint('[RomScanner] No new files found.');
-      // Update mtimes even if no new files, as we've verified the state
       for (final dir in dirsToScan) {
         final stat = await dir.stat();
         await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
@@ -114,6 +112,9 @@ class RomScannerService {
 
     const int maxConcurrent = 5;
     for (int i = 0; i < newFiles.length; i += maxConcurrent) {
+      // PERF FIX: Add a tiny pause between batches to reduce system load spikes
+      if (i > 0) await Future.delayed(const Duration(milliseconds: 100));
+
       final chunk = newFiles.sublist(i, i + maxConcurrent > newFiles.length ? newFiles.length : i + maxConcurrent);
       
       final results = await Future.wait(chunk.map((filePath) async {
@@ -136,7 +137,6 @@ class RomScannerService {
       }
     }
 
-    // Phase 5: Update mtimes only AFTER successful matching
     for (final dir in dirsToScan) {
       final stat = await dir.stat();
       await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
