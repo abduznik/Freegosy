@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -26,7 +27,7 @@ class XeniaSaveStrategy extends SaveStrategy {
     final exePath = await _directoryService.findEmulatorExecutable(
         'xenia_canary', 'xenia_canary.exe');
     if (exePath == null) return null;
-    return '${File(exePath).parent.path}\\content';
+    return p.join(File(exePath).parent.path, 'content');
   }
 
   @override

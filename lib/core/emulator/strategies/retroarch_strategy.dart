@@ -1,5 +1,6 @@
 import 'dart:io' as io show Platform, File, Directory;
 import 'dart:io' show Process;
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -33,6 +34,11 @@ class RetroArchStrategy extends EmulatorStrategy {
   DirectoryService get directoryService => _directoryService;
 
   void setNdsCore(String core) {
+    if (io.Platform.isMacOS && core == 'desmume') {
+      debugPrint('[RetroArch] DeSmuME core is not supported on macOS ARM, defaulting to melonDS.');
+      _ndsCore = 'melonds';
+      return;
+    }
     _ndsCore = core;
   }
 
@@ -67,116 +73,81 @@ class RetroArchStrategy extends EmulatorStrategy {
   @override
   bool get supportsSaveSync => true;
 
-  static const Map<String, String> _coreMapWindows = {
+  static const Map<String, String> _coreMap = {
     // Nintendo handhelds
-    'gba':         'mgba_libretro.dll',
-    'gbc':         'mgba_libretro.dll',
-    'gb':          'mgba_libretro.dll',
-    'nds':         'melonds_libretro.dll',
-    '3ds':         'azahar_libretro.dll',
-    'n3ds':        'azahar_libretro.dll',
-    'nintendo-3ds':'azahar_libretro.dll',
-    'new-nintendo-3ds': 'azahar_libretro.dll',
-    'new-nintendo-3ds-xl': 'azahar_libretro.dll',
-    'virtualboy':  'mednafen_vb_libretro.dll',
+    'gba':         'mgba_libretro',
+    'gbc':         'mgba_libretro',
+    'gb':          'mgba_libretro',
+    'nds':         'melonds_libretro',
+    '3ds':         'azahar_libretro',
+    'n3ds':        'azahar_libretro',
+    'nintendo-3ds':'azahar_libretro',
+    'new-nintendo-3ds': 'azahar_libretro',
+    'new-nintendo-3ds-xl': 'azahar_libretro',
+    'virtualboy':  'mednafen_vb_libretro',
     // Nintendo home
-    'nes':         'fceumm_libretro.dll',
-    'snes':        'snes9x_libretro.dll',
-    'n64':         'mupen64plus_next_libretro.dll',
+    'nes':         'fceumm_libretro',
+    'snes':         'snes9x_libretro',
+    'n64':         'mupen64plus_next_libretro',
     // Sony
-    'psx':         'pcsx_rearmed_libretro.dll',
-    'ps1':         'pcsx_rearmed_libretro.dll',
-    'playstation': 'pcsx_rearmed_libretro.dll',
-    'psp':         'ppsspp_libretro.dll',
+    'psx':         'pcsx_rearmed_libretro',
+    'ps1':         'pcsx_rearmed_libretro',
+    'playstation': 'pcsx_rearmed_libretro',
+    'psp':         'ppsspp_libretro',
     // Sega
-    'megadrive':   'genesis_plus_gx_libretro.dll',
-    'genesis':     'genesis_plus_gx_libretro.dll',
-    'md':          'genesis_plus_gx_libretro.dll',
-    'segacd':      'genesis_plus_gx_libretro.dll',
-    'saturn':      'mednafen_saturn_libretro.dll',
-    'dc':          'flycast_libretro.dll',
-    'dreamcast':   'flycast_libretro.dll',
-    'gamegear':    'genesis_plus_gx_libretro.dll',
+    'megadrive':   'genesis_plus_gx_libretro',
+    'genesis':     'genesis_plus_gx_libretro',
+    'md':          'genesis_plus_gx_libretro',
+    'segacd':      'genesis_plus_gx_libretro',
+    'saturn':      'mednafen_saturn_libretro',
+    'dc':          'flycast_libretro',
+    'dreamcast':   'flycast_libretro',
+    'gamegear':    'genesis_plus_gx_libretro',
     // Atari
-    'atari2600':   'stella_libretro.dll',
-    'atari7800':   'prosystem_libretro.dll',
-    'lynx':        'mednafen_lynx_libretro.dll',
+    'atari2600':   'stella_libretro',
+    'atari7800':   'prosystem_libretro',
+    'lynx':        'mednafen_lynx_libretro',
     // Arcade / SNK
-    'neogeo':      'fbneo_libretro.dll',
-    'arcade':      'fbneo_libretro.dll',
-    'mame':        'mame_libretro.dll',
+    'neogeo':      'fbneo_libretro',
+    'arcade':      'fbneo_libretro',
+    'mame':        'mame_libretro',
     // NEC
-    'pcengine':    'mednafen_pce_libretro.dll',
+    'pcengine':    'mednafen_pce_libretro',
     // Bandai
-    'wonderswan':  'mednafen_wswan_libretro.dll',
+    'wonderswan':  'mednafen_wswan_libretro',
     // Other
-    'msx':         'bluemsx_libretro.dll',
-    'dos':         'dosbox_pure_libretro.dll',
-  };
-
-  static const Map<String, String> _coreMapUnix = {
-    // Nintendo handhelds
-    'gba':         'mgba_libretro.dylib',
-    'gbc':         'mgba_libretro.dylib',
-    'gb':          'mgba_libretro.dylib',
-    'nds':         'melonds_libretro.dylib',
-    '3ds':         'azahar_libretro.dylib',
-    'n3ds':        'azahar_libretro.dylib',
-    'nintendo-3ds':'azahar_libretro.dylib',
-    'new-nintendo-3ds': 'azahar_libretro.dylib',
-    'new-nintendo-3ds-xl': 'azahar_libretro.dylib',
-    'virtualboy':  'mednafen_vb_libretro.dylib',
-    // Nintendo home
-    'nes':         'fceumm_libretro.dylib',
-    'snes':        'snes9x_libretro.dylib',
-    'n64':         'mupen64plus_next_libretro.dylib',
-    // Sony
-    'psx':         'pcsx_rearmed_libretro.dylib',
-    'ps1':         'pcsx_rearmed_libretro.dylib',
-    'playstation': 'pcsx_rearmed_libretro.dylib',
-    'psp':         'ppsspp_libretro.dylib',
-    // Sega
-    'megadrive':   'genesis_plus_gx_libretro.dylib',
-    'genesis':     'genesis_plus_gx_libretro.dylib',
-    'md':          'genesis_plus_gx_libretro.dylib',
-    'segacd':      'genesis_plus_gx_libretro.dylib',
-    'saturn':      'mednafen_saturn_libretro.dylib',
-    'dc':          'flycast_libretro.dylib',
-    'dreamcast':   'flycast_libretro.dylib',
-    'gamegear':    'genesis_plus_gx_libretro.dylib',
-    // Atari
-    'atari2600':   'stella_libretro.dylib',
-    'atari7800':   'prosystem_libretro.dylib',
-    'lynx':        'mednafen_lynx_libretro.dylib',
-    // Arcade / SNK
-    'neogeo':      'fbneo_libretro.dylib',
-    'arcade':      'fbneo_libretro.dylib',
-    'mame':        'mame_libretro.dylib',
-    // NEC
-    'pcengine':    'mednafen_pce_libretro.dylib',
-    // Bandai
-    'wonderswan':  'mednafen_wswan_libretro.dylib',
-    // Other
-    'msx':         'bluemsx_libretro.dylib',
-    'dos':         'dosbox_pure_libretro.dylib',
+    'msx':         'bluemsx_libretro',
+    'dos':         'dosbox_pure_libretro',
   };
 
   String? _getCoreForSlug(String? slug) {
     if (slug == null) return null;
-    final map = io.Platform.isWindows ? _coreMapWindows : _coreMapUnix;
-    
+
+    final String baseName;
     if (slug.toLowerCase() == 'nds' || slug.toLowerCase() == 'nintendo-ds') {
-      final ext = io.Platform.isWindows ? 'dll' : 'dylib';
-      return _ndsCore == 'desmume' ? 'desmume2015_libretro.$ext' : 'melonds_libretro.$ext';
+      baseName = _ndsCore == 'desmume' ? 'desmume2015_libretro' : 'melonds_libretro';
+    } else {
+      baseName = _coreMap[slug.toLowerCase()] ?? '';
     }
 
-    return map[slug.toLowerCase()];
+    if (baseName.isEmpty) return null;
+
+    final ext = io.Platform.isWindows ? 'dll' : (io.Platform.isMacOS ? 'dylib' : 'so');
+    return '$baseName.$ext';
+  }
+
+
+  String _getEmuRootDir(String exePath) {
+    if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+      // Go up from RetroArch.app/Contents/MacOS/RetroArch to Emulators/retroarch/
+      return io.File(exePath).parent.parent.parent.parent.path;
+    }
+    return io.File(exePath).parent.path;
   }
 
   Future<String?> _resolveCorePath(String exePath, String coreName) async {
-    final sep = io.Platform.isWindows ? r'\' : '/';
-    final exeDir = io.File(exePath).parent.path;
-    final standardPath = '$exeDir${sep}cores$sep$coreName';
+    final emuDir = _getEmuRootDir(exePath);
+    final standardPath = p.join(emuDir, 'cores', coreName);
 
     if (await io.File(standardPath).exists()) {
       return standardPath;
@@ -254,11 +225,10 @@ class RetroArchStrategy extends EmulatorStrategy {
     final corePath = await _resolveCorePath(exePath, coreName);
 
     if (corePath == null) {
-      final sep = io.Platform.isWindows ? r'\' : '/';
-      final exeDir = io.File(exePath).parent.path;
+      final emuDir = _getEmuRootDir(exePath);
       throw MissingRetroArchCoreException(
         coreName: coreName,
-        corePath: '$exeDir${sep}cores$sep$coreName',
+        corePath: p.join(emuDir, 'cores', coreName),
         exePath: exePath,
       );
     }
@@ -295,11 +265,10 @@ class RetroArchStrategy extends EmulatorStrategy {
     final corePath = await _resolveCorePath(exePath, coreName);
 
     if (corePath == null) {
-      final sep = io.Platform.isWindows ? r'\' : '/';
-      final exeDir = io.File(exePath).parent.path;
+      final emuDir = _getEmuRootDir(exePath);
       throw MissingRetroArchCoreException(
         coreName: coreName,
-        corePath: '$exeDir${sep}cores$sep$coreName',
+        corePath: p.join(emuDir, 'cores', coreName),
         exePath: exePath,
       );
     }
@@ -308,18 +277,49 @@ class RetroArchStrategy extends EmulatorStrategy {
   }
 
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
-    final String url;
-    final String ext;
+    String url;
+    String ext;
+    
+    debugPrint('[RetroArch] Downloading core: $coreName to $coresDir');
+    debugPrint('[RetroArch] Platform: ${io.Platform.operatingSystem}');
+
+    // Strip any existing extension from coreName to ensure we append the correct one for the URL
+    final coreBaseName = p.basenameWithoutExtension(coreName);
+
     if (io.Platform.isWindows) {
       ext = 'dll';
-      url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreName.zip';
+      url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreBaseName.dll.zip';
     } else if (io.Platform.isMacOS) {
       ext = 'dylib';
-      url = 'https://buildbot.libretro.com/nightly/apple/osx/arm64/latest/$coreName.zip';
+      // Detect if we are on Apple Silicon or Intel
+      bool isArm = io.Platform.version.contains('arm64');
+      try {
+        final result = Process.runSync('uname', ['-m']);
+        if (result.stdout.toString().contains('arm64')) {
+          isArm = true;
+        }
+      } catch (_) {}
+      
+      final arch = isArm ? 'arm64' : 'x86_64';
+      debugPrint('[RetroArch] Detected macOS architecture: $arch');
+      url = 'https://buildbot.libretro.com/nightly/apple/osx/$arch/latest/$coreBaseName.dylib.zip';
+
+      if (isArm) {
+        // Fallback for ARM64: if core is missing, try x86_64
+        try {
+          await dio.head(url);
+        } catch (e) {
+          debugPrint('[RetroArch] Core $coreBaseName not found for arm64, falling back to x86_64');
+          url = 'https://buildbot.libretro.com/nightly/apple/osx/x86_64/latest/$coreBaseName.dylib.zip';
+        }
+      }
     } else {
       ext = 'so';
-      url = 'https://buildbot.libretro.com/nightly/linux/x86_64/latest/$coreName.zip';
+      url = 'https://buildbot.libretro.com/nightly/linux/x86_64/latest/$coreBaseName.so.zip';
     }
+
+    debugPrint('[RetroArch] Target URL: $url');
+    debugPrint('[RetroArch] Target Extension: $ext');
 
     final tempDir = await getTemporaryDirectory();
     final zipPath = p.join(tempDir.path, '$coreName.zip');
@@ -328,12 +328,19 @@ class RetroArchStrategy extends EmulatorStrategy {
       await dio.download(url, zipPath);
       final bytes = await io.File(zipPath).readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
+      bool found = false;
       for (final entry in archive) {
+        debugPrint('[RetroArch] Zip entry: ${entry.name}');
         if (entry.isFile && entry.name.endsWith('.$ext')) {
           final outFile = io.File(p.join(coresDir, entry.name));
           await outFile.parent.create(recursive: true);
           await outFile.writeAsBytes(entry.content as List<int>);
+          debugPrint('[RetroArch] Extracted: ${entry.name} to ${outFile.path}');
+          found = true;
         }
+      }
+      if (!found) {
+        debugPrint('[RetroArch] Warning: No file ending in .$ext found in the zip!');
       }
     } finally {
       final f = io.File(zipPath);

@@ -17,11 +17,17 @@ class PpssppSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'ppsspp';
 
+  String _getEmuExe() {
+    if (io.Platform.isWindows) return 'PPSSPPWindows64.exe';
+    if (io.Platform.isMacOS) return 'PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL';
+    return 'PPSSPPSDL';
+  }
+
   Future<String> _getPspDir({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
     if (io.Platform.isWindows) {
       final exePath = await _directoryService.findEmulatorExecutable(
-          'ppsspp', 'PPSSPPWindows64.exe');
+          'ppsspp', _getEmuExe());
       if (exePath != null) {
         final emuDir = io.File(exePath).parent.path;
         final portableDir = p.join(emuDir, 'memstick', 'PSP');

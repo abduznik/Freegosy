@@ -18,14 +18,22 @@ class DolphinSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'dolphin';
 
+  String _getEmuExe() {
+    if (io.Platform.isWindows) return 'Dolphin.exe';
+    if (io.Platform.isMacOS) return 'Dolphin.app/Contents/MacOS/Dolphin';
+    return 'Dolphin';
+  }
+
   /// Returns the base user directory for Dolphin.
   Future<String> _getUserDir({String? platformSlug}) async {
     // 1. Check portable mode first — User folder next to exe
     final exePath = await _directoryService.findEmulatorExecutable(
-        'dolphin', 'Dolphin.exe');
+        'dolphin', _getEmuExe());
     if (exePath != null) {
       String exeDir = io.File(exePath).parent.path;
-      if (await io.FileSystemEntity.isDirectory(exePath)) {
+      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        exeDir = io.File(exePath).parent.parent.parent.parent.path;
+      } else if (await io.FileSystemEntity.isDirectory(exePath)) {
         exeDir = exePath;
       }
       final portableUser = p.join(exeDir, 'User');

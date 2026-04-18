@@ -43,6 +43,12 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'md':        _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
   };
 
+  String _getRetroArchExe() {
+    if (io.Platform.isWindows) return 'RetroArch.exe';
+    if (io.Platform.isMacOS) return 'RetroArch.app/Contents/MacOS/RetroArch';
+    return 'retroarch';
+  }
+
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
@@ -72,10 +78,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
       return p.join(baseDir, coreInfo.saveFolder);
     }
 
-    final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+    final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
     if (exePath == null) return null;
 
-    String exeDir = io.File(exePath).parent.path;
+    String exeDir = io.Platform.isMacOS ? p.join(io.File(exePath).parent.parent.parent.parent.path) : io.File(exePath).parent.path;
     // If exePath points to a folder instead of an exe, use it directly
     if (await io.FileSystemEntity.isDirectory(exePath)) {
       exeDir = exePath;
@@ -123,10 +129,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
         statesRoot = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
       }
     } else {
-      final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+      final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
       if (exePath == null) return {};
       
-      String exeDir = io.File(exePath).parent.path;
+      String exeDir = io.Platform.isMacOS ? p.join(io.File(exePath).parent.parent.parent.parent.path) : io.File(exePath).parent.path;
       if (await io.FileSystemEntity.isDirectory(exePath)) {
         exeDir = exePath;
       }
@@ -271,10 +277,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
               : p.join(baseDir, coreInfo.saveFolder);
         }
       } else {
-        final exePath = await _directoryService.findEmulatorExecutable('retroarch', 'RetroArch.exe');
+        final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
         if (exePath == null) return false;
         
-        String exeDir = io.File(exePath).parent.path;
+        String exeDir = io.Platform.isMacOS ? p.join(io.File(exePath).parent.parent.parent.parent.path) : io.File(exePath).parent.path;
         if (await io.FileSystemEntity.isDirectory(exePath)) {
           exeDir = exePath;
         }

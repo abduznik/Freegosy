@@ -682,12 +682,32 @@ class DirectoryService {
     if (io.Platform.isLinux) {
       await activeLinuxEnvironment.launch(game, romPath, emulatorId, exePath, args: args);
     } else {
+      final exeDir = io.File(exePath).parent.path;
       if (io.Platform.isWindows) {
         final normalizedRom = romPath.replaceAll('/', '\\');
         final normalizedExe = exePath.replaceAll('/', '\\');
-        await Process.start(normalizedExe, [...args, normalizedRom], mode: io.ProcessStartMode.detached);
+        final normalizedDir = exeDir.replaceAll('/', '\\');
+        await Process.start(
+          normalizedExe, 
+          [...args, normalizedRom], 
+          mode: io.ProcessStartMode.detached,
+          workingDirectory: normalizedDir,
+        );
+      } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
+        // Find the .app bundle path
+        final parts = exePath.split('/');
+        final appIdx = parts.indexWhere((p) => p.endsWith('.app'));
+        final appBundlePath = parts.sublist(0, appIdx + 1).join('/');
+        
+        // Launch via 'open' to ensure macOS environment handles the bundle correctly.
+        // Arguments to the binary itself must come after '--args'.
+        await Process.run('open', ['-a', appBundlePath, '--args', ...args, romPath]);
       } else {
-        await Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.detached);
+        await Process.start(
+          exePath, 
+          [...args, romPath], 
+          mode: io.ProcessStartMode.detached,
+        );
       }
     }
   }
@@ -696,12 +716,32 @@ class DirectoryService {
     if (io.Platform.isLinux) {
       return await activeLinuxEnvironment.launchWithHandle(game, romPath, emulatorId, exePath, args: args);
     } else {
+      final exeDir = io.File(exePath).parent.path;
       if (io.Platform.isWindows) {
         final normalizedRom = romPath.replaceAll('/', '\\');
         final normalizedExe = exePath.replaceAll('/', '\\');
-        return await Process.start(normalizedExe, [...args, normalizedRom], mode: io.ProcessStartMode.normal);
+        final normalizedDir = exeDir.replaceAll('/', '\\');
+        return await Process.start(
+          normalizedExe, 
+          [...args, normalizedRom], 
+          mode: io.ProcessStartMode.normal,
+          workingDirectory: normalizedDir,
+        );
+      } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
+        // Note: For handles, we might still want direct binary access, 
+        // but 'open' doesn't return the child PID easily. 
+        // We'll stick to direct execution for handles if possible, or use 'open' if it's a bundle.
+        return await Process.start(
+          exePath, 
+          [...args, romPath], 
+          mode: io.ProcessStartMode.normal,
+        );
       } else {
-        return await Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal);
+        return await Process.start(
+          exePath, 
+          [...args, romPath], 
+          mode: io.ProcessStartMode.normal,
+        );
       }
     }
   }

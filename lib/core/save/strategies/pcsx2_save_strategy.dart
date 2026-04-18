@@ -29,12 +29,20 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     return filename;
   }
 
+  String _getEmuExe() {
+    if (io.Platform.isWindows) return 'pcsx2-qt.exe';
+    if (io.Platform.isMacOS) return 'PCSX2.app/Contents/MacOS/PCSX2';
+    return 'pcsx2-qt';
+  }
+
   Future<String> _getSaveRoot() async {
     // 1. Check portable mode first — memcards folder next to exe (Windows)
-    final exePath = await _directoryService.findEmulatorExecutable('pcsx2', 'pcsx2-qt.exe');
+    final exePath = await _directoryService.findEmulatorExecutable('pcsx2', _getEmuExe());
     if (exePath != null) {
       String exeDir = io.File(exePath).parent.path;
-      if (await io.FileSystemEntity.isDirectory(exePath)) {
+      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        exeDir = io.File(exePath).parent.parent.parent.parent.path;
+      } else if (await io.FileSystemEntity.isDirectory(exePath)) {
         exeDir = exePath;
       }
       final portableMemcards = p.join(exeDir, 'memcards');

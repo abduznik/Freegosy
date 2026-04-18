@@ -16,12 +16,21 @@ class DuckstationSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'duckstation';
 
+  String _getEmuExe() {
+    if (io.Platform.isWindows) return 'duckstation-qt-x64-ReleaseLTCG.exe';
+    if (io.Platform.isMacOS) return 'DuckStation.app/Contents/MacOS/DuckStation';
+    return 'duckstation-qt';
+  }
+
   Future<String> _getBaseDir({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
     final exePath = await _directoryService.findEmulatorExecutable(
-        'duckstation', 'duckstation-qt-x64-ReleaseLTCG.exe');
+        'duckstation', _getEmuExe());
     if (exePath != null) {
-      final emulatorDir = File(exePath).parent.path;
+      String emulatorDir = File(exePath).parent.path;
+      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        emulatorDir = io.File(exePath).parent.parent.parent.parent.path;
+      }
       if (await File(p.join(emulatorDir, 'portable.txt')).exists()) {
         return emulatorDir;
       }

@@ -83,12 +83,21 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }
   }
 
+  String _getEmuExe() {
+    if (io.Platform.isWindows) return 'rpcs3.exe';
+    if (io.Platform.isMacOS) return 'RPCS3.app/Contents/MacOS/RPCS3';
+    return 'rpcs3';
+  }
+
   Future<String> _getRpcs3SaveRoot({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
     final exePath = await _directoryService.findEmulatorExecutable(
-        'rpcs3', 'rpcs3.exe');
+        'rpcs3', _getEmuExe());
     if (exePath != null) {
-      final exeDir = File(exePath).parent.path;
+      String exeDir = File(exePath).parent.path;
+      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        exeDir = io.File(exePath).parent.parent.parent.parent.path;
+      }
       final portableSaves = p.join(exeDir, 'dev_hdd0', 'home', '00000001', 'savedata');
       if (await io.Directory(portableSaves).exists()) {
         return portableSaves;
