@@ -60,6 +60,12 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as String);
 
   @override
+  void updateConfig(_i2.RomMConfig? newConfig) => super.noSuchMethod(
+    Invocation.method(#updateConfig, [newConfig]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
   _i5.Future<void> refreshToken() =>
       (super.noSuchMethod(
             Invocation.method(#refreshToken, []),
@@ -67,6 +73,14 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
           as _i5.Future<void>);
+
+  @override
+  _i5.Future<_i2.Game?> getGame(String? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGame, [id]),
+            returnValue: _i5.Future<_i2.Game?>.value(),
+          )
+          as _i5.Future<_i2.Game?>);
 
   @override
   _i5.Future<List<_i2.Platform>> getPlatforms() =>
@@ -185,12 +199,17 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
     _i6.File? saveFile, {
     String? slot,
     _i6.File? screenshotFile,
+    String? overrideFilename,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #uploadSave,
               [gameId, saveFile],
-              {#slot: slot, #screenshotFile: screenshotFile},
+              {
+                #slot: slot,
+                #screenshotFile: screenshotFile,
+                #overrideFilename: overrideFilename,
+              },
             ),
             returnValue: _i5.Future<bool>.value(false),
           )
@@ -310,6 +329,14 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
   ) =>
       (super.noSuchMethod(
             Invocation.method(#createRomNote, [romId, title, content]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<bool> deleteRomNote(String? romId, int? noteId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteRomNote, [romId, noteId]),
             returnValue: _i5.Future<bool>.value(false),
           )
           as _i5.Future<bool>);

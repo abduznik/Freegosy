@@ -84,12 +84,12 @@ void main() {
     test('SaveFile.fromJson parses all fields', () {
       final json = {
         'id': '456',
-        'game_id': '123',
-        'url': 'https://example.com/save',
+        'rom_id': '123',
+        'download_path': 'https://example.com/save',
       };
       final save = SaveFile.fromJson(json);
       expect(save.id, '456');
-      expect(save.gameId, '123');
+      expect(save.romId, '123');
       expect(save.url, 'https://example.com/save');
     });
 

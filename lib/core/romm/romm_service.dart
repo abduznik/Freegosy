@@ -142,14 +142,14 @@ class RommService {
 
   Future<Game?> getGame(String id) async {
     try {
-      final response = await _dio.get('/api/roms/$id/', options: _authOptions);
+      final response = await _dio.get('/api/roms/$id', options: _authOptions);
       if (response.statusCode == 200) return Game.fromJson(response.data);
       return null;
     } catch (_) { return null; }
   }
 
   Future<List<Platform>> getPlatforms() async {
-    final response = await _dio.get('/api/platforms/', options: _authOptions);
+    final response = await _dio.get('/api/platforms', options: _authOptions);
     if (response.statusCode == 200) {
       final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) 
           ? response.data['items'] : response.data as List<dynamic>;
@@ -160,7 +160,7 @@ class RommService {
 
   Future<List<Map<String, dynamic>>> getCollections() async {
     try {
-      final response = await _dio.get('/api/collections/', options: _authOptions);
+      final response = await _dio.get('/api/collections', options: _authOptions);
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data is List ? response.data : [];
         return data.map((e) => e as Map<String, dynamic>).toList();
@@ -192,7 +192,7 @@ class RommService {
 
   Future<List<Game>> getRecentlyPlayed({int limit = 15}) async {
     try {
-      final response = await _dio.get('/api/roms/', queryParameters: {'limit': limit, 'order_by': 'last_played', 'order_dir': 'desc', 'last_played': true, 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
+      final response = await _dio.get('/api/roms', queryParameters: {'limit': limit, 'order_by': 'last_played', 'order_dir': 'desc', 'last_played': true, 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
       if (response.statusCode == 200) {
         final List<dynamic> items = response.data is Map ? (response.data['items'] ?? []) : (response.data is List ? response.data : []);
         return items.map((e) => Game.fromJson(e as Map<String, dynamic>)).toList();
@@ -212,7 +212,7 @@ class RommService {
     if (collections.isNotEmpty) params['collection_id'] = int.tryParse(collections.first);
     if (statuses.isNotEmpty) { params['statuses'] = statuses; params['statuses_logic'] = 'any'; }
 
-    final response = await _dio.get('/api/roms/', queryParameters: params, options: _authOptions);
+    final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
       final List<dynamic> items = data['items'] ?? [];
@@ -225,7 +225,7 @@ class RommService {
   Future<List<Game>> _fetchPaginatedGames(Map<String, dynamic> params) async {
     int offset = 0; const int limit = 100; List<Game> allGames = []; int total = 0;
     do {
-      final response = await _dio.get('/api/roms/', queryParameters: {...params, 'limit': limit, 'offset': offset}, options: _authOptions);
+      final response = await _dio.get('/api/roms', queryParameters: {...params, 'limit': limit, 'offset': offset}, options: _authOptions);
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
         final List<dynamic> items = data['items'] ?? [];
@@ -239,18 +239,18 @@ class RommService {
 
   Future<Game?> getRandomGame() async {
     try {
-      final countResponse = await _dio.get('/api/roms/', queryParameters: {'limit': 1, 'offset': 0, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
+      final countResponse = await _dio.get('/api/roms', queryParameters: {'limit': 1, 'offset': 0, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
       if (countResponse.statusCode != 200) return null;
       final total = (countResponse.data is Map ? countResponse.data['total'] : null) as int? ?? 0;
       if (total == 0) return null;
-      final response = await _dio.get('/api/roms/', queryParameters: {'limit': 1, 'offset': Random().nextInt(total), 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
+      final response = await _dio.get('/api/roms', queryParameters: {'limit': 1, 'offset': Random().nextInt(total), 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
       final items = (response.data is Map ? response.data['items'] : null) as List<dynamic>? ?? [];
       return items.isEmpty ? null : Game.fromJson(items.first as Map<String, dynamic>);
     } catch (_) { return null; }
   }
 
   Future<List<SaveFile>> getSaves(String gameId) async {
-    final response = await _dio.get('/api/saves/', queryParameters: {'game_id': gameId}, options: _authOptions);
+    final response = await _dio.get('/api/saves', queryParameters: {'rom_id': gameId}, options: _authOptions);
     if (response.statusCode == 200) {
       final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : response.data as List<dynamic>;
       return items.map((item) => SaveFile.fromJson(item)).toList();
@@ -279,18 +279,45 @@ class RommService {
     return 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
   }
 
-  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot, io.File? screenshotFile}) async {
+  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot, io.File? screenshotFile, String? overrideFilename}) async {
     try {
       final now = DateTime.now(); final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
       final effectiveSlot = slot ?? 'freegosy-srm_$ts';
-      final boundary = '----FreegosyBoundary${DateTime.now().millisecondsSinceEpoch}';
-      final formDataMap = {'saveFile': await MultipartFile.fromFile(saveFile.path, filename: saveFile.uri.pathSegments.last)};
+      final uploadFilename = overrideFilename ?? saveFile.uri.pathSegments.last;
+      
+      final formDataMap = <String, dynamic>{
+        'saveFile': await MultipartFile.fromFile(saveFile.path, filename: uploadFilename)
+      };
       if (screenshotFile != null && await screenshotFile.exists()) {
-        formDataMap['stateScreenshot'] = await MultipartFile.fromFile(screenshotFile.path, filename: screenshotFile.uri.pathSegments.last);
+        formDataMap['screenshotFile'] = await MultipartFile.fromFile(screenshotFile.path, filename: screenshotFile.uri.pathSegments.last);
       }
-      final response = await _dio.post('/api/saves/', queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot}, data: FormData.fromMap(formDataMap), options: _authOptions.copyWith(headers: {..._authOptions.headers ?? {}, 'Content-Type': 'multipart/form-data; boundary=$boundary'}));
+      
+      final response = await _dio.post(
+        '/api/saves', 
+        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot}, 
+        data: FormData.fromMap(formDataMap), 
+        options: _authOptions.copyWith()
+      );
       return response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-    } catch (_) { return false; }
+    } catch (e) { 
+      debugPrint('[RomM] uploadSave error: $e');
+      return false; 
+    }
+  }
+
+  Future<bool> deleteSaves(List<int> saveIds) async {
+    if (saveIds.isEmpty) return true;
+    try {
+      final response = await _dio.post(
+        '/api/saves/delete',
+        data: {'saves': saveIds},
+        options: _authOptions.copyWith(contentType: 'application/json'),
+      );
+      return response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+    } catch (e) {
+      debugPrint('[RomM] deleteSaves error: $e');
+      return false;
+    }
   }
 
   Future<void> pruneOldSaves(String gameId, {int keepCount = 5}) async {
@@ -298,15 +325,25 @@ class RommService {
       final saves = await getSavesList(gameId);
       final freegosySaves = saves.where((s) => (s['emulator']?.toString() ?? '') == 'freegosy').toList();
       if (freegosySaves.length <= keepCount) return;
-      for (final save in freegosySaves.sublist(keepCount)) {
-        if (save['id'] != null) await _dio.delete('/api/saves/${save['id']}/', options: _authOptions);
+      
+      final toDelete = freegosySaves.sublist(keepCount);
+      final idsToDelete = toDelete
+          .map((s) => int.tryParse(s['id']?.toString() ?? ''))
+          .whereType<int>()
+          .toList();
+
+      if (idsToDelete.isNotEmpty) {
+        debugPrint('[RomM] Pruning ${idsToDelete.length} old saves for game $gameId');
+        await deleteSaves(idsToDelete);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[RomM] pruneOldSaves error: $e');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getSavesList(String gameId) async {
     try {
-      final response = await _dio.get('/api/saves/', queryParameters: {'rom_id': gameId}, options: _authOptions);
+      final response = await _dio.get('/api/saves', queryParameters: {'rom_id': gameId}, options: _authOptions);
       if (response.statusCode != 200) return [];
       final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : (response.data is List ? response.data : []);
       final sorted = List<Map<String, dynamic>>.from(items.whereType<Map<String, dynamic>>());
@@ -334,7 +371,7 @@ class RommService {
 
   Future<List<Firmware>> getFirmware({String? platformId}) async {
     final params = platformId != null ? {'platform_id': platformId} : <String, dynamic>{};
-    final response = await _dio.get('/api/firmware/', queryParameters: params, options: _authOptions);
+    final response = await _dio.get('/api/firmware', queryParameters: params, options: _authOptions);
     if (response.statusCode == 200) {
       final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : response.data as List<dynamic>;
       return items.map((item) => Firmware.fromJson(item)).toList();
@@ -364,14 +401,14 @@ class RommService {
       if (rating != null) data['rating'] = rating;
       if (status != null) data['status'] = status;
       if (completion != null) data['completion'] = completion;
-      final response = await _dio.put('/api/roms/$romId/props/', data: {'data': data, 'update_last_played': false, 'remove_last_played': false}, options: Options(headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json', validateStatus: (status) => status != null && status < 500));
+      final response = await _dio.put('/api/roms/$romId/props', data: {'data': data, 'update_last_played': false, 'remove_last_played': false}, options: Options(headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json', validateStatus: (status) => status != null && status < 500));
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (_) { return false; }
   }
 
   Future<List<RomNote>> getRomNotes(String romId) async {
     try {
-      final response = await _dio.get('/api/roms/$romId/notes/', options: _authOptions);
+      final response = await _dio.get('/api/roms/$romId/notes', options: _authOptions);
       if (response.statusCode == 200) {
         final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : response.data as List<dynamic>;
         return items.map((item) => RomNote.fromJson(item)).toList();
@@ -382,14 +419,14 @@ class RommService {
 
   Future<bool> createRomNote(String romId, String title, String content) async {
     try {
-      final response = await _dio.post('/api/roms/$romId/notes/', data: {'title': title, 'content': content, 'is_public': true, 'tags': []}, options: _authOptions.copyWith(contentType: 'application/json'));
+      final response = await _dio.post('/api/roms/$romId/notes', data: {'title': title, 'content': content, 'is_public': true, 'tags': []}, options: _authOptions.copyWith(contentType: 'application/json'));
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (_) { return false; }
   }
 
   Future<bool> deleteRomNote(String romId, int noteId) async {
     try {
-      final response = await _dio.delete('/api/roms/$romId/notes/$noteId/', options: _authOptions);
+      final response = await _dio.delete('/api/roms/$romId/notes/$noteId', options: _authOptions);
       return response.statusCode == 200 || response.statusCode == 204;
     } catch (_) { return false; }
   }

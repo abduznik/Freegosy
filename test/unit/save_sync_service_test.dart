@@ -31,6 +31,10 @@ void main() {
     // Ensure that on Linux tests we don't accidentally pick up a real system directory or a mock that returns empty string
     when(mockDirectoryService.getEmulatorAppSupportDirectory(any))
         .thenAnswer((_) async => '/nonexistent_directory_for_testing');
+
+    final sysTemp = Directory.systemTemp.path;
+    when(mockDirectoryService.getEmulatorDirectory('temp'))
+        .thenAnswer((_) async => sysTemp);
     
     service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry);
   });
@@ -53,13 +57,19 @@ void main() {
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
-      when(mockRommService.uploadSave(any, any)).thenAnswer((_) async => true);
+      when(mockRommService.uploadSave(
+        any, 
+        any, 
+        slot: anyNamed('slot'), 
+        screenshotFile: anyNamed('screenshotFile'), 
+        overrideFilename: anyNamed('overrideFilename')
+      )).thenAnswer((_) async => true);
       when(mockRommService.pruneOldSaves(any)).thenAnswer((_) async => {});
 
       final ok = await service.pushSaves(game, romPath);
       
       expect(ok, isTrue, reason: 'Should have found and uploaded game.sav');
-      verify(mockRommService.uploadSave('game1', any)).called(1);
+      verify(mockRommService.uploadSave('game1', any, slot: anyNamed('slot'), screenshotFile: anyNamed('screenshotFile'), overrideFilename: anyNamed('overrideFilename'))).called(1);
       
       await tempDir.delete(recursive: true);
     });
@@ -73,11 +83,17 @@ void main() {
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
       // Mock upload to be sure it's called first time
-      when(mockRommService.uploadSave(any, any)).thenAnswer((_) async => true);
+      when(mockRommService.uploadSave(
+        any, 
+        any, 
+        slot: anyNamed('slot'), 
+        screenshotFile: anyNamed('screenshotFile'), 
+        overrideFilename: anyNamed('overrideFilename')
+      )).thenAnswer((_) async => true);
       when(mockRommService.pruneOldSaves(any)).thenAnswer((_) async => {});
 
       await service.pushSaves(game, romPath);
-      verify(mockRommService.uploadSave('game1', any)).called(1);
+      verify(mockRommService.uploadSave('game1', any, slot: anyNamed('slot'), screenshotFile: anyNamed('screenshotFile'), overrideFilename: anyNamed('overrideFilename'))).called(1);
 
       // Second time should skip
       clearInteractions(mockRommService);

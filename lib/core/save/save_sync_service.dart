@@ -10,6 +10,7 @@ import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
 import 'package:archive/archive_io.dart';
+import 'package:path/path.dart' as p;
 import 'strategies/windows_save_strategy.dart';
 import 'strategies/pcsx2_save_strategy.dart';
 import 'strategies/rpcs3_save_strategy.dart';
@@ -246,49 +247,64 @@ class SaveSyncService {
       if (filesMap.isEmpty) return false;
 
       int uploaded = 0;
+      final displayStem = game.displayName;
+      final tempDir = await _directoryService.getEmulatorDirectory('temp');
+      if (!await Directory(tempDir).exists()) {
+        await Directory(tempDir).create(recursive: true);
+      }
+
       for (final entry in filesMap.entries) {
         final file = entry.key;
         final screenshotFile = entry.value;
-        File uploadFile = file;
-        bool isTempZip = false;
+        
+        final String localHash = await _hashFile(file);
+        final String uploadFilename = '$displayStem.zip';
+        final String? storedHash = await _getStoredHash(game.id, uploadFilename);
 
-        if (await FileSystemEntity.isDirectory(file.path)) {
-          final zipPath = '${file.path}.zip';
-          // Write a temp metadata file into the save dir before zipping.
-          // This gives each zip a unique content hash so RomM won't deduplicate.
-          final metaFile = File('${file.path}/.freegosy_sync');
-          await metaFile.writeAsString(DateTime.now().toIso8601String());
-          final encoder = ZipFileEncoder();
-          encoder.create(zipPath);
-          await encoder.addDirectory(Directory(file.path));
-          encoder.close();
-          // Clean up the temp meta file
-          if (await metaFile.exists()) await metaFile.delete();
-          uploadFile = File(zipPath);
-          isTempZip = true;
-        }
-
-        final filename = uploadFile.path
-            .split(RegExp(r'[/\\]'))
-            .last;
-
-        final localHash = await _hashFile(uploadFile);
-        final storedHash = await _getStoredHash(game.id, filename);
-
+        // Local deduplication check (only for automatic syncs)
         if (!force && storedHash != null && localHash == storedHash) {
-          if (isTempZip && await uploadFile.exists()) {
-            await uploadFile.delete();
-          }
+          debugPrint('[Sync] Skipping upload for $displayStem: hash matches local cache ($localHash)');
           continue;
         }
 
-        final ok = await _rommService.uploadSave(game.id, uploadFile, screenshotFile: screenshotFile);
-        if (ok) {
-          uploaded++;
-          await _storeHash(game.id, filename, localHash);
+        // --- Prepare unique ZIP to bypass server-side deduplication ---
+        final zipPath = p.join(tempDir, '$displayStem.${DateTime.now().millisecondsSinceEpoch}.zip');
+        final encoder = ZipFileEncoder();
+        encoder.create(zipPath);
+
+        // 1. Write fresh sync metadata
+        final metaFile = File(p.join(tempDir, 'freegosy_sync.txt'));
+        await metaFile.writeAsString(DateTime.now().toIso8601String());
+        await encoder.addFile(metaFile);
+
+        // 2. Add the actual save content
+        if (await FileSystemEntity.isDirectory(file.path)) {
+          // It's a directory (e.g., Eden, Dolphin Wii)
+          await encoder.addDirectory(Directory(file.path), includeDirName: false);
+        } else {
+          // It's a file (e.g., single .sav or pre-zipped PPSSPP/PSP folder)
+          await encoder.addFile(file, p.basename(file.path));
         }
 
-        if (isTempZip && await uploadFile.exists()) {
+        encoder.close();
+        if (await metaFile.exists()) await metaFile.delete();
+
+        final uploadFile = File(zipPath);
+        final ok = await _rommService.uploadSave(
+          game.id, 
+          uploadFile, 
+          screenshotFile: screenshotFile,
+          overrideFilename: uploadFilename,
+        );
+        
+        if (ok) {
+          uploaded++;
+          // Store the hash of the ORIGINAL source (file or dir) to track local changes
+          await _storeHash(game.id, uploadFilename, localHash);
+          debugPrint('[Sync] Successfully pushed save for $displayStem (forced: $force)');
+        }
+
+        if (await uploadFile.exists()) {
           await uploadFile.delete();
         }
       }
@@ -298,7 +314,8 @@ class SaveSyncService {
       }
       return uploaded > 0;
     } catch (e) {
-      rethrow;
+      debugPrint('[Sync] Error in pushSaves: $e');
+      return false;
     }
   }
 

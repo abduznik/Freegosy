@@ -307,20 +307,20 @@ class RomNote {
 
 class SaveFile {
   final String id;
-  final String gameId;
+  final String romId;
   final String url;
 
   SaveFile({
     required this.id,
-    required this.gameId,
+    required this.romId,
     required this.url,
   });
 
   factory SaveFile.fromJson(Map<String, dynamic> json) {
     return SaveFile(
       id: json['id']?.toString() ?? '',
-      gameId: json['game_id']?.toString() ?? '',
-      url: json['url']?.toString() ?? '',
+      romId: (json['rom_id'] ?? json['game_id'])?.toString() ?? '',
+      url: (json['url'] ?? json['download_path'])?.toString() ?? '',
     );
   }
 }
