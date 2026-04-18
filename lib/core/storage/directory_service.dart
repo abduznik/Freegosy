@@ -383,7 +383,7 @@ class DirectoryService {
   Future<String?> findExistingRomPath(Game game) async {
     final romDir = await getRomDirectory(game);
     final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final exactPath = '$romDir/$baseName';
+    final exactPath = p.normalize('$romDir/$baseName');
 
     debugPrint('[DirectoryService] Finding ROM for ${game.name}');
     debugPrint('[DirectoryService] romDir: $romDir');
@@ -401,7 +401,7 @@ class DirectoryService {
 
     // Check multi-file folder named after game name
     final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final multiFileDir = Directory('$romDir/$folderName');
+    final multiFileDir = Directory(p.normalize('$romDir/$folderName'));
     if (await multiFileDir.exists()) {
       debugPrint('[DirectoryService] Found multi-file folder: ${multiFileDir.path}');
       // Windows games: return the folder itself so WindowsStrategy can find the exe
@@ -440,7 +440,7 @@ class DirectoryService {
     if (!baseName.contains('.')) {
       final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
       for (final ext in extensions) {
-        final candidate = '$romDir/$baseName$ext';
+        final candidate = p.normalize('$romDir/$baseName$ext');
         if (await File(candidate).exists()) {
           debugPrint('[DirectoryService] Found file with extension $ext: $candidate');
           return p.absolute(candidate);
@@ -729,13 +729,18 @@ class DirectoryService {
         final absRom = p.absolute(romPath).replaceAll('/', '\\');
         final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        debugPrint('[DirectoryService] Windows Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
+        // Emulators on Windows (like melonDS) often require the ROM path to be explicitly quoted 
+        // especially when launched from a shell or with detached process.
+        final quotedRom = '"$absRom"';
+        
+        debugPrint('[DirectoryService] Windows Launch: $absExe ${args.join(' ')} $quotedRom (WorkingDir: $absDir)');
         
         await Process.start(
           absExe, 
-          [...args, absRom], 
+          [...args, quotedRom], 
           mode: io.ProcessStartMode.detached,
           workingDirectory: absDir,
+          runInShell: true, // Use shell to ensure the quoted argument is parsed correctly by the OS
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         // Find the .app bundle path
@@ -770,13 +775,15 @@ class DirectoryService {
         final absRom = p.absolute(romPath).replaceAll('/', '\\');
         final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
+        final quotedRom = '"$absRom"';
+        debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $quotedRom (WorkingDir: $absDir)');
 
         return await Process.start(
           absExe, 
-          [...args, absRom], 
+          [...args, quotedRom], 
           mode: io.ProcessStartMode.normal,
           workingDirectory: absDir,
+          runInShell: true,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         debugPrint('[DirectoryService] macOS App Handle Launch (via binary): $exePath ${args.join(' ')} $romPath');
