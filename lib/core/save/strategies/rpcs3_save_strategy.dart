@@ -368,6 +368,10 @@ class Rpcs3SaveStrategy extends SaveStrategy {
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
+        
+        // Ensure the leaf directory exists
+        await io.Directory(saveRoot).create(recursive: true);
+
         for (final entry in archive) {
           final entryPath = p.join(saveRoot, entry.name);
           if (entry.isFile) {

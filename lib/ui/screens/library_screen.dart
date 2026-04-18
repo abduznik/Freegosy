@@ -76,7 +76,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final config = ref.read(rommConfigProvider).value;
     final baseUrl = config?.baseUrl ?? '';
     final downloads = ref.read(downloadProvider);
-    final isActuallyDownloading = downloads.containsKey(game.id) && !downloads[game.id]!.isComplete;
+    // CRITICAL: Active download always blocks Playable state
+    final isActuallyDownloading = downloads.containsKey(game.id);
     final isDownloaded = (ref.read(downloadedGamesCacheProvider)[game.id] ?? false) && !isActuallyDownloading;
 
     await Navigator.push(
@@ -217,7 +218,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                   builder: (context, ref, _) {
                                     final downloadedCache = ref.watch(downloadedGamesCacheProvider);
                                     final downloads = ref.watch(downloadProvider);
-                                    final isActuallyDownloading = downloads.containsKey(game.id) && !downloads[game.id]!.isComplete;
+                                    final isActuallyDownloading = downloads.containsKey(game.id);
                                     final isDownloaded = (downloadedCache[game.id] ?? false) && !isActuallyDownloading;
                                     
                                     if (isDownloaded) {
@@ -592,7 +593,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                         }
                                         final game = displayGames[index];
                                         final downloads = ref.watch(downloadProvider);
-                                        final isActuallyDownloading = downloads.containsKey(game.id) && !downloads[game.id]!.isComplete;
+                                        final isActuallyDownloading = downloads.containsKey(game.id);
                                         final isDownloaded = (downloadedCache[game.id] ?? false) && !isActuallyDownloading;
                                         final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
                                         

@@ -29,7 +29,7 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
   @override
   String getEmulatorAppSupportDirectory(String home, String emulatorName, String? emudeckRoot, {String? platformSlug}) {
     if (emudeckRoot != null) {
-      // EmuDeck folder names mapping based on your ls -la output
+      // EmuDeck folder names mapping based on your exact ls -la output
       final Map<String, String> emudeckFolderMap = {
         'cemu': 'Cemu',
         'vita3k': 'Vita3K',
@@ -49,9 +49,9 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
       final folderName = emudeckFolderMap[emulatorName.toLowerCase()] ?? emulatorName;
       final emuSavesBase = p.join(emudeckRoot, 'Emulation', 'saves', folderName);
 
-      // PREFERENCE 1: The 'saves' symlink (most reliable on Steam Deck)
+      // PREFERENCE 1: The 'saves' symlink (definitive target on Steam Deck)
       final symlinkSaves = p.join(emuSavesBase, 'saves');
-      if (io.Directory(symlinkSaves).existsSync()) {
+      if (io.Directory(symlinkSaves).existsSync() || io.Link(symlinkSaves).existsSync()) {
         return symlinkSaves;
       }
 
@@ -120,7 +120,9 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<void> launch(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    final absRomPath = p.absolute(romPath);
+    final resolvedRomPath = await _resolveWiiURom(romPath, emulatorId);
+    final absRomPath = p.absolute(resolvedRomPath);
+    
     if (isEmuLaunchScript(exePath)) {
       final emuKeyMap = {
         'pcsx2': 'pcsx2-Qt',
@@ -145,7 +147,9 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<io.Process?> launchWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    final absRomPath = p.absolute(romPath);
+    final resolvedRomPath = await _resolveWiiURom(romPath, emulatorId);
+    final absRomPath = p.absolute(resolvedRomPath);
+    
     if (isEmuLaunchScript(exePath)) {
       final emuKeyMap = {
         'pcsx2': 'pcsx2-Qt',
@@ -191,5 +195,36 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
       final exeDir = io.File(exePath).parent.path;
       await io.Process.start(exePath, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
     }
+  }
+
+  Future<String> _resolveWiiURom(String romPath, String emulatorId) async {
+    if (emulatorId.toLowerCase() != 'cemu') return romPath;
+    
+    final dir = io.Directory(romPath);
+    if (!dir.existsSync()) return romPath;
+
+    // Check for common Wii U leaf files in the directory
+    final candidates = [
+      p.join(romPath, 'code', 'app.rpx'),
+      p.join(romPath, 'app.rpx'),
+    ];
+
+    for (final c in candidates) {
+      if (io.File(c).existsSync()) {
+        return c;
+      }
+    }
+
+    // Look for any .wua file inside if it was a folder download
+    try {
+      final files = dir.listSync(recursive: true);
+      for (final f in files) {
+        if (f is io.File && f.path.toLowerCase().endsWith('.wua')) {
+          return f.path;
+        }
+      }
+    } catch (_) {}
+
+    return romPath;
   }
 }

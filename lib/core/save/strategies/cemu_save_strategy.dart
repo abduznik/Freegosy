@@ -55,6 +55,7 @@ class CemuSaveStrategy extends SaveStrategy {
     try {
       final saveRoot = await _getSaveRoot(platformSlug: game.platformSlug);
       await io.Directory(saveRoot).create(recursive: true);
+      
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
@@ -62,6 +63,8 @@ class CemuSaveStrategy extends SaveStrategy {
           final entryName = entry.name;
           if (entryName.isEmpty) continue;
           
+          // EmuDeck 'saves' symlink for Cemu points to .../usr/save.
+          // If the ZIP already contains '00050000/...', extraction is correct.
           final targetPath = p.join(saveRoot, entryName);
           if (entry.isFile) {
             await backupSave(targetPath);

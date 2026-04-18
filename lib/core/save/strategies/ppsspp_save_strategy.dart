@@ -217,9 +217,15 @@ class PpssppSaveStrategy extends SaveStrategy {
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
-        final targetBaseDir = p.join(pspDir, 'SAVEDATA');
         
-        // Ensure SAVEDATA exists
+        // If pspDir already ends with SAVEDATA (from symlink), use it directly.
+        // Otherwise, append SAVEDATA.
+        String targetBaseDir = pspDir;
+        if (!pspDir.toUpperCase().endsWith('SAVEDATA')) {
+          targetBaseDir = p.join(pspDir, 'SAVEDATA');
+        }
+        
+        // Ensure the leaf dir exists
         await io.Directory(targetBaseDir).create(recursive: true);
 
         for (final entry in archive) {
