@@ -93,11 +93,10 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
       
       await for (final result in scanner.sync(romsRoot)) {
         if (result.romId != null) {
-          // Update UI state for "pop-in" effect
+          // 1. Mark as downloaded in our fast state
           state = {...state, result.romId!: true};
           
-          // CRITICAL: If we have the game metadata, save it IMMEDIATELY 
-          // so it shows up in the 'Installed Games' shelf on Home tab.
+          // 2. Persist metadata IMMEDIATELY so it shows up in Home shelves
           if (result.game != null) {
             await metadataCache.saveGames([result.game!]);
           }
@@ -108,7 +107,7 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     } finally {
       _isSyncing = false;
       debugPrint('[DownloadedGamesCache] Incremental sync complete.');
-      // Final refresh to ensure UI is perfectly in sync
+      // Final refresh to ensure everything is matched up
       refresh();
     }
   }
