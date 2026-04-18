@@ -69,15 +69,8 @@ class RomScannerService {
     debugPrint('[RomScanner] Scanning ${dirtyDirs.length} dirty platform directories...');
 
     // Phase 2: Identify files using compute() with a TOP-LEVEL function.
-    // This is safer than Isolate.run inside an instance method.
     final List<String> dirPaths = dirtyDirs.map((d) => d.path).toList();
     final List<String> allFiles = await compute(_performIsolatedScan, dirPaths);
-
-    // Phase 3: Update mtimes for scanned directories
-    for (final dir in dirtyDirs) {
-      final stat = await dir.stat();
-      await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
-    }
 
     final Set<String> existingFiles = mappings.keys.toSet();
     final Set<String> currentFilesSet = allFiles.toSet();
@@ -95,6 +88,11 @@ class RomScannerService {
 
     if (newFiles.isEmpty) {
       debugPrint('[RomScanner] No new files found in dirty directories.');
+      // Still update mtimes because we've confirmed nothing new is there
+      for (final dir in dirtyDirs) {
+        final stat = await dir.stat();
+        await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
+      }
       return;
     }
 
@@ -123,6 +121,12 @@ class RomScannerService {
       for (final result in results) {
         yield result;
       }
+    }
+
+    // Phase 5: Update mtimes only AFTER matching is finished
+    for (final dir in dirtyDirs) {
+      final stat = await dir.stat();
+      await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
     }
   }
 

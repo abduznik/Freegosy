@@ -102,20 +102,25 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
             matchedMetadataBuffer.add(result.game!);
           }
 
-          // Update UI state every 5 games to keep it smooth but responsive
           count++;
-          if (count % 5 == 0) {
+          // Update UI and Metadata Cache every 20 games for performance + persistence
+          if (count % 20 == 0) {
+            state = {...state, ...sessionMatches};
+            if (matchedMetadataBuffer.isNotEmpty) {
+              await metadataCache.saveGames(matchedMetadataBuffer);
+              matchedMetadataBuffer.clear();
+            }
+          } else if (count % 5 == 0) {
+            // Just update UI every 5 for the 'pop-in' effect
             state = {...state, ...sessionMatches};
           }
         }
       }
 
-      // Final state update for any remaining games
+      // Final state and metadata update
       state = {...state, ...sessionMatches};
-
-      // CRITICAL PERF FIX: Save all metadata in ONE single disk operation
       if (matchedMetadataBuffer.isNotEmpty) {
-        debugPrint('[DownloadedGamesCache] Batch persisting ${matchedMetadataBuffer.length} games...');
+        debugPrint('[DownloadedGamesCache] Final batch persisting ${matchedMetadataBuffer.length} games...');
         await metadataCache.saveGames(matchedMetadataBuffer);
       }
     } catch (e) {
