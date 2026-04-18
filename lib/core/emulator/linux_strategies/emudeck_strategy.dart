@@ -29,9 +29,9 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
   @override
   String getEmulatorAppSupportDirectory(String home, String emulatorName, String? emudeckRoot, {String? platformSlug}) {
     if (emudeckRoot != null) {
-      // EmuDeck folder names mapping (some are capitalized)
-      final Map<String, String> emudeckSavesMap = {
-        'cemu': 'cemu',
+      // EmuDeck folder names mapping based on your ls -la output
+      final Map<String, String> emudeckFolderMap = {
+        'cemu': 'Cemu',
         'vita3k': 'Vita3K',
         'mame': 'MAME',
         'pcsx2': 'pcsx2',
@@ -40,45 +40,33 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'rpcs3': 'rpcs3',
         'ryujinx': 'ryujinx',
         'yuzu': 'yuzu',
+        'azahar': 'azahar',
+        'citra': 'citra',
+        'xenia': 'xenia',
+        'shadps4': 'shadps4',
       };
 
-      final emuFolderName = emudeckSavesMap[emulatorName.toLowerCase()] ?? emulatorName.toLowerCase();
-      
-      String base = p.join(emudeckRoot, 'Emulation', 'saves', emuFolderName);
-      
-      // RPCS3 specific HDD path
+      final folderName = emudeckFolderMap[emulatorName.toLowerCase()] ?? emulatorName;
+      final emuSavesBase = p.join(emudeckRoot, 'Emulation', 'saves', folderName);
+
+      // PREFERENCE 1: The 'saves' symlink (most reliable on Steam Deck)
+      final symlinkSaves = p.join(emuSavesBase, 'saves');
+      if (io.Directory(symlinkSaves).existsSync()) {
+        return symlinkSaves;
+      }
+
+      // PREFERENCE 2: Platform-specific legacy logic if no 'saves' link exists
       if (emulatorName.toLowerCase() == 'rpcs3') {
-        return p.join(base, 'dev_hdd0', 'home', '00000001', 'savedata');
+        return p.join(emuSavesBase, 'dev_hdd0', 'home', '00000001', 'savedata');
       }
-
-      // Ryujinx specific BIS path
       if (emulatorName.toLowerCase() == 'ryujinx' || emulatorName.toLowerCase() == 'eden') {
-        return p.join(base, 'bis', 'user', 'save');
+        return p.join(emuSavesBase, 'bis', 'user', 'save');
       }
-
-      // Cemu specific MLC path
       if (emulatorName.toLowerCase() == 'cemu') {
-        return p.join(base, 'Cemu', 'mlc01', 'usr', 'save');
+        return p.join(emuSavesBase, 'Cemu', 'mlc01', 'usr', 'save');
       }
 
-      // Check if there is a 'saves' subfolder, if so use it as base
-      if (io.Directory(p.join(base, 'saves')).existsSync()) {
-        base = p.join(base, 'saves');
-      }
-
-      if (emulatorName.toLowerCase() == 'dolphin' || emulatorName.toLowerCase() == 'primehack') {
-        if (platformSlug != null) {
-          final slug = platformSlug.toLowerCase();
-          if (slug == 'gc' || slug == 'gamecube' || slug == 'ngc') return p.join(base, 'GC');
-          if (slug == 'wii') return p.join(base, 'Wii');
-        }
-      }
-
-      if (emulatorName.toLowerCase() == 'pcsx2') {
-        return base;
-      }
-
-      return platformSlug != null ? p.join(base, platformSlug) : base;
+      return emuSavesBase;
     }
     return p.join(home, '.config', emulatorName);
   }
@@ -132,8 +120,8 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<void> launch(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
+    final absRomPath = p.absolute(romPath);
     if (isEmuLaunchScript(exePath)) {
-      // Convert internal emulator ID to EmuDeck expected key if necessary
       final emuKeyMap = {
         'pcsx2': 'pcsx2-Qt',
         'retroarch': 'retroarch',
@@ -147,16 +135,17 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'cemu': 'cemu',
       };
       final emuKey = emuKeyMap[emulatorId] ?? emulatorId;
-      await io.Process.start('bash', [exePath, '-e', emuKey, ...args, romPath], mode: io.ProcessStartMode.detached);
+      await io.Process.start('bash', [exePath, '-e', emuKey, ...args, absRomPath], mode: io.ProcessStartMode.detached);
     } else if (exePath.endsWith('.sh')) {
-      await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.detached);
+      await io.Process.start('bash', [exePath, ...args, absRomPath], mode: io.ProcessStartMode.detached);
     } else {
-      await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.detached);
+      await io.Process.start(exePath, [...args, absRomPath], mode: io.ProcessStartMode.detached);
     }
   }
 
   @override
   Future<io.Process?> launchWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
+    final absRomPath = p.absolute(romPath);
     if (isEmuLaunchScript(exePath)) {
       final emuKeyMap = {
         'pcsx2': 'pcsx2-Qt',
@@ -171,11 +160,11 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'cemu': 'cemu',
       };
       final emuKey = emuKeyMap[emulatorId] ?? emulatorId;
-      return await io.Process.start('bash', [exePath, '-e', emuKey, ...args, romPath], mode: io.ProcessStartMode.normal);
+      return await io.Process.start('bash', [exePath, '-e', emuKey, ...args, absRomPath], mode: io.ProcessStartMode.normal);
     } else if (exePath.endsWith('.sh')) {
-      return await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.normal);
+      return await io.Process.start('bash', [exePath, ...args, absRomPath], mode: io.ProcessStartMode.normal);
     } else {
-      return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal);
+      return await io.Process.start(exePath, [...args, absRomPath], mode: io.ProcessStartMode.normal);
     }
   }
 
