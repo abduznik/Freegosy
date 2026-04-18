@@ -739,7 +739,7 @@ class DirectoryService {
           [...args, absRom], 
           mode: io.ProcessStartMode.detached,
           workingDirectory: absDir,
-          runInShell: true,
+          runInShell: false,
         );
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         // Find the .app bundle path
@@ -776,13 +776,19 @@ class DirectoryService {
         
         debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
 
-        return await Process.start(
+        final process = await Process.start(
           absExe, 
           [...args, absRom], 
           mode: io.ProcessStartMode.normal,
           workingDirectory: absDir,
-          runInShell: true,
+          runInShell: false,
         );
+        
+        // IMPORTANT: Drain stdout/stderr to prevent the process from hanging when buffers are full.
+        process.stdout.listen((_) {}, onDone: () {}, onError: (_) {});
+        process.stderr.listen((_) {}, onDone: () {}, onError: (_) {});
+        
+        return process;
       } else if (io.Platform.isMacOS && exePath.contains('.app/')) {
         debugPrint('[DirectoryService] macOS App Handle Launch (via binary): $exePath ${args.join(' ')} $romPath');
         // Note: For handles, we stick to direct execution as 'open' doesn't return child PID.
