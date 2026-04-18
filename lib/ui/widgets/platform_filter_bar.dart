@@ -5,20 +5,16 @@ import '../../core/romm/romm_models.dart';
 class PlatformFilterBar extends StatelessWidget {
   final List<Platform> platforms;
   final int? selectedPlatformId;
-  final bool downloadedOnly;
   final bool isHome;
   final Function(Platform?) onSelected;
-  final Function(bool) onDownloadedToggle;
   final VoidCallback onHomeSelected;
 
   const PlatformFilterBar({
     super.key,
     required this.platforms,
     required this.selectedPlatformId,
-    required this.downloadedOnly,
     required this.isHome,
     required this.onSelected,
-    required this.onDownloadedToggle,
     required this.onHomeSelected,
   });
 
@@ -72,26 +68,6 @@ class PlatformFilterBar extends StatelessWidget {
                   color: isAllSelected ? Colors.white : colorScheme.onSurface,
                 ),
                 side: isAllSelected ? null : BorderSide(color: colorScheme.outline.withValues(alpha: 0.5)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: FilterChip(
-                avatar: Icon(
-                  Icons.download_done,
-                  size: 16,
-                  color: downloadedOnly ? Colors.white : colorScheme.primary,
-                ),
-                label: const Text('Downloaded'),
-                selected: downloadedOnly,
-                onSelected: (selected) {
-                  onDownloadedToggle(selected);
-                },
-                backgroundColor: downloadedOnly ? colorScheme.secondary : null,
-                labelStyle: TextStyle(
-                  color: downloadedOnly ? Colors.white : colorScheme.onSurface,
-                ),
-                side: downloadedOnly ? null : BorderSide(color: colorScheme.outline.withValues(alpha: 0.5)),
               ),
             ),
             ...platforms.map((platform) {
