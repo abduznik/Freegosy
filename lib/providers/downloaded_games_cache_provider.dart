@@ -3,6 +3,7 @@ import '../core/romm/romm_models.dart';
 import 'download_provider.dart';
 import 'romm_provider.dart';
 import 'dart:async';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 
 class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
@@ -58,6 +59,7 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   }
 
   /// Quickly populates the cache from locally stored mappings.
+  /// Also verifies they actually exist on disk to prevent 'zombie' games.
   Future<void> refresh() async {
     final mappingServiceAsync = _ref.read(romMappingServiceProvider);
     if (!mappingServiceAsync.hasValue) return;
@@ -65,11 +67,22 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     final mappingService = mappingServiceAsync.value!;
     final mappings = mappingService.getMappings();
     final Map<String, bool> newState = {};
-    for (final romId in mappings.values) {
-      newState[romId] = true;
+    
+    for (final entry in mappings.entries) {
+      final path = entry.key;
+      final romId = entry.value;
+      
+      // DISK CHECK: If the file was deleted manually, clean up the mapping
+      if (await io.File(path).exists() || await io.Directory(path).exists()) {
+        newState[romId] = true;
+      } else {
+        debugPrint('[DownloadedGamesCache] Zombie detected: $path no longer exists. Removing.');
+        await mappingService.removeMapping(path);
+      }
     }
+    
     state = newState;
-    debugPrint('[DownloadedGamesCache] Loaded ${state.length} cached mappings.');
+    debugPrint('[DownloadedGamesCache] Loaded ${state.length} active mappings.');
   }
 
   /// Runs the high-performance incremental sync.

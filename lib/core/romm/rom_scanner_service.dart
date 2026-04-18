@@ -74,16 +74,29 @@ class RomScannerService {
     final List<String> dirPaths = dirsToScan.map((d) => d.path).toList();
     final List<String> scannedFiles = await compute(_performIsolatedScan, dirPaths);
 
-    final Set<String> scannedFilesSet = scannedFiles.toSet();
     final Set<String> existingMappedFiles = mappings.keys.toSet();
 
     final List<String> newFiles = scannedFiles.where((f) => !existingMappedFiles.contains(f)).toList();
     
     // 1. Identify and yield REMOVALS immediately
     final List<String> removedFiles = [];
+    final List<String> normalizedScannedPaths = scannedFiles.map((f) => p.normalize(f)).toList();
+    final Set<String> normalizedScannedSet = normalizedScannedPaths.toSet();
+
     for (final mappedPath in existingMappedFiles) {
-      bool isInScannedDir = dirsToScan.any((d) => mappedPath.startsWith(d.path));
-      if (isInScannedDir && !scannedFilesSet.contains(mappedPath)) {
+      final normalizedMappedPath = p.normalize(mappedPath);
+      
+      // Check if this mapped path is inside any of the directories we scanned
+      bool isInsideScannedDir = false;
+      for (final dir in dirsToScan) {
+        final normalizedDir = p.normalize(dir.path);
+        if (p.isWithin(normalizedDir, normalizedMappedPath) || normalizedDir == normalizedMappedPath) {
+          isInsideScannedDir = true;
+          break;
+        }
+      }
+
+      if (isInsideScannedDir && !normalizedScannedSet.contains(normalizedMappedPath)) {
         removedFiles.add(mappedPath);
       }
     }
