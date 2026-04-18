@@ -1,6 +1,6 @@
 import 'dart:io' as io;
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
@@ -60,7 +60,8 @@ class CemuSaveStrategy extends SaveStrategy {
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
           final entryName = entry.name;
-          if (entryName.isEmpty || entryName.endsWith('/') || entryName.endsWith('\\')) continue;
+          if (entryName.isEmpty) continue;
+          
           final targetPath = p.join(saveRoot, entryName);
           if (entry.isFile) {
             await backupSave(targetPath);
@@ -75,7 +76,8 @@ class CemuSaveStrategy extends SaveStrategy {
       }
       return false;
     } catch (e) {
-      return false;
+      debugPrint('[Cemu] Restore error: $e');
+      rethrow;
     }
   }
 }

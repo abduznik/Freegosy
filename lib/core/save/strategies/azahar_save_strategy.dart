@@ -132,7 +132,7 @@ class AzaharSaveStrategy extends SaveStrategy {
         rethrow;
       }
       debugPrint('[Azahar][Restore] ERROR: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -164,7 +164,7 @@ class AzaharSaveStrategy extends SaveStrategy {
       return true;
     } catch (e) {
       debugPrint('[Azahar][Extract] ERROR: $e');
-      return false;
+      rethrow;
     }
   }
 

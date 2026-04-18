@@ -390,7 +390,8 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       await File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
-      return false;
+      debugPrint('[RPCS3] Restore error: $e');
+      rethrow;
     }
-  }
-}
+    }
+    }

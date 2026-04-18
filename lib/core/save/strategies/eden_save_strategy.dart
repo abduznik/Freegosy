@@ -620,7 +620,7 @@ class EdenSaveStrategy extends SaveStrategy {
         rethrow;
       }
       debugPrint('[Eden][Restore] ERROR: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -704,7 +704,7 @@ class EdenSaveStrategy extends SaveStrategy {
       return true;
     } catch (e) {
       debugPrint('[Eden][Extract] ERROR: $e');
-      return false;
+      rethrow;
     }
   }
 }

@@ -37,34 +37,27 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
     }
 
-    // macOS check
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'];
-      if (home != null) {
-        final pspDir = p.join(home, '.config', 'ppsspp', 'PSP');
-        if (await io.Directory(pspDir).exists()) {
-          return pspDir;
-        }
-      }
-    }
-
-    // Linux check
-    if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'];
-      if (home != null) {
-        final pspDir = p.join(home, '.config', 'ppsspp', 'PSP');
-        if (await io.Directory(pspDir).exists()) {
-          return pspDir;
-        }
-      }
-    }
-
-    // 2. Dynamic path resolution
+    // 2. Dynamic path resolution (favors EmuDeck if configured)
     final baseDir = await _directoryService.getEmulatorAppSupportDirectory('ppsspp', platformSlug: platformSlug);
-    final pspDir = p.join(baseDir, 'PSP');
+    // EmuDeck maps 'ppsspp' -> 'Emulation/saves/ppsspp/PSP' via DirectoryService update
+    // If it returns that base, we use it. If it returns .config/ppsspp, we append PSP.
+    
+    String pspDir = baseDir;
+    if (!baseDir.endsWith('PSP')) {
+       pspDir = p.join(baseDir, 'PSP');
+    }
 
     if (!await io.Directory(pspDir).exists()) {
-      throw Exception('Save directory not found for PPSSPP at $pspDir. Please launch PPSSPP at least once to generate save data.');
+      // Create it if we are on EmuDeck to be safe, or fallback
+      try {
+        await io.Directory(pspDir).create(recursive: true);
+      } catch (_) {
+        // Fallback to .config if creation fails
+        final home = io.Platform.environment['HOME'];
+        if (home != null) {
+          pspDir = p.join(home, '.config', 'ppsspp', 'PSP');
+        }
+      }
     }
     return pspDir;
   }
@@ -191,8 +184,7 @@ class PpssppSaveStrategy extends SaveStrategy {
           final encoder = ZipFileEncoder();
           encoder.create(zipPath);
           for (final dir in foldersToZip) {
-            // Add the content of the directory, not the directory itself as a root
-            // This is important for the restore to place files directly into SAVEDATA
+            // Important: we include the folder name (e.g. ULUS10001) so restore can recreate it
             await encoder.addDirectory(dir);
           }
           encoder.close();
@@ -226,6 +218,10 @@ class PpssppSaveStrategy extends SaveStrategy {
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         final targetBaseDir = p.join(pspDir, 'SAVEDATA');
+        
+        // Ensure SAVEDATA exists
+        await io.Directory(targetBaseDir).create(recursive: true);
+
         for (final entry in archive) {
           if (entry.name.contains('.bak')) continue;
           final targetPath = p.join(targetBaseDir, entry.name);
@@ -252,7 +248,8 @@ class PpssppSaveStrategy extends SaveStrategy {
 
       return false;
     } catch (e) {
-      return false;
+      debugPrint('[PPSSPP] Restore error: $e');
+      rethrow;
     }
   }
 }
