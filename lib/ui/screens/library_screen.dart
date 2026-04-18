@@ -359,7 +359,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                 data: (platforms) => PlatformFilterBar(
                   platforms: platforms,
                   selectedPlatformId: selectedPlatformId,
-                  downloadedOnly: false, // Legacy, unused
                   isHome: isHomeSelected,
                   onSelected: (platform) {
                     ref.read(isHomeSelectedProvider.notifier).state = false;
@@ -369,7 +368,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     ref.read(isHomeSelectedProvider.notifier).state = true;
                     ref.read(selectedPlatformIdProvider.notifier).state = null;
                   },
-                  onDownloadedToggle: (_) {}, // Legacy, unused
                 ),
                 loading: () => const LinearProgressIndicator(),
                 error: (e, s) => Text('Error loading platforms: $e'),
@@ -409,7 +407,33 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
               Expanded(
                 child: paginatedState.isLoading
                     ? buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing, context)
-                    : RefreshIndicator(
+                    : (paginatedState.error != null && !paginatedState.error!.contains('Offline Mode'))
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Error: ${paginatedState.error}',
+                                  style: const TextStyle(color: Colors.red),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    ref.invalidate(rommServiceProvider);
+                                    ref.read(paginatedGamesProvider.notifier).loadInitial(
+                                      platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+                                      search: ref.read(searchQueryProvider),
+                                    );
+                                  },
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
                         key: _refreshIndicatorKey,
                         onRefresh: _refreshLibrary,
                         child: Consumer(
