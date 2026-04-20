@@ -112,7 +112,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
               : 'savestates';
           final targetDir = p.join(baseDir, targetDirName);
 
-          final targetPath = p.join(targetDir, p.basename(entry.name));
+          final targetPath = p.normalize(p.join(targetDir, p.basename(entry.name)));
           await backupSave(targetPath);
           final outFile = File(targetPath);
           await outFile.parent.create(recursive: true);
@@ -123,7 +123,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
 
       final isState = !filename.toLowerCase().endsWith('.mcd');
       final targetDirName = isState ? 'savestates' : 'memcards';
-      final targetPath = p.join(baseDir, targetDirName, filename);
+      final targetPath = p.normalize(p.join(baseDir, targetDirName, filename));
       await Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);

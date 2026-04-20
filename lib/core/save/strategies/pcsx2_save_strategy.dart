@@ -166,7 +166,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
             final targetFilename = entryLower.endsWith('.ps2')
                 ? _normalizeMemcardFilename(p.basename(entry.name))
                 : p.basename(entry.name);
-            final targetPath = p.join(targetDir, targetFilename);
+            final targetPath = p.normalize(p.join(targetDir, targetFilename));
             await backupSave(targetPath);
             final outFile = io.File(targetPath);
             await outFile.parent.create(recursive: true);
@@ -183,11 +183,11 @@ class Pcsx2SaveStrategy extends SaveStrategy {
           ? (isEmuDeck ? p.join(p.dirname(root), 'states') : p.join(root, 'sstates'))
           : (isEmuDeck ? root : p.join(root, 'memcards'));
       
-      await io.Directory(targetDir).create(recursive: true);
       final normalizedFilename = filename.toLowerCase().endsWith('.ps2')
           ? _normalizeMemcardFilename(filename)
           : filename;
-      final targetPath = p.join(targetDir, normalizedFilename);
+      final targetPath = p.normalize(p.join(targetDir, normalizedFilename));
+      await io.Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);
       return true;

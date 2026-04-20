@@ -349,15 +349,9 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     }
     if (!hasFiles) return [];
 
-    final zipPath = p.join(saveRoot, '${game.id}.saves.zip');
-    final encoder = ZipFileEncoder();
-    encoder.create(zipPath);
-    for (final dir in saveDirs) {
-      await encoder.addDirectory(dir);
-    }
-    encoder.close();
-
-    return [File(zipPath)];
+    // Return the directories themselves.
+    // SaveSyncService will add them recursively to the bundle zip.
+    return saveDirs.map((d) => File(d.path)).toList();
   }
 
   @override
@@ -377,7 +371,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         
-        // Ensure the leaf directory exists
+        // Ensure the root directory exists
         await io.Directory(resolvedRoot).create(recursive: true);
 
         for (final entry in archive) {
@@ -399,7 +393,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
           }
           if (cleanName.isEmpty) continue;
           
-          final entryPath = p.join(resolvedRoot, cleanName);
+          final entryPath = p.normalize(p.join(resolvedRoot, cleanName));
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);
@@ -414,8 +408,8 @@ class Rpcs3SaveStrategy extends SaveStrategy {
 
       // Fallback single file
       final saveDir = await getSaveDir(game, destPath) ?? saveRoot;
-      await Directory(saveDir).create(recursive: true);
-      final targetPath = p.join(saveDir, filename);
+      final targetPath = p.normalize(p.join(saveDir, filename));
+      await Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       return true;
@@ -423,5 +417,5 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       debugPrint('[RPCS3] Restore error: $e');
       rethrow;
     }
-    }
+  }
     }

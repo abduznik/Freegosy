@@ -121,7 +121,7 @@ class AzaharSaveStrategy extends SaveStrategy {
         final archive = ZipDecoder().decodeBytes(data);
         return await _extractArchive(archive, saveDir);
       } else {
-        final filePath = p.join(saveDir, filename);
+        final filePath = p.normalize(p.join(saveDir, filename));
         await backupSave(filePath);
         await io.File(filePath).writeAsBytes(data);
         debugPrint('[Azahar][Restore] Wrote single file: $filePath');
@@ -140,7 +140,7 @@ class AzaharSaveStrategy extends SaveStrategy {
   Future<bool> _extractArchive(Archive archive, String destDir) async {
     try {
       for (final entry in archive) {
-        if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt') continue;
+        if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
 
         // Strip leading folder if present (e.g. "00000001/save.bin" -> "save.bin")
         final segments = entry.name.split(RegExp(r'[/\\]'));
@@ -150,7 +150,7 @@ class AzaharSaveStrategy extends SaveStrategy {
 
         if (entryPath.isEmpty) continue;
 
-        final outPath = p.join(destDir, entryPath);
+        final outPath = p.normalize(p.join(destDir, entryPath));
         if (entry.isFile) {
           await backupSave(outPath);
           final outFile = io.File(outPath);

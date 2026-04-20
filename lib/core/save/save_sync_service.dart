@@ -248,7 +248,7 @@ class SaveSyncService {
       if (filesMap.isEmpty) return false;
 
       int uploaded = 0;
-      final displayStem = game.displayName;
+      final displayStem = game.displayName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
       final tempDir = await _directoryService.getEmulatorDirectory('temp');
       if (!await io.Directory(tempDir).exists()) {
         await io.Directory(tempDir).create(recursive: true);

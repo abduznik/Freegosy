@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../romm/romm_models.dart';
 import '../../windows/pcgamingwiki_service.dart';
@@ -80,14 +81,9 @@ class WindowsSaveStrategy extends SaveStrategy {
     }
     if (!hasFiles) return [];
 
-    // Package the entire save directory as a single zip
-    final zipPath = '${dir.path}.saves.zip';
-    final encoder = ZipFileEncoder();
-    encoder.create(zipPath);
-    await encoder.addDirectory(dir);
-    encoder.close();
-
-    return [File(zipPath)];
+    // Return the directory itself (wrapped in File for the strategy API)
+    // SaveSyncService will add it as a directory to the bundle zip.
+    return [File(dir.path)];
   }
 
   @override
@@ -105,7 +101,9 @@ class WindowsSaveStrategy extends SaveStrategy {
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
-          final entryPath = '$saveDir/${entry.name}';
+          if (entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
+          
+          final entryPath = p.normalize(p.join(saveDir, entry.name));
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);
@@ -119,7 +117,7 @@ class WindowsSaveStrategy extends SaveStrategy {
       }
 
       // Fallback for non-zip (single file)
-      final targetPath = '$saveDir/$filename';
+      final targetPath = p.normalize(p.join(saveDir, filename));
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       return true;

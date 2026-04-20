@@ -298,7 +298,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
         targetFilename = '${p.basenameWithoutExtension(filename)}.srm';
       }
 
-      final targetPath = p.join(targetDir, targetFilename);
+      final targetPath = p.normalize(p.join(targetDir, targetFilename));
       await backupSave(targetPath); // Backup existing file
       await io.File(targetPath).writeAsBytes(data);
       return true;

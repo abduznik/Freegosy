@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:path/path.dart' as p;
 
 import '../romm/romm_models.dart';
 
@@ -40,16 +41,17 @@ abstract class SaveStrategy {
 
   /// Creates a .bak rotation (up to 3 versions) for the file at [path].
   Future<void> backupSave(String path) async {
-    final file = File(path);
+    final normalized = p.normalize(path);
+    final file = File(normalized);
     if (!await file.exists()) return;
     try {
-      final bak2 = File('$path.bak2');
-      final bak1 = File('$path.bak1');
-      final bak = File('$path.bak');
+      final bak2 = File('$normalized.bak2');
+      final bak1 = File('$normalized.bak1');
+      final bak = File('$normalized.bak');
       if (await bak2.exists()) await bak2.delete();
-      if (await bak1.exists()) await bak1.rename('$path.bak2');
-      if (await bak.exists()) await bak.rename('$path.bak1');
-      await file.copy('$path.bak');
+      if (await bak1.exists()) await bak1.rename('$normalized.bak2');
+      if (await bak.exists()) await bak.rename('$normalized.bak1');
+      await file.copy('$normalized.bak');
     } catch (e) {
       // silent
     }

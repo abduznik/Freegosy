@@ -61,12 +61,12 @@ class MgbaSaveStrategy extends SaveStrategy {
       if (saveDir == null) return false;
 
       final romStem = p.basenameWithoutExtension(destPath);
-      String targetPath = p.join(saveDir, '$romStem.sav');
+      String targetPath = p.normalize(p.join(saveDir, '$romStem.sav'));
 
       if (!await io.File(targetPath).exists()) {
         // Fallback to getRomStem(game)
         final fallbackStem = getRomStem(game);
-        targetPath = p.join(saveDir, '$fallbackStem.sav');
+        targetPath = p.normalize(p.join(saveDir, '$fallbackStem.sav'));
       }
 
       await io.Directory(p.dirname(targetPath)).create(recursive: true);

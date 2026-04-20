@@ -598,8 +598,8 @@ class EdenSaveStrategy extends SaveStrategy {
       }
 
       // Construct target and create if needed
-      final targetPath =
-          p.join(base, '0000000000000000', profileId, titleId);
+      final targetPath = p.normalize(
+          p.join(base, '0000000000000000', profileId, titleId));
       debugPrint('[Eden][Restore] Target: $targetPath');
       io.Directory(targetPath).createSync(recursive: true);
 
@@ -608,7 +608,7 @@ class EdenSaveStrategy extends SaveStrategy {
         archive ??= ZipDecoder().decodeBytes(data);
         return await _extractArchive(archive, targetPath);
       } else {
-        final filePath = p.join(targetPath, filename);
+        final filePath = p.normalize(p.join(targetPath, filename));
         await backupSave(filePath);
         await io.File(filePath).writeAsBytes(data);
         debugPrint('[Eden][Restore] Wrote single file: $filePath');
@@ -678,7 +678,7 @@ class EdenSaveStrategy extends SaveStrategy {
   Future<bool> _extractArchive(Archive archive, String destDir) async {
     try {
       for (final entry in archive) {
-        if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt') continue;
+        if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
 
         // Strip leading Title ID folder from path if present.
         // e.g. "0100704000B3A000/save.bin" → "save.bin"
@@ -690,7 +690,7 @@ class EdenSaveStrategy extends SaveStrategy {
 
         if (entryPath.isEmpty) continue;
 
-        final outPath = p.join(destDir, entryPath);
+        final outPath = p.normalize(p.join(destDir, entryPath));
         if (entry.isFile) {
           await backupSave(outPath);
           final outFile = io.File(outPath);

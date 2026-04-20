@@ -220,7 +220,7 @@ class DolphinSaveStrategy extends SaveStrategy {
       final dir = io.Directory(saveDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      final targetPath = p.join(saveDir, filename);
+      final targetPath = p.normalize(p.join(saveDir, filename));
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);
       return true;

@@ -86,7 +86,7 @@ class CemuSaveStrategy extends SaveStrategy {
           }
           if (cleanName.isEmpty) continue;
           
-          final targetPath = p.join(resolvedRoot, cleanName);
+          final targetPath = p.normalize(p.join(resolvedRoot, cleanName));
           if (entry.isFile) {
             await backupSave(targetPath);
             final outFile = io.File(targetPath);

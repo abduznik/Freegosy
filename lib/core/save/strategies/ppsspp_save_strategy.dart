@@ -35,6 +35,15 @@ class PpssppSaveStrategy extends SaveStrategy {
           return portableDir;
         }
       }
+
+      // 1b. Check Documents/PPSSPP/PSP (Windows default)
+      final userProfile = io.Platform.environment['USERPROFILE'] ?? '';
+      if (userProfile.isNotEmpty) {
+        final docsPsp = p.join(userProfile, 'Documents', 'PPSSPP', 'PSP');
+        if (await io.Directory(docsPsp).exists()) {
+          return docsPsp;
+        }
+      }
     }
 
     // 2. Dynamic path resolution (favors EmuDeck if configured)
@@ -192,9 +201,9 @@ class PpssppSaveStrategy extends SaveStrategy {
           }
           if (cleanName.isEmpty) continue;
 
-          final targetPath = entry.name.endsWith('.ppst') 
+          final targetPath = p.normalize(entry.name.toLowerCase().endsWith('.ppst') 
               ? p.join(targetStateDir, cleanName)
-              : p.join(targetSaveDir, cleanName);
+              : p.join(targetSaveDir, cleanName));
 
           if (entry.isFile) {
             await backupSave(targetPath);
@@ -209,7 +218,7 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
 
       if (filename.toLowerCase().endsWith('.ppst')) {
-        final targetPath = p.join(targetStateDir, filename);
+        final targetPath = p.normalize(p.join(targetStateDir, filename));
         await backupSave(targetPath);
         final outFile = io.File(targetPath);
         await outFile.parent.create(recursive: true);

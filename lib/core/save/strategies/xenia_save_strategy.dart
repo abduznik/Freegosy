@@ -60,14 +60,8 @@ class XeniaSaveStrategy extends SaveStrategy {
     }
     if (!hasFiles) return [];
 
-    // Package entire save folder as zip
-    final zipPath = '${dir.path}.saves.zip';
-    final encoder = ZipFileEncoder();
-    encoder.create(zipPath);
-    await encoder.addDirectory(dir);
-    encoder.close();
-
-    return [File(zipPath)];
+    // Return the directory itself
+    return [File(dir.path)];
   }
 
   @override
@@ -77,12 +71,15 @@ class XeniaSaveStrategy extends SaveStrategy {
       final saveDir = await getSaveDir(game, destPath);
       if (saveDir == null) return false;
 
-      await Directory(saveDir).create(recursive: true);
+      final rootDir = Directory(saveDir);
+      if (!await rootDir.exists()) await rootDir.create(recursive: true);
 
       if (filename.toLowerCase().endsWith('.zip')) {
         final archive = ZipDecoder().decodeBytes(data);
         for (final entry in archive) {
-          final entryPath = '$saveDir\\${entry.name}';
+          if (entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
+          
+          final entryPath = p.normalize(p.join(saveDir, entry.name));
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);
@@ -95,7 +92,7 @@ class XeniaSaveStrategy extends SaveStrategy {
         return true;
       }
 
-      final targetPath = '$saveDir\\$filename';
+      final targetPath = p.normalize(p.join(saveDir, filename));
       await backupSave(targetPath);
       await File(targetPath).writeAsBytes(data);
       return true;
