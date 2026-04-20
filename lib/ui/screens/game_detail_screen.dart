@@ -628,24 +628,22 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       const Spacer(),
                       DropdownButton<String>(
                         value: const [
-                          'never_played',
-                          'playing',
+                          'never_playing',
                           'incomplete',
-                          'completed',
+                          'finished',
                           'completed_100',
-                          'dropped'
+                          'retired'
                         ].contains(_status) ? _status : null,
                         dropdownColor: Colors.grey[900],
                         style: const TextStyle(color: Colors.white),
                         hint: const Text('Not set', style: TextStyle(color: Colors.white54)),
                         underline: const SizedBox(),
                         items: const [
-                          DropdownMenuItem(value: 'never_played', child: Text('Never Played')),
-                          DropdownMenuItem(value: 'playing', child: Text('Playing')),
+                          DropdownMenuItem(value: 'never_playing', child: Text('Never Played')),
                           DropdownMenuItem(value: 'incomplete', child: Text('Incomplete')),
-                          DropdownMenuItem(value: 'completed', child: Text('Finished')),
+                          DropdownMenuItem(value: 'finished', child: Text('Finished')),
                           DropdownMenuItem(value: 'completed_100', child: Text('100% Completed')),
-                          DropdownMenuItem(value: 'dropped', child: Text('Dropped')),
+                          DropdownMenuItem(value: 'retired', child: Text('Dropped')),
                         ],
                         onChanged: (val) => setState(() => _status = val),
                       ),
@@ -658,12 +656,12 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       const Text('Rating', style: TextStyle(color: Colors.white54, fontSize: 13)),
                       const Spacer(),
                       Row(
-                        children: List.generate(5, (i) => GestureDetector(
+                        children: List.generate(10, (i) => GestureDetector(
                           onTap: () => setState(() => _rating = i + 1),
                           child: Icon(
                             i < _rating ? Icons.star : Icons.star_border,
                             color: Colors.amber,
-                            size: 28,
+                            size: 20,
                           ),
                         )),
                       ),

@@ -70,6 +70,19 @@ void main() {
       expect(game.fileName, 'game.zip');
     });
 
+    test('Game.fromJson lowercases status', () {
+      final json = {
+        'id': '123',
+        'name': 'Game Name',
+        'file_size_bytes': 0,
+        'rom_user': {
+          'status': 'Playing',
+        },
+      };
+      final game = Game.fromJson(json);
+      expect(game.status, 'playing');
+    });
+
     test('Game.displayName cleans title correctly', () {
       final g1 = Game(id: '1', name: '00040000000EC400 Mario Kart 7 (USA) (En,Fr,Es)', fileSize: 0);
       expect(g1.displayName, 'Mario Kart 7');

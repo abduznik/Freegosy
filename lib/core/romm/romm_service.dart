@@ -429,7 +429,7 @@ class RommService {
       if (backlogged != null) data['backlogged'] = backlogged;
       if (nowPlaying != null) data['now_playing'] = nowPlaying;
       if (rating != null) data['rating'] = rating;
-      if (status != null) data['status'] = status;
+      if (status != null) data['status'] = status.toLowerCase();
       if (completion != null) data['completion'] = completion;
       final response = await _dio.put('/api/roms/$romId/props', data: {'data': data, 'update_last_played': false, 'remove_last_played': false}, options: Options(headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json', validateStatus: (status) => status != null && status < 500));
       return response.statusCode == 200 || response.statusCode == 204;

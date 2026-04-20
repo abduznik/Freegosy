@@ -128,7 +128,7 @@ class Game {
       lastPlayed: json['rom_user']?['last_played'] != null ? DateTime.tryParse(json['rom_user']['last_played'].toString()) : null,
       userRating: json['rom_user']?['rating'] as int? ?? 0,
       completion: json['rom_user']?['completion'] as int? ?? 0,
-      status: json['rom_user']?['status']?.toString(),
+      status: json['rom_user']?['status']?.toString().toLowerCase(),
       backlogged: json['rom_user']?['backlogged'] as bool? ?? false,
       nowPlaying: json['rom_user']?['now_playing'] as bool? ?? false,
       notes: (json['all_user_notes'] as List<dynamic>?)?.map((e) => RomNote.fromJson(e)).toList() ?? [],
