@@ -115,32 +115,28 @@ Future<List<Platform>?> _loadPlatformsCache() async {
 
 const Map<String, Map<String, dynamic>> kDisplayPresets = {
   'windows_best': {
-    'columnCount': 5,
-    'cardAspectRatio': 0.72,
-    'cardSpacing': 8.0,
+    'columnCount': 6,
+    'cardAspectRatio': 0.75,
+    'cardSpacing': 12.0,
     'showTitle': true,
-    'showButtonsOnHover': false,
   },
   'steamdeck_best': {
     'columnCount': 3,
     'cardAspectRatio': 0.72,
     'cardSpacing': 12.0,
     'showTitle': true,
-    'showButtonsOnHover': false,
   },
   'cozy': {
     'columnCount': 4,
     'cardAspectRatio': 0.72,
     'cardSpacing': 8.0,
     'showTitle': true,
-    'showButtonsOnHover': false,
   },
   'compact': {
     'columnCount': 7,
     'cardAspectRatio': 1.0,
     'cardSpacing': 4.0,
     'showTitle': false,
-    'showButtonsOnHover': true,
   },
 };
 
@@ -148,9 +144,8 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
 
 final cardAspectRatioProvider = StateProvider<double>((ref) {
-  // Synchronous init — actual persisted value is loaded in _loadCardAspectRatio
-  // and set via the notifier. Default is 0.72 (portrait).
-  return 0.72;
+  // Updated default to 0.75
+  return 0.75;
 });
 
 // Loads persisted card aspect ratio into the provider on startup.
@@ -164,7 +159,7 @@ final cardAspectRatioLoaderProvider = FutureProvider<void>((ref) async {
 
 // Display Settings Providers
 final columnCountProvider = StateProvider<int>((ref) {
-  return 4;
+  return 6;
 });
 
 final columnCountLoaderProvider = FutureProvider<void>((ref) async {
@@ -176,7 +171,7 @@ final columnCountLoaderProvider = FutureProvider<void>((ref) async {
 });
 
 final cardSpacingProvider = StateProvider<double>((ref) {
-  return 8.0;
+  return 12.0;
 });
 
 final cardSpacingLoaderProvider = FutureProvider<void>((ref) async {
@@ -199,20 +194,8 @@ final showTitleLoaderProvider = FutureProvider<void>((ref) async {
   }
 });
 
-final showButtonsOnHoverProvider = StateProvider<bool>((ref) {
-  return false;
-});
-
-final showButtonsOnHoverLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getBool('show_buttons_on_hover');
-  if (saved != null) {
-    ref.read(showButtonsOnHoverProvider.notifier).state = saved;
-  }
-});
-
 final activePresetProvider = StateProvider<String>((ref) {
-  return 'custom';
+  return 'windows_best';
 });
 
 final activePresetLoaderProvider = FutureProvider<void>((ref) async {

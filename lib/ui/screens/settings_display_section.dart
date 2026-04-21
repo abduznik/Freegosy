@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../providers/library_provider.dart'; // Assuming this file contains the providers and kDisplayPresets
-
-// NOTE: kDisplayPresets is assumed to be globally available or defined in library_provider.dart
-// If not, it needs to be imported or passed as an argument.
+import '../../providers/library_provider.dart';
 
 // Function to build the Library Display section
 Widget buildDisplaySection(
@@ -13,7 +10,6 @@ Widget buildDisplaySection(
   int columnCount,
   double cardSpacing,
   bool showTitle,
-  bool showButtonsOnHover,
   String activePreset,
   WidgetRef ref,
 ) {
@@ -114,19 +110,6 @@ Widget buildDisplaySection(
           await prefs.setString('active_preset', 'custom');
         },
       ),
-      SwitchListTile(
-        title: const Text('Show buttons on hover only'),
-        subtitle: const Text('Buttons appear when hovering over a card'),
-        value: showButtonsOnHover,
-        contentPadding: EdgeInsets.zero,
-        onChanged: (value) async {
-          ref.read(activePresetProvider.notifier).state = 'custom';
-          ref.read(showButtonsOnHoverProvider.notifier).state = value;
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('show_buttons_on_hover', value);
-          await prefs.setString('active_preset', 'custom');
-        },
-      ),
     ],
   );
 }
@@ -143,23 +126,20 @@ Widget _presetChip(String label, String presetKey, String activePreset, WidgetRe
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('active_preset', presetKey);
       if (presetKey == 'custom') return;
-      final preset = kDisplayPresets[presetKey]; // kDisplayPresets must be accessible
+      final preset = kDisplayPresets[presetKey];
       if (preset == null) return;
       final cols = preset['columnCount'] as int;
       final ratio = preset['cardAspectRatio'] as double;
       final spacing = preset['cardSpacing'] as double;
       final title = preset['showTitle'] as bool;
-      final hover = preset['showButtonsOnHover'] as bool;
       ref.read(columnCountProvider.notifier).state = cols;
       ref.read(cardAspectRatioProvider.notifier).state = ratio;
       ref.read(cardSpacingProvider.notifier).state = spacing;
       ref.read(showTitleProvider.notifier).state = title;
-      ref.read(showButtonsOnHoverProvider.notifier).state = hover;
       await prefs.setInt('column_count', cols);
       await prefs.setDouble('card_aspect_ratio', ratio);
       await prefs.setDouble('card_spacing', spacing);
       await prefs.setBool('show_title', title);
-      await prefs.setBool('show_buttons_on_hover', hover);
     },
   );
 }

@@ -45,7 +45,6 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       ref.read(columnCountLoaderProvider.future),
       ref.read(cardSpacingLoaderProvider.future),
       ref.read(showTitleLoaderProvider.future),
-      ref.read(showButtonsOnHoverLoaderProvider.future),
       ref.read(activePresetLoaderProvider.future),
       ref.read(rpcs3ArchitectureLoaderProvider.future),
       ref.read(retroarchNdsCoreLoaderProvider.future),

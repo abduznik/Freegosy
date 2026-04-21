@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/paginated_games_provider.dart';
@@ -154,6 +153,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
   }) {
     if (games.isEmpty) return const SizedBox.shrink();
 
+    final cardAspectRatio = ref.watch(cardAspectRatioProvider);
+    final showTitle = ref.watch(showTitleProvider);
+    final columnCount = ref.watch(columnCountProvider);
+    final cardSpacing = ref.watch(cardSpacingProvider);
+
+    // "home has a -1 in row" logic: Use base columnCount for home (which is one less than grid)
+    final screenWidth = MediaQuery.of(context).size.width;
+    const padding = 24.0;
+    final totalSpacing = cardSpacing * (columnCount - 1);
+    final cardWidth = (screenWidth - padding - totalSpacing) / columnCount;
+    
+    final coverHeight = cardWidth / (cardAspectRatio <= 0 ? 0.75 : cardAspectRatio);
+    final footerHeight = showTitle ? 60.0 : 32.0;
+    final shelfHeight = coverHeight + footerHeight + 10.0; // Extra buffer
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -168,7 +182,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           ),
         ),
         SizedBox(
-          height: 220,
+          height: shelfHeight,
           child: ScrollConfiguration(
             behavior: ScrollConfiguration.of(context).copyWith(
               dragDevices: {
@@ -184,93 +198,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
               itemBuilder: (context, index) {
                 final game = games[index];
                 final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                
+                // Watch states for GameCard
+                final downloadedCache = ref.watch(downloadedGamesCacheProvider);
+                final downloads = ref.watch(downloadProvider);
+                final isActuallyDownloading = downloads.containsKey(game.id);
+                final isDownloaded = (downloadedCache[game.id] ?? false) && !isActuallyDownloading;
+
                 return GestureDetector(
                   onTap: () => _handleGameTap(context, ref, game),
                   child: Container(
-                    width: 150,
+                    width: cardWidth,
                     margin: const EdgeInsets.only(right: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              children: [
-                                coverUrl != null
-                                    ? CachedNetworkImage(
-                                        imageUrl: coverUrl,
-                                        fit: BoxFit.cover,
-                                        width: 150,
-                                        height: 200,
-                                        placeholder: (context, url) => Container(color: Colors.grey[900]),
-                                        errorWidget: (c, u, e) => Container(
-                                          color: Colors.grey[800],
-                                          child: const Icon(Icons.sports_esports, size: 40),
-                                        ),
-                                      )
-                                    : Container(
-                                        color: Colors.grey[800],
-                                        child: const Icon(Icons.sports_esports, size: 40),
-                                      ),
-                                // Check if downloaded AND NOT actively downloading
-                                Consumer(
-                                  builder: (context, ref, _) {
-                                    final downloadedCache = ref.watch(downloadedGamesCacheProvider);
-                                    final downloads = ref.watch(downloadProvider);
-                                    final isActuallyDownloading = downloads.containsKey(game.id);
-                                    final isDownloaded = (downloadedCache[game.id] ?? false) && !isActuallyDownloading;
-                                    
-                                    if (isDownloaded) {
-                                      return Positioned(
-                                        top: 4,
-                                        left: 4,
-                                        child: Container(
-                                          width: 18,
-                                          height: 18,
-                                          decoration: const BoxDecoration(
-                                            color: Colors.green,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(Icons.check, size: 12, color: Colors.white),
-                                        ),
-                                      );
-                                    }
-                                    if (isActuallyDownloading) {
-                                      return Positioned(
-                                        top: 4,
-                                        left: 4,
-                                        child: Container(
-                                          width: 18,
-                                          height: 18,
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(alpha: 0.5),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                        ),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          game.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                        Text(
-                          game.platformDisplayName ?? '',
-                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                        ),
-                      ],
+                    child: GameCard(
+                      game: game,
+                      coverUrl: coverUrl,
+                      isDownloaded: isDownloaded,
+                      platformLogoUrl: game.platformSlug != null
+                          ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
+                          : null,
+                      showTitle: showTitle,
                     ),
                   ),
                 );
@@ -289,9 +236,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final paginatedState = ref.watch(paginatedGamesProvider);
     final cardAspectRatio = ref.watch(cardAspectRatioProvider);
     final columnCount = ref.watch(columnCountProvider);
+    
+    // "home has a -1 in row" logic: 
+    // The main grid now uses the base columnCount (the normal count).
+    // The Home shelf logic inside _buildHorizontalShelf remains the same,
+    // where it calculates cardWidth based on the same columnCount, 
+    // effectively keeping them at the preferred "Home" size while the 
+    // grid remains at the "Normal" size.
+    final gridColumnCount = columnCount;
+
     final cardSpacing = ref.watch(cardSpacingProvider);
     final showTitle = ref.watch(showTitleProvider);
-    final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final rommConfigAsync = ref.watch(rommConfigProvider);
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final downloadedCache = ref.watch(downloadedGamesCacheProvider);
@@ -463,7 +418,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                 ),
               Expanded(
                 child: paginatedState.isLoading
-                    ? buildSkeletonGrid(cardAspectRatio, columnCount, cardSpacing, context)
+                    ? buildSkeletonGrid(cardAspectRatio, gridColumnCount, cardSpacing, context, showTitle: showTitle)
                     : (paginatedState.error != null && !paginatedState.error!.contains('Offline Mode'))
                         ? Center(
                             child: Column(
@@ -577,10 +532,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                   padding: const EdgeInsets.all(12),
                                   sliver: SliverGrid(
                                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: columnCount,
+                                      crossAxisCount: gridColumnCount,
                                       crossAxisSpacing: cardSpacing,
                                       mainAxisSpacing: cardSpacing,
-                                      mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context),
+                                      mainAxisExtent: calculateCardHeight(gridColumnCount, cardSpacing, cardAspectRatio, context, showTitle: showTitle),
                                     ),
                                     delegate: SliverChildBuilderDelegate(
                                       (context, index) {
@@ -607,12 +562,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                                 ? '${ref.read(rommConfigProvider).value?.baseUrl ?? ''}/assets/platforms/${game.platformSlug}.svg'
                                                 : null,
                                             showTitle: showTitle,
-                                            showButtonsOnHover: showButtonsOnHover,
-                                            onDownload: () => startDownload(context, ref, game),
-                                            onLaunch: () => handleLaunch(context, ref, game),
-                                            onDelete: () => handleDeleteRom(context, ref, game),
-                                            onPushSaves: () => handlePushSaves(context, ref, game),
-                                            onPullSaves: () => handlePullSaves(context, ref, game),
                                           ),
                                         );
                                       },

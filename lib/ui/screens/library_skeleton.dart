@@ -1,26 +1,30 @@
 import 'package:flutter/material.dart';
 
 double calculateCardHeight(int columnCount, double cardSpacing,
-    double cardAspectRatio, BuildContext context) {
+    double cardAspectRatio, BuildContext context, {bool showTitle = true}) {
   final screenWidth = MediaQuery.of(context).size.width;
   const padding = 24.0;
   final totalSpacing = cardSpacing * (columnCount - 1);
   final cardWidth = (screenWidth - padding - totalSpacing) / columnCount;
   final safeRatio = cardAspectRatio <= 0 ? 0.56 : cardAspectRatio;
   final coverHeight = cardWidth / safeRatio;
-  final totalHeight = coverHeight + 90.0;
-  return totalHeight.clamp(100.0, 900.0);
+  
+  // GameCard uses 52 for title or 24 for more_horiz. 
+  // We add a bit of extra for the Card's own margin/padding/elevation.
+  final footerHeight = showTitle ? 60.0 : 32.0; 
+  final totalHeight = coverHeight + footerHeight;
+  return totalHeight.clamp(80.0, 900.0);
 }
 
 Widget buildSkeletonGrid(
-    double cardAspectRatio, int columnCount, double cardSpacing, BuildContext context) {
+    double cardAspectRatio, int columnCount, double cardSpacing, BuildContext context, {bool showTitle = true}) {
   return GridView.builder(
     padding: const EdgeInsets.all(12),
     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: columnCount,
       crossAxisSpacing: cardSpacing,
       mainAxisSpacing: cardSpacing,
-      mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context),
+      mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context, showTitle: showTitle),
     ),
     itemCount: 20,
     itemBuilder: (context, index) {

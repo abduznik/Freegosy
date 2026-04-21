@@ -65,7 +65,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final columnCount = ref.watch(columnCountProvider);
     final cardSpacing = ref.watch(cardSpacingProvider);
     final showTitle = ref.watch(showTitleProvider);
-    final showButtonsOnHover = ref.watch(showButtonsOnHoverProvider);
     final activePreset = ref.watch(activePresetProvider);
 
     return Scaffold(
@@ -123,7 +122,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       columnCount,
                       cardSpacing,
                       showTitle,
-                      showButtonsOnHover,
                       activePreset,
                       ref, // Pass ref
                     ),
