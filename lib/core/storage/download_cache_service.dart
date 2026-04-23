@@ -3,16 +3,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class DownloadCacheService {
   static const String _key = 'downloaded_files_v2';
+  final SharedPreferences _prefs;
   Map<String, Set<String>> _cache = {}; // platformSlug -> Set of filenames
 
-  DownloadCacheService();
+  DownloadCacheService(this._prefs);
 
   Map<String, Set<String>> get filesByPlatform => _cache;
 
   /// Loads the persisted cache from SharedPreferences.
-  Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(_key);
+  void load() {
+    final jsonStr = _prefs.getString(_key);
     if (jsonStr == null) return;
     try {
       final Map<String, dynamic> decoded = jsonDecode(jsonStr);
@@ -45,28 +45,27 @@ class DownloadCacheService {
   }
 
   /// Adds a file to the cache and persists it.
-  Future<void> addFile(String filename, {String platformSlug = 'unknown'}) async {
+  void addFile(String filename, {String platformSlug = 'unknown'}) {
     final normalized = filename.toLowerCase();
     _cache.putIfAbsent(platformSlug, () => {}).add(normalized);
-    await _save();
+    _save();
   }
 
   /// Removes a file from the cache and persists it.
-  Future<void> removeFile(String filename) async {
+  void removeFile(String filename) {
     final normalized = filename.toLowerCase();
     for (final set in _cache.values) {
       set.remove(normalized);
     }
-    await _save();
+    _save();
   }
 
-  Future<void> _save() async {
+  void _save() {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final Map<String, List<String>> toSave = _cache.map((key, value) => 
         MapEntry(key, value.toList())
       );
-      await prefs.setString(_key, jsonEncode(toSave));
+      _prefs.setString(_key, jsonEncode(toSave));
     } catch (_) {}
   }
 }

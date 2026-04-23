@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
+import '../../providers/shared_prefs_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import 'settings_emulators_section.dart';
@@ -296,6 +296,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       final String password;
                       final String apiKey;
 
+                      final prefs = ref.read(sharedPreferencesProvider);
+
                       if (_isLegacyAuth) {
                         username = _usernameController.text.trim();
                         password = _passwordController.text;
@@ -304,36 +306,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         // Try Bearer token (OAuth2). If the server doesn't support
                         // it over HTTP or at all, fall back to Basic auth silently.
                         try {
-                          await RommService.fetchToken(baseUrl, username, password);
-                          // If successful, fetch token from preferences and move to secure storage
-                          final prefs = await SharedPreferences.getInstance();
-                          final token = prefs.getString('rommAuthToken');
-                          if (token != null) {
-                            await SecureStorageService.write('rommAuthToken', token);
-                            await prefs.remove('rommAuthToken');
+                          final token = await RommService.fetchToken(baseUrl, username, password, prefs);
+                          if (token.isNotEmpty) {
+                            await SecureStorageService.write('rommAuthToken', token, prefs);
                           }
                         } catch (e) {
                           // Clear any stale token so Basic auth is used instead.
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.remove('rommAuthToken');
-                          await SecureStorageService.delete('rommAuthToken');
+                          await SecureStorageService.delete('rommAuthToken', prefs);
                         }
                       } else {
                         username = '';
                         password = '';
                         apiKey = _apiKeyController.text.trim();
                         // Clear any legacy tokens when switching to API Key
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.remove('rommAuthToken');
-                        await SecureStorageService.delete('rommAuthToken');
+                        await SecureStorageService.delete('rommAuthToken', prefs);
                       }
 
                       // Save credentials regardless of whether token fetch succeeded.
-                      final prefs = await SharedPreferences.getInstance();
                       await prefs.setString('rommBaseUrl', baseUrl);
                       await prefs.setString('rommUsername', username);
-                      await SecureStorageService.write('rommPassword', password);
-                      await SecureStorageService.write('rommApiKey', apiKey);
+                      await SecureStorageService.write('rommPassword', password, prefs);
+                      await SecureStorageService.write('rommApiKey', apiKey, prefs);
 
                       // Invalidate providers to refresh RomM service and config
                       ref.invalidate(rommConfigProvider);
@@ -476,11 +469,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ButtonSegment(value: 'both', label: Text('Both')),
           ],
           selected: {syncMode},
-          onSelectionChanged: (selection) async {
+          onSelectionChanged: (selection) {
             final value = selection.first;
-            ref.read(retroarchSyncModeProvider.notifier).state = value;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('retroarch_sync_mode', value);
+            ref.read(retroarchSyncModeProvider.notifier).update(value);
           },
         ),
         const SizedBox(height: 20),
@@ -493,11 +484,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ButtonSegment(value: 'desmume', label: Text('DeSmuME')),
           ],
           selected: {ndsCore},
-          onSelectionChanged: (selection) async {
+          onSelectionChanged: (selection) {
             final value = selection.first;
-            ref.read(retroarchNdsCoreProvider.notifier).state = value;
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('retroarch_nds_core', value);
+            ref.read(retroarchNdsCoreProvider.notifier).update(value);
           },
         ),
       ],
@@ -576,8 +565,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         } catch (_) {}
 
         final home = io.Platform.environment['HOME'] ?? '';
-        final emudeckFound = await io.Directory(p.join(home, 'Emulation', 'roms')).exists();
-
+        final emudeckFound = io.Directory(p.join(home, 'Emulation', 'roms')).existsSync();
         return <String, bool>{'retrodeck': retrodeckFound, 'emudeck': emudeckFound};
       }(),
       builder: (context, snapshot) {

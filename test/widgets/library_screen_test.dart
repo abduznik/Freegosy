@@ -6,9 +6,11 @@ import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/providers/paginated_games_provider.dart';
 import 'package:freegosy/providers/romm_provider.dart';
+import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/library_screen.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'library_screen_test.mocks.dart';
@@ -18,8 +20,11 @@ void main() {
   late MockRommService mockRommService;
   late MockDirectoryService mockDirectoryService;
   late MockRomMappingService mockRomMappingService;
+  late SharedPreferences prefs;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    prefs = await SharedPreferences.getInstance();
     mockRommService = MockRommService();
     mockDirectoryService = MockDirectoryService();
     mockRomMappingService = MockRomMappingService();
@@ -39,6 +44,7 @@ void main() {
       
       await tester.pumpWidget(ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           rommServiceProvider.overrideWithValue(mockRommService),
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
@@ -64,6 +70,7 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           rommServiceProvider.overrideWithValue(mockRommService),
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
@@ -86,6 +93,7 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           rommServiceProvider.overrideWithValue(mockRommService),
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
@@ -107,6 +115,7 @@ void main() {
 
       await tester.pumpWidget(ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           rommServiceProvider.overrideWithValue(mockRommService),
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),

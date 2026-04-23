@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/providers/romm_provider.dart';
+import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/settings_screen.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
@@ -19,12 +20,14 @@ void main() {
   late MockDirectoryService mockDirectoryService;
   late MockRommService mockRommService;
   late MockStrategyRegistry mockStrategyRegistry;
+  late SharedPreferences prefs;
 
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({
       'rommBaseUrl': 'https://old.com',
       'rommUsername': 'olduser',
     });
+    prefs = await SharedPreferences.getInstance();
     mockDirectoryService = MockDirectoryService();
     mockRommService = MockRommService();
     mockStrategyRegistry = MockStrategyRegistry();
@@ -41,6 +44,7 @@ void main() {
   Widget createSettingsScreen() {
     return ProviderScope(
       overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
         rommServiceProvider.overrideWithValue(mockRommService),
         directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
         strategyRegistryProvider.overrideWith((ref) => Future.value(mockStrategyRegistry)),

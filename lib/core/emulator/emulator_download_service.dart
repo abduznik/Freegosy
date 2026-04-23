@@ -7,19 +7,16 @@ import '../downloader/download_service.dart';
 import '../storage/directory_service.dart';
 import '../extraction/extraction_service.dart';
 import 'emulator_registry_data.dart';
-import 'github_release_service.dart';
-import 'gitea_release_service.dart';
+import 'release_service.dart';
 
 class EmulatorDownloadService {
   final Dio _dio;
   final DirectoryService _directoryService;
   final ExtractionService _extractionService;
-  late final GithubReleaseService _githubService;
-  late final GiteaReleaseService _giteaService;
+  late final ReleaseService _releaseService;
 
   EmulatorDownloadService(this._dio, this._directoryService, this._extractionService) {
-    _githubService = GithubReleaseService(_dio);
-    _giteaService = GiteaReleaseService(_dio);
+    _releaseService = ReleaseService(_dio);
   }
 
   Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture, String? buildType}) async* {
@@ -72,10 +69,11 @@ class EmulatorDownloadService {
           status: 'Fetching latest $buildType release...',
         );
 
-        downloadUrl = await _giteaService.getLatestReleaseUrl(
+        downloadUrl = await _releaseService.getLatestReleaseUrl(
+          platform: ReleasePlatform.gitea,
           repo: repo,
-          required: required,
-          excluded: excluded,
+          requiredFilters: required,
+          excludedFilters: excluded,
         );
       } else {
         final String nightlyKey;
@@ -87,7 +85,6 @@ class EmulatorDownloadService {
           nightlyKey = '${buildType}_linux_url';
         }
         
-        // Specifically for Eden and other "direct" emulators that might have _nightly_url keys
         final String specificNightlyKey;
         if (Platform.isWindows) {
           specificNightlyKey = 'windows_${buildType}_url';
@@ -118,8 +115,6 @@ class EmulatorDownloadService {
         required = ['macos', '.7z'];
       } else {
         // arm64
-        // TODO: ARM64 (Apple Silicon native) - source from RPCS3 macOS binaries releases page
-        // The ARM64 URL is not yet known — add a TODO placeholder for it in the code and leave a comment saying it needs to be sourced from the RPCS3 macOS binaries releases page.
         repo = definition['github_repo_macos'] as String? ?? 'RPCS3/rpcs3-binaries-mac-arm64';
         required = List<String>.from(definition['github_asset_required_macos'] ?? ['macos', 'aarch64', '.7z']);
       }
@@ -130,10 +125,11 @@ class EmulatorDownloadService {
         status: 'Fetching latest $arch release...',
       );
 
-      downloadUrl = await _githubService.getLatestReleaseUrl(
+      downloadUrl = await _releaseService.getLatestReleaseUrl(
+        platform: ReleasePlatform.github,
         repo: repo,
-        required: required,
-        excluded: excluded,
+        requiredFilters: required,
+        excludedFilters: excluded,
       );
     }
 
@@ -179,10 +175,11 @@ class EmulatorDownloadService {
 
       final required = List<String>.from(definition[requiredKey] ?? []);
       final excluded = List<String>.from(definition[excludedKey] ?? []);
-      downloadUrl = await _githubService.getLatestReleaseUrl(
+      downloadUrl = await _releaseService.getLatestReleaseUrl(
+        platform: ReleasePlatform.github,
         repo: repo,
-        required: required,
-        excluded: excluded,
+        requiredFilters: required,
+        excludedFilters: excluded,
       );
       if (downloadUrl == null) {
         yield DownloadProgress(

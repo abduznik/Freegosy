@@ -4,17 +4,18 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i7;
-import 'dart:io' as _i8;
-import 'dart:typed_data' as _i9;
+import 'dart:io' as _i9;
+import 'dart:typed_data' as _i10;
 
 import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart'
     as _i4;
 import 'package:freegosy/core/romm/romm_models.dart' as _i2;
 import 'package:freegosy/core/romm/romm_service.dart' as _i5;
 import 'package:freegosy/core/storage/directory_service.dart' as _i3;
-import 'package:freegosy/core/storage/rom_mapping_service.dart' as _i10;
+import 'package:freegosy/core/storage/rom_mapping_service.dart' as _i11;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
+import 'package:shared_preferences/shared_preferences.dart' as _i8;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -81,9 +82,9 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
   );
 
   @override
-  _i7.Future<void> refreshToken() =>
+  _i7.Future<void> refreshToken(_i8.SharedPreferences? prefs) =>
       (super.noSuchMethod(
-            Invocation.method(#refreshToken, []),
+            Invocation.method(#refreshToken, [prefs]),
             returnValue: _i7.Future<void>.value(),
             returnValueForMissingStub: _i7.Future<void>.value(),
           )
@@ -227,9 +228,9 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
   @override
   _i7.Future<bool> uploadSave(
     String? gameId,
-    _i8.File? saveFile, {
+    _i9.File? saveFile, {
     String? slot,
-    _i8.File? screenshotFile,
+    _i9.File? screenshotFile,
     String? overrideFilename,
   }) =>
       (super.noSuchMethod(
@@ -286,12 +287,15 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
           as _i7.Future<Map<String, dynamic>?>);
 
   @override
-  _i7.Future<_i9.Uint8List?> downloadSave(String? saveUrl) =>
+  _i7.Future<_i10.Uint8List?> downloadSave(
+    String? saveUrl, {
+    _i8.SharedPreferences? prefs,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#downloadSave, [saveUrl]),
-            returnValue: _i7.Future<_i9.Uint8List?>.value(),
+            Invocation.method(#downloadSave, [saveUrl], {#prefs: prefs}),
+            returnValue: _i7.Future<_i10.Uint8List?>.value(),
           )
-          as _i7.Future<_i9.Uint8List?>);
+          as _i7.Future<_i10.Uint8List?>);
 
   @override
   _i7.Future<List<_i2.Firmware>> getFirmware({String? platformId}) =>
@@ -313,7 +317,7 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
           as String);
 
   @override
-  _i7.Future<_i9.Uint8List?> downloadFirmware(
+  _i7.Future<_i10.Uint8List?> downloadFirmware(
     _i2.Firmware? firmware, {
     void Function(int, int)? onProgress,
   }) =>
@@ -323,13 +327,14 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
               [firmware],
               {#onProgress: onProgress},
             ),
-            returnValue: _i7.Future<_i9.Uint8List?>.value(),
+            returnValue: _i7.Future<_i10.Uint8List?>.value(),
           )
-          as _i7.Future<_i9.Uint8List?>);
+          as _i7.Future<_i10.Uint8List?>);
 
   @override
   _i7.Future<bool> updateRomProps(
-    String? romId, {
+    String? romId,
+    _i8.SharedPreferences? prefs, {
     bool? backlogged,
     bool? nowPlaying,
     int? rating,
@@ -339,7 +344,7 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
       (super.noSuchMethod(
             Invocation.method(
               #updateRomProps,
-              [romId],
+              [romId, prefs],
               {
                 #backlogged: backlogged,
                 #nowPlaying: nowPlaying,
@@ -544,13 +549,10 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i7.Future<void>);
 
   @override
-  _i7.Future<void> loadEmulatorPathOverrides() =>
-      (super.noSuchMethod(
-            Invocation.method(#loadEmulatorPathOverrides, []),
-            returnValue: _i7.Future<void>.value(),
-            returnValueForMissingStub: _i7.Future<void>.value(),
-          )
-          as _i7.Future<void>);
+  void loadEmulatorPathOverrides() => super.noSuchMethod(
+    Invocation.method(#loadEmulatorPathOverrides, []),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i7.Future<void> setEmulatorPathOverride(String? emulatorId, String? path) =>
@@ -839,7 +841,7 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
           as _i7.Future<void>);
 
   @override
-  _i7.Future<_i8.Process?> launchGameWithHandle(
+  _i7.Future<_i9.Process?> launchGameWithHandle(
     _i2.Game? game,
     String? romPath,
     String? emulatorId,
@@ -852,9 +854,9 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
               [game, romPath, emulatorId, exePath],
               {#args: args},
             ),
-            returnValue: _i7.Future<_i8.Process?>.value(),
+            returnValue: _i7.Future<_i9.Process?>.value(),
           )
-          as _i7.Future<_i8.Process?>);
+          as _i7.Future<_i9.Process?>);
 
   @override
   _i7.Future<void> launchStandalone(
@@ -886,7 +888,7 @@ class MockDirectoryService extends _i1.Mock implements _i3.DirectoryService {
 /// A class which mocks [RomMappingService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockRomMappingService extends _i1.Mock implements _i10.RomMappingService {
+class MockRomMappingService extends _i1.Mock implements _i11.RomMappingService {
   MockRomMappingService() {
     _i1.throwOnMissingStub(this);
   }
@@ -912,15 +914,6 @@ class MockRomMappingService extends _i1.Mock implements _i10.RomMappingService {
   _i7.Future<void> updateMapping(String? path, String? romId) =>
       (super.noSuchMethod(
             Invocation.method(#updateMapping, [path, romId]),
-            returnValue: _i7.Future<void>.value(),
-            returnValueForMissingStub: _i7.Future<void>.value(),
-          )
-          as _i7.Future<void>);
-
-  @override
-  _i7.Future<void> removeMapping(String? path) =>
-      (super.noSuchMethod(
-            Invocation.method(#removeMapping, [path]),
             returnValue: _i7.Future<void>.value(),
             returnValueForMissingStub: _i7.Future<void>.value(),
           )
@@ -956,6 +949,15 @@ class MockRomMappingService extends _i1.Mock implements _i10.RomMappingService {
   String? getRomIdForPath(String? path) =>
       (super.noSuchMethod(Invocation.method(#getRomIdForPath, [path]))
           as String?);
+
+  @override
+  _i7.Future<void> removeMapping(String? path) =>
+      (super.noSuchMethod(
+            Invocation.method(#removeMapping, [path]),
+            returnValue: _i7.Future<void>.value(),
+            returnValueForMissingStub: _i7.Future<void>.value(),
+          )
+          as _i7.Future<void>);
 
   @override
   _i7.Future<void> clear() =>

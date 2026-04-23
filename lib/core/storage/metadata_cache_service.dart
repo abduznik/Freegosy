@@ -4,16 +4,16 @@ import '../romm/romm_models.dart';
 
 class MetadataCacheService {
   static const String _gamesKey = 'cached_games_metadata';
+  final SharedPreferences _prefs;
   List<Game> _cachedGames = [];
 
-  MetadataCacheService();
+  MetadataCacheService(this._prefs);
 
   List<Game> get cachedGames => _cachedGames;
 
-  Future<void> load() async {
+  void load() {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonStr = prefs.getString(_gamesKey);
+      final jsonStr = _prefs.getString(_gamesKey);
       if (jsonStr == null) return;
       
       final List<dynamic> decoded = jsonDecode(jsonStr);
@@ -30,14 +30,13 @@ class MetadataCacheService {
       gameMap[g.id] = g;
     }
     _cachedGames = gameMap.values.toList();
-    await _persist();
+    _persist();
   }
 
-  Future<void> _persist() async {
+  void _persist() {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final jsonList = _cachedGames.map((g) => g.toJson()).toList();
-      await prefs.setString(_gamesKey, jsonEncode(jsonList));
+      _prefs.setString(_gamesKey, jsonEncode(jsonList));
     } catch (_) {}
   }
 

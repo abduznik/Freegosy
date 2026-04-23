@@ -36,7 +36,8 @@ void main() {
     when(mockDirectoryService.getEmulatorDirectory('temp'))
         .thenAnswer((_) async => sysTemp);
     
-    service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry);
+    final prefs = await SharedPreferences.getInstance();
+    service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry, prefs);
   });
 
   group('SaveSyncService', () {

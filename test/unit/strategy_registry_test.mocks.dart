@@ -202,13 +202,10 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
           as _i5.Future<void>);
 
   @override
-  _i5.Future<void> loadEmulatorPathOverrides() =>
-      (super.noSuchMethod(
-            Invocation.method(#loadEmulatorPathOverrides, []),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
+  void loadEmulatorPathOverrides() => super.noSuchMethod(
+    Invocation.method(#loadEmulatorPathOverrides, []),
+    returnValueForMissingStub: null,
+  );
 
   @override
   _i5.Future<void> setEmulatorPathOverride(String? emulatorId, String? path) =>

@@ -25,11 +25,12 @@ import 'package:freegosy/core/emulator/strategies/custom_emulator_strategy.dart'
 
 class StrategyRegistry {
   final DirectoryService _directoryService;
+  final SharedPreferences _prefs;
   late final List<EmulatorStrategy> _strategies;
   final List<CustomEmulatorConfig> _customEmulatorConfigs;
   final Map<String, String> _slugPreferences = {};
 
-  StrategyRegistry(this._directoryService, {List<CustomEmulatorConfig> customEmulators = const []}) 
+  StrategyRegistry(this._directoryService, this._prefs, {List<CustomEmulatorConfig> customEmulators = const []}) 
     : _customEmulatorConfigs = customEmulators {
     final List<EmulatorStrategy> allPossibleStrategies = [
       RetroArchStrategy(_directoryService),
@@ -47,7 +48,7 @@ class StrategyRegistry {
       MAMEStrategy(_directoryService),
       XemuStrategy(_directoryService),
       XeniaStrategy(_directoryService),
-      WindowsStrategy(_directoryService),
+      WindowsStrategy(_directoryService, _prefs),
       ..._customEmulatorConfigs.map((config) => CustomEmulatorStrategy(config, _directoryService)),
     ];
 
@@ -60,6 +61,8 @@ class StrategyRegistry {
       if (Platform.isMacOS && supported.contains('macos')) return true;
       return false;
     }).toList();
+    
+    _loadPreferences();
   }
 
   Map<String, List<EmulatorStrategy>> detectConflicts() {
@@ -101,12 +104,11 @@ class StrategyRegistry {
 
   String? getPreferredEmulatorId(String slug) => _slugPreferences[slug];
 
-  Future<void> loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final key in prefs.getKeys()) {
+  void _loadPreferences() {
+    for (final key in _prefs.getKeys()) {
       if (key.startsWith('emulator_pref_')) {
         final slug = key.replaceFirst('emulator_pref_', '');
-        final emulatorId = prefs.getString(key);
+        final emulatorId = _prefs.getString(key);
         if (emulatorId != null) {
           _slugPreferences[slug] = emulatorId;
         }
@@ -115,8 +117,6 @@ class StrategyRegistry {
   }
 
   Future<void> setPreference(String canonicalSlug, String emulatorId) async {
-    final prefs = await SharedPreferences.getInstance();
-    
     // Find all slugs that belong to the same group as this canonicalSlug
     final slugToStrategies = <String, List<String>>{};
     for (final strategy in _strategies) {
@@ -128,7 +128,7 @@ class StrategyRegistry {
     final targetStrategies = slugToStrategies[canonicalSlug];
     if (targetStrategies == null) {
       // Fallback: just set for this slug
-      await prefs.setString('emulator_pref_$canonicalSlug', emulatorId);
+      await _prefs.setString('emulator_pref_$canonicalSlug', emulatorId);
       _slugPreferences[canonicalSlug] = emulatorId;
       return;
     }
@@ -141,17 +141,16 @@ class StrategyRegistry {
       final ids = entry.value..sort();
       if (ids.join('|') == targetKey) {
         final slug = entry.key;
-        await prefs.setString('emulator_pref_$slug', emulatorId);
+        await _prefs.setString('emulator_pref_$slug', emulatorId);
         _slugPreferences[slug] = emulatorId;
       }
     }
   }
 
   Future<void> clearPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('emulator_pref_')).toList();
+    final keys = _prefs.getKeys().where((k) => k.startsWith('emulator_pref_')).toList();
     for (final key in keys) {
-      await prefs.remove(key);
+      await _prefs.remove(key);
     }
     _slugPreferences.clear();
   }

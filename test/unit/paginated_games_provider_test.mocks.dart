@@ -4,13 +4,14 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
-import 'dart:io' as _i6;
-import 'dart:typed_data' as _i7;
+import 'dart:io' as _i7;
+import 'dart:typed_data' as _i8;
 
 import 'package:freegosy/core/romm/romm_models.dart' as _i2;
 import 'package:freegosy/core/romm/romm_service.dart' as _i3;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
+import 'package:shared_preferences/shared_preferences.dart' as _i6;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -66,9 +67,9 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
   );
 
   @override
-  _i5.Future<void> refreshToken() =>
+  _i5.Future<void> refreshToken(_i6.SharedPreferences? prefs) =>
       (super.noSuchMethod(
-            Invocation.method(#refreshToken, []),
+            Invocation.method(#refreshToken, [prefs]),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
@@ -212,9 +213,9 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
   @override
   _i5.Future<bool> uploadSave(
     String? gameId,
-    _i6.File? saveFile, {
+    _i7.File? saveFile, {
     String? slot,
-    _i6.File? screenshotFile,
+    _i7.File? screenshotFile,
     String? overrideFilename,
   }) =>
       (super.noSuchMethod(
@@ -271,12 +272,15 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as _i5.Future<Map<String, dynamic>?>);
 
   @override
-  _i5.Future<_i7.Uint8List?> downloadSave(String? saveUrl) =>
+  _i5.Future<_i8.Uint8List?> downloadSave(
+    String? saveUrl, {
+    _i6.SharedPreferences? prefs,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#downloadSave, [saveUrl]),
-            returnValue: _i5.Future<_i7.Uint8List?>.value(),
+            Invocation.method(#downloadSave, [saveUrl], {#prefs: prefs}),
+            returnValue: _i5.Future<_i8.Uint8List?>.value(),
           )
-          as _i5.Future<_i7.Uint8List?>);
+          as _i5.Future<_i8.Uint8List?>);
 
   @override
   _i5.Future<List<_i2.Firmware>> getFirmware({String? platformId}) =>
@@ -298,7 +302,7 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
           as String);
 
   @override
-  _i5.Future<_i7.Uint8List?> downloadFirmware(
+  _i5.Future<_i8.Uint8List?> downloadFirmware(
     _i2.Firmware? firmware, {
     void Function(int, int)? onProgress,
   }) =>
@@ -308,13 +312,14 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
               [firmware],
               {#onProgress: onProgress},
             ),
-            returnValue: _i5.Future<_i7.Uint8List?>.value(),
+            returnValue: _i5.Future<_i8.Uint8List?>.value(),
           )
-          as _i5.Future<_i7.Uint8List?>);
+          as _i5.Future<_i8.Uint8List?>);
 
   @override
   _i5.Future<bool> updateRomProps(
-    String? romId, {
+    String? romId,
+    _i6.SharedPreferences? prefs, {
     bool? backlogged,
     bool? nowPlaying,
     int? rating,
@@ -324,7 +329,7 @@ class MockRommService extends _i1.Mock implements _i3.RommService {
       (super.noSuchMethod(
             Invocation.method(
               #updateRomProps,
-              [romId],
+              [romId, prefs],
               {
                 #backlogged: backlogged,
                 #nowPlaying: nowPlaying,

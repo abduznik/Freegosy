@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/emulator/emulator_registry_data.dart';
 import '../../core/emulator/strategy_registry.dart';
@@ -107,11 +106,9 @@ Widget buildEmulatorsSection(
                           DropdownMenuItem(value: 'x64', child: Text('x64')),
                           DropdownMenuItem(value: 'arm64', child: Text('ARM64')),
                         ],
-                        onChanged: (value) async {
+                        onChanged: (value) {
                           if (value != null) {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('rpcs3_macos_architecture', value);
-                            ref.read(rpcs3ArchitectureProvider.notifier).state = value;
+                            ref.read(rpcs3ArchitectureProvider.notifier).update(value);
                           }
                         },
                       );
@@ -227,40 +224,7 @@ Future<void> _startDownload(
   String? buildType;
 
   if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) {
-    // ... (architecture logic remains the same)
-    final prefs = await SharedPreferences.getInstance();
-    final hasPreference = prefs.containsKey('rpcs3_macos_architecture');
-    
-    if (!hasPreference) {
-      if (!context.mounted) return;
-      // Show choice dialog
-      final choice = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Select Architecture"),
-          content: const Text("Choose the variant of RPCS3 to download for macOS:"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'arm64'),
-              child: const Text("ARM64 (Apple Silicon Native)"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'x64'),
-              child: const Text("x64 (Rosetta 2 - Default)"),
-            ),
-          ],
-        ),
-      );
-      
-      if (choice == null) return; // Cancelled
-      architecture = choice;
-      
-      // Save preference
-      await prefs.setString('rpcs3_macos_architecture', architecture);
-      ref.read(rpcs3ArchitectureProvider.notifier).state = architecture;
-    } else {
-      architecture = ref.read(rpcs3ArchitectureProvider);
-    }
+    architecture = ref.read(rpcs3ArchitectureProvider);
   }
 
   if (emulatorId == 'eden') {
@@ -285,11 +249,7 @@ Future<void> _startDownload(
 
     if (choice == null) return; // Cancelled
     buildType = choice;
-    
-    // Save preference
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('eden_build_type', buildType);
-    ref.read(edenBuildTypeProvider.notifier).state = buildType;
+    ref.read(edenBuildTypeProvider.notifier).update(buildType);
   }
 
   final String buildLabel = (buildType != null && buildType != 'stable') ? " ($buildType)" : "";

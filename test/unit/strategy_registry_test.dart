@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:mockito/annotations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'strategy_registry_test.mocks.dart';
 
@@ -10,9 +11,11 @@ void main() {
   late StrategyRegistry registry;
   late DirectoryService mockDirectoryService;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     mockDirectoryService = MockDirectoryService();
-    registry = StrategyRegistry(mockDirectoryService);
+    registry = StrategyRegistry(mockDirectoryService, prefs);
   });
 
   group('StrategyRegistry', () {

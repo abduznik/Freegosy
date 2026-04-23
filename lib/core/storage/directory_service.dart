@@ -1,4 +1,4 @@
-﻿import 'dart:io' as io;
+import 'dart:io' as io;
 import 'dart:io' show Directory, File, Process;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -53,6 +53,7 @@ class DirectoryService {
     'genesis': ['.md', '.bin', '.gen', '.zip'],
   };
 
+  final SharedPreferences _prefs;
   late String romsRootPath;
   late String emulatorsRootPath;
   String linuxSyncPreset = 'default';
@@ -62,7 +63,7 @@ class DirectoryService {
   
   LinuxEnvironmentStrategy? _linuxStrategy;
 
-  DirectoryService();
+  DirectoryService(this._prefs);
 
   bool get isSteamDeck {
     if (!io.Platform.isLinux) return false;
@@ -126,9 +127,8 @@ class DirectoryService {
 
   Future<StorageStatus> initialize() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      linuxSyncPreset = prefs.getString(_linuxSyncPresetKey) ?? 'default';
-      emudeckRootPath = prefs.getString(_emudeckRootPathKey);
+      linuxSyncPreset = _prefs.getString(_linuxSyncPresetKey) ?? 'default';
+      emudeckRootPath = _prefs.getString(_emudeckRootPathKey);
       
       // Auto-detection logic for Linux
       if (defaultTargetPlatform == TargetPlatform.linux) {
@@ -160,15 +160,15 @@ class DirectoryService {
       final home = io.Platform.environment['HOME'] ?? '';
 
       if (defaultTargetPlatform == TargetPlatform.linux) {
-        final customRoms = prefs.getString(_romsRootPathKey);
-        final customEmus = prefs.getString(_emulatorsRootPathKey);
+        final customRoms = _prefs.getString(_romsRootPathKey);
+        final customEmus = _prefs.getString(_emulatorsRootPathKey);
         
         romsRootPath = activeLinuxEnvironment.getRomsRoot(home, customRoms, emudeckRootPath);
         emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, customEmus, emudeckRootPath);
       } else {
-        romsRootPath = prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
+        romsRootPath = _prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
         emulatorsRootPath =
-            prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
+            _prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
       }
 
       final romsStatus = await _ensureDirectoryExists(romsRootPath);
@@ -183,7 +183,7 @@ class DirectoryService {
         return status;
       }
 
-      await loadEmulatorPathOverrides();
+      loadEmulatorPathOverrides();
       status = const StorageStatus();
       return status;
     } catch (e) {
@@ -204,8 +204,7 @@ class DirectoryService {
   }
 
   Future<void> resetRomsRoot() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_romsRootPathKey);
+    await _prefs.remove(_romsRootPathKey);
     final base = await getDefaultBase();
     final home = io.Platform.environment['HOME'] ?? '';
 
@@ -218,8 +217,7 @@ class DirectoryService {
   }
 
   Future<void> resetEmulatorsRoot() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_emulatorsRootPathKey);
+    await _prefs.remove(_emulatorsRootPathKey);
     final base = await getDefaultBase();
     final home = io.Platform.environment['HOME'] ?? '';
 
@@ -232,27 +230,24 @@ class DirectoryService {
   }
 
   Future<void> setLinuxSyncPreset(String preset) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_linuxSyncPresetKey, preset);
+    await _prefs.setString(_linuxSyncPresetKey, preset);
     linuxSyncPreset = preset;
     // Re-initialize to update paths based on new preset
     await initialize();
   }
 
   Future<void> setEmudeckRoot(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_emudeckRootPathKey, path);
+    await _prefs.setString(_emudeckRootPathKey, path);
     emudeckRootPath = path;
     // Re-initialize to update paths based on new root
     await initialize();
   }
 
-  Future<void> loadEmulatorPathOverrides() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final key in prefs.getKeys()) {
+  void loadEmulatorPathOverrides() {
+    for (final key in _prefs.getKeys()) {
       if (key.startsWith('emu_path_')) {
         final emuId = key.replaceFirst('emu_path_', '');
-        final path = prefs.getString(key);
+        final path = _prefs.getString(key);
         if (path != null) {
           _emulatorPathOverrides[emuId] = path;
         }
@@ -261,8 +256,7 @@ class DirectoryService {
   }
 
   Future<void> setEmulatorPathOverride(String emulatorId, String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('emu_path_$emulatorId', path);
+    await _prefs.setString('emu_path_$emulatorId', path);
     _emulatorPathOverrides[emulatorId] = path;
   }
 
@@ -312,15 +306,13 @@ class DirectoryService {
   }
 
   Future<void> setRomsRoot(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_romsRootPathKey, path);
+    await _prefs.setString(_romsRootPathKey, path);
     romsRootPath = path;
     status = await _ensureDirectoryExists(path);
   }
 
   Future<void> setEmulatorsRoot(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_emulatorsRootPathKey, path);
+    await _prefs.setString(_emulatorsRootPathKey, path);
     emulatorsRootPath = path;
     status = await _ensureDirectoryExists(path);
   }

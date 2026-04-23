@@ -28,33 +28,12 @@ class FreegosyApp extends ConsumerStatefulWidget {
 
 class _FreegosyAppState extends ConsumerState<FreegosyApp> {
   int _currentIndex = 0;
-  bool _settingsLoaded = false;
 
   final List<Widget> _screens = const [
     LibraryScreen(),
     DownloadScreen(),
     SettingsScreen(),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    Future.wait([
-      ref.read(cardAspectRatioLoaderProvider.future),
-      ref.read(retroarchSyncModeLoaderProvider.future),
-      ref.read(columnCountLoaderProvider.future),
-      ref.read(cardSpacingLoaderProvider.future),
-      ref.read(showTitleLoaderProvider.future),
-      ref.read(activePresetLoaderProvider.future),
-      ref.read(rpcs3ArchitectureLoaderProvider.future),
-      ref.read(retroarchNdsCoreLoaderProvider.future),
-      ref.read(edenBuildTypeLoaderProvider.future),
-    ]).then((_) {
-      if (mounted) {
-        setState(() => _settingsLoaded = true);
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,114 +49,77 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       }
     });
 
-    // Also apply once when building if settings are loaded
-    if (_settingsLoaded) {
-      final String core = ref.read(retroarchNdsCoreProvider);
-      final StrategyRegistry? registry = ref.read(strategyRegistryProvider).asData?.value;
-      final SaveSyncService? syncService = ref.read(saveSyncServiceProvider).asData?.value;
-      if (registry != null) {
-        registry.setNdsCore(core);
-      }
-      if (syncService != null) {
-        syncService.setNdsCore(core);
-      }
-    }
-
-    if (!_settingsLoaded) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        scrollBehavior: CustomScrollBehavior(),
-        home: Scaffold(
-          backgroundColor: const Color(0xFF0f0f0f),
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'freegosy_logo.png',
-                  width: 200,
-                  height: 200,
-                ),
-                const SizedBox(height: 24),
-                const CircularProgressIndicator(
-                  color: Colors.deepPurple,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
     return ExcludeSemantics(
       child: MaterialApp(
         title: 'Freegosy',
+        debugShowCheckedModeBanner: false,
         scrollBehavior: CustomScrollBehavior(),
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-          surface: const Color(0xFF1a1a1a),
-        ),
-        scaffoldBackgroundColor: const Color(0xFF0f0f0f),
-        cardTheme: const CardThemeData(
-          color: Color(0xFF1a1a1a),
-          elevation: 2,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0f0f0f),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-        ),
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: const Color(0xFF1a1a1a),
-          indicatorColor: Colors.deepPurple.withValues(alpha: 0.3),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFF1a1a1a),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.deepPurple.shade800),
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.deepPurple,
+            brightness: Brightness.dark,
+            surface: const Color(0xFF1a1a1a),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: Colors.deepPurple.shade900),
+          scaffoldBackgroundColor: const Color(0xFF0f0f0f),
+          cardTheme: const CardThemeData(
+            color: Color(0xFF1a1a1a),
+            elevation: 2,
           ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepPurple,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF0f0f0f),
             foregroundColor: Colors.white,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+          ),
+          navigationBarTheme: NavigationBarThemeData(
+            backgroundColor: const Color(0xFF1a1a1a),
+            indicatorColor: Colors.deepPurple.withValues(alpha: 0.3),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: const Color(0xFF1a1a1a),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.deepPurple.shade800),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.deepPurple.shade900),
+            ),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
           ),
         ),
-      ),
-      home: Scaffold(
-        body: _screens[_currentIndex],
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.library_books),
-              label: 'Library',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.download),
-              label: 'Downloads',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
+        home: Scaffold(
+          body: _screens[_currentIndex],
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.library_books),
+                label: 'Library',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.download),
+                label: 'Downloads',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings),
+                label: 'Settings',
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

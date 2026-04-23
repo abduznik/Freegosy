@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
@@ -14,6 +13,7 @@ import 'package:freegosy/core/storage/metadata_cache_service.dart';
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'package:freegosy/core/romm/rom_scanner_service.dart';
 import 'package:freegosy/providers/custom_emulators_provider.dart';
+import 'package:freegosy/providers/shared_prefs_provider.dart';
 
 import 'package:freegosy/core/emulator/firmware_service.dart';
 
@@ -52,20 +52,23 @@ final firmwareServiceProvider = FutureProvider<FirmwareService?>((ref) async {
 });
 
 final downloadCacheServiceProvider = Provider<DownloadCacheService>((ref) {
-  return DownloadCacheService();
+  final prefs = ref.watch(sharedPreferencesProvider);
+  final service = DownloadCacheService(prefs);
+  service.load();
+  return service;
 });
 
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = ref.watch(sharedPreferencesProvider);
   
   String baseUrl = prefs.getString('rommBaseUrl') ?? '';
   if (baseUrl.isEmpty) baseUrl = 'https://api.romm.example.com';
   
   final username = prefs.getString('rommUsername') ?? '';
-  final password = await SecureStorageService.read('rommPassword') ?? '';
-  final token = await SecureStorageService.read('rommAuthToken');
-  final apiKey = await SecureStorageService.read('rommApiKey') ?? '';
+  final password = await SecureStorageService.read('rommPassword', prefs) ?? '';
+  final token = await SecureStorageService.read('rommAuthToken', prefs);
+  final apiKey = await SecureStorageService.read('rommApiKey', prefs) ?? '';
 
   debugPrint('[RomM-Init] Loading config:');
   debugPrint('  - Base URL: $baseUrl');
@@ -85,7 +88,8 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
 // Exposes a login function that fetches a Bearer token and refreshes the config/service providers.
 final loginProvider = Provider<Future<void> Function(String baseUrl, String username, String password)>((ref) {
   return (baseUrl, username, password) async {
-    await RommService.fetchToken(baseUrl, username, password);
+    final prefs = ref.read(sharedPreferencesProvider);
+    await RommService.fetchToken(baseUrl, username, password, prefs);
     ref.invalidate(rommConfigProvider);
     ref.invalidate(rommServiceProvider);
   };
@@ -94,12 +98,14 @@ final loginProvider = Provider<Future<void> Function(String baseUrl, String user
 // Simplified DirectoryService provider
 final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
   try {
-    final service = DirectoryService();
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final service = DirectoryService(prefs);
     await service.initialize();
     return service;
   } catch (e) {
     // Return service even on error so UI can access service.status
-    final service = DirectoryService();
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final service = DirectoryService(prefs);
     service.status = StorageStatus(error: StorageError.unknown, message: e.toString());
     return service;
   }
@@ -109,11 +115,11 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
 final strategyRegistryProvider = FutureProvider<StrategyRegistry?>((ref) async {
   final directoryService = ref.watch(directoryServiceProvider).value;
   final customEmulators = ref.watch(customEmulatorsProvider);
+  final prefs = ref.watch(sharedPreferencesProvider);
   
   if (directoryService != null) {
     try {
-      final registry = StrategyRegistry(directoryService, customEmulators: customEmulators);
-      await registry.loadPreferences(); // Await preferences loading
+      final registry = StrategyRegistry(directoryService, prefs, customEmulators: customEmulators);
       // Load persisted Windows exe overrides
       final winStrategy = registry.getStrategyForSlug('windows');
       if (winStrategy is WindowsStrategy) {
@@ -132,8 +138,9 @@ final saveSyncServiceProvider = FutureProvider<SaveSyncService?>((ref) async {
   final rommService = ref.watch(rommServiceProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
   final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
+  final prefs = ref.watch(sharedPreferencesProvider);
   if (rommService == null || directoryService == null || strategyRegistry == null) return null;
-  final service = SaveSyncService(rommService, directoryService, strategyRegistry);
+  final service = SaveSyncService(rommService, directoryService, strategyRegistry, prefs);
   service.windowsSaveStrategy.loadPersistedOverrides();
   return service;
 });
@@ -153,7 +160,8 @@ final rommServiceProvider = Provider<RommService?>((ref) {
       // Refresh token on startup to ensure latest scopes
       if (config.username.isNotEmpty && config.password.isNotEmpty) {
         debugPrint('[RomM-Init] Triggering background token refresh...');
-        service.refreshToken();
+        final prefs = ref.read(sharedPreferencesProvider);
+        service.refreshToken(prefs);
       }
       return service;
     } catch (e) {
@@ -165,8 +173,9 @@ final rommServiceProvider = Provider<RommService?>((ref) {
 });
 
 final metadataCacheServiceProvider = FutureProvider<MetadataCacheService>((ref) async {
-  final service = MetadataCacheService();
-  await service.load();
+  final prefs = ref.watch(sharedPreferencesProvider);
+  final service = MetadataCacheService(prefs);
+  service.load();
   return service;
 });
 

@@ -2,17 +2,18 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/emulator/custom_emulator_config.dart';
+import 'shared_prefs_provider.dart';
 
 class CustomEmulatorsNotifier extends StateNotifier<List<CustomEmulatorConfig>> {
   static const String _storageKey = 'custom_emulators_config';
+  final SharedPreferences _prefs;
 
-  CustomEmulatorsNotifier() : super([]) {
+  CustomEmulatorsNotifier(this._prefs) : super([]) {
     _load();
   }
 
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(_storageKey);
+  void _load() {
+    final jsonStr = _prefs.getString(_storageKey);
     if (jsonStr != null) {
       try {
         final List<dynamic> list = json.decode(jsonStr);
@@ -23,23 +24,23 @@ class CustomEmulatorsNotifier extends StateNotifier<List<CustomEmulatorConfig>> 
     }
   }
 
-  Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
+  void _save() {
     final jsonStr = json.encode(state.map((e) => e.toJson()).toList());
-    await prefs.setString(_storageKey, jsonStr);
+    _prefs.setString(_storageKey, jsonStr);
   }
 
-  Future<void> addEmulator(CustomEmulatorConfig config) async {
+  void addEmulator(CustomEmulatorConfig config) {
     state = [...state, config];
-    await _save();
+    _save();
   }
 
-  Future<void> removeEmulator(String id) async {
+  void removeEmulator(String id) {
     state = state.where((e) => e.id != id).toList();
-    await _save();
+    _save();
   }
 }
 
 final customEmulatorsProvider = StateNotifierProvider<CustomEmulatorsNotifier, List<CustomEmulatorConfig>>((ref) {
-  return CustomEmulatorsNotifier();
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return CustomEmulatorsNotifier(prefs);
 });

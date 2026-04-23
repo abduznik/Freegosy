@@ -5,13 +5,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
+import 'shared_prefs_provider.dart';
 
 const String _gamesCacheKey = 'cached_games';
 const String _platformsCacheKey = 'cached_platforms_v2';
 const String _gamesCacheTimeKey = 'cached_games_time';
 const String _platformsCacheTimeKey = 'cached_platforms_time';
 const int _cacheExpiryDays = 7;
-const int _cacheMaxBytes = 10 * 1024 * 1024; // 10MB
 
 Future<bool> _isCacheValid(SharedPreferences prefs, String timeKey) async {
   final savedTime = prefs.getString(timeKey);
@@ -21,64 +21,9 @@ Future<bool> _isCacheValid(SharedPreferences prefs, String timeKey) async {
   return DateTime.now().difference(cacheTime).inDays < _cacheExpiryDays;
 }
 
-Future<void> _saveGamesCache(List<Game> games) async {
-  final prefs = await SharedPreferences.getInstance();
-  final jsonList = games.map((g) => {
-    'id': g.id,
-    'name': g.name,
-    'platform_id': g.platformId,
-    'platform_slug': g.platformSlug,
-    'platform_display_name': g.platformDisplayName,
-    'path_cover_large': g.pathCoverLarge,
-    'path_cover_small': g.pathCoverSmall,
-    'url_cover': g.urlCover,
-    'url_download': g.fileUrl,
-    'file_name': g.fileName,
-    'fs_name': g.fsName,
-    'file_size_bytes': g.fileSize,
-    'multi_file_path': g.multiFilePath,
-    'has_multiple_files': g.hasMultipleFiles,
-  }).toList();
-  
-  final jsonString = jsonEncode(jsonList);
-  final sizeInBytes = jsonString.length; // Use .length for string size in bytes (UTF-8)
-  
-  if (sizeInBytes > _cacheMaxBytes) {
-    // Library too large to cache safely
-    // Store a flag so we know caching was skipped
-    await prefs.setBool('cache_size_exceeded', true);
-    await prefs.remove(_gamesCacheKey);
-    await prefs.remove(_gamesCacheTimeKey);
-    return;
-  }
-  
-  await prefs.setBool('cache_size_exceeded', false);
-  await prefs.setString(_gamesCacheKey, jsonString);
-  await prefs.setString(
-    _gamesCacheTimeKey, 
-    DateTime.now().toIso8601String(),
-  );
-}
-
-Future<void> _savePlatformsCache(List<Platform> platforms) async {
-  final prefs = await SharedPreferences.getInstance();
-  final jsonList = platforms.map((p) => {
-    'id': p.id,
-    'name': p.name,
-    'slug': p.slug,
-    'games_count': p.gamesCount,
-  }).toList();
-  await prefs.setString(_platformsCacheKey, jsonEncode(jsonList));
-  await prefs.setString(_platformsCacheTimeKey, DateTime.now().toIso8601String());
-}
-
-Future<List<Game>?> _loadGamesCache() async {
-  final prefs = await SharedPreferences.getInstance();
-  
-  // If cache was previously skipped due to size, 
-  // don't attempt to load
-  final sizeExceeded = 
-    prefs.getBool('cache_size_exceeded') ?? false;
+Future<List<Game>?> _loadGamesCache(Ref ref) async {
+  final prefs = ref.read(sharedPreferencesProvider);
+  final sizeExceeded = prefs.getBool('cache_size_exceeded') ?? false;
   if (sizeExceeded) return null;
   
   final isValid = await _isCacheValid(prefs, _gamesCacheTimeKey);
@@ -97,8 +42,8 @@ Future<List<Game>?> _loadGamesCache() async {
   }
 }
 
-Future<List<Platform>?> _loadPlatformsCache() async {
-  final prefs = await SharedPreferences.getInstance();
+Future<List<Platform>?> _loadPlatformsCache(Ref ref) async {
+  final prefs = ref.read(sharedPreferencesProvider);
   final isValid = await _isCacheValid(prefs, _platformsCacheTimeKey);
   if (!isValid) return null;
   final jsonString = prefs.getString(_platformsCacheKey);
@@ -143,92 +88,56 @@ const Map<String, Map<String, dynamic>> kDisplayPresets = {
 final searchQueryProvider = StateProvider<String>((ref) => '');
 final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
 
-final cardAspectRatioProvider = StateProvider<double>((ref) {
-  // Updated default to 0.75
-  return 0.75;
-});
+// Display Settings Providers using PersistentStateNotifier
+final cardAspectRatioProvider = createPersistentProvider<double>('card_aspect_ratio', 0.75);
+final columnCountProvider = createPersistentProvider<int>('column_count', 6);
+final cardSpacingProvider = createPersistentProvider<double>('card_spacing', 12.0);
+final showTitleProvider = createPersistentProvider<bool>('show_title', true);
+final activePresetProvider = createPersistentProvider<String>('active_preset', 'windows_best');
 
-// Loads persisted card aspect ratio into the provider on startup.
-final cardAspectRatioLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getDouble('card_aspect_ratio');
-  if (saved != null) {
-    ref.read(cardAspectRatioProvider.notifier).state = saved;
-  }
-});
-
-// Display Settings Providers
-final columnCountProvider = StateProvider<int>((ref) {
-  return 6;
-});
-
-final columnCountLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getInt('column_count');
-  if (saved != null) {
-    ref.read(columnCountProvider.notifier).state = saved;
-  }
-});
-
-final cardSpacingProvider = StateProvider<double>((ref) {
-  return 12.0;
-});
-
-final cardSpacingLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getDouble('card_spacing');
-  if (saved != null) {
-    ref.read(cardSpacingProvider.notifier).state = saved;
-  }
-});
-
-final showTitleProvider = StateProvider<bool>((ref) {
-  return true;
-});
-
-final showTitleLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getBool('show_title');
-  if (saved != null) {
-    ref.read(showTitleProvider.notifier).state = saved;
-  }
-});
-
-final activePresetProvider = StateProvider<String>((ref) {
-  return 'windows_best';
-});
-
-final activePresetLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getString('active_preset');
-  if (saved != null) {
-    ref.read(activePresetProvider.notifier).state = saved;
-  }
-});
+// Legacy compatibility - redirects for loaders (no longer needed but kept for minimal breaking changes)
+final cardAspectRatioLoaderProvider = FutureProvider<void>((ref) async {});
+final columnCountLoaderProvider = FutureProvider<void>((ref) async {});
+final cardSpacingLoaderProvider = FutureProvider<void>((ref) async {});
+final showTitleLoaderProvider = FutureProvider<void>((ref) async {});
+final activePresetLoaderProvider = FutureProvider<void>((ref) async {});
 
 final platformsProvider = FutureProvider<List<Platform>>((ref) async {
   final service = ref.watch(rommServiceProvider);
   if (service == null) return [];
 
-  // Try cache first
-  final cached = await _loadPlatformsCache();
+  final cached = await _loadPlatformsCache(ref);
   if (cached != null) {
-    // Refresh in background
     Future.microtask(() async {
       try {
         final fresh = await service.getPlatforms();
         if (fresh.isNotEmpty) {
-          await _savePlatformsCache(fresh);
+          final prefs = ref.read(sharedPreferencesProvider);
+          final jsonList = fresh.map((p) => {
+            'id': p.id,
+            'name': p.name,
+            'slug': p.slug,
+            'games_count': p.gamesCount,
+          }).toList();
+          await prefs.setString(_platformsCacheKey, jsonEncode(jsonList));
+          await prefs.setString(_platformsCacheTimeKey, DateTime.now().toIso8601String());
         }
       } catch (_) {}
     });
     return cached.where((p) => p.gamesCount > 0).toList();
   }
 
-  // No valid cache — fetch fresh
   final platforms = await service.getPlatforms();
   if (platforms.isNotEmpty) {
-    await _savePlatformsCache(platforms);
+    final prefs = ref.read(sharedPreferencesProvider);
+    final jsonList = platforms.map((p) => {
+      'id': p.id,
+      'name': p.name,
+      'slug': p.slug,
+      'games_count': p.gamesCount,
+    }).toList();
+    await prefs.setString(_platformsCacheKey, jsonEncode(jsonList));
+    await prefs.setString(_platformsCacheTimeKey, DateTime.now().toIso8601String());
   }
   return platforms.where((p) => p.gamesCount > 0).toList();
 });
@@ -248,25 +157,28 @@ final allGamesProvider = FutureProvider<List<Game>>((ref) async {
     }
   }
 
-  // Try cache first — return instantly if valid
-  final cached = await _loadGamesCache();
+  final cached = await _loadGamesCache(ref);
   if (cached != null) {
-    // Refresh in background without blocking UI
     Future.microtask(() async {
       try {
         final fresh = await service.getAllGames(platformId: platformIdStr);
         if (fresh.isNotEmpty) {
-          await _saveGamesCache(fresh);
+           final prefs = ref.read(sharedPreferencesProvider);
+           final jsonList = fresh.map((g) => g.toJson()).toList();
+           await prefs.setString(_gamesCacheKey, jsonEncode(jsonList));
+           await prefs.setString(_gamesCacheTimeKey, DateTime.now().toIso8601String());
         }
       } catch (_) {}
     });
     return cached;
   }
 
-  // No valid cache — fetch fresh and cache result
   final games = await service.getAllGames(platformId: platformIdStr);
   if (games.isNotEmpty) {
-    await _saveGamesCache(games);
+     final prefs = ref.read(sharedPreferencesProvider);
+     final jsonList = games.map((g) => g.toJson()).toList();
+     await prefs.setString(_gamesCacheKey, jsonEncode(jsonList));
+     await prefs.setString(_gamesCacheTimeKey, DateTime.now().toIso8601String());
   }
   return games;
 });
@@ -294,37 +206,16 @@ final filteredGamesProvider = Provider<List<Game>>((ref) {
   return filtered;
 });
 
-final retroarchSyncModeProvider = StateProvider<String>((ref) => 'both');
+final retroarchSyncModeProvider = createPersistentProvider<String>('retroarch_sync_mode', 'both');
+final rpcs3ArchitectureProvider = createPersistentProvider<String>('rpcs3_macos_architecture', 'x64');
+final edenBuildTypeProvider = createPersistentProvider<String>('eden_build_type', 'stable');
+final retroarchNdsCoreProvider = createPersistentProvider<String>('retroarch_nds_core', 'melonds');
 
-final retroarchSyncModeLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getString('retroarch_sync_mode') ?? 'both';
-  ref.read(retroarchSyncModeProvider.notifier).state = saved;
-});
-
-final rpcs3ArchitectureProvider = StateProvider<String>((ref) => 'x64');
-
-final rpcs3ArchitectureLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getString('rpcs3_macos_architecture') ?? 'x64';
-  ref.read(rpcs3ArchitectureProvider.notifier).state = saved;
-});
-
-final edenBuildTypeProvider = StateProvider<String>((ref) => 'stable');
-
-final edenBuildTypeLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getString('eden_build_type') ?? 'stable';
-  ref.read(edenBuildTypeProvider.notifier).state = saved;
-});
-
-final retroarchNdsCoreProvider = StateProvider<String>((ref) => 'melonds');
-
-final retroarchNdsCoreLoaderProvider = FutureProvider<void>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final saved = prefs.getString('retroarch_nds_core') ?? 'melonds';
-  ref.read(retroarchNdsCoreProvider.notifier).state = saved;
-});
+// Legacy compatibility
+final retroarchSyncModeLoaderProvider = FutureProvider<void>((ref) async {});
+final rpcs3ArchitectureLoaderProvider = FutureProvider<void>((ref) async {});
+final edenBuildTypeLoaderProvider = FutureProvider<void>((ref) async {});
+final retroarchNdsCoreLoaderProvider = FutureProvider<void>((ref) async {});
 
 final platformLogoCacheProvider = FutureProvider.family<Uint8List?, String>((ref, logoUrl) async {
   if (logoUrl.isEmpty) return null;

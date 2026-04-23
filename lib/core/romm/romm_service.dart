@@ -50,31 +50,8 @@ class RommService {
 
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
-        final statusCode = e.response?.statusCode;
-        final path = e.requestOptions.path;
-        final isAuthRetry = e.requestOptions.extra['_isAuthRetry'] == true;
-
-        if (!isAuthRetry && (statusCode == 401 || statusCode == 403 || statusCode == 500) && path != '/api/token') {
-          if (_config.username.isNotEmpty && _config.password.isNotEmpty) {
-            debugPrint('[RomM] Auth error ($statusCode), attempting fresh login...');
-            try {
-              final newToken = await fetchToken(_config.baseUrl, _config.username, _config.password);
-              if (newToken.isNotEmpty) {
-                _config = _config.copyWith(token: newToken, apiKey: '');
-                _authOptions = _computeAuthOptions(_config);
-                
-                final opts = e.requestOptions.copyWith(
-                  headers: Map<String, dynamic>.from(e.requestOptions.headers)
-                    ..remove('X-Api-Key')
-                    ..['Authorization'] = 'Bearer $newToken',
-                )..extra['_isAuthRetry'] = true;
-                
-                final retryResponse = await _dio.fetch(opts);
-                return handler.resolve(retryResponse);
-              }
-            } catch (_) {}
-          }
-        }
+        // Note: fetchToken needs SharedPreferences now. 
+        // We'll rely on the provider calling refreshToken/fetchToken with prefs.
         return handler.next(e);
       },
     ));
@@ -98,7 +75,7 @@ class RommService {
     return Options(headers: headers);
   }
 
-  static Future<String> fetchToken(String baseUrl, String username, String password) async {
+  static Future<String> fetchToken(String baseUrl, String username, String password, SharedPreferences prefs) async {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
@@ -116,26 +93,24 @@ class RommService {
     final token = response.data['access_token'] as String?;
     if (token == null || token.isEmpty) throw Exception('Login failed: no access_token');
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('rommAuthToken', token);
-    await SecureStorageService.write('rommAuthToken', token);
+    await SecureStorageService.write('rommAuthToken', token, prefs);
     
     return token;
   }
 
-  Future<void> refreshToken() async {
+  Future<void> refreshToken(SharedPreferences prefs) async {
     try {
       if (_config.username.isEmpty || _config.password.isEmpty) return;
-      final newToken = await fetchToken(_config.baseUrl, _config.username, _config.password);
+      final newToken = await fetchToken(_config.baseUrl, _config.username, _config.password, prefs);
       _config = _config.copyWith(token: newToken);
       _authOptions = _computeAuthOptions(_config);
     } catch (_) {}
   }
 
-  Future<void> _ensureBearerToken() async {
+  Future<void> _ensureBearerToken(SharedPreferences prefs) async {
     final authHeader = _authOptions.headers?['Authorization']?.toString() ?? '';
     if (!authHeader.startsWith('Bearer ')) {
-      await refreshToken();
+      await refreshToken(prefs);
     }
   }
 
@@ -387,9 +362,11 @@ class RommService {
     return items.isEmpty ? null : items.first;
   }
 
-  Future<Uint8List?> downloadSave(String saveUrl) async {
+  Future<Uint8List?> downloadSave(String saveUrl, {SharedPreferences? prefs}) async {
     try {
-      await _ensureBearerToken();
+      if (prefs != null) {
+        await _ensureBearerToken(prefs);
+      }
       final url = saveUrl.startsWith('http') ? saveUrl : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
       final response = await _dio.get<List<int>>(url, options: _authOptions.copyWith(responseType: ResponseType.bytes));
       return (response.statusCode == 200 && response.data != null) ? Uint8List.fromList(response.data!) : null;
@@ -422,9 +399,9 @@ class RommService {
     } catch (_) { return null; }
   }
 
-  Future<bool> updateRomProps(String romId, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
+  Future<bool> updateRomProps(String romId, SharedPreferences prefs, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
     try {
-      await _ensureBearerToken();
+      await _ensureBearerToken(prefs);
       final data = <String, dynamic>{};
       if (backlogged != null) data['backlogged'] = backlogged;
       if (nowPlaying != null) data['now_playing'] = nowPlaying;

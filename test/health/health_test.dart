@@ -4,9 +4,14 @@ import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' as io;
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('Health Checks', () {
     test('RommService initializes without throwing', () {
       final config = RomMConfig(
@@ -17,13 +22,15 @@ void main() {
       expect(() => RommService(config), returnsNormally);
     });
 
-    test('DirectoryService initializes without throwing', () {
-      expect(() => DirectoryService(), returnsNormally);
+    test('DirectoryService initializes without throwing', () async {
+      final prefs = await SharedPreferences.getInstance();
+      expect(() => DirectoryService(prefs), returnsNormally);
     });
 
     test('StrategyRegistry registers all strategies and detects conflicts', () async {
-      final ds = DirectoryService();
-      final registry = StrategyRegistry(ds);
+      final prefs = await SharedPreferences.getInstance();
+      final ds = DirectoryService(prefs);
+      final registry = StrategyRegistry(ds, prefs);
       
       final allSlugs = <String, String>{}; // slug -> emulatorId
       final overlapErrors = <String>[];
@@ -67,18 +74,20 @@ void main() {
       expect(overlapErrors, isEmpty, reason: overlapErrors.join('\n'));
     });
 
-    test('SaveSyncService initializes without throwing', () {
-      final ds = DirectoryService();
+    test('SaveSyncService initializes without throwing', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final ds = DirectoryService(prefs);
       final rs = RommService(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
-      final reg = StrategyRegistry(ds);
-      expect(() => SaveSyncService(rs, ds, reg), returnsNormally);
+      final reg = StrategyRegistry(ds, prefs);
+      expect(() => SaveSyncService(rs, ds, reg, prefs), returnsNormally);
     });
 
-    test('All Save strategies can be instantiated', () {
-      final ds = DirectoryService();
+    test('All Save strategies can be instantiated', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final ds = DirectoryService(prefs);
       final rs = RommService(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
-      final reg = StrategyRegistry(ds);
-      final sss = SaveSyncService(rs, ds, reg);
+      final reg = StrategyRegistry(ds, prefs);
+      final sss = SaveSyncService(rs, ds, reg, prefs);
       
       expect(sss.getStrategyForSlug('gba'), isNotNull);
       expect(sss.getStrategyForSlug('gc'), isNotNull);

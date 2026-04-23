@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/error/error_handler.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
@@ -241,7 +241,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       final keysPath = '$systemDir/$keysSubPath';
 
       if (!await File(keysPath).exists()) {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = ref.read(sharedPreferencesProvider);
         final shownOnce = prefs.getBool('shown_3ds_keys_warning') ?? false;
         if (!shownOnce && context.mounted) {
           await showDialog(
@@ -485,7 +485,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         if (!context.mounted) return;
         ErrorHandler.showInfo(context, 'Retry Sync', message: 'Save appears unchanged. Retrying with force...');
         // Force pull by clearing the pull timestamp
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = ref.read(sharedPreferencesProvider);
         await prefs.remove('last_pull_${game.id}');
         if (context.mounted) {
           final retryOk = await syncService.pullSave(game, romPath, saveData: selectedSave);

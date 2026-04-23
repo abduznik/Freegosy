@@ -15,7 +15,7 @@ class SecureStorageService {
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
-  static Future<String?> read(String key) async {
+  static Future<String?> read(String key, SharedPreferences prefs) async {
     try {
       // Layer 1: Secure Storage
       return await _storage.read(key: key);
@@ -23,7 +23,6 @@ class SecureStorageService {
       // Layer 2: Fallback for keyring errors
       if (e.message?.contains('keyring') == true || e.code == 'null') {
         debugPrint('[SecureStorage] Keyring error on Linux, falling back to SharedPreferences: $e');
-        final prefs = await SharedPreferences.getInstance();
         return prefs.getString('fallback_secure_$key');
       }
       debugPrint('[SecureStorage] PlatformException reading $key: $e');
@@ -34,7 +33,7 @@ class SecureStorageService {
     }
   }
 
-  static Future<void> write(String key, String value) async {
+  static Future<void> write(String key, String value, SharedPreferences prefs) async {
     try {
       // Layer 1: Secure Storage
       await _storage.write(key: key, value: value);
@@ -42,7 +41,6 @@ class SecureStorageService {
       // Layer 2: Fallback for keyring errors
       if (e.message?.contains('keyring') == true || e.code == 'null') {
         debugPrint('[SecureStorage] Keyring error on Linux, writing to SharedPreferences: $e');
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString('fallback_secure_$key', value);
       } else {
         debugPrint('[SecureStorage] PlatformException writing $key: $e');
@@ -52,16 +50,14 @@ class SecureStorageService {
     }
   }
 
-  static Future<void> delete(String key) async {
+  static Future<void> delete(String key, SharedPreferences prefs) async {
     try {
       await _storage.delete(key: key);
-      final prefs = await SharedPreferences.getInstance();
       await prefs.remove('fallback_secure_$key');
     } catch (e) {
       debugPrint('[SecureStorage] Error deleting $key: $e');
       // Always try to clear the fallback even if secure storage fails
       try {
-        final prefs = await SharedPreferences.getInstance();
         await prefs.remove('fallback_secure_$key');
       } catch (_) {}
     }

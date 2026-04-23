@@ -28,6 +28,7 @@ class SaveSyncService {
   final RommService _rommService;
   final DirectoryService _directoryService;
   final StrategyRegistry _strategyRegistry;
+  final SharedPreferences _prefs;
 
   late final RetroArchSaveStrategy _retroarch;
   late final DolphinSaveStrategy _dolphin;
@@ -43,11 +44,11 @@ class SaveSyncService {
   late final CemuSaveStrategy _cemu;
   late final AzaharSaveStrategy _azahar;
 
-  SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry) {
+  SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry, this._prefs) {
     _retroarch = RetroArchSaveStrategy(_directoryService);
     _dolphin = DolphinSaveStrategy(_directoryService);
     _eden = EdenSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
-    _windows = WindowsSaveStrategy();
+    _windows = WindowsSaveStrategy(_prefs);
     _pcsx2 = Pcsx2SaveStrategy(_directoryService);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
     _xenia = XeniaSaveStrategy(_directoryService);
@@ -60,27 +61,23 @@ class SaveSyncService {
   }
 
   /// Returns the manual Title ID mapping for a given game.
-  Future<String?> getMappedFolder(String gameId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('eden_mapping_$gameId');
+  String? getMappedFolder(String gameId) {
+    return _prefs.getString('eden_mapping_$gameId');
   }
 
   /// Saves the manual Title ID mapping for a given game.
   Future<void> saveMappedFolder(String gameId, String folderName) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('eden_mapping_$gameId', folderName);
+    await _prefs.setString('eden_mapping_$gameId', folderName);
   }
 
   /// Returns the manual Eden profile choice.
-  Future<String?> getActiveProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('active_eden_profile');
+  String? getActiveProfile() {
+    return _prefs.getString('active_eden_profile');
   }
 
   /// Saves the manual Eden profile choice.
   Future<void> saveActiveProfile(String profileId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('active_eden_profile', profileId);
+    await _prefs.setString('active_eden_profile', profileId);
   }
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
@@ -178,24 +175,21 @@ class SaveSyncService {
   String _hashKey(String gameId, String filename) =>
       'last_hash_${gameId}_$filename';
 
-  Future<String?> _getStoredHash(
-      String gameId, String filename) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_hashKey(gameId, filename));
+  String? _getStoredHash(
+      String gameId, String filename) {
+    return _prefs.getString(_hashKey(gameId, filename));
   }
 
   Future<void> _storeHash(
       String gameId, String filename, String hash) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_hashKey(gameId, filename), hash);
+    await _prefs.setString(_hashKey(gameId, filename), hash);
   }
 
   /// Clears the stored hash for a game, forcing the next push to upload.
   Future<void> clearHashCache(String gameId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('last_hash_${gameId}_'));
+    final keys = _prefs.getKeys().where((k) => k.startsWith('last_hash_${gameId}_')).toList();
     for (final key in keys) {
-      await prefs.remove(key);
+      await _prefs.remove(key);
     }
     debugPrint('[SyncService] Cleared hash cache for game $gameId');
   }
@@ -208,16 +202,14 @@ class SaveSyncService {
   String _pullKey(String gameId) =>
       'last_pull_$gameId';
 
-  Future<DateTime?> _getLastPullTime(String gameId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_pullKey(gameId));
+  DateTime? _getLastPullTime(String gameId) {
+    final stored = _prefs.getString(_pullKey(gameId));
     if (stored == null) return null;
     return DateTime.tryParse(stored);
   }
 
   Future<void> _setLastPullTime(String gameId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
+    await _prefs.setString(
       _pullKey(gameId),
       DateTime.now().toIso8601String(),
     );
@@ -231,12 +223,12 @@ class SaveSyncService {
       if (strategy == null) return false;
 
       if (strategy is EdenSaveStrategy) {
-        final mapping = await getMappedFolder(game.id);
+        final mapping = getMappedFolder(game.id);
         strategy.setManualMapping(mapping);
-        final activeProfile = await getActiveProfile();
+        final activeProfile = getActiveProfile();
         strategy.setActiveProfileOverride(activeProfile);
       } else if (strategy is AzaharSaveStrategy) {
-        final mapping = await getMappedFolder(game.id);
+        final mapping = getMappedFolder(game.id);
         strategy.setManualMapping(mapping);
       }
 
@@ -278,7 +270,7 @@ class SaveSyncService {
       final uploadFile = io.File(bundleZipPath);
       final String localHash = await _hashFile(uploadFile);
       final String uploadFilename = '$displayStem.zip';
-      final String? storedHash = await _getStoredHash(game.id, uploadFilename);
+      final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
       // Local deduplication check (only for automatic syncs)
       if (!force && storedHash != null && localHash == storedHash) {
@@ -325,12 +317,12 @@ class SaveSyncService {
       if (strategy == null) return false;
 
       if (strategy is EdenSaveStrategy) {
-        final mapping = await getMappedFolder(game.id);
+        final mapping = getMappedFolder(game.id);
         strategy.setManualMapping(mapping);
-        final activeProfile = await getActiveProfile();
+        final activeProfile = getActiveProfile();
         strategy.setActiveProfileOverride(activeProfile);
       } else if (strategy is AzaharSaveStrategy) {
-        final mapping = await getMappedFolder(game.id);
+        final mapping = getMappedFolder(game.id);
         strategy.setManualMapping(mapping);
       }
 
@@ -340,7 +332,7 @@ class SaveSyncService {
       if (saveData == null) {
         final remoteUpdatedAt = DateTime.tryParse(
             save['updated_at']?.toString() ?? '');
-        final lastPull = await _getLastPullTime(game.id);
+        final lastPull = _getLastPullTime(game.id);
 
         if (lastPull != null &&
             remoteUpdatedAt != null &&

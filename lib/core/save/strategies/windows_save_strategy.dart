@@ -10,11 +10,12 @@ import 'package:dio/dio.dart';
 
 class WindowsSaveStrategy extends SaveStrategy {
   final PcGamingWikiService _wikiService;
+  final SharedPreferences _prefs;
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
 
-  WindowsSaveStrategy() : _wikiService = PcGamingWikiService(Dio());
+  WindowsSaveStrategy(this._prefs) : _wikiService = PcGamingWikiService(Dio());
 
   @override
   String get strategyId => 'windows';
@@ -22,12 +23,11 @@ class WindowsSaveStrategy extends SaveStrategy {
   /// Allows the user to manually set a save path for a game.
   static const String _prefsPrefix = 'win_save_';
 
-  Future<void> loadPersistedOverrides() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith(_prefsPrefix));
+  void loadPersistedOverrides() {
+    final keys = _prefs.getKeys().where((k) => k.startsWith(_prefsPrefix));
     for (final key in keys) {
       final gameId = key.substring(_prefsPrefix.length);
-      final path = prefs.getString(key);
+      final path = _prefs.getString(key);
       if (path != null && path.isNotEmpty) _manualOverrides[gameId] = path;
     }
   }
@@ -35,8 +35,7 @@ class WindowsSaveStrategy extends SaveStrategy {
   /// Allows the user to manually set a save path for a game.
   Future<void> setManualOverride(String gameId, String path) async {
     _manualOverrides[gameId] = path;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_prefsPrefix$gameId', path);
+    await _prefs.setString('$_prefsPrefix$gameId', path);
   }
 
   String? getManualOverride(String gameId) => _manualOverrides[gameId];

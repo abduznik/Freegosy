@@ -8,11 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class WindowsStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
   final WindowsGameService _windowsGameService;
+  final SharedPreferences _prefs;
 
   // Manual exe overrides per game id
   final Map<String, String> _exeOverrides = {};
 
-  WindowsStrategy(this._directoryService)
+  WindowsStrategy(this._directoryService, this._prefs)
       : _windowsGameService = WindowsGameService();
 
   @override
@@ -38,20 +39,18 @@ class WindowsStrategy extends EmulatorStrategy {
 
   static const String _prefsPrefix = 'win_exe_';
 
-  Future<void> loadPersistedOverrides() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith(_prefsPrefix));
+  void loadPersistedOverrides() {
+    final keys = _prefs.getKeys().where((k) => k.startsWith(_prefsPrefix));
     for (final key in keys) {
       final gameId = key.substring(_prefsPrefix.length);
-      final path = prefs.getString(key);
+      final path = _prefs.getString(key);
       if (path != null && path.isNotEmpty) _exeOverrides[gameId] = path;
     }
   }
 
   Future<void> setExeOverride(String gameId, String exePath) async {
     _exeOverrides[gameId] = exePath;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_prefsPrefix$gameId', exePath);
+    await _prefs.setString('$_prefsPrefix$gameId', exePath);
   }
 
   String? getExeOverride(String gameId) => _exeOverrides[gameId];

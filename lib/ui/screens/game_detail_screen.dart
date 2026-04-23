@@ -6,6 +6,7 @@ import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/shared_prefs_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
 import '../widgets/download_progress_indicator.dart';
 
@@ -195,8 +196,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSaving = true);
     
+    final prefs = ref.read(sharedPreferencesProvider);
     final success = await widget.rommService!.updateRomProps(
       _currentGame.id,
+      prefs,
       backlogged: _backlogged,
       nowPlaying: _nowPlaying,
       rating: _rating,
