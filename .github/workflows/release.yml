@@ -138,11 +138,9 @@ jobs:
         run: |
           create-dmg \
             --volname "Freegosy" \
-            --no-internet-enable \
+            --app-drop-link 600 185 \
             freegosy-macos.dmg \
             build/macos/Build/Products/Release/*.app || true
-          # create-dmg exits non-zero when codesign is skipped on unsigned builds
-          # || true prevents CI failure — the DMG is still created successfully
       - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
