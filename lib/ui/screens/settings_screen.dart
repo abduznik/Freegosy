@@ -336,6 +336,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Logged in and settings saved.'), backgroundColor: Colors.green),
                         );
+                        if (!kIsWeb && io.Platform.isMacOS) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Note: this is an unsigned build — credentials are stored without encryption. For a secure build, compile from source with your own signing certificate.'),
+                              duration: Duration(seconds: 5),
+                            ),
+                          );
+                        }
                       }
                       setState(() => _isSaving = false);
                     },
