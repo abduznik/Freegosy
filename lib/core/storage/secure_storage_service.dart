@@ -1,3 +1,4 @@
+import 'dart:io' as io;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,16 +11,21 @@ import 'package:flutter/foundation.dart';
 /// 1. Try FlutterSecureStorage (Keychain/DPAPI/Libsecret).
 /// 2. If it fails due to a PlatformException (e.g., keyring locked/missing), fallback to SharedPreferences.
 /// 3. Log errors but never crash the app for a storage read.
+/// 
+/// NOTE: macOS uses SharedPreferences directly to avoid Keychain error -34018
+/// caused by ad-hoc signing requirements.
 class SecureStorageService {
   static final _storage = FlutterSecureStorage(
     aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-    mOptions: const MacOsOptions(
-      accessibility: KeychainAccessibility.first_unlock,
-    ),
     lOptions: const LinuxOptions(),
   );
 
   static Future<String?> read(String key, SharedPreferences prefs) async {
+    // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
+    if (!kIsWeb && io.Platform.isMacOS) {
+      return prefs.getString('macos_secure_$key');
+    }
+
     try {
       // Layer 1: Secure Storage
       return await _storage.read(key: key);
@@ -38,6 +44,12 @@ class SecureStorageService {
   }
 
   static Future<void> write(String key, String value, SharedPreferences prefs) async {
+    // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
+    if (!kIsWeb && io.Platform.isMacOS) {
+      await prefs.setString('macos_secure_$key', value);
+      return;
+    }
+
     try {
       // Layer 1: Secure Storage
       await _storage.write(key: key, value: value);
@@ -55,6 +67,12 @@ class SecureStorageService {
   }
 
   static Future<void> delete(String key, SharedPreferences prefs) async {
+    // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
+    if (!kIsWeb && io.Platform.isMacOS) {
+      await prefs.remove('macos_secure_$key');
+      return;
+    }
+
     try {
       await _storage.delete(key: key);
       await prefs.remove('fallback_secure_$key');
