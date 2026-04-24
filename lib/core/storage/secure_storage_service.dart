@@ -15,7 +15,6 @@ class SecureStorageService {
     aOptions: const AndroidOptions(encryptedSharedPreferences: true),
     mOptions: const MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock,
-      groupId: 'com.example.freegosy',
     ),
     lOptions: const LinuxOptions(),
   );
