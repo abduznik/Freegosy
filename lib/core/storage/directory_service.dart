@@ -446,7 +446,7 @@ class DirectoryService {
       await for (final entity in dir.list()) {
         if (entity is File) {
           final fname = p.basename(entity.path);
-          if (fname.toLowerCase().startsWith(baseName.toLowerCase())) {
+          if (fname.toLowerCase().startsWith(baseName.toLowerCase()) && !fname.toLowerCase().endsWith('.part')) {
             candidates.add(entity);
           }
         }

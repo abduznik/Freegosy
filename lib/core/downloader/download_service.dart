@@ -13,8 +13,11 @@ class DownloadProgress {
   final int bytesReceived;
   final int totalBytes;
   final bool isComplete;
+  final bool isPaused;
   final String? error;
-  final String status; // 'downloading', 'extracting', 'complete', 'error'
+  final String status; // 'downloading', 'extracting', 'complete', 'error', 'paused', 'canceled'
+  final Game? game;
+  final String? downloadUrl;
 
   DownloadProgress({
     required this.id,
@@ -23,9 +26,38 @@ class DownloadProgress {
     this.bytesReceived = 0,
     this.totalBytes = 0,
     this.isComplete = false,
+    this.isPaused = false,
     this.error,
     this.status = 'Downloading...',
+    this.game,
+    this.downloadUrl,
   });
+
+  DownloadProgress copyWith({
+    double? percent,
+    int? bytesReceived,
+    int? totalBytes,
+    bool? isComplete,
+    bool? isPaused,
+    String? error,
+    String? status,
+    Game? game,
+    String? downloadUrl,
+  }) {
+    return DownloadProgress(
+      id: id,
+      gameName: gameName,
+      percent: percent ?? this.percent,
+      bytesReceived: bytesReceived ?? this.bytesReceived,
+      totalBytes: totalBytes ?? this.totalBytes,
+      isComplete: isComplete ?? this.isComplete,
+      isPaused: isPaused ?? this.isPaused,
+      error: error ?? this.error,
+      status: status ?? this.status,
+      game: game ?? this.game,
+      downloadUrl: downloadUrl ?? this.downloadUrl,
+    );
+  }
 }
 
 class DownloadService {
@@ -39,126 +71,169 @@ class DownloadService {
     required this.extractionService,
   });
 
-  Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers}) async* {
+  Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers, CancelToken? cancelToken}) async* {
     if (await directoryService.isRomDownloaded(game)) {
       yield DownloadProgress(id: game.id, gameName: game.name, percent: 1.0, isComplete: true);
       return;
     }
 
-    final savePath = await directoryService.getRomFilePath(game);
-    final saveFile = File(savePath);
-    await saveFile.parent.create(recursive: true);
+    final finalPath = await directoryService.getRomFilePath(game);
+    final partPath = '$finalPath.part';
+    final partFile = File(partPath);
+    await partFile.parent.create(recursive: true);
 
-    final controller = StreamController<DownloadProgress>();
+    int existingBytes = 0;
+    if (await partFile.exists()) {
+      existingBytes = await partFile.length();
+    }
+
+    yield DownloadProgress(
+      id: game.id,
+      gameName: game.name,
+      percent: 0.0,
+      bytesReceived: existingBytes,
+      status: 'Starting...',
+    );
 
     debugPrint("[DownloadService] Starting download for: ${game.name}");
     debugPrint("[DownloadService] URL: $downloadUrl");
-    debugPrint("[DownloadService] Save Path: $savePath");
+    debugPrint("[DownloadService] Final Path: $finalPath");
+    debugPrint("[DownloadService] Part Path: $partPath");
+    debugPrint("[DownloadService] Existing Bytes: $existingBytes");
 
     try {
-      dio.download(
-        downloadUrl,
-        savePath,
-        options: Options(headers: headers),
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
-            controller.add(DownloadProgress(
-              id: game.id,
-              gameName: game.name,
-              percent: received / total,
-              bytesReceived: received,
-              totalBytes: total,
-            ));
-          }
+      final options = Options(
+        headers: {
+          ...?headers,
+          if (existingBytes > 0) 'Range': 'bytes=$existingBytes-',
         },
-        deleteOnError: true,
-      ).then((_) async {
-        try {
-          File file = File(savePath);
-          String currentPath = savePath;
+        responseType: ResponseType.stream,
+      );
 
-          debugPrint("=== DOWNLOAD COMPLETION DEBUG ===");
-          debugPrint("Game: ${game.name}, hasMultipleFiles: ${game.isMultiFile}");
-          debugPrint("Downloaded File Path: $savePath");
+      final response = await dio.get(downloadUrl, options: options, cancelToken: cancelToken);
+      
+      final bool isResuming = response.statusCode == 206;
+      int receivedBytes = 0;
+      int actualTotalBytes = 0;
 
-          bool isZipSignature = false;
-          if (await file.exists()) {
-            // Peek at first 4 bytes for ZIP signature [0x50, 0x4B, 0x03, 0x04]
-            final raf = await file.open();
-            final bytes = await raf.read(4);
-            await raf.close();
+      if (isResuming) {
+        debugPrint("[DownloadService] Server accepted Range header (206 Partial Content)");
+        receivedBytes = existingBytes;
+        final contentLength = int.tryParse(response.headers.value('content-length') ?? '0') ?? 0;
+        actualTotalBytes = contentLength + existingBytes;
+      } else {
+        debugPrint("[DownloadService] Server returned 200 OK (Full Content), starting fresh");
+        receivedBytes = 0;
+        actualTotalBytes = int.tryParse(response.headers.value('content-length') ?? '0') ?? 0;
+        if (existingBytes > 0) {
+          // If we had a partial file but server gave us full content, truncate/overwrite
+          await partFile.writeAsBytes([], mode: FileMode.write);
+        }
+      }
 
-            debugPrint("File Magic Bytes: $bytes");
+      debugPrint("[DownloadService] Total Bytes to download: $actualTotalBytes, Starting from: $receivedBytes");
 
-            isZipSignature = bytes.length == 4 &&
-                bytes[0] == 0x50 &&
-                bytes[1] == 0x4B &&
-                bytes[2] == 0x03 &&
-                bytes[3] == 0x04;
+      final sink = await partFile.open(mode: isResuming ? FileMode.append : FileMode.write);
 
-            debugPrint("Forcing ZIP extraction: $isZipSignature");
 
-            if (isZipSignature) {
-              if (!currentPath.toLowerCase().endsWith('.zip')) {
-                final newPath = '$currentPath.zip';
-                await file.rename(newPath);
-                currentPath = newPath;
-              }
-            }
-          }
+      try {
+        final stream = response.data.stream as Stream<List<int>>;
+        DateTime lastUpdate = DateTime.now();
 
-          final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-          final isArchive = currentPath.toLowerCase().endsWith('.zip') ||
-              currentPath.toLowerCase().endsWith('.7z');
-          final shouldExtract = game.isMultiFile || (isWindowsGame && isArchive) || isZipSignature;
-          
-          if (shouldExtract) {
-            controller.add(DownloadProgress(
+        await for (final chunk in stream) {
+          await sink.writeFrom(chunk);
+          receivedBytes += chunk.length;
+
+          // Throttle UI updates to 10 FPS max to avoid lag
+          final now = DateTime.now();
+          if (now.difference(lastUpdate) > const Duration(milliseconds: 100) || receivedBytes == actualTotalBytes) {
+            yield DownloadProgress(
               id: game.id,
               gameName: game.name,
-              percent: 1.0,
-              status: 'Extracting...',
-            ));
-            await _extractMultiFile(game, currentPath);
+              percent: actualTotalBytes > 0 ? receivedBytes / actualTotalBytes : 0,
+              bytesReceived: receivedBytes,
+              totalBytes: actualTotalBytes,
+              status: 'Downloading...',
+            );
+            lastUpdate = now;
           }
-          controller.add(DownloadProgress(
+        }
+      } finally {
+        await sink.close();
+      }
+
+      // Download complete, rename .part to final
+      File file = await partFile.rename(finalPath);
+      String currentPath = finalPath;
+
+      // Extraction logic
+      try {
+        debugPrint("=== DOWNLOAD COMPLETION DEBUG ===");
+        debugPrint("Game: ${game.name}, hasMultipleFiles: ${game.isMultiFile}");
+        
+        bool isZipSignature = false;
+        if (await file.exists()) {
+          final raf = await file.open();
+          final bytes = await raf.read(4);
+          await raf.close();
+
+          isZipSignature = bytes.length == 4 &&
+              bytes[0] == 0x50 &&
+              bytes[1] == 0x4B &&
+              bytes[2] == 0x03 &&
+              bytes[3] == 0x04;
+
+          if (isZipSignature && !currentPath.toLowerCase().endsWith('.zip')) {
+            final newPath = '$currentPath.zip';
+            await file.rename(newPath);
+            currentPath = newPath;
+          }
+        }
+
+        final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+        final isArchive = currentPath.toLowerCase().endsWith('.zip') ||
+            currentPath.toLowerCase().endsWith('.7z');
+        final shouldExtract = game.isMultiFile || (isWindowsGame && isArchive) || isZipSignature;
+        
+        if (shouldExtract) {
+          yield DownloadProgress(
             id: game.id,
             gameName: game.name,
             percent: 1.0,
-            isComplete: true,
-            status: 'Done!',
-          ));
-        } catch (e) {
-          controller.add(DownloadProgress(
-            id: game.id,
-            gameName: game.name,
-            error: 'Extraction failed: $e',
-          ));
-        } finally {
-          controller.close();
+            status: 'Extracting...',
+          );
+          await _extractMultiFile(game, currentPath);
         }
-      }).catchError((e) {
+        
+        yield DownloadProgress(
+          id: game.id,
+          gameName: game.name,
+          percent: 1.0,
+          isComplete: true,
+          status: 'Done!',
+        );
+      } catch (e) {
+        yield DownloadProgress(
+          id: game.id,
+          gameName: game.name,
+          error: 'Extraction failed: $e',
+        );
+      }
+    } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) {
+        debugPrint("[DownloadService] Download paused/canceled for: ${game.name}");
+      } else {
         String errorMsg = 'Download failed: $e';
-        debugPrint("[DownloadService] Download failed: $e");
         if (e is DioException) {
-          debugPrint("[DownloadService] Dio Error Response: ${e.response?.data}");
-          debugPrint("[DownloadService] Dio Error Status: ${e.response?.statusCode}");
-          if (e.response?.statusCode == 404) {
-            errorMsg = 'File not found on server (404). URL: $downloadUrl';
-          } else if (e.response?.statusCode == 400) {
-            errorMsg = 'Server rejected request (400). URL: $downloadUrl';
-          } else if (e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.connectionTimeout) {
-            errorMsg = 'Download timed out. Check your internet connection.';
+          if (e.response?.statusCode == 416) {
+            errorMsg = 'Range error. Retrying from start...';
+            if (await partFile.exists()) await partFile.delete();
+          } else if (e.response?.statusCode == 404) {
+            errorMsg = 'File not found on server (404).';
           }
         }
-        controller.add(DownloadProgress(id: game.id, gameName: game.name, error: errorMsg));
-        controller.close();
-      });
-
-      yield* controller.stream;
-    } catch (e) {
-      yield DownloadProgress(id: game.id, gameName: game.name, error: 'Error: $e');
-      if (await saveFile.exists()) await saveFile.delete();
+        yield DownloadProgress(id: game.id, gameName: game.name, error: errorMsg);
+      }
     }
   }
 

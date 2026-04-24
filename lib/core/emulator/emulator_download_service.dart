@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -19,7 +20,7 @@ class EmulatorDownloadService {
     _releaseService = ReleaseService(_dio);
   }
 
-  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture, String? buildType}) async* {
+  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture, String? buildType, CancelToken? cancelToken}) async* {
     final definition = kEmulatorDefinitions.firstWhere(
       (d) => d['id'] == emulatorId,
       orElse: () => {},
@@ -37,8 +38,10 @@ class EmulatorDownloadService {
     final String emulatorName = definition['name'] as String? ?? emulatorId;
     final String type = definition['type'] as String? ?? 'direct';
 
-    // Resolve download URL based on type
+    // Resolve download URL logic remains the same ...
     String? downloadUrl;
+    // ... (rest of URL resolution logic)
+
     
     // Check for build-specific overrides (e.g., Nightly)
     if (buildType != null && buildType.isNotEmpty) {
@@ -271,89 +274,91 @@ class EmulatorDownloadService {
     final controller = StreamController<DownloadProgress>();
 
     try {
-      _dio.download(
-        downloadUrl,
-        tempFilePath,
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
-            controller.add(DownloadProgress(
-              id: emulatorId,
-              gameName: emulatorName,
-              percent: received / total,
-              bytesReceived: received,
-              totalBytes: total,
-              status: 'Downloading...',
-            ));
-          }
-        },
-        deleteOnError: true,
-      ).then((_) async {
-        try {
+      final options = Options(responseType: ResponseType.stream);
+      final response = await _dio.get(downloadUrl, options: options, cancelToken: cancelToken);
+      
+      final totalBytes = int.tryParse(response.headers.value('content-length') ?? '0') ?? 0;
+      final file = File(tempFilePath);
+      final sink = await file.open(mode: FileMode.write);
+      int receivedBytes = 0;
+
+      try {
+        final stream = response.data.stream as Stream<List<int>>;
+        await for (final chunk in stream) {
+          await sink.writeFrom(chunk);
+          receivedBytes += chunk.length;
           controller.add(DownloadProgress(
             id: emulatorId,
             gameName: emulatorName,
-            percent: 1.0,
-            status: 'Extracting...',
+            percent: totalBytes > 0 ? receivedBytes / totalBytes : 0,
+            bytesReceived: receivedBytes,
+            totalBytes: totalBytes,
+            status: 'Downloading...',
           ));
-          await _extractionService.extract(tempFilePath, emulatorDir);
+        }
+      } finally {
+        await sink.close();
+      }
 
-          // Ensure binary is executable and remove quarantine on macOS/Linux
-          final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);
-          if (exeName != null) {
-            final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName as String);
-            if (exePath != null) {
-              if (Platform.isLinux || Platform.isMacOS) {
-                await Process.run('chmod', ['+x', exePath]);
-              }
-              
-              if (Platform.isMacOS) {
-                // Remove quarantine attribute for the entire emulator directory
-                // This prevents Gatekeeper from killing the process on direct launch
-                await Process.run('xattr', ['-cr', emulatorDir]);
+      try {
+        controller.add(DownloadProgress(
+          id: emulatorId,
+          gameName: emulatorName,
+          percent: 1.0,
+          status: 'Extracting...',
+        ));
+        await _extractionService.extract(tempFilePath, emulatorDir);
 
-                // Special case for Ryujinx: Re-sign with hypervisor entitlement
-                if (emulatorId == 'ryujinx') {
-                  await _reSignRyujinx(exePath);
-                }
+        // Ensure binary is executable and remove quarantine on macOS/Linux
+        final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);
+        if (exeName != null) {
+          final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName as String);
+          if (exePath != null) {
+            if (Platform.isLinux || Platform.isMacOS) {
+              await Process.run('chmod', ['+x', exePath]);
+            }
+            
+            if (Platform.isMacOS) {
+              await Process.run('xattr', ['-cr', emulatorDir]);
+              if (emulatorId == 'ryujinx') {
+                await _reSignRyujinx(exePath);
               }
             }
           }
-
-          controller.add(DownloadProgress(
-            id: emulatorId,
-            gameName: emulatorName,
-            percent: 1.0,
-            isComplete: true,
-            status: 'Done!',
-          ));
-        } catch (e) {
-          controller.add(DownloadProgress(
-            id: emulatorId,
-            gameName: emulatorName,
-            error: 'Extraction failed: $e',
-          ));
-        } finally {
-          controller.close();
-          final f = File(tempFilePath);
-          if (await f.exists()) await f.delete();
         }
-      }).catchError((e) {
+
+        controller.add(DownloadProgress(
+          id: emulatorId,
+          gameName: emulatorName,
+          percent: 1.0,
+          isComplete: true,
+          status: 'Done!',
+        ));
+      } catch (e) {
+        controller.add(DownloadProgress(
+          id: emulatorId,
+          gameName: emulatorName,
+          error: 'Extraction failed: $e',
+        ));
+      } finally {
+        final f = File(tempFilePath);
+        if (await f.exists()) await f.delete();
+      }
+    } catch (e) {
+      if (e is DioException && CancelToken.isCancel(e)) {
+        debugPrint("[EmulatorDownloadService] Download canceled: $emulatorId");
+      } else {
         controller.add(DownloadProgress(
           id: emulatorId,
           gameName: emulatorName,
           error: 'Download failed: $e',
         ));
-        controller.close();
-      });
-
-      yield* controller.stream;
-    } catch (e) {
-      yield DownloadProgress(
-        id: emulatorId,
-        gameName: emulatorName,
-        error: 'Error: $e',
-      );
+      }
+    } finally {
+      controller.close();
     }
+
+    yield* controller.stream;
   }
 
   Future<void> _reSignRyujinx(String exePath) async {

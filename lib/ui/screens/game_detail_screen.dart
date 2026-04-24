@@ -246,6 +246,27 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     return '$base$normalizedPath';
   }
 
+  Future<bool> _showCancelConfirmation(BuildContext context, String gameName) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Download'),
+        content: Text('Are you sure you want to cancel downloading $gameName? This will delete the partial file.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel Download', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(downloadProvider, (prev, next) {
@@ -397,75 +418,115 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   Consumer(
                     builder: (context, ref, _) {
                       final downloads = ref.watch(downloadProvider);
-                      final downloadProgress = downloads[_currentGame.id];
+                      final progress = downloads[_currentGame.id];
 
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          if (!_isDownloaded)
-                            if (downloadProgress != null)
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      return SizedBox(
+                        width: double.infinity,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (!_isDownloaded)
+                              if (progress != null) ...[
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
                                   child: DownloadProgressIndicator(
-                                    progress: downloadProgress,
+                                    progress: progress,
                                     compact: true,
                                   ),
                                 ),
-                              )
-                            else
-                              _ActionButton(
-                                icon: Icons.download,
-                                label: 'Download',
-                                onPressed: () async {
-                                  await widget.onDownload();
-                                  _checkDownloadStatus();
-                                },
-                              )
-                          else ...[
-                            _ActionButton(
-                              icon: Icons.play_arrow,
-                              label: 'Play',
-                              onPressed: () async {
-                                if (_isDownloaded) {
-                                  await widget.onLaunch();
-                                }
-                              },
-                            ),
-                            _ActionButton(
-                              icon: Icons.cloud_upload,
-                              label: 'Push',
-                              onPressed: () async {
-                                if (_isDownloaded) {
-                                  await widget.onPushSaves();
-                                }
-                              },
-                            ),
-                            _ActionButton(
-                              icon: Icons.cloud_download,
-                              label: 'Pull',
-                              onPressed: () async {
-                                if (_isDownloaded) {
-                                  await widget.onPullSaves();
-                                }
-                              },
-                            ),
-                            _ActionButton(
-                              icon: Icons.delete,
-                              label: 'Delete',
-                              onPressed: () async {
-                                await widget.onDelete();
-                                // Invalidate download provider to clear "100% done" sticky state
-                                ref.invalidate(downloadProvider);
-                                _checkDownloadStatus();
-                              },
-                              color: Colors.red,
-                            ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    if (!progress.isComplete && progress.error == null)
+                                      _ActionButton(
+                                        icon: progress.isPaused ? Icons.play_arrow : Icons.pause,
+                                        label: progress.isPaused ? 'Resume' : 'Pause',
+                                        onPressed: () {
+                                          if (progress.isPaused) {
+                                            if (progress.game != null && progress.downloadUrl != null) {
+                                              ref.read(downloadProvider.notifier).startDownload(
+                                                progress.game!,
+                                                progress.downloadUrl!,
+                                              );
+                                            }
+                                          } else {
+                                            ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id);
+                                          }
+                                        },
+                                      ),
+                                    _ActionButton(
+                                      icon: Icons.close,
+                                      label: 'Cancel',
+                                      color: Colors.red,
+                                      onPressed: () async {
+                                        if (await _showCancelConfirmation(context, progress.gameName)) {
+                                          ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ] else
+                                _ActionButton(
+                                  icon: Icons.download,
+                                  label: 'Download',
+                                  onPressed: () async {
+                                    await widget.onDownload();
+                                    _checkDownloadStatus();
+                                  },
+                                )
+                            else ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _ActionButton(
+                                    icon: Icons.play_arrow,
+                                    label: 'Play',
+                                    onPressed: () async {
+                                      if (_isDownloaded) {
+                                        await widget.onLaunch();
+                                      }
+                                    },
+                                  ),
+                                  _ActionButton(
+                                    icon: Icons.cloud_upload,
+                                    label: 'Push',
+                                    onPressed: () async {
+                                      if (_isDownloaded) {
+                                        await widget.onPushSaves();
+                                      }
+                                    },
+                                  ),
+                                  _ActionButton(
+                                    icon: Icons.cloud_download,
+                                    label: 'Pull',
+                                    onPressed: () async {
+                                      if (_isDownloaded) {
+                                        await widget.onPullSaves();
+                                      }
+                                    },
+                                  ),
+                                  _ActionButton(
+                                    icon: Icons.delete,
+                                    label: 'Delete',
+                                    onPressed: () async {
+                                      await widget.onDelete();
+                                      // Invalidate download provider to clear "100% done" sticky state
+                                      ref.invalidate(downloadProvider);
+                                      _checkDownloadStatus();
+                                    },
+                                    color: Colors.red,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       );
                     },
                   ),
+
                   const SizedBox(height: 24),
 
                   // SECTION 3 - Metadata chips row
