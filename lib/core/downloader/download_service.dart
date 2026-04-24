@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/extraction/extraction_service.dart';
@@ -241,19 +242,25 @@ class DownloadService {
   /// then deletes the zip. Finds the main ROM by largest file size.
   Future<void> _extractMultiFile(Game game, String zipPath) async {
     final romDir = await directoryService.getRomDirectory(game);
-    // Sanitize game name for use as folder name
-    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final extractDir = '$romDir/$folderName';
+    // Sanitize game name for use as folder name - matches DirectoryService sanitization
+    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final extractDir = p.join(romDir, folderName);
+
+    debugPrint('[DownloadService] Extraction starting...');
+    debugPrint('[DownloadService] Zip Path: $zipPath');
+    debugPrint('[DownloadService] Extract Dir: $extractDir');
 
     await Directory(extractDir).create(recursive: true);
 
     try {
       await extractionService.extract(zipPath, extractDir);
+      debugPrint('[DownloadService] Extraction complete. Deleting zip.');
       await File(zipPath).delete();
     } catch (e) {
+      debugPrint('[DownloadService] Extraction Error: $e');
       if (e.toString().contains('Unsupported archive format')) {
         // File is not an archive - leave it as downloaded
-        await Directory(extractDir).delete();
+        debugPrint('[DownloadService] Not an archive, keeping original file.');
         return;
       }
       rethrow;

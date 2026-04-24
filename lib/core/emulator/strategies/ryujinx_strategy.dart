@@ -82,29 +82,15 @@ class RyujinxStrategy extends EmulatorStrategy {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    final absRomPath = io.File(romPath).absolute.path;
+    debugPrint('[Ryujinx] Strategy Received romPath: $romPath');
 
     if (io.Platform.isWindows) {
-      final exeDir = io.File(exePath).parent.path;
-      debugPrint('[Ryujinx] Launching Windows Standalone');
-      debugPrint('[Ryujinx] Executable: $exePath');
-      debugPrint('[Ryujinx] ROM Path: $absRomPath');
-      debugPrint('[Ryujinx] Working Directory: $exeDir');
-      
-      try {
-        final process = await io.Process.start(
-          exePath,
-          [absRomPath],
-          mode: io.ProcessStartMode.detached,
-          workingDirectory: exeDir,
-        );
-        debugPrint('[Ryujinx] Process started with PID: ${process.pid}');
-      } catch (e) {
-        debugPrint('[Ryujinx] Failed to start process: $e');
-        rethrow;
-      }
+      debugPrint('[Ryujinx] Delegating to DirectoryService for Windows launch');
+      await _directoryService.launchGame(game, romPath, emulatorId, exePath);
       return;
     }
+
+    final absRomPath = io.File(romPath).absolute.path;
 
     // Auto-fix permissions on macOS/Linux
     if (io.Platform.isMacOS || io.Platform.isLinux) {
@@ -130,31 +116,14 @@ class RyujinxStrategy extends EmulatorStrategy {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    final absRomPath = io.File(romPath).absolute.path;
+    debugPrint('[Ryujinx] Strategy Received romPath (with handle): $romPath');
 
     if (io.Platform.isWindows) {
-      final exeDir = io.File(exePath).parent.path;
-      debugPrint('[Ryujinx] Launching Windows with Handle');
-      debugPrint('[Ryujinx] Executable: $exePath');
-      debugPrint('[Ryujinx] ROM Path: $absRomPath');
-      debugPrint('[Ryujinx] Working Directory: $exeDir');
-
-      try {
-        // Mode.normal keeps the handle. We do NOT pipe/redirect stdout/stderr
-        // to allow Ryujinx to own its own console window output.
-        final process = await io.Process.start(
-          exePath,
-          [absRomPath],
-          mode: io.ProcessStartMode.normal,
-          workingDirectory: exeDir,
-        );
-        debugPrint('[Ryujinx] Process started with PID: ${process.pid}');
-        return process;
-      } catch (e) {
-        debugPrint('[Ryujinx] Failed to start process: $e');
-        rethrow;
-      }
+      debugPrint('[Ryujinx] Delegating to DirectoryService for Windows handle launch');
+      return await _directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath);
     }
+
+    final absRomPath = io.File(romPath).absolute.path;
 
     // macOS/Linux permission handling
     if (io.Platform.isMacOS || io.Platform.isLinux) {

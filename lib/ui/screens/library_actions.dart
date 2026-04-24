@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:io' as io;
 import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/error/error_handler.dart';
@@ -122,27 +124,56 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
 
     String romPath = existingRomPath;
+    bool isAutoDetected = await io.File(existingRomPath).exists();
 
-    // Multi-disc picker
+    // Multi-disc picker logic
     if (game.hasMultipleFiles && game.files.isNotEmpty) {
-      if (!context.mounted) return;
-      String? selectedFilePath;
-      await MultiDiscPicker.show(
-        context,
-        game: game,
-        files: game.files,
-        onSelect: (file) {
-          selectedFilePath = file['full_path']?.toString() ?? file['file_name']?.toString();
-        },
-      );
-      if (selectedFilePath == null) return; // user dismissed
-      romPath = selectedFilePath!;
-      if (!context.mounted) return;
-      // Prefix with ROMs root if not absolute
-      if (!romPath.startsWith('/') && !romPath.contains(':\\')) {
-        final romsRoot = await dir.getRomsDirectory();
-        romPath = '$romsRoot/$romPath';
+      // If we already auto-detected a specific file (not a folder) that exists, skip the picker
+      if (isAutoDetected && !await io.Directory(romPath).exists()) {
+        debugPrint('[LibraryActions] Automatic detection found file: $romPath. Skipping picker.');
+      } else {
+        if (!context.mounted) return;
+        String? selectedFilePath;
+        await MultiDiscPicker.show(
+          context,
+          game: game,
+          files: game.files,
+          onSelect: (file) {
+            selectedFilePath = file['full_path']?.toString() ?? file['file_name']?.toString();
+          },
+        );
+        if (selectedFilePath == null) return; // user dismissed
+        
+        debugPrint('[LibraryActions] Raw selectedFilePath from RomM: $selectedFilePath');
+
+        // SANITIZE: Multi-disc file paths from RomM might contain characters like ':'
+        // We must sanitize them segment by segment to preserve path separators (folders)
+        // while matching how DirectoryService stores them on disk (spaces instead of invalid chars, collapsed spaces)
+        final segments = selectedFilePath!.split(RegExp(r'[/\\]'));
+        final sanitizedSegments = segments.map((s) => 
+          s.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim()
+        ).toList();
+        
+        romPath = sanitizedSegments.join(io.Platform.isWindows ? '\\' : '/');
+        
+        if (!context.mounted) return;
+        // Prefix with ROMs root if not absolute
+        if (!romPath.startsWith('/') && !romPath.contains(':\\')) {
+          final romsRoot = await dir.getRomsDirectory();
+          romPath = p.join(romsRoot, romPath);
+        }
       }
+    }
+
+    // FINAL VALIDATION: Ensure the path actually exists on disk before handing to emulator
+    if (!await io.File(romPath).exists() && !await io.Directory(romPath).exists()) {
+       debugPrint('[LibraryActions] ERROR: romPath does not exist on disk: $romPath');
+       // One last try: if it has 'roms/' in path, try without it? Or vice-versa?
+       // For now, show error to help debug
+       if (context.mounted) {
+         ErrorHandler.showInfo(context, 'File Not Found', message: 'The ROM was not found at the expected location. Please try downloading it again.');
+       }
+       return;
     }
 
     if (!context.mounted) return;
@@ -583,7 +614,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Multiple Eden profiles have recent save activity. Which one would you like to use?'),
+              const Text('Multiple save profiles have recent activity. Which one would you like to use?'),
               const SizedBox(height: 16),
               Flexible(
                 child: ListView.builder(

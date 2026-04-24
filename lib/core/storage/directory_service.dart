@@ -364,7 +364,7 @@ class DirectoryService {
 
   Future<String> getRomFilePath(Game game) async {
     final romDir = await getRomDirectory(game);
-    final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+    final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     return p.join(romDir, fileName);
   }
 
@@ -373,101 +373,120 @@ class DirectoryService {
   /// Returns the found path or null if not found.
   Future<String?> findExistingRomPath(Game game) async {
     final romDir = await getRomDirectory(game);
-    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    
+    // 1. Check exact path first (file or directory) in primary platform folder
     final exactPath = p.join(romDir, baseName);
-
-    debugPrint('[DirectoryService] Finding ROM for ${game.name}');
-    debugPrint('[DirectoryService] romDir: $romDir');
-    debugPrint('[DirectoryService] baseName: $baseName');
-    debugPrint('[DirectoryService] exactPath (normalized): ${p.normalize(exactPath)}');
-
-    // Check exact path first (file or directory)
-    if (await File(exactPath).exists()) {
-      debugPrint('[DirectoryService] Found exact file match: $exactPath');
-      return p.absolute(exactPath);
-    }
-    if (await Directory(exactPath).exists()) {
-      debugPrint('[DirectoryService] Found exact directory match: $exactPath');
-      // If it's a directory, we might want to look inside, handled by multi-file folder logic below
+    if (await File(exactPath).exists()) return p.absolute(exactPath);
+    
+    // 2. Check for "roms/" subfolder (common in some RomM structures)
+    final romsSubDir = p.join(romDir, 'roms');
+    if (await Directory(romsSubDir).exists()) {
+      final subExactPath = p.join(romsSubDir, baseName);
+      if (await File(subExactPath).exists()) return p.absolute(subExactPath);
     }
 
-    // Check multi-file folder named after game name
-    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-    final multiFileDir = Directory(p.join(romDir, folderName));
-    if (await multiFileDir.exists()) {
-      debugPrint('[DirectoryService] Found multi-file folder: ${multiFileDir.path}');
-      // Windows games: return the folder itself so WindowsStrategy can find the exe
-      final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-      if (isWindowsGame) return p.absolute(multiFileDir.path);
+    // 3. Search for multi-file folder (sanitized game name)
+    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    
+    // Try both romDir and romDir/roms
+    final searchDirs = [romDir, p.join(romDir, 'roms')];
+    
+    for (final dirPath in searchDirs) {
+      final parentDir = Directory(dirPath);
+      if (!await parentDir.exists()) continue;
 
-      // NDS specific: Prioritize .nds file in the folder
-      if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
-        await for (final entity in multiFileDir.list(recursive: true)) {
-          if (entity is File && entity.path.toLowerCase().endsWith('.nds')) {
-            debugPrint('[DirectoryService] Found NDS file in folder: ${entity.path}');
-            return p.absolute(entity.path);
-          }
-        }
+      // Check direct folder match
+      final candidateFolder = Directory(p.join(dirPath, folderName));
+      if (await candidateFolder.exists()) {
+        final found = await _findMainRomInFolder(game, candidateFolder.path);
+        if (found != null) return found;
       }
 
-      // Other platforms: find largest file inside — that's the main ROM
-      File? largestFile;
-      int largestSize = 0;
-      await for (final entity in multiFileDir.list(recursive: true)) {
-        if (entity is File) {
-          final size = await entity.length();
-          if (size > largestSize) {
-            largestSize = size;
-            largestFile = entity;
-          }
-        }
-      }
-      if (largestFile != null) {
-        debugPrint('[DirectoryService] Found largest file in folder: ${largestFile.path}');
-        return p.absolute(largestFile.path);
-      }
-    }
-
-    // Try common extensions for this platform
-    final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
-    for (final ext in extensions) {
-      if (baseName.toLowerCase().endsWith(ext.toLowerCase())) continue; // Already tried by exactPath
-      final candidate = p.join(romDir, '$baseName$ext');
-      if (await File(candidate).exists()) {
-        debugPrint('[DirectoryService] Found file with extension $ext: $candidate');
-        return p.absolute(candidate);
-      }
-    }
-
-    // Scan directory for fuzzy match
-    final dir = Directory(romDir);
-    if (await dir.exists()) {
-      List<File> candidates = [];
-      await for (final entity in dir.list()) {
-        if (entity is File) {
-          final fname = p.basename(entity.path);
-          if (fname.toLowerCase().startsWith(baseName.toLowerCase()) && !fname.toLowerCase().endsWith('.part')) {
-            candidates.add(entity);
-          }
-        }
-      }
-      
-      if (candidates.isNotEmpty) {
-        // Prioritize .nds for NDS games
-        if (game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') {
-          for (final f in candidates) {
-            if (f.path.toLowerCase().endsWith('.nds')) {
-              debugPrint('[DirectoryService] Found fuzzy NDS match: ${f.path}');
-              return p.absolute(f.path);
+      // Fuzzy folder match (e.g. "Captain Toad Treasure Tracker" matches "Captain Toad_ Treasure Tracker")
+      try {
+        await for (final entity in parentDir.list()) {
+          if (entity is Directory) {
+            final dName = p.basename(entity.path);
+            final sanitizedDName = dName.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+            if (sanitizedDName.toLowerCase() == folderName.toLowerCase()) {
+              final found = await _findMainRomInFolder(game, entity.path);
+              if (found != null) return found;
             }
           }
         }
-        debugPrint('[DirectoryService] Found fuzzy match: ${candidates.first.path}');
-        return p.absolute(candidates.first.path);
+      } catch (_) {}
+    }
+
+    // 4. Try common extensions for this platform
+    final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
+    for (final dirPath in searchDirs) {
+      final parentDir = Directory(dirPath);
+      if (!await parentDir.exists()) continue;
+      
+      for (final ext in extensions) {
+        if (baseName.toLowerCase().endsWith(ext.toLowerCase())) continue;
+        final candidate = p.join(dirPath, '$baseName$ext');
+        if (await File(candidate).exists()) return p.absolute(candidate);
       }
     }
 
-    debugPrint('[DirectoryService] No ROM found for ${game.name}');
+    // 5. Scan directory for fuzzy file match
+    for (final dirPath in searchDirs) {
+      final parentDir = Directory(dirPath);
+      if (!await parentDir.exists()) continue;
+
+      try {
+        await for (final entity in parentDir.list()) {
+          if (entity is File) {
+            final fname = p.basename(entity.path);
+            final sanitizedFName = fname.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+            if (sanitizedFName.toLowerCase().startsWith(baseName.toLowerCase()) && !fname.toLowerCase().endsWith('.part')) {
+              // Prioritize .nds for NDS
+              if ((game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') && fname.toLowerCase().endsWith('.nds')) {
+                return p.absolute(entity.path);
+              }
+              return p.absolute(entity.path);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  /// Finds the largest ROM-like file in a folder.
+  Future<String?> _findMainRomInFolder(Game game, String folderPath) async {
+    final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
+    if (isWindowsGame) return p.absolute(folderPath);
+
+    final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
+    
+    File? largestFile;
+    int largestSize = 0;
+
+    try {
+      await for (final entity in Directory(folderPath).list(recursive: true)) {
+        if (entity is File) {
+          final ext = p.extension(entity.path).toLowerCase();
+          // Filter by platform extensions if available, or just take any significant file
+          if (extensions.isEmpty || extensions.contains(ext)) {
+            final size = await entity.length();
+            if (size > largestSize) {
+              largestSize = size;
+              largestFile = entity;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (largestFile != null) {
+      // If there's only one ROM-like file, or one is significantly larger (e.g. 2x the next one)
+      // we can be fairly certain it's the main ROM.
+      return p.absolute(largestFile.path);
+    }
     return null;
   }
 
@@ -782,7 +801,12 @@ class DirectoryService {
         final absRom = p.absolute(romPath).replaceAll('/', '\\');
         final absDir = p.absolute(exeDir).replaceAll('/', '\\');
         
-        debugPrint('[DirectoryService] Windows Handle Launch: $absExe ${args.join(' ')} $absRom (WorkingDir: $absDir)');
+        debugPrint('[DirectoryService] === WINDOWS PROCESS START ===');
+        debugPrint('[DirectoryService] Raw Exe: $exePath');
+        debugPrint('[DirectoryService] Raw Rom: $romPath');
+        debugPrint('[DirectoryService] Abs Exe: $absExe');
+        debugPrint('[DirectoryService] Abs Rom: $absRom');
+        debugPrint('[DirectoryService] Working Dir: $absDir');
 
         final process = await Process.start(
           absExe, 

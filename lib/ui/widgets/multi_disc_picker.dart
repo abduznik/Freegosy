@@ -56,7 +56,7 @@ class MultiDiscPicker extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: [
           // Handle bar
           Container(
@@ -101,53 +101,53 @@ class MultiDiscPicker extends StatelessWidget {
             ),
           ),
           const Divider(color: Colors.white12),
-          // File list
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: files.length,
-            itemBuilder: (context, index) {
-              final file = files[index];
-              final filename = file['file_name']?.toString() ?? file['name']?.toString() ?? 'File ${index + 1}';
-              final size = file['file_size_bytes'] as int?;
-              final label = _discLabel(filename, index);
+          // File list - Expanded and Scrollable
+          Expanded(
+            child: ListView.builder(
+              itemCount: files.length,
+              itemBuilder: (context, index) {
+                final file = files[index];
+                final filename = file['file_name']?.toString() ?? file['name']?.toString() ?? 'File ${index + 1}';
+                final size = file['file_size_bytes'] as int?;
+                final label = _discLabel(filename, index);
 
-              return ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${index + 1}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
+                return ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${index + 1}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                title: Text(label),
-                subtitle: Text(
-                  filename,
-                  style: const TextStyle(fontSize: 11, color: Colors.white54),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: size != null
-                    ? Text(
-                        _formatSize(size),
-                        style: const TextStyle(fontSize: 11, color: Colors.white38),
-                      )
-                    : null,
-                onTap: () {
-                  Navigator.pop(context);
-                  onSelect(file);
-                },
-              );
-            },
+                  title: Text(label),
+                  subtitle: Text(
+                    filename,
+                    style: const TextStyle(fontSize: 11, color: Colors.white54),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: size != null
+                      ? Text(
+                          _formatSize(size),
+                          style: const TextStyle(fontSize: 11, color: Colors.white38),
+                        )
+                      : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    onSelect(file);
+                  },
+                );
+              },
+            ),
           ),
           const SizedBox(height: 16),
         ],
