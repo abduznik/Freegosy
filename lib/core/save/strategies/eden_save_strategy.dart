@@ -673,18 +673,26 @@ class EdenSaveStrategy extends SaveStrategy {
     return folders;
   }
 
-  /// Extracts a ZIP archive into [destDir], stripping a leading Title ID
-  /// folder if present (so the save files land directly in the target).
+  /// Extracts a ZIP archive into [destDir], stripping a leading container
+  /// folder if present (Title ID, User ID, or numeric index).
   Future<bool> _extractArchive(Archive archive, String destDir) async {
     try {
+      final userIdRegex = RegExp(r'^[0-9A-Fa-f]{16}$');
+      final numericRegex = RegExp(r'^\d+$');
+
       for (final entry in archive) {
         if (entry.name.isEmpty || entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
 
-        // Strip leading Title ID folder from path if present.
-        // e.g. "0100704000B3A000/save.bin" → "save.bin"
+        // Strip leading container folder if present.
+        // Handles: "0100704000B3A000/..." (Eden)
+        // Handles: "0000000000000001/..." (Ryujinx User)
+        // Handles: "0/..." (Ryujinx Index)
         final segments = entry.name.split(RegExp(r'[/\\]'));
+        final first = segments.first;
         final entryPath = (segments.length > 1 &&
-                _strictTitleIdRegex.hasMatch(segments.first))
+                (_strictTitleIdRegex.hasMatch(first) || 
+                 userIdRegex.hasMatch(first) || 
+                 numericRegex.hasMatch(first)))
             ? p.joinAll(segments.sublist(1))
             : entry.name;
 

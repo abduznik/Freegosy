@@ -17,6 +17,7 @@ class ReleaseService {
     required String repo,
     required List<String> requiredFilters,
     List<String> excludedFilters = const [],
+    String? baseUrl,
   }) async {
     try {
       String url;
@@ -26,7 +27,7 @@ class ReleaseService {
         url = 'https://api.github.com/repos/$repo/releases/latest';
         headers = {'Accept': 'application/vnd.github.v3+json'};
       } else {
-        final base = giteaBaseUrl ?? 'https://git.eden-emu.dev';
+        final base = baseUrl ?? giteaBaseUrl ?? 'https://git.eden-emu.dev';
         url = '$base/api/v1/repos/$repo/releases/latest';
         headers = {'Accept': 'application/json'};
       }

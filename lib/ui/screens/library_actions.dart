@@ -13,6 +13,7 @@ import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/save/save_strategy.dart';
 import '../../core/save/strategies/eden_save_strategy.dart';
+import '../../core/save/strategies/ryujinx_save_strategy.dart';
 import '../../core/save/strategies/azahar_save_strategy.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
 import '../../core/emulator/strategies/retroarch_strategy.dart';
@@ -153,7 +154,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       } on SaveMappingRequiredException {
         if (!context.mounted) return;
         final strategy = syncService.getStrategyForSlug(game.platformSlug);
-        if (strategy is EdenSaveStrategy || strategy is AzaharSaveStrategy) {
+        if (strategy is EdenSaveStrategy || strategy is RyujinxSaveStrategy || strategy is AzaharSaveStrategy) {
           final selectedFolder = await showFolderMappingDialog(context, strategy);
           if (selectedFolder != null) {
             await syncService.saveMappedFolder(game.id, selectedFolder);
@@ -186,7 +187,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       } on SaveMappingRequiredException {
         if (!context.mounted) return;
         final strategy = syncService.getStrategyForSlug(game.platformSlug);
-        if (strategy is EdenSaveStrategy || strategy is AzaharSaveStrategy) {
+        if (strategy is EdenSaveStrategy || strategy is RyujinxSaveStrategy || strategy is AzaharSaveStrategy) {
           final selectedFolder = await showFolderMappingDialog(context, strategy);
           if (selectedFolder != null) {
             await syncService.saveMappedFolder(game.id, selectedFolder);

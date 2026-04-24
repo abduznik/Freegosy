@@ -10,6 +10,7 @@ import 'save_strategy.dart';
 import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
+import 'strategies/ryujinx_save_strategy.dart';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'strategies/windows_save_strategy.dart';
@@ -33,6 +34,7 @@ class SaveSyncService {
   late final RetroArchSaveStrategy _retroarch;
   late final DolphinSaveStrategy _dolphin;
   late final EdenSaveStrategy _eden;
+  late final RyujinxSaveStrategy _ryujinx;
   late final WindowsSaveStrategy _windows;
   late final Pcsx2SaveStrategy _pcsx2;
   late final Rpcs3SaveStrategy _rpcs3;
@@ -48,6 +50,7 @@ class SaveSyncService {
     _retroarch = RetroArchSaveStrategy(_directoryService);
     _dolphin = DolphinSaveStrategy(_directoryService);
     _eden = EdenSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
+    _ryujinx = RyujinxSaveStrategy(onMappingResolved: saveMappedFolder);
     _windows = WindowsSaveStrategy(_prefs);
     _pcsx2 = Pcsx2SaveStrategy(_directoryService);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
@@ -97,6 +100,7 @@ class SaveSyncService {
         if (id == 'dolphin') return _dolphin;
         if (id == 'xenia' || id == 'xenia_canary') return _xenia;
         if (id == 'eden') return _eden;
+        if (id == 'ryujinx') return _ryujinx;
         if (id == 'windows') return _windows;
         if (id == 'azahar') return _azahar;
       }
@@ -139,7 +143,7 @@ class SaveSyncService {
       case 'switch':
       case 'nintendo-switch':
       case 'ns':
-        return _eden;
+        return _ryujinx; // Default Switch to Ryujinx
       case 'windows':
       case 'pc':
       case 'win':
@@ -223,6 +227,11 @@ class SaveSyncService {
       if (strategy == null) return false;
 
       if (strategy is EdenSaveStrategy) {
+        final mapping = getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
+        final activeProfile = getActiveProfile();
+        strategy.setActiveProfileOverride(activeProfile);
+      } else if (strategy is RyujinxSaveStrategy) {
         final mapping = getMappedFolder(game.id);
         strategy.setManualMapping(mapping);
         final activeProfile = getActiveProfile();
@@ -317,6 +326,11 @@ class SaveSyncService {
       if (strategy == null) return false;
 
       if (strategy is EdenSaveStrategy) {
+        final mapping = getMappedFolder(game.id);
+        strategy.setManualMapping(mapping);
+        final activeProfile = getActiveProfile();
+        strategy.setActiveProfileOverride(activeProfile);
+      } else if (strategy is RyujinxSaveStrategy) {
         final mapping = getMappedFolder(game.id);
         strategy.setManualMapping(mapping);
         final activeProfile = getActiveProfile();

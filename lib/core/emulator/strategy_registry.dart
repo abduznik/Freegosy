@@ -5,6 +5,7 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/retroarch_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/dolphin_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/eden_strategy.dart';
+import 'package:freegosy/core/emulator/strategies/ryujinx_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/rpcs3_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/pcsx2_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/azahar_strategy.dart';
@@ -36,6 +37,7 @@ class StrategyRegistry {
       RetroArchStrategy(_directoryService),
       DolphinStrategy(_directoryService),
       EdenStrategy(_directoryService),
+      RyujinxStrategy(_directoryService),
       Rpcs3Strategy(_directoryService),
       Pcsx2Strategy(_directoryService),
       AzaharStrategy(_directoryService),

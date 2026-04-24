@@ -48,6 +48,7 @@ class EmulatorDownloadService {
 
       if (currentBuildType == 'gitea') {
         final repo = definition[buildTypeRepoKey] as String;
+        final giteaBaseUrl = definition['gitea_base_url'] as String?;
         List<String> required = [];
         List<String> excluded = List<String>.from(definition['${buildType}_asset_excluded'] ?? []);
 
@@ -74,6 +75,7 @@ class EmulatorDownloadService {
           repo: repo,
           requiredFilters: required,
           excludedFilters: excluded,
+          baseUrl: giteaBaseUrl,
         );
       } else {
         final String nightlyKey;
@@ -189,6 +191,59 @@ class EmulatorDownloadService {
         );
         return;
       }
+    } else if (downloadUrl == null && type == 'gitea') {
+      yield DownloadProgress(
+        id: emulatorId,
+        gameName: emulatorName,
+        status: 'Fetching latest release...',
+      );
+
+      final repo = definition['gitea_repo'] as String;
+      final giteaBaseUrl = definition['gitea_base_url'] as String?;
+
+      // Determine platform-specific asset filters
+      final String requiredKey;
+      final String excludedKey;
+
+      if (Platform.isWindows && definition.containsKey('gitea_asset_required_windows')) {
+        requiredKey = 'gitea_asset_required_windows';
+      } else if (Platform.isMacOS && definition.containsKey('gitea_asset_required_macos')) {
+        requiredKey = 'gitea_asset_required_macos';
+      } else if (Platform.isLinux && definition.containsKey('gitea_asset_required_linux')) {
+        requiredKey = 'gitea_asset_required_linux';
+      } else {
+        requiredKey = 'gitea_asset_required';
+      }
+
+      if (Platform.isWindows && definition.containsKey('gitea_asset_excluded_windows')) {
+        excludedKey = 'gitea_asset_excluded_windows';
+      } else if (Platform.isMacOS && definition.containsKey('gitea_asset_excluded_macos')) {
+        excludedKey = 'gitea_asset_excluded_macos';
+      } else if (Platform.isLinux && definition.containsKey('gitea_asset_excluded_linux')) {
+        excludedKey = 'gitea_asset_excluded_linux';
+      } else {
+        excludedKey = 'gitea_asset_excluded';
+      }
+
+      final required = List<String>.from(definition[requiredKey] ?? []);
+      final excluded = List<String>.from(definition[excludedKey] ?? []);
+
+      downloadUrl = await _releaseService.getLatestReleaseUrl(
+        platform: ReleasePlatform.gitea,
+        repo: repo,
+        requiredFilters: required,
+        excludedFilters: excluded,
+        baseUrl: giteaBaseUrl,
+      );
+
+      if (downloadUrl == null) {
+        yield DownloadProgress(
+          id: emulatorId,
+          gameName: emulatorName,
+          error: 'No matching release asset found on Gitea',
+        );
+        return;
+      }
     } else if (downloadUrl == null) {
       if (Platform.isWindows) {
         downloadUrl = definition['windows_url'] as String?;
@@ -242,13 +297,24 @@ class EmulatorDownloadService {
           ));
           await _extractionService.extract(tempFilePath, emulatorDir);
 
-          // Linux specific: ensure binary is executable
-          if (Platform.isLinux) {
-            final exeName = definition['linux_executable'] as String?;
-            if (exeName != null) {
-              final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName);
-              if (exePath != null) {
+          // Ensure binary is executable and remove quarantine on macOS/Linux
+          final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);
+          if (exeName != null) {
+            final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName as String);
+            if (exePath != null) {
+              if (Platform.isLinux || Platform.isMacOS) {
                 await Process.run('chmod', ['+x', exePath]);
+              }
+              
+              if (Platform.isMacOS) {
+                // Remove quarantine attribute for the entire emulator directory
+                // This prevents Gatekeeper from killing the process on direct launch
+                await Process.run('xattr', ['-cr', emulatorDir]);
+
+                // Special case for Ryujinx: Re-sign with hypervisor entitlement
+                if (emulatorId == 'ryujinx') {
+                  await _reSignRyujinx(exePath);
+                }
               }
             }
           }
@@ -287,6 +353,52 @@ class EmulatorDownloadService {
         gameName: emulatorName,
         error: 'Error: $e',
       );
+    }
+  }
+
+  Future<void> _reSignRyujinx(String exePath) async {
+    final appPath = exePath.split('/Contents/MacOS/').first;
+    
+    final entitlements = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key><true/>
+    <key>com.apple.security.cs.allow-jit</key><true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+    <key>com.apple.security.cs.debugger</key><true/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key><true/>
+    <key>com.apple.security.cs.disable-library-validation</key><true/>
+    <key>com.apple.security.get-task-allow</key><true/>
+    <key>com.apple.security.hypervisor</key><true/>
+</dict>
+</plist>
+''';
+
+    final tempFile = File('${Directory.systemTemp.path}/ryujinx_entitlements_download.plist');
+    await tempFile.writeAsString(entitlements);
+
+    try {
+      final signResult = await Process.run('codesign', [
+        '--sign', '-',
+        '--force',
+        '--deep',
+        '--entitlements', tempFile.path,
+        appPath,
+      ]);
+
+      if (signResult.exitCode != 0) {
+        // We log to stderr but don't fail the download since the emulator might still work
+        // or the user can fix it manually.
+        stderr.writeln('[Ryujinx Sign] codesign failed (${signResult.exitCode}): ${signResult.stderr}');
+      }
+    } catch (e) {
+      stderr.writeln('[Ryujinx Sign] Error: $e');
+    } finally {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
     }
   }
 }
