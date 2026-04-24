@@ -23,7 +23,7 @@ on:
 jobs:
   build_linux:
     name: Build Linux
-    if: ${{ github.event.inputs.build_linux }}
+    if: ${{ inputs.build_linux }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev
           flutter pub get
       - name: Build Linux
-        run: flutter build linux --release --build-name=${{ github.event.inputs.version }} --build-number=$GITHUB_RUN_NUMBER
+        run: flutter build linux --release --build-name=${{ inputs.version }} --build-number=$GITHUB_RUN_NUMBER
       - name: Package Linux
         run: |
           cd build/linux/x64/release/bundle
@@ -86,7 +86,7 @@ jobs:
 
   build_windows:
     name: Build Windows Installer
-    if: ${{ github.event.inputs.build_windows }}
+    if: ${{ inputs.build_windows }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +106,7 @@ jobs:
 
   build_macos:
     name: Build macOS DMG
-    if: ${{ github.event.inputs.build_macos }}
+    if: ${{ inputs.build_macos }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,7 +123,7 @@ jobs:
           FLUTTER_XCODE_DEVELOPMENT_TEAM: ""
         run: |
           flutter build macos --release \
-            --build-name=${{ github.event.inputs.version }} \
+            --build-name=${{ inputs.version }} \
             --build-number=$GITHUB_RUN_NUMBER
       - name: Ad-hoc sign macOS app
         run: |
@@ -161,21 +161,21 @@ jobs:
         run: mkdir artifacts
 
       - name: Download Linux Artifact
-        if: ${{ github.event.inputs.build_linux }}
+        if: ${{ inputs.build_linux }}
         uses: actions/download-artifact@v4
         with:
           name: linux-release
           path: artifacts/
           
       - name: Download Windows Artifact
-        if: ${{ github.event.inputs.build_windows }}
+        if: ${{ inputs.build_windows }}
         uses: actions/download-artifact@v4
         with:
           name: windows-release
           path: artifacts/
           
       - name: Download macOS Artifact
-        if: ${{ github.event.inputs.build_macos }}
+        if: ${{ inputs.build_macos }}
         uses: actions/download-artifact@v4
         with:
           name: macos-release
@@ -184,8 +184,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: Release ${{ github.event.inputs.version }}
+          tag_name: ${{ inputs.version }}
+          name: Release ${{ inputs.version }}
           files: |
             artifacts/freegosy-linux-x64.tar.gz
             artifacts/Freegosy-x86_64.AppImage
