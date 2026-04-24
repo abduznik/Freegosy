@@ -57,13 +57,13 @@ class ExtractionService {
   }
 
   Future<void> _handleTar(String archivePath, String destDir) async {
-    if (Platform.isMacOS || Platform.isLinux) {
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
       try {
         // 'tar -xf' handles gzip, xz, etc. automatically on modern systems
         final result = await Process.run(
           'tar',
           ['-xf', archivePath, '-C', destDir],
-          runInShell: false,
+          runInShell: Platform.isWindows,
         );
         if (result.exitCode != 0) {
           throw Exception('tar failed: ${result.stderr}');
@@ -149,6 +149,24 @@ class ExtractionService {
       if (Platform.isMacOS) {
         await _postExtractSanitize(destDir);
       }
+    } else if (Platform.isWindows) {
+      try {
+        // Modern Windows 10/11 has tar built-in which handles ZIPs perfectly.
+        final result = await Process.run(
+          'tar',
+          ['-xf', archivePath, '-C', destDir],
+          runInShell: true, // tar might be a shim or in System32
+        );
+        if (result.exitCode == 0) return;
+        
+        debugPrint('tar failed with exit code ${result.exitCode}, falling back to archive package');
+      } catch (e) {
+        debugPrint('tar not found or failed: $e, falling back to archive package');
+      }
+
+      // Fallback to archive package
+      final fileBytes = await File(archivePath).readAsBytes();
+      await compute(_extractZipIsolate, [fileBytes, destDir]);
     } else {
       final fileBytes = await File(archivePath).readAsBytes();
       await compute(_extractZipIsolate, [fileBytes, destDir]);

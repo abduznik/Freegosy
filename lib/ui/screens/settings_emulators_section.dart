@@ -270,17 +270,19 @@ Future<void> _startDownload(
     final progress = downloads[emulatorId];
     if (progress != null && (progress.isComplete || progress.error != null)) {
       if (progress.isComplete) {
-        ref.invalidate(emulatorStatusProvider);
         if (context.mounted) {
+          ref.invalidate(emulatorStatusProvider);
           messenger.showSnackBar(SnackBar(
             content: Text('$emulatorName downloaded successfully.'),
           ));
         }
       } else if (progress.error != null) {
-        if (context.mounted) setState(() {});
-        messenger.showSnackBar(SnackBar(
-          content: Text('Failed to download $emulatorName: ${progress.error}'),
-        ));
+        if (context.mounted) {
+          setState(() {});
+          messenger.showSnackBar(SnackBar(
+            content: Text('Failed to download $emulatorName: ${progress.error}'),
+          ));
+        }
       }
       sub?.cancel();
     }

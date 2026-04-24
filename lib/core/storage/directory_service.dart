@@ -166,9 +166,9 @@ class DirectoryService {
         romsRootPath = activeLinuxEnvironment.getRomsRoot(home, customRoms, emudeckRootPath);
         emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, customEmus, emudeckRootPath);
       } else {
-        romsRootPath = _prefs.getString(_romsRootPathKey) ?? '$defaultBase/ROMs';
+        romsRootPath = _prefs.getString(_romsRootPathKey) ?? p.join(defaultBase, 'ROMs');
         emulatorsRootPath =
-            _prefs.getString(_emulatorsRootPathKey) ?? '$defaultBase/Emulators';
+            _prefs.getString(_emulatorsRootPathKey) ?? p.join(defaultBase, 'Emulators');
       }
 
       final romsStatus = await _ensureDirectoryExists(romsRootPath);
@@ -212,23 +212,22 @@ class DirectoryService {
       romsRootPath = activeLinuxEnvironment.getRomsRoot(home, null, emudeckRootPath);
     } else {
       romsRootPath = '$base/ROMs';
-    }
-    status = await _ensureDirectoryExists(romsRootPath);
-  }
+      }
+      status = await _ensureDirectoryExists(romsRootPath);
+      }
 
-  Future<void> resetEmulatorsRoot() async {
-    await _prefs.remove(_emulatorsRootPathKey);
-    final base = await getDefaultBase();
-    final home = io.Platform.environment['HOME'] ?? '';
+      Future<void> resetEmulatorsRoot() async {
+      await _prefs.remove(_emulatorsRootPathKey);
+      final base = await getDefaultBase();
+      final home = io.Platform.environment['HOME'] ?? '';
 
-    if (defaultTargetPlatform == TargetPlatform.linux) {
-      emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, null, emudeckRootPath);
-    } else {
-      emulatorsRootPath = '$base/Emulators';
-    }
-    status = await _ensureDirectoryExists(emulatorsRootPath);
-  }
-
+      if (defaultTargetPlatform == TargetPlatform.linux) {
+        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, null, emudeckRootPath);
+      } else {
+        emulatorsRootPath = p.join(base, 'Emulators');
+      }
+      status = await _ensureDirectoryExists(emulatorsRootPath);
+      }
   Future<void> setLinuxSyncPreset(String preset) async {
     await _prefs.setString(_linuxSyncPresetKey, preset);
     linuxSyncPreset = preset;
@@ -533,7 +532,7 @@ class DirectoryService {
     final override = getEmulatorPathOverride(emulatorId);
     if (override != null) return override;
 
-    final dirPath = '$emulatorsRootPath/$emulatorId';
+    final dirPath = p.join(emulatorsRootPath, emulatorId);
     await _ensureDirectoryExists(dirPath);
     return dirPath;
   }
@@ -591,13 +590,19 @@ class DirectoryService {
 
     debugPrint("=== EMULATOR CHECK ===");
     debugPrint("Looking for: $executableName in $emulatorDir");
-    await for (final e in dir.list()) {
-      debugPrint("Found on disk: ${e.path}");
-    }
 
-    final direct = File('$emulatorDir/$executableName');
+    // 1. Direct match (absolute or relative to emulatorDir)
+    final direct = File(p.join(emulatorDir, executableName));
     if (await direct.exists()) {
       return direct.path;
+    }
+
+    // Try with .exe on Windows
+    if (io.Platform.isWindows && !executableName.toLowerCase().endsWith('.exe')) {
+      final withExe = File(p.join(emulatorDir, '$executableName.exe'));
+      if (await withExe.exists()) {
+        return withExe.path;
+      }
     }
 
     if (io.Platform.isLinux) {
@@ -613,7 +618,7 @@ class DirectoryService {
       // Recursive search for the bundle directory (max 3 levels)
       await for (final entity in dir.list(recursive: true)) {
         if (entity is Directory) {
-          final dirName = entity.path.split(io.Platform.isWindows ? r'\' : '/').last;
+          final dirName = p.basename(entity.path);
           
           // Exact match or fuzzy match for versioned .app bundles (e.g. PCSX2-v2.6.3.app matches PCSX2.app)
           bool matches = dirName.toLowerCase() == firstPart.toLowerCase();
@@ -626,20 +631,20 @@ class DirectoryService {
 
           if (matches) {
             debugPrint("[DirectoryService] Found matching .app bundle: $dirName at ${entity.path}");
-            final sub = File('${entity.path}/$remaining');
+            final sub = File(p.join(entity.path, remaining));
             if (await sub.exists()) {
               debugPrint("[DirectoryService] Found direct binary: ${sub.path}");
               return sub.path;
             }
             
             // Secondary check: search inside Contents/MacOS case-insensitively
-            final macosDir = Directory('${entity.path}/Contents/MacOS');
+            final macosDir = Directory(p.join(entity.path, 'Contents', 'MacOS'));
             if (await macosDir.exists()) {
               final binaryName = remaining.split('/').last.toLowerCase();
               debugPrint("[DirectoryService] Searching for binary '$binaryName' in ${macosDir.path}");
               await for (final subEntity in macosDir.list()) {
                 if (subEntity is File) {
-                  final subName = subEntity.path.split('/').last.toLowerCase();
+                  final subName = p.basename(subEntity.path).toLowerCase();
                   if (subName == binaryName) {
                     debugPrint("[DirectoryService] Found binary via case-insensitive match: ${subEntity.path}");
                     return subEntity.path;
@@ -650,7 +655,7 @@ class DirectoryService {
               // Third check: find any file in Contents/MacOS (fallback)
               await for (final subEntity in macosDir.list()) {
                 if (subEntity is File) {
-                  final subName = subEntity.path.split('/').last.toLowerCase();
+                  final subName = p.basename(subEntity.path).toLowerCase();
                   final stem = dirName.toLowerCase().replaceAll('.app', '');
                   if (subName.contains(stem) || stem.contains(subName)) {
                     debugPrint("[DirectoryService] Found binary via stem match: ${subEntity.path}");
@@ -669,26 +674,37 @@ class DirectoryService {
           }
         }
       }
-      return null;
     }
 
-    await for (final entity in dir.list()) {
-      if (entity is File && entity.path.endsWith('/$executableName')) {
-        return entity.path;
-      }
-      if (entity is Directory) {
-        final sub = File('${entity.path}/$executableName');
-        if (await sub.exists()) {
-          return sub.path;
+    // 3. Fallback: Recursive search for the binary (important for Windows "publish" subfolders)
+    debugPrint("[DirectoryService] Starting recursive search for $executableName in $emulatorDir");
+    int count = 0;
+    await for (final entity in dir.list(recursive: true)) {
+      count++;
+      if (entity is File) {
+        final fileName = p.basename(entity.path).toLowerCase();
+        final searchName = executableName.toLowerCase();
+        
+        if (fileName == searchName) {
+          debugPrint("[DirectoryService] Found binary via recursive search: ${entity.path}");
+          return entity.path;
+        }
+        
+        if (io.Platform.isWindows && !searchName.endsWith('.exe')) {
+           if (fileName == '$searchName.exe') {
+             debugPrint("[DirectoryService] Found binary via recursive search (with .exe): ${entity.path}");
+             return entity.path;
+           }
         }
       }
     }
+    debugPrint("[DirectoryService] Recursive search finished. Scanned $count entities. Not found.");
 
     // Secondary check for core libraries if binary not found
     final ext = io.Platform.isMacOS ? '.dylib' : (io.Platform.isWindows ? '.dll' : '.so');
     await for (final entity in dir.list(recursive: true)) {
       if (entity is File) {
-        final name = entity.path.split(io.Platform.isWindows ? r'\' : '/').last.toLowerCase();
+        final name = p.basename(entity.path).toLowerCase();
         if (name.endsWith(ext) && name.contains(emulatorId.toLowerCase())) {
           debugPrint("Found core library fallback: ${entity.path}");
           return entity.path;
