@@ -11,8 +11,12 @@ import 'package:flutter/foundation.dart';
 /// 2. If it fails due to a PlatformException (e.g., keyring locked/missing), fallback to SharedPreferences.
 /// 3. Log errors but never crash the app for a storage read.
 class SecureStorageService {
-  static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  static final _storage = FlutterSecureStorage(
+    aOptions: const AndroidOptions(encryptedSharedPreferences: true),
+    mOptions: const MacOsOptions(
+      accessibility: KeychainAccessibility.first_unlock,
+    ),
+    lOptions: const LinuxOptions(),
   );
 
   static Future<String?> read(String key, SharedPreferences prefs) async {
