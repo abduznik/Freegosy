@@ -439,67 +439,60 @@ void _syncBiosForEmulator(BuildContext context, WidgetRef ref, String emulatorId
 
 void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryService directoryService, String emulatorId, String type) {
   final controller = TextEditingController();
-  bool isLoading = true;
+
+  // Only load the stored override (instant SharedPreferences read, no network)
+  directoryService.getEmulatorUrlOverride(emulatorId).then((stored) {
+    controller.text = stored ?? '';
+  });
 
   showDialog(
     context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) {
-        if (isLoading) {
-          ref.read(emulatorDownloadServiceProvider).value?.resolveCurrentDownloadUrl(emulatorId).then((url) {
-            if (ctx.mounted) {
-              controller.text = url ?? '';
-              setState(() => isLoading = false);
-            }
-          });
-        }
-
-        return AlertDialog(
-          title: const Text("Download URL Override"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Current source: $type", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 16),
-              if (isLoading)
-                const Center(child: CircularProgressIndicator())
-              else
-                TextField(
-                  controller: controller,
-                  decoration: const InputDecoration(
-                    labelText: "URL",
-                    helperText: "Direct URL to .zip, .7z, .dmg, .tar.gz or .AppImage",
-                  ),
-                ),
-            ],
+    builder: (ctx) => AlertDialog(
+      title: const Text("Download URL Override"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Source: $type — paste a direct download URL to override",
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
-          actions: [
-            OutlinedButton(
-              onPressed: () async {
-                await directoryService.setEmulatorUrlOverride(emulatorId, null);
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text("Reset"),
+          const SizedBox(height: 16),
+          TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: "Override URL",
+              hintText: "https://example.com/emulator.zip",
+              helperText: "Accepts .zip .7z .dmg .tar.gz .AppImage",
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Cancel"),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final text = controller.text.trim();
-                await directoryService.setEmulatorUrlOverride(
-                  emulatorId,
-                  text.isEmpty ? null : text,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text("Confirm"),
-            ),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () async {
+            await directoryService.setEmulatorUrlOverride(emulatorId, null);
+            controller.text = '';
+            if (ctx.mounted) Navigator.pop(ctx);
+          },
+          child: const Text("Reset"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancel"),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final text = controller.text.trim();
+            await directoryService.setEmulatorUrlOverride(
+              emulatorId,
+              text.isEmpty ? null : text,
+            );
+            if (ctx.mounted) Navigator.pop(ctx);
+          },
+          child: const Text("Confirm"),
+        ),
+      ],
     ),
   );
 }
