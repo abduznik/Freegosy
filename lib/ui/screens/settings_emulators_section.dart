@@ -438,19 +438,21 @@ void _syncBiosForEmulator(BuildContext context, WidgetRef ref, String emulatorId
 }
 
 void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryService directoryService, String emulatorId, String type) {
+  final controller = TextEditingController();
+  bool isLoading = true;
+
   showDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) {
-        final controller = TextEditingController();
-        bool isLoading = true;
-
-        ref.read(emulatorDownloadServiceProvider).value!.resolveCurrentDownloadUrl(emulatorId).then((url) {
-          if (ctx.mounted) {
-            controller.text = url ?? '';
-            setState(() => isLoading = false);
-          }
-        });
+        if (isLoading) {
+          ref.read(emulatorDownloadServiceProvider).value?.resolveCurrentDownloadUrl(emulatorId).then((url) {
+            if (ctx.mounted) {
+              controller.text = url ?? '';
+              setState(() => isLoading = false);
+            }
+          });
+        }
 
         return AlertDialog(
           title: const Text("Download URL Override"),
@@ -480,10 +482,17 @@ void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryServic
               },
               child: const Text("Reset"),
             ),
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel"),
+            ),
             FilledButton(
               onPressed: () async {
-                await directoryService.setEmulatorUrlOverride(emulatorId, controller.text);
+                final text = controller.text.trim();
+                await directoryService.setEmulatorUrlOverride(
+                  emulatorId,
+                  text.isEmpty ? null : text,
+                );
                 if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text("Confirm"),
