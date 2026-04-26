@@ -105,6 +105,7 @@ inno_bundle:
     description: "Freegosy Flutter app"
     executable_name: "freegosy"
     url: "https://github.com/abduznik/Freegosy"
+    start_menu_group: "Freegosy"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

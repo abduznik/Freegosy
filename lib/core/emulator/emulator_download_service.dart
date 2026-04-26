@@ -20,7 +20,68 @@ class EmulatorDownloadService {
     _releaseService = ReleaseService(_dio);
   }
 
-  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture, String? buildType, CancelToken? cancelToken}) async* {
+  Future<List<Map<String, String>>> getLatestAssetsForEmulator(String emulatorId) async {
+    final definition = kEmulatorDefinitions.firstWhere((d) => d['id'] == emulatorId);
+    final repo = definition['github_repo'] as String? ?? definition['gitea_repo'] as String?;
+    final platform = definition['type'] == 'github' ? ReleasePlatform.github : ReleasePlatform.gitea;
+    
+    // Simplification: Re-use filters from definition
+    final requiredKey = Platform.isWindows ? 'github_asset_required_windows' : 'github_asset_required_linux';
+    final excludedKey = 'github_asset_excluded';
+    
+    return await _releaseService.getLatestReleaseAssets(
+      platform: platform,
+      repo: repo!,
+      requiredFilters: List<String>.from(definition[requiredKey] ?? []),
+      excludedFilters: List<String>.from(definition[excludedKey] ?? []),
+    );
+  }
+
+  Future<void> _reSignRyujinx(String exePath) async {
+    final appPath = exePath.split('/Contents/MacOS/').first;
+    
+    final entitlements = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key><true/>
+    <key>com.apple.security.cs.allow-jit</key><true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+    <key>com.apple.security.cs.debugger</key><true/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key><true/>
+    <key>com.apple.security.cs.disable-library-validation</key><true/>
+    <key>com.apple.security.get-task-allow</key><true/>
+    <key>com.apple.security.hypervisor</key><true/>
+</dict>
+</plist>
+''';
+
+    final tempFile = File('${Directory.systemTemp.path}/ryujinx_entitlements_download.plist');
+    await tempFile.writeAsString(entitlements);
+
+    try {
+      final signResult = await Process.run('codesign', [
+        '--sign', '-',
+        '--force',
+        '--deep',
+        '--entitlements', tempFile.path,
+        appPath,
+      ]);
+
+      if (signResult.exitCode != 0) {
+        stderr.writeln('[Ryujinx Sign] codesign failed (${signResult.exitCode}): ${signResult.stderr}');
+      }
+    } catch (e) {
+      stderr.writeln('[Ryujinx Sign] Error: $e');
+    } finally {
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+    }
+  }
+
+  Stream<DownloadProgress> downloadEmulator(String emulatorId, {String? architecture, String? buildType, String? urlOverride, CancelToken? cancelToken}) async* {
     final definition = kEmulatorDefinitions.firstWhere(
       (d) => d['id'] == emulatorId,
       orElse: () => {},
@@ -38,13 +99,10 @@ class EmulatorDownloadService {
     final String emulatorName = definition['name'] as String? ?? emulatorId;
     final String type = definition['type'] as String? ?? 'direct';
 
-    // Resolve download URL logic remains the same ...
-    String? downloadUrl;
-    // ... (rest of URL resolution logic)
+    String? downloadUrl = urlOverride;
 
-    
     // Check for build-specific overrides (e.g., Nightly)
-    if (buildType != null && buildType.isNotEmpty) {
+    if (downloadUrl == null && buildType != null && buildType.isNotEmpty) {
       final buildTypeRepoKey = '${buildType}_repo';
       final buildTypeTypeKey = '${buildType}_type';
       final currentBuildType = (definition[buildTypeTypeKey] ?? 'direct') as String;
@@ -73,69 +131,23 @@ class EmulatorDownloadService {
           status: 'Fetching latest $buildType release...',
         );
 
-        downloadUrl = await _releaseService.getLatestReleaseUrl(
+        final assets = await _releaseService.getLatestReleaseAssets(
           platform: ReleasePlatform.gitea,
           repo: repo,
           requiredFilters: required,
           excludedFilters: excluded,
           baseUrl: giteaBaseUrl,
         );
-      } else {
-        final String nightlyKey;
-        if (Platform.isWindows) {
-          nightlyKey = '${buildType}_windows_url'; // Fallback
-        } else if (Platform.isMacOS) {
-          nightlyKey = '${buildType}_macos_url';
-        } else {
-          nightlyKey = '${buildType}_linux_url';
+
+        if (assets.isEmpty) {
+          yield DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'No matching release asset found on Gitea');
+          return;
+        } else if (assets.length > 1) {
+          yield DownloadProgress(id: emulatorId, gameName: emulatorName, status: 'selection_required');
+          return;
         }
-        
-        final String specificNightlyKey;
-        if (Platform.isWindows) {
-          specificNightlyKey = 'windows_${buildType}_url';
-        } else if (Platform.isMacOS) {
-          specificNightlyKey = 'macos_${buildType}_url';
-        } else {
-          // Check for Steam Deck specific nightly if on Linux
-          if (buildType == 'nightly' && _directoryService.isSteamDeck) {
-            specificNightlyKey = 'linux_steamdeck_nightly_url';
-          } else {
-            specificNightlyKey = 'linux_${buildType}_url';
-          }
-        }
-
-        downloadUrl = (definition[specificNightlyKey] ?? definition[nightlyKey]) as String?;
+        downloadUrl = assets.first['url'];
       }
-    }
-
-    // RPCS3 Special Case for macOS
-    if (downloadUrl == null && emulatorId == 'rpcs3' && Platform.isMacOS) {
-      final arch = architecture ?? 'x64';
-      String repo;
-      List<String> required;
-      List<String> excluded = ['debug'];
-
-      if (arch == 'x64') {
-        repo = 'RPCS3/rpcs3-binaries-mac';
-        required = ['macos', '.7z'];
-      } else {
-        // arm64
-        repo = definition['github_repo_macos'] as String? ?? 'RPCS3/rpcs3-binaries-mac-arm64';
-        required = List<String>.from(definition['github_asset_required_macos'] ?? ['macos', 'aarch64', '.7z']);
-      }
-
-      yield DownloadProgress(
-        id: emulatorId,
-        gameName: emulatorName,
-        status: 'Fetching latest $arch release...',
-      );
-
-      downloadUrl = await _releaseService.getLatestReleaseUrl(
-        platform: ReleasePlatform.github,
-        repo: repo,
-        requiredFilters: required,
-        excludedFilters: excluded,
-      );
     }
 
     if (downloadUrl == null && type == 'github') {
@@ -154,46 +166,36 @@ class EmulatorDownloadService {
         repo = definition['github_repo_linux'] as String;
       }
 
-      // Determine platform-specific asset filters with generic fallbacks
-      final String requiredKey;
-      final String excludedKey;
-
-      if (Platform.isWindows && definition.containsKey('github_asset_required_windows')) {
-        requiredKey = 'github_asset_required_windows';
-      } else if (Platform.isMacOS && definition.containsKey('github_asset_required_macos')) {
-        requiredKey = 'github_asset_required_macos';
-      } else if (Platform.isLinux && definition.containsKey('github_asset_required_linux')) {
-        requiredKey = 'github_asset_required_linux';
-      } else {
-        requiredKey = 'github_asset_required';
-      }
-
-      if (Platform.isWindows && definition.containsKey('github_asset_excluded_windows')) {
-        excludedKey = 'github_asset_excluded_windows';
-      } else if (Platform.isMacOS && definition.containsKey('github_asset_excluded_macos')) {
-        excludedKey = 'github_asset_excluded_macos';
-      } else if (Platform.isLinux && definition.containsKey('github_asset_excluded_linux')) {
-        excludedKey = 'github_asset_excluded_linux';
-      } else {
-        excludedKey = 'github_asset_excluded';
+      String requiredKey = 'github_asset_required';
+      String excludedKey = 'github_asset_excluded';
+      if (Platform.isWindows) {
+        if (definition.containsKey('github_asset_required_windows')) requiredKey = 'github_asset_required_windows';
+        if (definition.containsKey('github_asset_excluded_windows')) excludedKey = 'github_asset_excluded_windows';
+      } else if (Platform.isMacOS) {
+        if (definition.containsKey('github_asset_required_macos')) requiredKey = 'github_asset_required_macos';
+        if (definition.containsKey('github_asset_excluded_macos')) excludedKey = 'github_asset_excluded_macos';
+      } else if (Platform.isLinux) {
+        if (definition.containsKey('github_asset_required_linux')) requiredKey = 'github_asset_required_linux';
+        if (definition.containsKey('github_asset_excluded_linux')) excludedKey = 'github_asset_excluded_linux';
       }
 
       final required = List<String>.from(definition[requiredKey] ?? []);
       final excluded = List<String>.from(definition[excludedKey] ?? []);
-      downloadUrl = await _releaseService.getLatestReleaseUrl(
+      final assets = await _releaseService.getLatestReleaseAssets(
         platform: ReleasePlatform.github,
         repo: repo,
         requiredFilters: required,
         excludedFilters: excluded,
       );
-      if (downloadUrl == null) {
-        yield DownloadProgress(
-          id: emulatorId,
-          gameName: emulatorName,
-          error: 'No matching release asset found on GitHub',
-        );
+
+      if (assets.isEmpty) {
+        yield DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'No matching release asset found on GitHub');
+        return;
+      } else if (assets.length > 1) {
+        yield DownloadProgress(id: emulatorId, gameName: emulatorName, status: 'selection_required');
         return;
       }
+      downloadUrl = assets.first['url'];
     } else if (downloadUrl == null && type == 'gitea') {
       yield DownloadProgress(
         id: emulatorId,
@@ -202,52 +204,40 @@ class EmulatorDownloadService {
       );
 
       final repo = definition['gitea_repo'] as String;
-      final giteaBaseUrl = definition['gitea_base_url'] as String?;
+      final baseUrl = definition['gitea_host'] != null ? 'https://${definition['gitea_host']}' : null;
 
-      // Determine platform-specific asset filters
-      final String requiredKey;
-      final String excludedKey;
-
-      if (Platform.isWindows && definition.containsKey('gitea_asset_required_windows')) {
-        requiredKey = 'gitea_asset_required_windows';
-      } else if (Platform.isMacOS && definition.containsKey('gitea_asset_required_macos')) {
-        requiredKey = 'gitea_asset_required_macos';
-      } else if (Platform.isLinux && definition.containsKey('gitea_asset_required_linux')) {
-        requiredKey = 'gitea_asset_required_linux';
-      } else {
-        requiredKey = 'gitea_asset_required';
-      }
-
-      if (Platform.isWindows && definition.containsKey('gitea_asset_excluded_windows')) {
-        excludedKey = 'gitea_asset_excluded_windows';
-      } else if (Platform.isMacOS && definition.containsKey('gitea_asset_excluded_macos')) {
-        excludedKey = 'gitea_asset_excluded_macos';
-      } else if (Platform.isLinux && definition.containsKey('gitea_asset_excluded_linux')) {
-        excludedKey = 'gitea_asset_excluded_linux';
-      } else {
-        excludedKey = 'gitea_asset_excluded';
+      String requiredKey = 'gitea_asset_required';
+      String excludedKey = 'gitea_asset_excluded';
+      if (Platform.isWindows) {
+        if (definition.containsKey('gitea_asset_required_windows')) requiredKey = 'gitea_asset_required_windows';
+        if (definition.containsKey('gitea_asset_excluded_windows')) excludedKey = 'gitea_asset_excluded_windows';
+      } else if (Platform.isMacOS) {
+        if (definition.containsKey('gitea_asset_required_macos')) requiredKey = 'gitea_asset_required_macos';
+        if (definition.containsKey('gitea_asset_excluded_macos')) excludedKey = 'gitea_asset_excluded_macos';
+      } else if (Platform.isLinux) {
+        if (definition.containsKey('gitea_asset_required_linux')) requiredKey = 'gitea_asset_required_linux';
+        if (definition.containsKey('gitea_asset_excluded_linux')) excludedKey = 'gitea_asset_excluded_linux';
       }
 
       final required = List<String>.from(definition[requiredKey] ?? []);
       final excluded = List<String>.from(definition[excludedKey] ?? []);
-
-      downloadUrl = await _releaseService.getLatestReleaseUrl(
+      final assets = await _releaseService.getLatestReleaseAssets(
         platform: ReleasePlatform.gitea,
         repo: repo,
         requiredFilters: required,
         excludedFilters: excluded,
-        baseUrl: giteaBaseUrl,
+        baseUrl: baseUrl,
       );
 
-      if (downloadUrl == null) {
-        yield DownloadProgress(
-          id: emulatorId,
-          gameName: emulatorName,
-          error: 'No matching release asset found on Gitea',
-        );
+      if (assets.isEmpty) {
+        yield DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'No matching release asset found on Gitea');
+        return;
+      } else if (assets.length > 1) {
+        yield DownloadProgress(id: emulatorId, gameName: emulatorName, status: 'selection_required');
         return;
       }
-    } else if (downloadUrl == null) {
+      downloadUrl = assets.first['url'];
+    } else if (downloadUrl == null && type == 'direct') {
       if (Platform.isWindows) {
         downloadUrl = definition['windows_url'] as String?;
       } else if (Platform.isMacOS) {
@@ -272,6 +262,14 @@ class EmulatorDownloadService {
     final emulatorDir = await _directoryService.getEmulatorDirectory(emulatorId);
 
     final controller = StreamController<DownloadProgress>();
+
+    // Initial status update before starting the download
+    controller.add(DownloadProgress(
+      id: emulatorId,
+      gameName: emulatorName,
+      status: 'Downloading...',
+      percent: 0.0,
+    ));
 
     try {
       final options = Options(responseType: ResponseType.stream);
@@ -309,7 +307,6 @@ class EmulatorDownloadService {
         ));
         await _extractionService.extract(tempFilePath, emulatorDir);
 
-        // Ensure binary is executable and remove quarantine on macOS/Linux
         final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);
         if (exeName != null) {
           final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName as String);
@@ -359,51 +356,5 @@ class EmulatorDownloadService {
     }
 
     yield* controller.stream;
-  }
-
-  Future<void> _reSignRyujinx(String exePath) async {
-    final appPath = exePath.split('/Contents/MacOS/').first;
-    
-    final entitlements = '''
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.cs.allow-dyld-environment-variables</key><true/>
-    <key>com.apple.security.cs.allow-jit</key><true/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
-    <key>com.apple.security.cs.debugger</key><true/>
-    <key>com.apple.security.cs.disable-executable-page-protection</key><true/>
-    <key>com.apple.security.cs.disable-library-validation</key><true/>
-    <key>com.apple.security.get-task-allow</key><true/>
-    <key>com.apple.security.hypervisor</key><true/>
-</dict>
-</plist>
-''';
-
-    final tempFile = File('${Directory.systemTemp.path}/ryujinx_entitlements_download.plist');
-    await tempFile.writeAsString(entitlements);
-
-    try {
-      final signResult = await Process.run('codesign', [
-        '--sign', '-',
-        '--force',
-        '--deep',
-        '--entitlements', tempFile.path,
-        appPath,
-      ]);
-
-      if (signResult.exitCode != 0) {
-        // We log to stderr but don't fail the download since the emulator might still work
-        // or the user can fix it manually.
-        stderr.writeln('[Ryujinx Sign] codesign failed (${signResult.exitCode}): ${signResult.stderr}');
-      }
-    } catch (e) {
-      stderr.writeln('[Ryujinx Sign] Error: $e');
-    } finally {
-      if (await tempFile.exists()) {
-        await tempFile.delete();
-      }
-    }
   }
 }
