@@ -7,16 +7,13 @@ import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
-
 import 'package:freegosy/core/storage/download_cache_service.dart';
 import 'package:freegosy/core/storage/metadata_cache_service.dart';
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'package:freegosy/core/romm/rom_scanner_service.dart';
 import 'package:freegosy/providers/custom_emulators_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
-
 import 'package:freegosy/core/emulator/firmware_service.dart';
-
 import 'package:freegosy/core/storage/secure_storage_service.dart';
 
 final emulatorStatusProvider = FutureProvider<Map<String, bool>>((ref) async {
@@ -163,6 +160,8 @@ final rommServiceProvider = Provider<RommService?>((ref) {
         final prefs = ref.read(sharedPreferencesProvider);
         service.refreshToken(prefs);
       }
+      service.startHeartbeat();
+      ref.onDispose(() => service.stopHeartbeat());
       return service;
     } catch (e) {
       debugPrint('[RomM-Init] FAILED to initialize RommService: $e');

@@ -7,11 +7,14 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../storage/secure_storage_service.dart';
 import 'romm_models.dart';
+import 'dart:async';
 
 class RommService {
   RomMConfig _config;
   final Dio _dio;
   Options _authOptions;
+  final ValueNotifier<bool> isOffline = ValueNotifier(false);
+  Timer? _heartbeatTimer;
 
   RomMConfig get config => _config;
 
@@ -29,8 +32,8 @@ class RommService {
   RommService(this._config)
       : _dio = Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(_config.baseUrl),
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(minutes: 10),
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
           headers: {
             'User-Agent': _ua,
             'Accept': 'application/json',
@@ -50,19 +53,59 @@ class RommService {
 
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
-        // Note: fetchToken needs SharedPreferences now. 
-        // We'll rely on the provider calling refreshToken/fetchToken with prefs.
         return handler.next(e);
       },
     ));
+    
+    _initializeConnectivity();
   }
 
-  /// Use standard Bearer format for both API keys and JWTs, as it's the most widely supported.
+  void startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      try {
+        await _dio.get('/api/heartbeat', options: Options(
+          headers: {'Authorization': _authOptions.headers?['Authorization']},
+          sendTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 3),
+        ));
+        if (isOffline.value) {
+          isOffline.value = false;
+        }
+      } catch (e) {
+        if (!isOffline.value) {
+          isOffline.value = true;
+        }
+      }
+    });
+  }
+
+  void stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+  }
+
+  Future<void> _initializeConnectivity() async {
+    try {
+      final uri = Uri.parse(_config.baseUrl);
+      final socket = await io.Socket.connect(
+        uri.host, 
+        uri.port == 0 ? (uri.scheme == 'https' ? 443 : 80) : uri.port, 
+        timeout: const Duration(seconds: 2)
+      );
+      await socket.close();
+      
+      await getPlatforms();
+      isOffline.value = false;
+    } catch (e) {
+      debugPrint('[RommService] Server unreachable, switching to offline mode.');
+      isOffline.value = true;
+    }
+  }
+
   static Options _computeAuthOptions(RomMConfig config) {
     final headers = <String, dynamic>{};
     
     if (config.apiKey.isNotEmpty) {
-      // Standard RomM API keys work best as a Bearer token in most Nginx configs
       headers['Authorization'] = 'Bearer ${config.apiKey}';
       headers['X-Api-Key'] = config.apiKey;
     } else if (config.token != null && config.token!.isNotEmpty) {

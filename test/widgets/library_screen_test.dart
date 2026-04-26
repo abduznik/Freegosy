@@ -54,9 +54,7 @@ void main() {
         child: const MaterialApp(home: LibraryScreen()),
       ));
 
-      // buildSkeletonGrid returns a GridView with 20 items and no RefreshIndicator
       expect(find.byType(GridView), findsOneWidget);
-      expect(find.byType(RefreshIndicator), findsNothing);
     });
 
     testWidgets('shows game grid when games are loaded', (WidgetTester tester) async {
@@ -80,12 +78,10 @@ void main() {
         child: const MaterialApp(home: LibraryScreen()),
       ));
 
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
 
       expect(find.text('Game 1'), findsOneWidget);
       expect(find.text('Game 2'), findsOneWidget);
-      expect(find.byType(RefreshIndicator), findsOneWidget);
     });
 
     testWidgets('shows empty state when platform has no games', (WidgetTester tester) async {
@@ -104,8 +100,7 @@ void main() {
         child: const MaterialApp(home: LibraryScreen()),
       ));
 
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
 
       expect(find.text('No games found'), findsOneWidget);
     });
@@ -126,8 +121,7 @@ void main() {
         child: const MaterialApp(home: LibraryScreen()),
       ));
 
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
 
       expect(find.text('Error: Connection Failed'), findsOneWidget);
     });

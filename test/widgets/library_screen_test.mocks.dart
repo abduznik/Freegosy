@@ -9,6 +9,7 @@ import 'dart:typed_data' as _i10;
 
 import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart'
     as _i4;
+import 'package:flutter/material.dart' as _i6;
 import 'package:freegosy/core/romm/romm_models.dart' as _i2;
 import 'package:freegosy/core/romm/romm_service.dart' as _i5;
 import 'package:freegosy/core/storage/directory_service.dart' as _i3;
@@ -55,6 +56,9 @@ class MockRommService extends _i1.Mock implements _i5.RommService {
   MockRommService() {
     _i1.throwOnMissingStub(this);
   }
+
+  @override
+  final _i6.ValueNotifier<bool> isOffline = _i6.ValueNotifier(false);
 
   @override
   _i2.RomMConfig get config =>

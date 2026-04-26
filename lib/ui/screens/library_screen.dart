@@ -247,7 +247,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
     final cardSpacing = ref.watch(cardSpacingProvider);
     final showTitle = ref.watch(showTitleProvider);
-    final rommConfigAsync = ref.watch(rommConfigProvider);
     final directoryServiceAsync = ref.watch(directoryServiceProvider);
     final downloadedCache = ref.watch(downloadedGamesCacheProvider);
     final isSyncing = ref.watch(downloadedGamesCacheProvider.notifier).isSyncing;
@@ -269,15 +268,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       }
     });
 
-    final appBarTitle = rommConfigAsync.when(
-      data: (config) {
-        final uri = Uri.tryParse(config.baseUrl);
-        final host = uri?.host ?? config.baseUrl;
-        return 'Freegosy • $host';
-      },
-      loading: () => 'Freegosy',
-      error: (e, s) => 'Freegosy',
-    );
+    final rommService = ref.watch(rommServiceProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -289,7 +280,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
               width: 32,
             ),
             const SizedBox(width: 12),
-            Expanded(child: Text(appBarTitle, overflow: TextOverflow.ellipsis)),
+            Expanded(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: rommService!.isOffline,
+                builder: (context, offline, _) {
+                  return Text(
+                    offline ? "${rommService.config.baseUrl} - Offline Mode" : rommService.config.baseUrl,
+                    style: offline ? const TextStyle(color: Colors.orange) : null,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                },
+              ),
+            ),
           ],
         ),
         actions: [

@@ -113,10 +113,11 @@ void main() {
 
             for (final platform in ['windows', 'macos', 'linux']) {
               final requiredKey = 'github_asset_required_$platform';
-              final excludedKey = 'github_asset_excluded';
+              final baseExcluded = List<String>.from(definition['github_asset_excluded'] ?? []);
+              final platformExcluded = List<String>.from(definition['github_asset_excluded_$platform'] ?? []);
+              final excludedFilters = {...baseExcluded, ...platformExcluded}.toList();
 
               final requiredFilters = List<String>.from(definition[requiredKey] ?? definition['github_asset_required'] ?? []);
-              final excludedFilters = List<String>.from(definition[excludedKey] ?? []);
 
               bool found = false;
               for (final asset in assets) {
@@ -137,6 +138,53 @@ void main() {
             }
           } catch (e) {
             logStatus(0, '[$name] Unexpected error during GitHub audit: $e');
+          }
+        } else if (type == 'github_multi') {
+          final repos = definition['github_repos'] as Map<String, dynamic>;
+          for (final platform in ['windows', 'macos', 'linux']) {
+            if (!repos.containsKey(platform)) continue;
+            final repo = repos[platform] as String;
+            try {
+              final request = await client.getUrl(Uri.parse('https://api.github.com/repos/$repo/releases/latest'));
+              request.headers.add('User-Agent', 'Freegosy-Test-Suite');
+              request.headers.add('Accept', 'application/vnd.github.v3+json');
+              final response = await request.close();
+
+              if (response.statusCode != 200) {
+                logStatus(response.statusCode, '[$name] Failed to fetch GitHub releases for $platform (Status: ${response.statusCode})');
+                continue;
+              }
+
+              final body = await response.transform(utf8.decoder).join();
+              final List assets = jsonDecode(body)['assets'] ?? [];
+
+              final requiredKey = 'github_asset_required_$platform';
+              final baseExcluded = List<String>.from(definition['github_asset_excluded'] ?? []);
+              final platformExcluded = List<String>.from(definition['github_asset_excluded_$platform'] ?? []);
+              final excludedFilters = {...baseExcluded, ...platformExcluded}.toList();
+              final requiredFilters = List<String>.from(definition[requiredKey] ?? []);
+
+              bool found = false;
+              for (final asset in assets) {
+                final String assetName = asset['name'] as String;
+                final matchesRequired = requiredFilters.isEmpty ||
+                    requiredFilters.every((f) => assetName.toLowerCase().contains(f.toLowerCase()));
+                final matchesExcluded = excludedFilters.any((f) => assetName.toLowerCase().contains(f.toLowerCase()));
+
+                if (matchesRequired && !matchesExcluded) {
+                  found = true;
+                  break;
+                }
+              }
+
+              if (!found) {
+                logStatus(404, '[$name] No matching asset found on GitHub for platform: $platform (Required: $requiredFilters)');
+              } else {
+                logStatus(200, '[$name] GitHub API OK for $platform');
+              }
+            } catch (e) {
+              logStatus(0, '[$name] Unexpected error during GitHub multi-audit for $platform: $e');
+            }
           }
         }
       } catch (e) {
