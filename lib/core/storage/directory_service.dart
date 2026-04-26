@@ -259,6 +259,18 @@ class DirectoryService {
     _emulatorPathOverrides[emulatorId] = path;
   }
 
+  Future<String?> getEmulatorUrlOverride(String emulatorId) async {
+    return _prefs.getString('emulator_url_override_$emulatorId');
+  }
+
+  Future<void> setEmulatorUrlOverride(String emulatorId, String? url) async {
+    if (url == null) {
+      await _prefs.remove('emulator_url_override_$emulatorId');
+    } else {
+      await _prefs.setString('emulator_url_override_$emulatorId', url);
+    }
+  }
+
   String? getEmulatorPathOverride(String emulatorId) => _emulatorPathOverrides[emulatorId];
 
   Future<StorageStatus> _ensureDirectoryExists(String path) async {

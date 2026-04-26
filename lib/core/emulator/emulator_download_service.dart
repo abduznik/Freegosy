@@ -37,6 +37,17 @@ class EmulatorDownloadService {
     );
   }
 
+  Future<String?> resolveCurrentDownloadUrl(String emulatorId) async {
+    final stored = await _directoryService.getEmulatorUrlOverride(emulatorId);
+    if (stored != null) return stored;
+
+    final assets = await getLatestAssetsForEmulator(emulatorId);
+    if (assets.isNotEmpty) {
+      return assets.first['url'];
+    }
+    return null;
+  }
+
   Future<void> _reSignRyujinx(String exePath) async {
     final appPath = exePath.split('/Contents/MacOS/').first;
     
@@ -100,6 +111,7 @@ class EmulatorDownloadService {
     final String type = definition['type'] as String? ?? 'direct';
 
     String? downloadUrl = urlOverride;
+    downloadUrl ??= await _directoryService.getEmulatorUrlOverride(emulatorId);
 
     // Check for build-specific overrides (e.g., Nightly)
     if (downloadUrl == null && buildType != null && buildType.isNotEmpty) {

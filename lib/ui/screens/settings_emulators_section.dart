@@ -141,6 +141,11 @@ Widget buildEmulatorsSection(
                   },
                 ),
                 IconButton(
+                  icon: const Icon(Icons.link, size: 20),
+                  tooltip: 'Download URL Override',
+                  onPressed: () => _showUrlOverrideDialog(context, ref, directoryService, emulatorId, type),
+                ),
+                IconButton(
                   icon: const Icon(Icons.library_books, size: 20),
                   tooltip: 'Sync BIOS from RomM',
                   onPressed: () async {
@@ -428,6 +433,64 @@ void _syncBiosForEmulator(BuildContext context, WidgetRef ref, String emulatorId
     builder: (context) => _FirmwareProgressDialog(
       title: 'Syncing BIOS for $emulatorName',
       onSync: (onProgress) => firmwareService.syncFirmwareForEmulator(emulatorId, onProgress: onProgress),
+    ),
+  );
+}
+
+void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryService directoryService, String emulatorId, String type) {
+  showDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        final controller = TextEditingController();
+        bool isLoading = true;
+
+        ref.read(emulatorDownloadServiceProvider).value!.resolveCurrentDownloadUrl(emulatorId).then((url) {
+          if (ctx.mounted) {
+            controller.text = url ?? '';
+            setState(() => isLoading = false);
+          }
+        });
+
+        return AlertDialog(
+          title: const Text("Download URL Override"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Current source: $type", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 16),
+              if (isLoading)
+                const Center(child: CircularProgressIndicator())
+              else
+                TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(
+                    labelText: "URL",
+                    helperText: "Direct URL to .zip, .7z, .dmg, .tar.gz or .AppImage",
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () async {
+                await directoryService.setEmulatorUrlOverride(emulatorId, null);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text("Reset"),
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+            FilledButton(
+              onPressed: () async {
+                await directoryService.setEmulatorUrlOverride(emulatorId, controller.text);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text("Confirm"),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
