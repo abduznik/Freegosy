@@ -254,7 +254,7 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
   }
 
   Future<void> startEmulatorDownload(
-      String emulatorId, String emulatorName, {String? architecture, String? buildType}) async {
+      String emulatorId, String emulatorName, {String? architecture, String? buildType, String? urlOverride}) async {
     // If already downloading, do nothing
     if (_cancelTokens.containsKey(emulatorId)) return;
 
@@ -264,7 +264,7 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
     final cancelToken = CancelToken();
     _cancelTokens[emulatorId] = cancelToken;
 
-    service.downloadEmulator(emulatorId, architecture: architecture, buildType: buildType, cancelToken: cancelToken).listen(
+    service.downloadEmulator(emulatorId, architecture: architecture, buildType: buildType, urlOverride: urlOverride, cancelToken: cancelToken).listen(
       (progress) {
         _updateProgress(emulatorId, progress);
       },

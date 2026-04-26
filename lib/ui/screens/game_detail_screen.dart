@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/storage/system_utils.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
@@ -504,6 +505,17 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                                     onPressed: () async {
                                       if (_isDownloaded) {
                                         await widget.onPullSaves();
+                                      }
+                                    },
+                                  ),
+                                  _ActionButton(
+                                    icon: Icons.folder_open,
+                                    label: 'Open Folder',
+                                    onPressed: () async {
+                                      final ds = ref.read(directoryServiceProvider).value;
+                                      if (ds != null) {
+                                        final path = await ds.getRomDirectory(_currentGame);
+                                        await SystemUtils.openDirectory(path);
                                       }
                                     },
                                   ),

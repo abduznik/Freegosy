@@ -37,9 +37,9 @@ class DownloadProgressCard extends StatelessWidget {
               tooltip: isPaused ? 'Resume' : 'Pause',
             ),
           IconButton(
-            icon: const Icon(Icons.close),
+            icon: Icon(isComplete ? Icons.check : Icons.close),
             onPressed: onCancel,
-            tooltip: 'Cancel',
+            tooltip: isComplete ? 'Clear' : 'Cancel',
           ),
         ],
       ),

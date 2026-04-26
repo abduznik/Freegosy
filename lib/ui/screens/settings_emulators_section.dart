@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/storage/directory_service.dart';
+import '../../core/storage/system_utils.dart';
 import '../../core/emulator/emulator_registry_data.dart';
+
 import '../../core/emulator/strategy_registry.dart';
 import '../../core/emulator/firmware_service.dart';
+import '../../ui/widgets/emulator_selection_dialog.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
@@ -127,6 +130,14 @@ Widget buildEmulatorsSection(
                       await directoryService.setEmulatorPathOverride(emulatorId, selectedDirectory);
                       setState(() {}); // Trigger parent state update
                     }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.folder_shared, size: 20),
+                  tooltip: 'Open emulator folder',
+                  onPressed: () async {
+                    final path = await directoryService.getEmulatorDirectory(emulatorId);
+                    await SystemUtils.openDirectory(path);
                   },
                 ),
                 IconButton(
@@ -264,24 +275,56 @@ Future<void> _startDownload(
     buildType: buildType,
   );
 
-  // Listen for download completion and update state
+  // Listen for download completion or selection requirement
   StreamSubscription? sub;
-  sub = ref.read(downloadProvider.notifier).stream.listen((downloads) {
+  sub = ref.read(downloadProvider.notifier).stream.listen((downloads) async {
     final progress = downloads[emulatorId];
-    if (progress != null && (progress.isComplete || progress.error != null)) {
+    if (progress == null) return;
+
+    if (progress.status == 'selection_required') {
+      sub?.cancel(); // Cancel current listener as we are entering a modal flow
+      
+      // We need to fetch the assets again or retrieve from the provider.
+      // Since it's a new flow, we fetch them via the ReleaseService directly or via a provider.
+      // Given we are in the UI, we can use the ReleaseService if available, 
+      // but the assets are likely already fetched in the download service.
+      // Since we don't have direct access to the asset list in DownloadProgress,
+      // let's assume we re-fetch them based on definition.
+      
+      final assets = await ref.read(emulatorDownloadServiceProvider).value!.getLatestAssetsForEmulator(emulatorId);
+      
+      if (context.mounted) {
+        final selected = await showDialog<Map<String, String>>(
+          context: context,
+          builder: (ctx) => EmulatorSelectionDialog(
+            assets: assets,
+            onSelect: (url) => Navigator.pop(ctx, assets.firstWhere((a) => a['url'] == url)),
+          ),
+        );
+        
+        if (selected != null) {
+          // Restart download with the selected URL
+          messenger.showSnackBar(SnackBar(content: Text('Downloading ${selected['name']}...')));
+          ref.read(downloadProvider.notifier).startEmulatorDownload(
+            emulatorId,
+            emulatorName,
+            urlOverride: selected['url'],
+          );
+        }
+      }
+      return; // Stop processing further for this progress update
+    }
+
+    if (progress.isComplete || progress.error != null) {
       if (progress.isComplete) {
         if (context.mounted) {
           ref.invalidate(emulatorStatusProvider);
-          messenger.showSnackBar(SnackBar(
-            content: Text('$emulatorName downloaded successfully.'),
-          ));
+          messenger.showSnackBar(SnackBar(content: Text('$emulatorName downloaded successfully.')));
         }
       } else if (progress.error != null) {
         if (context.mounted) {
           setState(() {});
-          messenger.showSnackBar(SnackBar(
-            content: Text('Failed to download $emulatorName: ${progress.error}'),
-          ));
+          messenger.showSnackBar(SnackBar(content: Text('Failed to download $emulatorName: ${progress.error}')));
         }
       }
       sub?.cancel();
