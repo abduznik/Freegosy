@@ -281,16 +281,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: ValueListenableBuilder<bool>(
-                valueListenable: rommService!.isOffline,
-                builder: (context, offline, _) {
-                  return Text(
-                    offline ? "${rommService.config.baseUrl} - Offline Mode" : rommService.config.baseUrl,
-                    style: offline ? const TextStyle(color: Colors.orange) : null,
-                    overflow: TextOverflow.ellipsis,
-                  );
-                },
-              ),
+              child: rommService == null 
+                ? Consumer(
+                    builder: (context, ref, _) {
+                      final config = ref.watch(rommConfigProvider).value;
+                      return Text(
+                        config?.baseUrl ?? 'Loading...',
+                        style: const TextStyle(color: Colors.grey),
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
+                  )
+                : ValueListenableBuilder<bool>(
+                    valueListenable: rommService.isOffline,
+                    builder: (context, offline, _) {
+                      return Text(
+                        offline ? "${rommService.config.baseUrl} - Offline Mode" : rommService.config.baseUrl,
+                        style: offline ? const TextStyle(color: Colors.orange) : null,
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    },
+                  ),
             ),
           ],
         ),
