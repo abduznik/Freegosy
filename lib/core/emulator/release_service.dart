@@ -71,35 +71,63 @@ class ReleaseService {
   }
 
   Future<List<Map<String, String>>> _scrapeFallback(
-      ReleasePlatform platform, String repo, List<String> requiredFilters, List<String> excludedFilters, String? baseUrl) async {
+      ReleasePlatform platform, String repo, List<String> requiredFilters, 
+      List<String> excludedFilters, String? baseUrl) async {
     try {
-      final base = platform == ReleasePlatform.github ? 'https://github.com' : (baseUrl ?? giteaBaseUrl ?? 'https://git.eden-emu.dev');
-      final url = '$base/$repo/releases/latest';
-
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode != 200) return [];
-
-      final html = response.body;
-      final regex = RegExp(r'href="([^"]+/releases/download/[^"]+)"');
-      final matches = regex.allMatches(html);
-      List<Map<String, String>> matchingAssets = [];
-
-      for (final match in matches) {
-        final path = match.group(1)!;
-        final fullUrl = path.startsWith('http') ? path : '$base$path';
-        final name = path.split('/').last;
-
-        final matchesRequired = requiredFilters.isEmpty ||
-            requiredFilters.every((f) => name.toLowerCase().contains(f.toLowerCase()));
-        final matchesExcluded = excludedFilters.any((f) => name.toLowerCase().contains(f.toLowerCase()));
-
-        if (matchesRequired && !matchesExcluded) {
-          matchingAssets.add({'name': name, 'url': fullUrl});
-        }
+      if (platform == ReleasePlatform.gitea) {
+        // Gitea HTML scrape still works fine
+        final base = baseUrl ?? giteaBaseUrl ?? 'https://git.eden-emu.dev';
+        return await _htmlScrape('$base/$repo/releases/latest', base, requiredFilters, excludedFilters);
       }
-      return matchingAssets;
+
+      // GitHub: use Atom feed to get latest tag, then construct asset URLs
+      final feedUrl = 'https://github.com/$repo/releases.atom';
+      final feedResponse = await http.get(Uri.parse(feedUrl), headers: {'User-Agent': 'Freegosy'});
+      if (feedResponse.statusCode != 200) return [];
+
+      // Extract latest release tag from Atom feed
+      final tagRegex = RegExp(r'<id>tag:github\.com,2008:Repository/\d+/([^<]+)</id>');
+      final tagMatch = tagRegex.firstMatch(feedResponse.body);
+      if (tagMatch == null) return [];
+      final tag = tagMatch.group(1)!;
+
+      // Now fetch the release page for that specific tag to get asset links
+      final releasePage = 'https://github.com/$repo/releases/expanded_assets/$tag';
+      final pageResponse = await http.get(Uri.parse(releasePage), headers: {'User-Agent': 'Freegosy'});
+      if (pageResponse.statusCode != 200) return [];
+
+      return _parseHtmlAssets(pageResponse.body, 'https://github.com', requiredFilters, excludedFilters);
     } catch (e) {
       return [];
     }
+  }
+
+  Future<List<Map<String, String>>> _htmlScrape(String url, String base, 
+      List<String> requiredFilters, List<String> excludedFilters) async {
+    final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'Freegosy'});
+    if (response.statusCode != 200) return [];
+    return _parseHtmlAssets(response.body, base, requiredFilters, excludedFilters);
+  }
+
+  List<Map<String, String>> _parseHtmlAssets(String html, String base,
+      List<String> requiredFilters, List<String> excludedFilters) {
+    final regex = RegExp(r'href="([^"]+/releases/download/[^"]+)"');
+    final matches = regex.allMatches(html);
+    final List<Map<String, String>> matchingAssets = [];
+
+    for (final match in matches) {
+      final path = match.group(1)!;
+      final fullUrl = path.startsWith('http') ? path : '$base$path';
+      final name = fullUrl.split('/').last;
+
+      final matchesRequired = requiredFilters.isEmpty ||
+          requiredFilters.every((f) => name.toLowerCase().contains(f.toLowerCase()));
+      final matchesExcluded = excludedFilters.any((f) => name.toLowerCase().contains(f.toLowerCase()));
+
+      if (matchesRequired && !matchesExcluded) {
+        matchingAssets.add({'name': name, 'url': fullUrl});
+      }
+    }
+    return matchingAssets;
   }
 }

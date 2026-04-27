@@ -194,7 +194,16 @@ class DownloadService {
         final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
         final isArchive = currentPath.toLowerCase().endsWith('.zip') ||
             currentPath.toLowerCase().endsWith('.7z');
-        final shouldExtract = game.isMultiFile || (isWindowsGame && isArchive) || isZipSignature;
+        
+        final platformSupportsArchive = directoryService.platformSupportsArchive(game.platformSlug);
+
+        // We only want to extract if:
+        // 1. It's a multi-file game (RomM says it has multiple files)
+        // 2. It's a Windows game in an archive (usually needs extraction to run an EXE)
+        // 3. It's a ZIP/archive but the platform emulator DOES NOT support archives natively
+        final shouldExtract = game.isMultiFile || 
+                             (isWindowsGame && isArchive) || 
+                             ((isZipSignature || isArchive) && !platformSupportsArchive);
         
         if (shouldExtract) {
           yield DownloadProgress(
@@ -244,11 +253,19 @@ class DownloadService {
     final romDir = await directoryService.getRomDirectory(game);
     // Sanitize game name for use as folder name - matches DirectoryService sanitization
     final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    final extractDir = p.join(romDir, folderName);
+    String extractDir = p.join(romDir, folderName);
 
     debugPrint('[DownloadService] Extraction starting...');
     debugPrint('[DownloadService] Zip Path: $zipPath');
     debugPrint('[DownloadService] Extract Dir: $extractDir');
+
+    // If the extract directory path is already a file (e.g. game.name is "Game.zip" 
+    // and we're extracting "Game.zip"), we must use an alternative folder name
+    // to avoid "Not a directory" (Errno 20) error.
+    if (extractDir == zipPath) {
+      extractDir = p.join(romDir, '${folderName}_extracted');
+      debugPrint('[DownloadService] Path conflict detected. Using: $extractDir');
+    }
 
     await Directory(extractDir).create(recursive: true);
 

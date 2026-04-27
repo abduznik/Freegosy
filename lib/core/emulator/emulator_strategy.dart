@@ -37,7 +37,9 @@ abstract class EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
     final normalizedRomPath = p.absolute(p.normalize(romPath));
+    await preLaunch(game, romPath);
     await directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: launchArgs);
+    await postLaunch(game, romPath);
   }
 
   Future<Process?> launchWithHandle(Game game, String romPath) async {
@@ -45,8 +47,15 @@ abstract class EmulatorStrategy {
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
     final normalizedRomPath = p.absolute(p.normalize(romPath));
-    return await directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: launchArgs);
+    await preLaunch(game, romPath);
+    final process = await directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: launchArgs);
+    await process?.exitCode;
+    await postLaunch(game, romPath);
+    return process;
   }
+
+  Future<void> preLaunch(Game game, String romPath) async {}
+  Future<void> postLaunch(Game game, String romPath) async {}
 
   Future<void> launchStandalone() async {
     final exePath = await findExecutable();

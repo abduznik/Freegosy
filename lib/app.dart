@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'main.dart' show scaffoldMessengerKey;
 import 'providers/library_provider.dart';
 import 'providers/romm_provider.dart';
 import 'core/emulator/strategy_registry.dart';
@@ -53,6 +54,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       child: MaterialApp(
         title: 'Freegosy',
         debugShowCheckedModeBanner: false,
+        scaffoldMessengerKey: scaffoldMessengerKey,
         scrollBehavior: CustomScrollBehavior(),
         theme: ThemeData(
           useMaterial3: true,

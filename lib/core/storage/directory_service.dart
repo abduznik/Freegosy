@@ -328,6 +328,13 @@ class DirectoryService {
     status = await _ensureDirectoryExists(path);
   }
 
+  /// Checks if a platform's emulator natively supports ZIP or 7Z archives.
+  bool platformSupportsArchive(String? platformSlug) {
+    if (platformSlug == null) return false;
+    final extensions = _platformExtensions[platformSlug.toLowerCase()] ?? [];
+    return extensions.any((ext) => ext.toLowerCase() == '.zip' || ext.toLowerCase() == '.7z');
+  }
+
   Future<String> getRomsDirectory() async => romsRootPath;
 
   Future<Set<String>> getAllDownloadedFileNames() async {
