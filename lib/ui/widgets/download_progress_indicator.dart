@@ -34,7 +34,8 @@ class DownloadProgressIndicator extends StatelessWidget {
               child: Text(
                 () {
                   String displayStatus = progress.status;
-                  if (progress.status == 'Downloading...' && progress.percent > 0.8 && progress.percent < 1.0) {
+                  // If we are in the download phase and progress is high, show "Almost done"
+                  if (progress.status == 'Downloading...' && progress.percent >= 0.8) {
                     displayStatus = 'Almost done...';
                   }
                   

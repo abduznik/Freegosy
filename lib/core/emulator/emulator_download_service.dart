@@ -339,6 +339,8 @@ class EmulatorDownloadService {
           percent: 1.0,
           status: 'Extracting ($extension)...',
         ));
+        // Small delay so user can actually see the status change
+        await Future.delayed(const Duration(milliseconds: 500));
         await _extractionService.extract(tempFilePath, emulatorDir);
 
         final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);

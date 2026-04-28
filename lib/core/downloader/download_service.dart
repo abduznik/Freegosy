@@ -213,6 +213,8 @@ class DownloadService {
             percent: 1.0,
             status: 'Extracting ($extension)...',
           );
+          // Small delay so user can actually see the status change
+          await Future.delayed(const Duration(milliseconds: 500));
           await _extractMultiFile(game, currentPath);
         }
         
