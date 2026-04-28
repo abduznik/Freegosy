@@ -6,6 +6,7 @@ import 'providers/library_provider.dart';
 import 'providers/romm_provider.dart';
 import 'core/emulator/strategy_registry.dart';
 import 'core/save/save_sync_service.dart';
+import 'core/save/background_sync_queue.dart';
 import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
@@ -47,6 +48,29 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       }
       if (syncService != null) {
         syncService.setNdsCore(next);
+      }
+    });
+
+    // Listen to RommService initialization to hook up background sync queue
+    ref.listen(rommServiceProvider, (previous, next) {
+      if (previous != next && next != null) {
+        // 1. Attempt to sync immediately on startup if online
+        if (!next.isOffline.value) {
+          final backupRepo = ref.read(backupRepositoryProvider);
+          if (scaffoldMessengerKey.currentContext != null) {
+            BackgroundSyncQueue.processQueue(next, backupRepo, scaffoldMessengerKey.currentContext!);
+          }
+        }
+
+        // 2. Listen to future network state changes (e.g., coming back online)
+        next.isOffline.addListener(() {
+          if (!next.isOffline.value) {
+            final backupRepo = ref.read(backupRepositoryProvider);
+            if (scaffoldMessengerKey.currentContext != null) {
+              BackgroundSyncQueue.processQueue(next, backupRepo, scaffoldMessengerKey.currentContext!);
+            }
+          }
+        });
       }
     });
 
