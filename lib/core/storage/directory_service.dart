@@ -406,7 +406,7 @@ class DirectoryService {
   /// Returns the found path or null if not found.
   Future<String?> findExistingRomPath(Game game) async {
     final romDir = await getRomDirectory(game);
-    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     
     // 1. Check exact path first (file or directory) in primary platform folder
     final exactPath = p.join(romDir, baseName);
@@ -420,7 +420,7 @@ class DirectoryService {
     }
 
     // 3. Search for multi-file folder (sanitized game name)
-    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     
     // Try both romDir and romDir/roms
     final searchDirs = [romDir, p.join(romDir, 'roms')];
@@ -441,7 +441,7 @@ class DirectoryService {
         await for (final entity in parentDir.list()) {
           if (entity is Directory) {
             final dName = p.basename(entity.path);
-            final sanitizedDName = dName.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+            final sanitizedDName = dName.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
             if (sanitizedDName.toLowerCase() == folderName.toLowerCase()) {
               final found = await _findMainRomInFolder(game, entity.path);
               if (found != null) return found;
@@ -473,7 +473,7 @@ class DirectoryService {
         await for (final entity in parentDir.list()) {
           if (entity is File) {
             final fname = p.basename(entity.path);
-            final sanitizedFName = fname.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+            final sanitizedFName = fname.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
             if (sanitizedFName.toLowerCase().startsWith(baseName.toLowerCase()) && !fname.toLowerCase().endsWith('.part')) {
               // Prioritize .nds for NDS
               if ((game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') && fname.toLowerCase().endsWith('.nds')) {
