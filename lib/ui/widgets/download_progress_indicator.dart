@@ -18,10 +18,13 @@ class DownloadProgressIndicator extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (!compact) const SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: progress.percent > 0 ? progress.percent : null,
-          backgroundColor: Colors.grey[800],
-          valueColor: const AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+        _IndeterminatePulse(
+          enabled: progress.percent <= 0 && !progress.isComplete && progress.error == null,
+          child: LinearProgressIndicator(
+            value: progress.percent > 0 ? progress.percent : null,
+            backgroundColor: Colors.grey[800],
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+          ),
         ),
         const SizedBox(height: 4),
         Row(
@@ -51,5 +54,55 @@ class DownloadProgressIndicator extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+class _IndeterminatePulse extends StatefulWidget {
+  final Widget child;
+  final bool enabled;
+
+  const _IndeterminatePulse({required this.child, required this.enabled});
+
+  @override
+  State<_IndeterminatePulse> createState() => _IndeterminatePulseState();
+}
+
+class _IndeterminatePulseState extends State<_IndeterminatePulse> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 1),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    if (widget.enabled) _controller.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_IndeterminatePulse oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled && !oldWidget.enabled) {
+      _controller.repeat(reverse: true);
+    } else if (!widget.enabled && oldWidget.enabled) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    return FadeTransition(opacity: _animation, child: widget.child);
   }
 }

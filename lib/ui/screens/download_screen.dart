@@ -68,7 +68,9 @@ class DownloadScreen extends ConsumerWidget {
                       }
                     },
                     onCancel: () async {
-                      if (await _showCancelConfirmation(context, progress.gameName)) {
+                      if (progress.isComplete || progress.error != null) {
+                        ref.read(downloadProvider.notifier).cancelDownload(gameId);
+                      } else if (await _showCancelConfirmation(context, progress.gameName)) {
                         ref.read(downloadProvider.notifier).cancelDownload(gameId);
                       }
                     },

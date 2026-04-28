@@ -465,7 +465,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                                       label: 'Cancel',
                                       color: Colors.red,
                                       onPressed: () async {
-                                        if (await _showCancelConfirmation(context, progress.gameName)) {
+                                        if (progress.isComplete || progress.error != null) {
+                                          ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
+                                        } else if (await _showCancelConfirmation(context, progress.gameName)) {
                                           ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
                                         }
                                       },
