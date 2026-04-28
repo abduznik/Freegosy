@@ -28,6 +28,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _apiKeyController;
   bool _preferencesLoaded = false;
   bool _isLegacyAuth = false;
+  bool _isTestingConnection = false;
+  String? _connectionError;
+  bool _connectionSuccess = false;
 
   @override
   void initState() {
@@ -149,21 +152,86 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         Switch(value: _isLegacyAuth, onChanged: (val) => setState(() => _isLegacyAuth = val)),
       ]),
       const SizedBox(height: 16),
-      ElevatedButton(
-        onPressed: () async {
-          final prefs = ref.read(sharedPreferencesProvider);
-          await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
-          if (_isLegacyAuth) {
-             await prefs.setString('rommUsername', _usernameController.text.trim());
-             await SecureStorageService.write('rommPassword', _passwordController.text, prefs);
-          } else {
-             await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
-          }
-          ref.invalidate(rommConfigProvider);
-          ref.invalidate(rommServiceProvider);
-          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
-        },
-        child: const Text('Save'),
+      const SizedBox(height: 16),
+      if (_connectionError != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(_connectionError!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+        ),
+      if (_connectionSuccess)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text('Connection successful!', style: TextStyle(color: Colors.green, fontSize: 13)),
+        ),
+      Row(
+        children: [
+          ElevatedButton(
+            onPressed: _isTestingConnection ? null : () async {
+              final baseUrl = _baseUrlController.text.trim();
+              if (baseUrl.isEmpty) {
+                setState(() => _connectionError = 'Server URL is required');
+                return;
+              }
+
+              setState(() {
+                _isTestingConnection = true;
+                _connectionError = null;
+                _connectionSuccess = false;
+              });
+
+              try {
+                // Temporary config for testing
+                final testConfig = RomMConfig(
+                  baseUrl: baseUrl,
+                  username: _usernameController.text.trim(),
+                  password: _passwordController.text,
+                  apiKey: _apiKeyController.text.trim(),
+                );
+                
+                final testService = RommService(testConfig);
+                await testService.getPlatforms(); // Simple connectivity test
+                
+                if (mounted) {
+                  setState(() {
+                    _isTestingConnection = false;
+                    _connectionSuccess = true;
+                  });
+                }
+              } catch (e) {
+                if (mounted) {
+                  setState(() {
+                    _isTestingConnection = false;
+                    _connectionError = 'Connection failed: ${e.toString().split('\n').first}';
+                  });
+                }
+              }
+            },
+            child: _isTestingConnection 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Test Connection'),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final prefs = ref.read(sharedPreferencesProvider);
+              await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
+              if (_isLegacyAuth) {
+                 await prefs.setString('rommUsername', _usernameController.text.trim());
+                 await SecureStorageService.write('rommPassword', _passwordController.text, prefs);
+              } else {
+                 await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
+              }
+              ref.invalidate(rommConfigProvider);
+              ref.invalidate(rommServiceProvider);
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     ]);
   }

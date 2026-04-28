@@ -430,35 +430,65 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                   ),
                 ),
               Expanded(
-                child: paginatedState.isLoading
-                    ? buildSkeletonGrid(cardAspectRatio, gridColumnCount, cardSpacing, context, showTitle: showTitle)
-                    : (paginatedState.error != null && !paginatedState.error!.contains('Offline Mode'))
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Error: ${paginatedState.error}',
-                                  style: const TextStyle(color: Colors.red),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    ref.invalidate(rommServiceProvider);
-                                    ref.read(paginatedGamesProvider.notifier).loadInitial(
-                                      platformId: ref.read(selectedPlatformIdProvider)?.toString(),
-                                      search: ref.read(searchQueryProvider),
-                                    );
-                                  },
-                                  child: const Text('Retry'),
-                                ),
-                              ],
+                child: rommService == null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.settings_outlined, size: 64, color: Colors.grey),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Setup Required',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                             ),
-                          )
-                        : RefreshIndicator(
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Please configure your RomM server in Settings.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: () {
+                                // Ideally we would switch the tab, but for now just a hint
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Click the Settings icon at the bottom.')),
+                                );
+                              },
+                              child: const Text('Go to Settings'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : paginatedState.isLoading
+                        ? buildSkeletonGrid(cardAspectRatio, gridColumnCount, cardSpacing, context, showTitle: showTitle)
+                        : (paginatedState.error != null && !paginatedState.error!.contains('Offline Mode'))
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Error: ${paginatedState.error}',
+                                      style: const TextStyle(color: Colors.red),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        ref.invalidate(rommServiceProvider);
+                                        ref.read(paginatedGamesProvider.notifier).loadInitial(
+                                          platformId: ref.read(selectedPlatformIdProvider)?.toString(),
+                                          search: ref.read(searchQueryProvider),
+                                        );
+                                      },
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : RefreshIndicator(
                         key: _refreshIndicatorKey,
                         onRefresh: _refreshLibrary,
                         child: Consumer(

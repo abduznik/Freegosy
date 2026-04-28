@@ -62,7 +62,7 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final prefs = ref.watch(sharedPreferencesProvider);
   
   String baseUrl = prefs.getString('rommBaseUrl') ?? '';
-  if (baseUrl.isEmpty) baseUrl = 'https://api.romm.example.com';
+  // Removed default example.com URL to avoid first-start error screens
   
   final username = prefs.getString('rommUsername') ?? '';
   final password = await SecureStorageService.read('rommPassword', prefs) ?? '';
@@ -152,7 +152,7 @@ final rommServiceProvider = Provider<RommService?>((ref) {
   final config = rommConfigAsync.asData?.value;
   final directoryService = directoryServiceAsync.asData?.value;
 
-  if (config != null && directoryService != null) {
+  if (config != null && directoryService != null && config.baseUrl.isNotEmpty) {
     try {
       debugPrint('[RomM-Init] Initializing RommService with config for ${config.baseUrl}');
       final service = RommService(config);
