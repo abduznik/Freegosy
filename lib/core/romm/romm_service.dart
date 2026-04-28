@@ -61,7 +61,9 @@ class RommService {
           return handler.next(response);
         },
         onError: (e, handler) {
-          debugPrint('[RomM-Network] ! ERROR ${e.requestOptions.uri}: ${e.message}');
+          if (!e.requestOptions.path.contains('/api/heartbeat')) {
+            debugPrint('[RomM-Network] ! ERROR ${e.requestOptions.uri}: ${e.message}');
+          }
           return handler.next(e);
         },
       ));
@@ -356,7 +358,10 @@ class RommService {
         '/api/saves', 
         queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot}, 
         data: FormData.fromMap(formDataMap), 
-        options: _authOptions.copyWith()
+        options: _authOptions.copyWith(
+          sendTimeout: const Duration(minutes: 5),
+          receiveTimeout: const Duration(minutes: 5),
+        ),
       );
       return response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
     } catch (e) { 
