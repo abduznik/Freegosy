@@ -29,6 +29,9 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Core — Save Sync
 - `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() keeps max 3 clean versions (.bak, .bak1, .bak2), getRomStem().
 - `lib/core/save/save_sync_service.dart` — SaveSyncService. Methods: pushSaves(), pullSave(), getStrategyForSlug(). getStrategyForSlug() checks StrategyRegistry user preferences first before falling back to platform slug defaults. Wires all strategies to RommService. Exposes windowsSaveStrategy for external access.
+- `lib/core/save/backup_entry.dart` — BackupEntry plain model + hand-written BackupEntryAdapter (typeId=1). Registered in main.dart.
+- `lib/core/save/backup_repository.dart` — BackupRepository. Opens the 'freegosy_backups' Hive box. Methods: getEntries(), addEntry() (enforces 8-cap rotation + disk cleanup), removeEntry().
+- `lib/core/save/backup_service.dart` — BackupService. Methods: createImmediate() (reuses ZipFileEncoder pipeline from SaveSyncService, writes to getApplicationSupportDirectory()/backups/), restore() (extracts chosen zip back to save dir using archive package).
 - `lib/core/save/strategies/retroarch_save_strategy.dart` — RetroArch save strategy. Handles dual-stem matching for states.
 - `lib/core/save/strategies/dolphin_save_strategy.dart` — Dolphin save strategy (GC/Wii).
 - `lib/core/save/strategies/eden_save_strategy.dart` — Eden/Switch save strategy. Resolves title ID.
@@ -88,6 +91,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/widgets/windows_game_config_dialog.dart` — Manual path override UI.
 - `lib/ui/widgets/multi_disc_picker.dart` — Bottom sheet for selecting discs in multi-file games.
 - `lib/ui/widgets/screenshot_gallery_dialog.dart` — Fullscreen swipeable screenshot gallery with zoom support.
+- `lib/ui/widgets/backup_history_sheet.dart` — Bottom sheet listing up to 8 local backup checkpoints per game. Includes Restore button with pre-restore safety snapshot.
 
 ## Key Contracts
 

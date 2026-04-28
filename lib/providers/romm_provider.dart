@@ -5,6 +5,8 @@ import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
+import 'package:freegosy/core/save/backup_repository.dart';
+import 'package:freegosy/core/save/backup_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
 import 'package:freegosy/core/storage/download_cache_service.dart';
@@ -193,3 +195,17 @@ final romScannerServiceProvider = Provider<RomScannerService?>((ref) {
   }
   return null;
 });
+
+// ---------------------------------------------------------------------------
+// Backup providers
+// ---------------------------------------------------------------------------
+
+/// Exposes the Hive-backed [BackupRepository].
+final backupRepositoryProvider = Provider<BackupRepository>((ref) {
+  final repo = BackupRepository();
+  repo.initBox();
+  return repo;
+});
+
+/// Lightweight service for creating and restoring local save backups.
+final backupServiceProvider = Provider<BackupService>((ref) => BackupService());

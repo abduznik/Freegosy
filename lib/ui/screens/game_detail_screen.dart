@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:developer' as dev;
 import '../../core/storage/system_utils.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
+import '../../core/save/backup_entry.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
 import '../widgets/download_progress_indicator.dart';
+import '../widgets/backup_history_sheet.dart';
 
 class GameDetailScreen extends ConsumerStatefulWidget {
   final Game game;
@@ -481,54 +484,150 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                 children: [
+                                  Expanded(
+                                    child: _ActionButton(
+                                      icon: Icons.play_arrow,
+                                      label: 'Play',
+                                      onPressed: () async {
+                                        if (_isDownloaded) {
+                                          await widget.onLaunch();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _ActionButton(
+                                      icon: Icons.cloud_upload,
+                                      label: 'Push',
+                                      onPressed: () async {
+                                        if (_isDownloaded) {
+                                          await widget.onPushSaves();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _ActionButton(
+                                      icon: Icons.cloud_download,
+                                      label: 'Pull',
+                                      onPressed: () async {
+                                        if (_isDownloaded) {
+                                          await widget.onPullSaves();
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _ActionButton(
+                                      icon: Icons.folder_open,
+                                      label: 'Open Folder',
+                                      onPressed: () async {
+                                        final ds = ref.read(directoryServiceProvider).value;
+                                        if (ds != null) {
+                                          final path = await ds.getRomDirectory(_currentGame);
+                                          await SystemUtils.openDirectory(path);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _ActionButton(
+                                      icon: Icons.delete,
+                                      label: 'Delete',
+                                      onPressed: () async {
+                                        await widget.onDelete();
+                                        // Invalidate download provider to clear "100% done" sticky state
+                                        ref.invalidate(downloadProvider);
+                                        _checkDownloadStatus();
+                                      },
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              const Divider(color: Colors.white12),
+                              const SizedBox(height: 12),
+                              const Center(
+                                child: Text(
+                                  'Local Version Control',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  // ── Local Backup button ──────────────────
                                   _ActionButton(
-                                    icon: Icons.play_arrow,
-                                    label: 'Play',
+                                    icon: Icons.save_alt_outlined,
+                                    label: 'Backup',
                                     onPressed: () async {
-                                      if (_isDownloaded) {
-                                        await widget.onLaunch();
+                                      try {
+                                        final syncService = ref.read(saveSyncServiceProvider).asData?.value;
+                                        final ds = ref.read(directoryServiceProvider).value;
+                                        if (syncService == null || ds == null) {
+                                          ErrorHandler.showInfo(context, 'Not Ready', message: 'Services not available');
+                                          return;
+                                        }
+                                        final romPath = await ds.getRomFilePath(_currentGame);
+                                        final backupService = ref.read(backupServiceProvider);
+                                        final result = await backupService.createImmediate(_currentGame, romPath, syncService);
+                                        if (!context.mounted) return;
+                                        if (result != null) {
+                                          final backupRepo = ref.read(backupRepositoryProvider);
+                                          await backupRepo.addEntry(
+                                            _currentGame.id,
+                                            BackupEntry(
+                                              timestamp: DateTime.now(),
+                                              md5Hash: result.md5,
+                                              localZipPath: result.zipPath,
+                                            ),
+                                          );
+                                          if (context.mounted) {
+                                            ErrorHandler.showSuccess(context, 'Backup Created', message: 'Local restore point saved.');
+                                          }
+                                        } else {
+                                          ErrorHandler.showInfo(context, 'No Saves', message: 'No save files found to back up.');
+                                        }
+                                      } catch (e, st) {
+                                        dev.log('Backup button failed', error: e, stackTrace: st);
+                                        if (context.mounted) {
+                                          ErrorHandler.showException(context, e, contextLabel: 'Local Backup');
+                                        }
                                       }
                                     },
                                   ),
+                                  const SizedBox(width: 48),
+                                  // ── Restore button ───────────────────────
                                   _ActionButton(
-                                    icon: Icons.cloud_upload,
-                                    label: 'Push',
+                                    icon: Icons.history,
+                                    label: 'Restore',
                                     onPressed: () async {
-                                      if (_isDownloaded) {
-                                        await widget.onPushSaves();
+                                      try {
+                                        final ds = ref.read(directoryServiceProvider).value;
+                                        final romPath = ds != null
+                                            ? await ds.getRomFilePath(_currentGame)
+                                            : '';
+                                        if (!context.mounted) return;
+                                        await BackupHistorySheet.show(
+                                          context,
+                                          game: _currentGame,
+                                          romPath: romPath,
+                                        );
+                                      } catch (e, st) {
+                                        dev.log('Restore button failed', error: e, stackTrace: st);
+                                        if (context.mounted) {
+                                          ErrorHandler.showException(context, e, contextLabel: 'Local Restore');
+                                        }
                                       }
                                     },
-                                  ),
-                                  _ActionButton(
-                                    icon: Icons.cloud_download,
-                                    label: 'Pull',
-                                    onPressed: () async {
-                                      if (_isDownloaded) {
-                                        await widget.onPullSaves();
-                                      }
-                                    },
-                                  ),
-                                  _ActionButton(
-                                    icon: Icons.folder_open,
-                                    label: 'Open Folder',
-                                    onPressed: () async {
-                                      final ds = ref.read(directoryServiceProvider).value;
-                                      if (ds != null) {
-                                        final path = await ds.getRomDirectory(_currentGame);
-                                        await SystemUtils.openDirectory(path);
-                                      }
-                                    },
-                                  ),
-                                  _ActionButton(
-                                    icon: Icons.delete,
-                                    label: 'Delete',
-                                    onPressed: () async {
-                                      await widget.onDelete();
-                                      // Invalidate download provider to clear "100% done" sticky state
-                                      ref.invalidate(downloadProvider);
-                                      _checkDownloadStatus();
-                                    },
-                                    color: Colors.red,
                                   ),
                                 ],
                               ),
@@ -834,6 +933,7 @@ class _ActionButton extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
+          textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color ?? Colors.white70),
         ),
       ],

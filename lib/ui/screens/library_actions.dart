@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:io' as io;
+import 'dart:developer' as dev;
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
@@ -14,6 +15,8 @@ import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/save/save_strategy.dart';
+import '../../core/save/backup_entry.dart';
+import '../../core/save/backup_service.dart';
 import '../../core/save/strategies/eden_save_strategy.dart';
 import '../../core/save/strategies/ryujinx_save_strategy.dart';
 import '../../core/save/strategies/azahar_save_strategy.dart';
@@ -298,7 +301,29 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       if (!context.mounted) return;
       ErrorHandler.showInfo(context, 'Launching', message: 'Launching ${game.name}...');
 
-      // Try to get process handle for auto-sync when game closes
+      // --- Safety Sandwich: pre-launch restore-point ---
+      BackupResult? preBackup;
+      if (syncService != null) {
+        try {
+          final backupService = ref.read(backupServiceProvider);
+          final backupRepo = ref.read(backupRepositoryProvider);
+          preBackup = await backupService.createImmediate(game, romPath, syncService);
+          if (preBackup != null) {
+            await backupRepo.addEntry(
+              game.id,
+              BackupEntry(
+                timestamp: DateTime.now(),
+                md5Hash: preBackup.md5,
+                localZipPath: preBackup.zipPath,
+              ),
+            );
+            debugPrint('[SafetySandwich] Pre-launch restore point created: ${preBackup.zipPath}');
+          }
+        } catch (e, st) {
+          dev.log('Safety Sandwich pre-launch backup failed', error: e, stackTrace: st);
+        }
+      }
+
       Process? process = await strategy.launchWithHandle(game, romPath);
       if (!context.mounted) return;
       if (process == null) {
@@ -316,12 +341,36 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             if (syncService != null) {
               final syncMode = ref.read(retroarchSyncModeProvider);
               await syncService.pushSaves(game, romPath, syncMode: syncMode);
+
+              // --- Safety Sandwich: post-exit backup if save changed ---
+              try {
+                final backupService = ref.read(backupServiceProvider);
+                final backupRepo = ref.read(backupRepositoryProvider);
+                final postBackup = await backupService.createImmediate(game, romPath, syncService);
+                if (postBackup != null && postBackup.md5 != preBackup?.md5) {
+                  await backupRepo.addEntry(
+                    game.id,
+                    BackupEntry(
+                      timestamp: DateTime.now(),
+                      md5Hash: postBackup.md5,
+                      localZipPath: postBackup.zipPath,
+                    ),
+                  );
+                  debugPrint('[SafetySandwich] Post-exit backup saved: ${postBackup.zipPath}');
+                } else if (postBackup != null) {
+                  // No change — discard the redundant zip
+                  final f = io.File(postBackup.zipPath);
+                  if (await f.exists()) await f.delete();
+                }
+              } catch (e, st) {
+                dev.log('Safety Sandwich post-exit backup failed', error: e, stackTrace: st);
+              }
             }
 
             if (!context.mounted) return;
             ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
           } catch (e) {
-            // Silently ignore errors in auto-sync
+            // Silently ignore errors in auto-sync / backup
           }
         }));
       }
