@@ -85,7 +85,9 @@ class BackgroundSyncQueue {
 
         debugPrint('[BackgroundSyncQueue] Pushing ${zipFile.path} to RomM...');
 
-        final uploadFilename = 'freegosy_${item.romId}_${item.entry.timestamp.millisecondsSinceEpoch}_${item.entry.md5Hash}.zip';
+        final game = await rommService.getGame(item.romId);
+        final displayStem = game?.displayName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_') ?? 'freegosy_${item.romId}';
+        final uploadFilename = '$displayStem.zip';
 
         final success = await rommService.uploadSave(
           item.romId,
