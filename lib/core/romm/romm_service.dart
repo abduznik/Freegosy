@@ -350,10 +350,16 @@ class RommService {
     }
     final baseUrl = _normalizeBaseUrl(_config.baseUrl);
     final name = game.fileName ?? game.fsName ?? game.name;
-    String encoded = Uri.encodeComponent(name);
+    String encoded = Uri.encodeComponent(name)
+        .replaceAll("'", "%27")
+        .replaceAll("(", "%28")
+        .replaceAll(")", "%29");
     if (encoded.length > 100) {
       final ext = p.extension(name); final stem = p.basenameWithoutExtension(name);
-      encoded = Uri.encodeComponent('${stem.substring(0, min(stem.length, 50))}$ext');
+      encoded = Uri.encodeComponent('${stem.substring(0, min(stem.length, 50))}$ext')
+          .replaceAll("'", "%27")
+          .replaceAll("(", "%28")
+          .replaceAll(")", "%29");
     }
     return '$baseUrl/api/roms/${game.id}/content/$encoded';
   }

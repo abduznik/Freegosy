@@ -7,6 +7,10 @@ on:
         description: 'Version tag (e.g. v1.0.0)'
         required: true
         default: 'v1.0.0'
+      prerelease:
+        description: 'Is Pre-release?'
+        type: boolean
+        default: false
       build_linux:
         description: 'Build Linux?'
         type: boolean
@@ -186,6 +190,6 @@ jobs:
             artifacts/freegosy-macos.dmg
           fail_on_unmatched_files: false
           draft: false
-          prerelease: false
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

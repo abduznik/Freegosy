@@ -22,7 +22,6 @@ final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
     connectTimeout: const Duration(seconds: 60),
     receiveTimeout: const Duration(hours: 4), // Allow up to 4 hours for large ROMs
     headers: {
-      'Accept-Encoding': 'identity', // Disable compression for large downloads to avoid proxy issues
       'User-Agent': 'Freegosy/${AppConstants.version}',
     },
   ));
@@ -53,7 +52,6 @@ final emulatorDownloadServiceProvider =
     connectTimeout: const Duration(seconds: 60),
     receiveTimeout: const Duration(minutes: 30),
     headers: {
-      'Accept-Encoding': 'identity',
       'User-Agent': 'Freegosy/${AppConstants.version}',
     },
   ));

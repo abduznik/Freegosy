@@ -1,3 +1,4 @@
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -236,22 +237,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // --- Storage Section ---
   Widget _buildStorageSection(DirectoryService directoryService) {
+    final prefs = ref.read(sharedPreferencesProvider);
+    final preset = directoryService.linuxSyncPreset;
+    
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Storage', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 16),
-      _buildPathRow(
-        label: 'ROMs Directory',
-        currentPath: directoryService.romsRootPath,
-        onChanged: (p) async { if (p != null) { await directoryService.setRomsRoot(p); ref.invalidate(directoryServiceProvider); } },
-        onReset: () async { await directoryService.resetRomsRoot(); ref.invalidate(directoryServiceProvider); },
-      ),
-      const SizedBox(height: 12),
-      _buildPathRow(
-        label: 'Emulators Directory',
-        currentPath: directoryService.emulatorsRootPath,
-        onChanged: (p) async { if (p != null) { await directoryService.setEmulatorsRoot(p); ref.invalidate(directoryServiceProvider); } },
-        onReset: () async { await directoryService.resetEmulatorsRoot(); ref.invalidate(directoryServiceProvider); },
-      ),
+      
+      if (io.Platform.isLinux) ...[
+        const Text('Linux App Layout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: preset,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: 'default', child: Text('Manual / Native')),
+            DropdownMenuItem(value: 'emudeck', child: Text('EmuDeck')),
+            DropdownMenuItem(value: 'retrodeck', child: Text('RetroDeck')),
+          ],
+          onChanged: (val) async {
+            if (val != null) {
+              await directoryService.setLinuxSyncPreset(val);
+              ref.invalidate(directoryServiceProvider);
+            }
+          },
+        ),
+        const SizedBox(height: 16),
+      ],
+
+      if (io.Platform.isLinux && preset != 'default') ...[
+        _buildPathRow(
+          label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
+          currentPath: preset == 'emudeck' 
+              ? (directoryService.emudeckRootPath ?? 'Not set') 
+              : (prefs.getString('retrodeckRootPath') ?? 'Not set'),
+          onChanged: (p) async { 
+            if (p != null) { 
+              if (preset == 'emudeck') {
+                await directoryService.setEmudeckRoot(p);
+              } else {
+                await prefs.setString('retrodeckRootPath', p);
+                // Trigger re-init so paths compute
+                await directoryService.initialize();
+              }
+              ref.invalidate(directoryServiceProvider); 
+            } 
+          },
+        ),
+        const SizedBox(height: 12),
+        // Read-only views of the computed paths
+        _buildPathRow(
+          label: 'Computed ROMs Directory',
+          currentPath: directoryService.romsRootPath,
+          onChanged: null,
+        ),
+        const SizedBox(height: 12),
+        _buildPathRow(
+          label: 'Computed Emulators Directory',
+          currentPath: directoryService.emulatorsRootPath,
+          onChanged: null,
+        ),
+      ] else ...[
+        _buildPathRow(
+          label: 'ROMs Directory',
+          currentPath: directoryService.romsRootPath,
+          onChanged: (p) async { if (p != null) { await directoryService.setRomsRoot(p); ref.invalidate(directoryServiceProvider); } },
+          onReset: () async { await directoryService.resetRomsRoot(); ref.invalidate(directoryServiceProvider); },
+        ),
+        const SizedBox(height: 12),
+        _buildPathRow(
+          label: 'Emulators Directory',
+          currentPath: directoryService.emulatorsRootPath,
+          onChanged: (p) async { if (p != null) { await directoryService.setEmulatorsRoot(p); ref.invalidate(directoryServiceProvider); } },
+          onReset: () async { await directoryService.resetEmulatorsRoot(); ref.invalidate(directoryServiceProvider); },
+        ),
+      ],
       const SizedBox(height: 16),
       OutlinedButton.icon(
         onPressed: () => SystemUtils.openDirectory(directoryService.romsRootPath),
@@ -267,13 +327,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ]);
   }
 
-  Widget _buildPathRow({required String label, required String currentPath, required Function(String?) onChanged, VoidCallback? onReset}) {
+  Widget _buildPathRow({required String label, required String currentPath, required Function(String?)? onChanged, VoidCallback? onReset}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
       Row(children: [
         Expanded(child: Text(currentPath, overflow: TextOverflow.ellipsis)),
-        IconButton(onPressed: onReset, icon: const Icon(Icons.restore)),
-        ElevatedButton(onPressed: () async => onChanged(await FilePicker.platform.getDirectoryPath()), child: const Text('Change')),
+        if (onReset != null) IconButton(onPressed: onReset, icon: const Icon(Icons.restore)),
+        if (onChanged != null) ElevatedButton(onPressed: () async => onChanged(await FilePicker.platform.getDirectoryPath()), child: const Text('Change')),
       ]),
     ]);
   }

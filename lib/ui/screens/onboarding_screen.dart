@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
@@ -32,6 +33,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // Step 2: Storage Config
   String? _romsRoot;
   String? _emusRoot;
+  String? _presetRoot;
   String _linuxPreset = 'default';
   bool _isStorageInitialized = false;
 
@@ -49,6 +51,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final romsRoot = prefs.getString('romsRootPath');
     final emusRoot = prefs.getString('emulatorsRootPath');
     final linuxPreset = prefs.getString('linuxSyncPreset') ?? 'default';
+    String? presetRoot;
+    if (linuxPreset == 'emudeck') {
+      presetRoot = prefs.getString('emudeckRootPath');
+    } else if (linuxPreset == 'retrodeck') {
+      presetRoot = prefs.getString('retrodeckRootPath');
+    }
 
     if (!mounted) return;
 
@@ -60,6 +68,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (romsRoot != null) _romsRoot = romsRoot;
       if (emusRoot != null) _emusRoot = emusRoot;
       _linuxPreset = linuxPreset;
+      if (presetRoot != null) _presetRoot = presetRoot;
       if (romsRoot != null || emusRoot != null) {
         _isStorageInitialized = true;
       }
@@ -128,14 +137,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
     await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
     
+    if (io.Platform.isLinux && _linuxPreset != 'default' && _presetRoot != null) {
+      if (_linuxPreset == 'emudeck') {
+        _romsRoot = p.join(_presetRoot!, 'roms');
+        _emusRoot = p.join(_presetRoot!, 'tools', 'launchers');
+        await prefs.setString('emudeckRootPath', _presetRoot!);
+      } else if (_linuxPreset == 'retrodeck') {
+        _romsRoot = p.join(_presetRoot!, 'roms');
+        _emusRoot = p.join(_presetRoot!, 'tools');
+        await prefs.setString('retrodeckRootPath', _presetRoot!);
+      }
+      await prefs.setString('linuxSyncPreset', _linuxPreset);
+    } else if (io.Platform.isLinux) {
+      await prefs.setString('linuxSyncPreset', 'default');
+    }
+    
     // Save Storage Config
     if (_romsRoot != null) await prefs.setString('romsRootPath', _romsRoot!);
     if (_emusRoot != null) await prefs.setString('emulatorsRootPath', _emusRoot!);
     
-    if (io.Platform.isLinux) {
-      await prefs.setString('linuxSyncPreset', _linuxPreset);
-    }
-
     // Invalidate providers to trigger reload
     ref.invalidate(rommConfigProvider);
     ref.invalidate(rommServiceProvider);
@@ -261,19 +281,39 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           const SizedBox(height: 40),
           TextField(
             controller: _baseUrlController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Server URL',
               hintText: 'http://your-ip:8080',
-              prefixIcon: Icon(Icons.dns),
+              prefixIcon: const Icon(Icons.dns),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.paste),
+                onPressed: () async {
+                  final data = await Clipboard.getData(Clipboard.kTextPlain);
+                  if (data != null && data.text != null) {
+                    _baseUrlController.text = data.text!;
+                  }
+                },
+                tooltip: 'Paste from clipboard',
+              ),
             ),
           ),
           const SizedBox(height: 20),
           TextField(
             controller: _apiKeyController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'API Key',
               hintText: 'Found in RomM User Settings',
-              prefixIcon: Icon(Icons.key),
+              prefixIcon: const Icon(Icons.key),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.paste),
+                onPressed: () async {
+                  final data = await Clipboard.getData(Clipboard.kTextPlain);
+                  if (data != null && data.text != null) {
+                    _apiKeyController.text = data.text!;
+                  }
+                },
+                tooltip: 'Paste from clipboard',
+              ),
             ),
             obscureText: true,
           ),
@@ -367,23 +407,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             const SizedBox(height: 32),
           ],
 
-          _buildPathSelector(
-            label: 'ROMs Directory',
-            currentPath: _romsRoot ?? 'Loading...',
-            onTap: () async {
-              final path = await FilePicker.platform.getDirectoryPath();
-              if (path != null) setState(() => _romsRoot = path);
-            },
-          ),
-          const SizedBox(height: 24),
-          _buildPathSelector(
-            label: 'Emulators Directory',
-            currentPath: _emusRoot ?? 'Loading...',
-            onTap: () async {
-              final path = await FilePicker.platform.getDirectoryPath();
-              if (path != null) setState(() => _emusRoot = path);
-            },
-          ),
+          if (io.Platform.isLinux && _linuxPreset != 'default') ...[
+            _buildPathSelector(
+              label: '${_linuxPreset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
+              currentPath: _presetRoot ?? 'Select root directory...',
+              onTap: () async {
+                final path = await FilePicker.platform.getDirectoryPath();
+                if (path != null) setState(() => _presetRoot = path);
+              },
+            ),
+          ] else ...[
+            _buildPathSelector(
+              label: 'ROMs Directory',
+              currentPath: _romsRoot ?? 'Loading...',
+              onTap: () async {
+                final path = await FilePicker.platform.getDirectoryPath();
+                if (path != null) setState(() => _romsRoot = path);
+              },
+            ),
+            const SizedBox(height: 24),
+            _buildPathSelector(
+              label: 'Emulators Directory',
+              currentPath: _emusRoot ?? 'Loading...',
+              onTap: () async {
+                final path = await FilePicker.platform.getDirectoryPath();
+                if (path != null) setState(() => _emusRoot = path);
+              },
+            ),
+          ],
         ],
       ),
     );
