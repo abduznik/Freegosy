@@ -23,6 +23,7 @@ final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
     receiveTimeout: const Duration(hours: 4), // Allow up to 4 hours for large ROMs
     headers: {
       'User-Agent': 'Freegosy/${AppConstants.version}',
+      'Accept-Encoding': 'gzip, deflate, br',
     },
   ));
 

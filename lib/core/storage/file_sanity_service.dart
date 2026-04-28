@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'package:freegosy/core/storage/download_cache_service.dart';
 import 'package:freegosy/providers/romm_provider.dart';
@@ -50,7 +49,6 @@ class FileSanityService {
 }
 
 final fileSanityServiceProvider = Provider<FileSanityService?>((ref) {
-  final dirService = ref.watch(directoryServiceProvider).asData?.value;
   final mappingServiceAsync = ref.watch(romMappingServiceProvider);
   final cacheService = ref.watch(downloadCacheServiceProvider);
 
