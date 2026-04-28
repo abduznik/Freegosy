@@ -87,7 +87,7 @@ class DirectoryService {
     'nes': ['.nes', '.zip'],
     'psx': ['.bin', '.cue', '.iso', '.img', '.chd'],
     'ps2': ['.iso', '.bin', '.chd'],
-    'ps3': ['.pkg', '.iso'],
+    'ps3': ['.pkg', '.iso', '.bin', '.edat'],
     'psp': ['.iso', '.cso', '.pbp'],
     'gc': ['.iso', '.gcm', '.rvz', '.wbfs'],
     'gamecube': ['.iso', '.gcm', '.rvz', '.wbfs'],
@@ -452,6 +452,8 @@ class DirectoryService {
     final romDir = await getRomDirectory(game);
     final platformLower = game.platformSlug?.toLowerCase();
     
+    debugPrint('[Matching] Searching for ${game.name} (Platform: $platformLower) in $romDir');
+
     // Names to check (in order of priority)
     final namesToCheck = <String>[];
     if (game.fsName != null) namesToCheck.add(game.fsName!);
@@ -466,10 +468,14 @@ class DirectoryService {
         final lowerName = name.toLowerCase();
         
         // Try exact name match (files)
-        if (index.files.containsKey(lowerName)) return index.files[lowerName];
+        if (index.files.containsKey(lowerName)) {
+          debugPrint('[Matching] Index hit (file): $lowerName');
+          return index.files[lowerName];
+        }
         
         // Try name match (dirs)
         if (index.dirs.containsKey(lowerName)) {
+          debugPrint('[Matching] Index hit (dir): $lowerName');
           final found = await _findMainRomInFolder(game, index.dirs[lowerName]!);
           if (found != null) return found;
         }
@@ -579,13 +585,18 @@ class DirectoryService {
       } catch (_) {}
     }
 
+    debugPrint('[Matching] No match found for ${game.name}');
     return null;
   }
 
   /// Finds the largest ROM-like file in a folder.
   Future<String?> _findMainRomInFolder(Game game, String folderPath) async {
-    final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
-    if (isWindowsGame) return p.absolute(folderPath);
+    final platform = game.platformSlug?.toLowerCase() ?? '';
+    final isFolderBased = ['windows', 'pc', 'win', 'ps3', 'switch', 'nintendo-switch'].contains(platform);
+    if (isFolderBased) {
+      // For folder-based platforms, we can often just return the folder path if it's a direct match
+      // But we still try to find a "main" file inside first for better emulator compatibility
+    }
 
     final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
     
@@ -609,10 +620,12 @@ class DirectoryService {
     } catch (_) {}
 
     if (largestFile != null) {
-      // If there's only one ROM-like file, or one is significantly larger (e.g. 2x the next one)
-      // we can be fairly certain it's the main ROM.
       return p.absolute(largestFile.path);
     }
+    
+    // Fallback for PS3/Switch folders that might not have a "known" extension but are valid
+    if (isFolderBased) return p.absolute(folderPath);
+    
     return null;
   }
 

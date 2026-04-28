@@ -6,10 +6,13 @@ import 'app.dart';
 import 'core/save/backup_entry.dart';
 import 'providers/shared_prefs_provider.dart';
 
+import 'core/storage/logger_service.dart';
+
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LoggerService.init();
   Hive.registerAdapter(BackupEntryAdapter());
   await Hive.initFlutter();
   await Hive.openBox<List>('freegosy_backups');

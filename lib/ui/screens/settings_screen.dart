@@ -12,6 +12,7 @@ import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/storage/logger_service.dart';
 import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
@@ -365,7 +366,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           label: Text(isScanning ? 'Scanning...' : 'Force Full ROM Scan'),
         );
       }),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: () => _showLogsDialog(context),
+        icon: const Icon(Icons.receipt_long),
+        label: const Text('View Console Logs'),
+      ),
     ]);
+  }
+
+  void _showLogsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: double.infinity,
+          height: MediaQuery.of(context).size.height * 0.8,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('System Logs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.delete_sweep),
+                        onPressed: () => LoggerService().clear(),
+                        tooltip: 'Clear Logs',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Divider(),
+              Expanded(
+                child: StreamBuilder<List<LogEntry>>(
+                  stream: LoggerService().logStream,
+                  initialData: LoggerService().logs,
+                  builder: (context, snapshot) {
+                    final logs = snapshot.data ?? [];
+                    return ListView.builder(
+                      reverse: true,
+                      itemCount: logs.length,
+                      itemBuilder: (context, index) {
+                        final log = logs[logs.length - 1 - index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            log.toString(),
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildPathRow({required String label, required String currentPath, required Function(String?)? onChanged, VoidCallback? onReset}) {
