@@ -378,65 +378,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showLogsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        child: Container(
-          width: double.infinity,
-          height: MediaQuery.of(context).size.height * 0.8,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('System Logs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.delete_sweep),
-                        onPressed: () => LoggerService().clear(),
-                        tooltip: 'Clear Logs',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const Divider(),
-              Expanded(
-                child: StreamBuilder<List<LogEntry>>(
-                  stream: LoggerService().logStream,
-                  initialData: LoggerService().logs,
-                  builder: (context, snapshot) {
-                    final logs = snapshot.data ?? [];
-                    return ListView.builder(
-                      reverse: true,
-                      itemCount: logs.length,
-                      itemBuilder: (context, index) {
-                        final log = logs[logs.length - 1 - index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            log.toString(),
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => const _LogsDialogContent(),
     );
   }
 
@@ -455,4 +397,130 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) => const SizedBox();
   Widget _buildLinuxSettingsSection(BuildContext context, WidgetRef ref, DirectoryService directoryService) => const SizedBox();
   Widget _buildLegalSection(BuildContext context) => const SizedBox();
+}
+
+class _LogsDialogContent extends StatefulWidget {
+  const _LogsDialogContent();
+
+  @override
+  State<_LogsDialogContent> createState() => _LogsDialogContentState();
+}
+
+class _LogsDialogContentState extends State<_LogsDialogContent> {
+  String _filter = 'ALL';
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(maxWidth: 800),
+        height: MediaQuery.of(context).size.height * 0.8,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('System Logs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.delete_sweep),
+                      onPressed: () => LoggerService().clear(),
+                      tooltip: 'Clear Logs',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(label: 'ALL', selected: _filter == 'ALL', onSelected: () => setState(() => _filter = 'ALL')),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: 'SCANNER', selected: _filter == 'SCANNER', onSelected: () => setState(() => _filter = 'SCANNER')),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: 'NETWORK', selected: _filter == 'NETWORK', onSelected: () => setState(() => _filter = 'NETWORK')),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: 'ERROR', selected: _filter == 'ERROR', onSelected: () => setState(() => _filter = 'ERROR')),
+                ],
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: StreamBuilder<List<LogEntry>>(
+                stream: LoggerService().logStream,
+                initialData: LoggerService().logs,
+                builder: (context, snapshot) {
+                  final allLogs = snapshot.data ?? [];
+                  final filteredLogs = allLogs.where((log) {
+                    final msg = log.toString().toUpperCase();
+                    if (_filter == 'ALL') return true;
+                    if (_filter == 'SCANNER') return msg.contains('[SCAN]') || msg.contains('[ROM SCANNER]');
+                    if (_filter == 'NETWORK') return msg.contains('[NETWORK]') || msg.contains('[ROMMSERVICE]');
+                    if (_filter == 'ERROR') return msg.contains('ERROR') || msg.contains('FAILED');
+                    return true;
+                  }).toList();
+
+                  final fullText = filteredLogs.map((e) => e.toString()).join('\n');
+
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: SelectionArea(
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: Text(
+                            fullText,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _FilterChip({required this.label, required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label, style: const TextStyle(fontSize: 11)),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      visualDensity: VisualDensity.compact,
+    );
+  }
 }

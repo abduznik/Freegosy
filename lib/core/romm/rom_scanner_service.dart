@@ -55,7 +55,7 @@ class RomScannerService {
         continue;
       }
 
-      debugPrint('[RomScanner] Syncing platform: $platformSlug (File-Centric)...');
+      debugPrint('[Scan] $platformSlug...');
       
       // 1. Build local indices (ls)
       final index = await FileSystemIndex.build(dir.path);
@@ -108,7 +108,7 @@ class RomScannerService {
           continue;
         }
 
-        debugPrint('[Scanner] Discovery: $fileName');
+        debugPrint('[Scan] ? $fileName');
         
         // Extract key search term (First 1-2 words, at least 3 chars)
         final words = fileName.split(RegExp(r'[\s\.\-_\[\(]')).where((w) => w.length >= 3).toList();
@@ -119,13 +119,13 @@ class RomScannerService {
           continue;
         }
 
-        debugPrint('[Scanner] Searching cloud for: "$searchTerm"...');
+        debugPrint('[Scan] Search: "$searchTerm"');
         
         Game? matchedGame;
         
         try {
           final results = await _rommService.searchRoms(search: searchTerm, platformId: platformId);
-          debugPrint('[Scanner] Cloud returned ${results.length} candidates for "$searchTerm"');
+          // debugPrint('[Scanner] Cloud returned ${results.length} candidates for "$searchTerm"');
 
           for (final candidate in results) {
             // VERIFICATION: Use the exact same robust logic the Detail Card uses
@@ -147,12 +147,12 @@ class RomScannerService {
         }
 
         if (matchedGame != null) {
-          debugPrint('[Scanner] Locked: $fileName -> ${matchedGame.name} (ID: ${matchedGame.id})');
+          debugPrint('[Scan] Found: $fileName -> ${matchedGame.name}');
           await _mappingService.updateMapping(entityPath, matchedGame.id);
           matchedPathsInThisPlatform.add(entityPath);
           yield RomSyncResult(entityPath, matchedGame.id, game: matchedGame);
         } else {
-          debugPrint('[Scanner] No cloud match for: $fileName');
+          // debugPrint('[Scanner] No cloud match for: $fileName');
         }
         
         // Small delay to avoid hammering the API
