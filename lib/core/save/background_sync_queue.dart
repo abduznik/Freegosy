@@ -16,9 +16,14 @@ class BackgroundSyncQueue {
     BackupRepository backupRepo, [
     ScaffoldMessengerState? customMessenger,
   ]) async {
-    if (_isRunning) return;
+    debugPrint('[BackgroundSyncQueue] processQueue triggered.');
+    if (_isRunning) {
+      debugPrint('[BackgroundSyncQueue] Queue is already running. Bailing.');
+      return;
+    }
 
     final pending = backupRepo.getUnsyncedEntries();
+    debugPrint('[BackgroundSyncQueue] Sweep complete. Found ${pending.length} pending jobs.');
     if (pending.isEmpty) return;
 
     _isRunning = true;
