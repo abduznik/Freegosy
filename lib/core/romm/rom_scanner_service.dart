@@ -182,7 +182,8 @@ class RomScannerService {
   String _cleanName(String name) {
     return name.toLowerCase()
         .replaceAll(RegExp(r'[\(\[][^\]\)]*[\)\]]'), ' ') // Remove content inside () or []
-        .replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ') // Remove special chars
+        .replaceAll(RegExp(r'[:-]'), ' ') // Explicitly handle dashes and colons as spaces
+        .replaceAll(RegExp(r'[<>:"/\\|?*!\(\)\[\]]'), ' ') // Remove other special chars
         .replaceAll(RegExp(r'\s+'), ' ') // Collapse spaces
         .trim();
   }

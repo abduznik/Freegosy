@@ -166,7 +166,26 @@ class DownloadService {
       }
 
       // Download complete, rename .part to final
-      File file = await partFile.rename(finalPath);
+      // On Windows, if finalPath is a directory or locked, rename() throws Access Denied (errno 5).
+      if (await Directory(finalPath).exists()) {
+        debugPrint("[DownloadService] Destination is a directory. Removing to allow rename.");
+        await Directory(finalPath).delete(recursive: true);
+      } else if (await File(finalPath).exists()) {
+        await File(finalPath).delete();
+      }
+
+      File file;
+      try {
+        file = await partFile.rename(finalPath);
+      } catch (e) {
+        debugPrint("[DownloadService] Rename failed ($e). Retrying with copy/delete fallback...");
+        // Fallback for Windows "Access Denied" or "File Locked"
+        // Wait a tiny bit for any scanner locks to release
+        await Future.delayed(const Duration(milliseconds: 200));
+        await partFile.copy(finalPath);
+        await partFile.delete();
+        file = File(finalPath);
+      }
       String currentPath = finalPath;
 
       // Extraction logic
