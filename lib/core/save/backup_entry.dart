@@ -5,11 +5,13 @@ class BackupEntry {
   final DateTime timestamp;
   final String md5Hash;
   final String localZipPath;
+  final bool isSynced;
 
   BackupEntry({
     required this.timestamp,
     required this.md5Hash,
     required this.localZipPath,
+    this.isSynced = false,
   });
 }
 
@@ -34,19 +36,22 @@ class BackupEntryAdapter extends TypeAdapter<BackupEntry> {
       timestamp: fields[0] as DateTime,
       md5Hash: fields[1] as String,
       localZipPath: fields[2] as String,
+      isSynced: fields.containsKey(3) ? fields[3] as bool : true,
     );
   }
 
   @override
   void write(BinaryWriter writer, BackupEntry obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.timestamp)
       ..writeByte(1)
       ..write(obj.md5Hash)
       ..writeByte(2)
-      ..write(obj.localZipPath);
+      ..write(obj.localZipPath)
+      ..writeByte(3)
+      ..write(obj.isSynced);
   }
 
   @override

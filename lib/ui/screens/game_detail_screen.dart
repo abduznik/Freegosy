@@ -547,14 +547,13 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                               ),
                               
                               const SizedBox(height: 24),
-                              const Divider(color: Colors.white12),
-                              const SizedBox(height: 12),
+                              const Divider(color: Colors.white10, height: 32),
                               const Center(
                                 child: Text(
-                                  'Local Version Control',
+                                  'LOCAL SAVE STATES',
                                   style: TextStyle(
                                     color: Colors.white54,
-                                    fontSize: 12,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 0.5,
                                   ),

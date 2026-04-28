@@ -34,6 +34,23 @@ class BackupRepository {
     return raw.cast<BackupEntry>().toList();
   }
 
+  /// Returns all unsynced entries across all games, along with their romId.
+  List<({String romId, BackupEntry entry})> getUnsyncedEntries() {
+    final unsynced = <({String romId, BackupEntry entry})>[];
+    for (final key in _openBox.keys) {
+      final romId = key.toString();
+      final entries = getEntries(romId);
+      for (final entry in entries) {
+        if (!entry.isSynced) {
+          unsynced.add((romId: romId, entry: entry));
+        }
+      }
+    }
+    // Sort oldest first so they get processed in order of creation
+    unsynced.sort((a, b) => a.entry.timestamp.compareTo(b.entry.timestamp));
+    return unsynced;
+  }
+
   // ---------------------------------------------------------------------------
   // Write
   // ---------------------------------------------------------------------------
@@ -63,6 +80,24 @@ class BackupRepository {
         e.timestamp == entry.timestamp);
     await _openBox.put(romId, entries);
     await _deleteFile(entry.localZipPath);
+  }
+
+  /// Marks a specific [entry] as synced.
+  Future<void> markAsSynced(String romId, BackupEntry entry) async {
+    final entries = getEntries(romId);
+    final index = entries.indexWhere((e) =>
+        e.localZipPath == entry.localZipPath &&
+        e.timestamp == entry.timestamp);
+    if (index != -1) {
+      final old = entries[index];
+      entries[index] = BackupEntry(
+        timestamp: old.timestamp,
+        md5Hash: old.md5Hash,
+        localZipPath: old.localZipPath,
+        isSynced: true,
+      );
+      await _openBox.put(romId, entries);
+    }
   }
 
   // ---------------------------------------------------------------------------

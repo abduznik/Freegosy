@@ -206,9 +206,20 @@ class _BackupTile extends ConsumerWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: Text(
-          'MD5: ${entry.md5Hash.substring(0, 8)}…',
-          style: const TextStyle(color: Colors.white38, fontSize: 11),
+        subtitle: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'MD5: ${entry.md5Hash.substring(0, 8)}…',
+              style: const TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              entry.isSynced ? Icons.cloud_done : Icons.cloud_upload_outlined,
+              size: 14,
+              color: entry.isSynced ? Colors.green.withValues(alpha: 0.7) : Colors.orange.withValues(alpha: 0.7),
+            ),
+          ],
         ),
         trailing: _RestoreButton(entry: entry, game: game, romPath: romPath),
       ),
