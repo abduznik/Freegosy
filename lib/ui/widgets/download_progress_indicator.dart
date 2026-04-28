@@ -19,7 +19,7 @@ class DownloadProgressIndicator extends StatelessWidget {
       children: [
         if (!compact) const SizedBox(height: 8),
         LinearProgressIndicator(
-          value: progress.percent,
+          value: progress.percent > 0 ? progress.percent : null,
           backgroundColor: Colors.grey[800],
           valueColor: const AlwaysStoppedAnimation<Color>(Colors.deepPurple),
         ),
@@ -29,12 +29,14 @@ class DownloadProgressIndicator extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${progress.status} — ${(progress.percent * 100).toStringAsFixed(1)}%',
+                progress.percent > 0 
+                  ? '${progress.status} — ${(progress.percent * 100).toStringAsFixed(1)}%'
+                  : progress.status,
                 style: Theme.of(context).textTheme.bodySmall,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (!compact)
+            if (!compact && progress.totalBytes > 0)
               Text(
                 '${(progress.bytesReceived / 1024 / 1024).toStringAsFixed(1)} / '
                 '${(progress.totalBytes / 1024 / 1024).toStringAsFixed(1)} MB',

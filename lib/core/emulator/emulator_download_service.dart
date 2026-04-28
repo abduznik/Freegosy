@@ -140,7 +140,7 @@ class EmulatorDownloadService {
         yield DownloadProgress(
           id: emulatorId,
           gameName: emulatorName,
-          status: 'Fetching latest $buildType release...',
+          status: 'Downloading...',
         );
 
         final assets = await _releaseService.getLatestReleaseAssets(
@@ -166,7 +166,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        status: 'Fetching latest release...',
+        status: 'Downloading...',
       );
       
       String repo = definition['github_repo'] as String;
@@ -212,7 +212,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        status: 'Fetching latest release from Dolphin site...',
+        status: 'Downloading...',
       );
 
       final requiredKey = Platform.isWindows ? 'asset_required_windows' : (Platform.isMacOS ? 'asset_required_macos' : 'asset_required_linux');
@@ -233,7 +233,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        status: 'Fetching latest release...',
+        status: 'Downloading...',
       );
 
       final repo = definition['gitea_repo'] as String;

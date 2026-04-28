@@ -93,7 +93,7 @@ class DownloadService {
       gameName: game.name,
       percent: 0.0,
       bytesReceived: existingBytes,
-      status: 'Starting...',
+      status: 'Downloading...',
     );
 
     debugPrint("[DownloadService] Starting download for: ${game.name}");
