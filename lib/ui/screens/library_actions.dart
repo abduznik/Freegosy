@@ -478,6 +478,30 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final dirService = ref.read(directoryServiceProvider).asData?.value;
     if (dirService == null) return;
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete ROM?'),
+        content: Text('Are you sure you want to delete the local files for ${game.name}? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
       await dirService.deleteRom(game);
       if (!context.mounted) return;
@@ -485,8 +509,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       // Refresh the new background cache
       ref.read(downloadedGamesCacheProvider.notifier).refresh();
       
+      if (!context.mounted) return;
       ErrorHandler.showSuccess(context, 'ROM Deleted', message: 'Local files for ${game.name} were removed.');
     } catch (e) {
+      if (!context.mounted) return;
       ErrorHandler.showException(context, e, contextLabel: 'Delete Failed');
     }
   }
