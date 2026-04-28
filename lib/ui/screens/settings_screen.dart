@@ -248,6 +248,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const Text('Linux App Layout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          key: ValueKey(preset),
           initialValue: preset,
           decoration: const InputDecoration(border: OutlineInputBorder()),
           items: const [
@@ -265,7 +266,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 16),
       ],
 
-      if (io.Platform.isLinux && preset != 'default') ...[
+      if (io.Platform.isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
         _buildPathRow(
           label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
           currentPath: preset == 'emudeck' 
@@ -277,39 +278,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 await directoryService.setEmudeckRoot(p);
               } else {
                 await prefs.setString('retrodeckRootPath', p);
-                // Trigger re-init so paths compute
                 await directoryService.initialize();
               }
               ref.invalidate(directoryServiceProvider); 
             } 
           },
         ),
-        const SizedBox(height: 12),
-        // Read-only views of the computed paths
-        _buildPathRow(
-          label: 'Computed ROMs Directory',
-          currentPath: directoryService.romsRootPath,
-          onChanged: null,
-        ),
-        const SizedBox(height: 12),
-        _buildPathRow(
-          label: 'Computed Emulators Directory',
-          currentPath: directoryService.emulatorsRootPath,
-          onChanged: null,
-        ),
-      ] else ...[
+        const SizedBox(height: 16),
+        const Text('Computed Paths (Read-only)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+        const SizedBox(height: 8),
         _buildPathRow(
           label: 'ROMs Directory',
           currentPath: directoryService.romsRootPath,
-          onChanged: (p) async { if (p != null) { await directoryService.setRomsRoot(p); ref.invalidate(directoryServiceProvider); } },
-          onReset: () async { await directoryService.resetRomsRoot(); ref.invalidate(directoryServiceProvider); },
+          onChanged: null,
         ),
         const SizedBox(height: 12),
         _buildPathRow(
           label: 'Emulators Directory',
           currentPath: directoryService.emulatorsRootPath,
-          onChanged: (p) async { if (p != null) { await directoryService.setEmulatorsRoot(p); ref.invalidate(directoryServiceProvider); } },
-          onReset: () async { await directoryService.resetEmulatorsRoot(); ref.invalidate(directoryServiceProvider); },
+          onChanged: null,
+        ),
+      ] else ...[
+        // This handles both non-Linux OSs and Linux 'Manual' mode
+        _buildPathRow(
+          label: 'ROMs Directory',
+          currentPath: directoryService.romsRootPath,
+          onChanged: (p) async { 
+            if (p != null) { 
+              await directoryService.setRomsRoot(p); 
+              ref.invalidate(directoryServiceProvider); 
+            } 
+          },
+          onReset: () async { 
+            await directoryService.resetRomsRoot(); 
+            ref.invalidate(directoryServiceProvider); 
+          },
+        ),
+        const SizedBox(height: 16),
+        _buildPathRow(
+          label: 'Emulators Directory',
+          currentPath: directoryService.emulatorsRootPath,
+          onChanged: (p) async { 
+            if (p != null) { 
+              await directoryService.setEmulatorsRoot(p); 
+              ref.invalidate(directoryServiceProvider); 
+            } 
+          },
+          onReset: () async { 
+            await directoryService.resetEmulatorsRoot(); 
+            ref.invalidate(directoryServiceProvider); 
+          },
         ),
       ],
       const SizedBox(height: 16),

@@ -133,21 +133,30 @@ class DirectoryService {
       // Auto-detection logic for Linux
       if (defaultTargetPlatform == TargetPlatform.linux) {
         if (linuxSyncPreset == 'auto' || linuxSyncPreset == 'default') {
-          final detectedRoot = await detectEmuDeckRoot();
-          if (detectedRoot != null) {
-            emudeckRootPath = detectedRoot;
-            linuxSyncPreset = 'emudeck';
-            _linuxStrategy = EmuDeckStrategy();
-          } else {
+          // If we are in 'auto' or 'default', try to see if EmuDeck or RetroDeck is there.
+          // BUT: If the user has already explicitly chosen a root, don't overwrite it with auto-detection.
+          if (emudeckRootPath == null) {
+            final detectedRoot = await detectEmuDeckRoot();
+            if (detectedRoot != null) {
+              emudeckRootPath = detectedRoot;
+              linuxSyncPreset = 'emudeck';
+              _linuxStrategy = EmuDeckStrategy();
+              await _prefs.setString(_linuxSyncPresetKey, 'emudeck');
+              await _prefs.setString(_emudeckRootPathKey, emudeckRootPath!);
+            }
+          } else if (linuxSyncPreset == 'default') {
+             // If they are on 'default' (manual) but have an emudeckRootPath, 
+             // we stay on 'default' unless it's the very first run.
+          }
+          
+          if (linuxSyncPreset == 'default' || linuxSyncPreset == 'auto') {
             // Check for RetroDeck
             final home = io.Platform.environment['HOME'] ?? '';
             final retrodeckConfig = p.join(home, '.var', 'app', 'net.retrodeck.retrodeck');
             if (await io.Directory(retrodeckConfig).exists()) {
               linuxSyncPreset = 'retrodeck';
               _linuxStrategy = RetroDeckStrategy();
-            } else {
-              linuxSyncPreset = 'default';
-              _linuxStrategy = NativeLinuxStrategy();
+              await _prefs.setString(_linuxSyncPresetKey, 'retrodeck');
             }
           }
         }
@@ -230,6 +239,10 @@ class DirectoryService {
   }
 
   Future<void> setEmudeckRoot(String path) async {
+    // If user picked the 'Emulation' folder itself, go up one level
+    if (p.basename(path).toLowerCase() == 'emulation') {
+      path = p.dirname(path);
+    }
     await _prefs.setString(_emudeckRootPathKey, path);
     emudeckRootPath = path;
     // Re-initialize to update paths based on new root

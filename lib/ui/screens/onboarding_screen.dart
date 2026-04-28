@@ -138,23 +138,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
     
     if (io.Platform.isLinux && _linuxPreset != 'default' && _presetRoot != null) {
+      await prefs.setString('linuxSyncPreset', _linuxPreset);
       if (_linuxPreset == 'emudeck') {
-        _romsRoot = p.join(_presetRoot!, 'roms');
-        _emusRoot = p.join(_presetRoot!, 'tools', 'launchers');
         await prefs.setString('emudeckRootPath', _presetRoot!);
       } else if (_linuxPreset == 'retrodeck') {
-        _romsRoot = p.join(_presetRoot!, 'roms');
-        _emusRoot = p.join(_presetRoot!, 'tools');
         await prefs.setString('retrodeckRootPath', _presetRoot!);
       }
-      await prefs.setString('linuxSyncPreset', _linuxPreset);
+      // Clear custom paths so DirectoryService uses the preset/root logic
+      await prefs.remove('romsRootPath');
+      await prefs.remove('emulatorsRootPath');
     } else if (io.Platform.isLinux) {
       await prefs.setString('linuxSyncPreset', 'default');
+      if (_romsRoot != null) await prefs.setString('romsRootPath', _romsRoot!);
+      if (_emusRoot != null) await prefs.setString('emulatorsRootPath', _emusRoot!);
+    } else {
+      // Non-Linux behavior
+      if (_romsRoot != null) await prefs.setString('romsRootPath', _romsRoot!);
+      if (_emusRoot != null) await prefs.setString('emulatorsRootPath', _emusRoot!);
     }
-    
-    // Save Storage Config
-    if (_romsRoot != null) await prefs.setString('romsRootPath', _romsRoot!);
-    if (_emusRoot != null) await prefs.setString('emulatorsRootPath', _emusRoot!);
     
     // Invalidate providers to trigger reload
     ref.invalidate(rommConfigProvider);
@@ -413,7 +414,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               currentPath: _presetRoot ?? 'Select root directory...',
               onTap: () async {
                 final path = await FilePicker.platform.getDirectoryPath();
-                if (path != null) setState(() => _presetRoot = path);
+                if (path != null) {
+                  var finalPath = path;
+                  if (p.basename(finalPath).toLowerCase() == 'emulation') {
+                    finalPath = p.dirname(finalPath);
+                  }
+                  setState(() => _presetRoot = finalPath);
+                }
               },
             ),
           ] else ...[
