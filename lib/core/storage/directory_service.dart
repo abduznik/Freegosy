@@ -74,18 +74,18 @@ class DirectoryService {
   static const String _emudeckRootPathKey = 'emudeckRootPath';
 
   // Known extensions per platform slug
-  static const Map<String, List<String>> _platformExtensions = {
+  static const Map<String, List<String>> platformExtensions = {
     'switch': ['.nsp', '.xci', '.nsz', '.xcz'],
     'nintendo-switch': ['.nsp', '.xci', '.nsz', '.xcz'],
     'ns': ['.nsp', '.xci', '.nsz', '.xcz'],
-    'gba': ['.gba', '.zip'],
-    'gbc': ['.gbc', '.gb', '.zip'],
-    'gb': ['.gb', '.gbc', '.zip'],
-    'nds': ['.nds', '.zip'],
-    'n64': ['.z64', '.n64', '.v64', '.zip'],
-    'snes': ['.sfc', '.smc', '.zip'],
-    'nes': ['.nes', '.zip'],
-    'psx': ['.bin', '.cue', '.iso', '.img', '.chd'],
+    'gba': ['.gba', '.zip', '.7z'],
+    'gbc': ['.gbc', '.gb', '.zip', '.7z'],
+    'gb': ['.gb', '.gbc', '.zip', '.7z'],
+    'nds': ['.nds', '.zip', '.7z'],
+    'n64': ['.z64', '.n64', '.v64', '.zip', '.7z'],
+    'snes': ['.sfc', '.smc', '.zip', '.7z'],
+    'nes': ['.nes', '.zip', '.7z'],
+    'psx': ['.bin', '.cue', '.iso', '.img', '.chd', '.pbp'],
     'ps2': ['.iso', '.bin', '.chd'],
     'ps3': ['.pkg', '.iso', '.bin', '.edat'],
     'psp': ['.iso', '.cso', '.pbp'],
@@ -93,9 +93,19 @@ class DirectoryService {
     'gamecube': ['.iso', '.gcm', '.rvz', '.wbfs'],
     'wii': ['.iso', '.wbfs', '.rvz'],
     'dreamcast': ['.chd', '.gdi', '.cdi', '.iso'],
-    'megadrive': ['.md', '.bin', '.gen', '.zip'],
-    'genesis': ['.md', '.bin', '.gen', '.zip'],
+    'megadrive': ['.md', '.bin', '.gen', '.zip', '.7z'],
+    'genesis': ['.md', '.bin', '.gen', '.zip', '.7z'],
+    '3ds': ['.3ds', '.cia', '.app'],
+    'wiiu': ['.wua', '.rpx', '.wud', '.wux'],
   };
+
+  static bool isRomFile(String platformSlug, String path) {
+    final ext = p.extension(path).toLowerCase();
+    if (ext.isEmpty) return false; // Folders are handled separately or skip
+    final allowed = platformExtensions[platformSlug.toLowerCase()] ?? [];
+    if (allowed.isEmpty) return true; // If no list, allow all (risky but fallback)
+    return allowed.contains(ext);
+  }
 
   final SharedPreferences _prefs;
   late String romsRootPath;
@@ -389,7 +399,7 @@ class DirectoryService {
   /// Checks if a platform's emulator natively supports ZIP or 7Z archives.
   bool platformSupportsArchive(String? platformSlug) {
     if (platformSlug == null) return false;
-    final extensions = _platformExtensions[platformSlug.toLowerCase()] ?? [];
+    final extensions = platformExtensions[platformSlug.toLowerCase()] ?? [];
     return extensions.any((ext) => ext.toLowerCase() == '.zip' || ext.toLowerCase() == '.7z');
   }
 
@@ -481,7 +491,7 @@ class DirectoryService {
         }
 
         // Try with extensions
-        final extensions = _platformExtensions[platformLower] ?? [];
+    final extensions = platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
         for (final ext in extensions) {
           final nameWithExt = lowerName.endsWith(ext.toLowerCase()) ? lowerName : '$lowerName${ext.toLowerCase()}';
           if (index.files.containsKey(nameWithExt)) return index.files[nameWithExt];
@@ -548,7 +558,7 @@ class DirectoryService {
     }
 
     // 4. Try common extensions for this platform (Case-insensitive)
-    final extensions = _platformExtensions[platformLower] ?? [];
+    final extensions = platformExtensions[platformLower] ?? [];
     for (final dirPath in searchDirs) {
       final pDir = Directory(dirPath);
       if (!await pDir.exists()) continue;
@@ -600,7 +610,7 @@ class DirectoryService {
       // But we still try to find a "main" file inside first for better emulator compatibility
     }
 
-    final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
+    final extensions = platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
     
     File? largestFile;
     int largestSize = 0;

@@ -89,8 +89,24 @@ class RomScannerService {
 
         final fileName = p.basename(entityPath);
         
-        // Skip hidden files, system files, etc.
-        if (fileName.startsWith('.') || fileName.toLowerCase() == 'roms' || fileName.toLowerCase() == 'gamelist.xml') continue;
+        // Skip hidden files, system files, known non-rom files, and files with invalid extensions
+        if (fileName.startsWith('.') || 
+            fileName.toLowerCase() == 'roms' || 
+            fileName.toLowerCase() == 'gamelist.xml' ||
+            fileName.toLowerCase().endsWith('.sav') ||
+            fileName.toLowerCase().endsWith('.srm') ||
+            fileName.toLowerCase().endsWith('.txt') ||
+            fileName.toLowerCase().endsWith('.pdf') ||
+            fileName.toLowerCase().endsWith('.jpg') ||
+            fileName.toLowerCase().endsWith('.png')) {
+          continue;
+        }
+
+        // Strict extension validation
+        if (await File(entityPath).exists() && !DirectoryService.isRomFile(platformSlug, entityPath)) {
+          debugPrint('[Scanner] Skipping non-ROM file by extension: $fileName');
+          continue;
+        }
 
         debugPrint('[Scanner] Discovery: $fileName');
         
