@@ -410,6 +410,11 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
   String _filter = 'ALL';
   final ScrollController _scrollController = ScrollController();
 
+  String _maskIPs(String text) {
+    final ipRegex = RegExp(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b');
+    return text.replaceAll(ipRegex, '***.***.***.***');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -451,6 +456,10 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
                   const SizedBox(width: 8),
                   _FilterChip(label: 'NETWORK', selected: _filter == 'NETWORK', onSelected: () => setState(() => _filter = 'NETWORK')),
                   const SizedBox(width: 8),
+                  _FilterChip(label: 'REGISTRY', selected: _filter == 'REGISTRY', onSelected: () => setState(() => _filter = 'REGISTRY')),
+                  const SizedBox(width: 8),
+                  _FilterChip(label: 'DIRECTORY', selected: _filter == 'DIRECTORY', onSelected: () => setState(() => _filter = 'DIRECTORY')),
+                  const SizedBox(width: 8),
                   _FilterChip(label: 'ERROR', selected: _filter == 'ERROR', onSelected: () => setState(() => _filter = 'ERROR')),
                 ],
               ),
@@ -466,12 +475,14 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
                     final msg = log.toString().toUpperCase();
                     if (_filter == 'ALL') return true;
                     if (_filter == 'SCANNER') return msg.contains('[SCAN]') || msg.contains('[ROM SCANNER]');
-                    if (_filter == 'NETWORK') return msg.contains('[NETWORK]') || msg.contains('[ROMMSERVICE]');
+                    if (_filter == 'NETWORK') return msg.contains('[NETWORK]') || msg.contains('[ROMMSERVICE]') || msg.contains('[ROMM-NETWORK]');
+                    if (_filter == 'REGISTRY') return msg.contains('[REGISTRY]');
+                    if (_filter == 'DIRECTORY') return msg.contains('[DIRECTORYSERVICE]');
                     if (_filter == 'ERROR') return msg.contains('ERROR') || msg.contains('FAILED');
                     return true;
                   }).toList();
 
-                  final fullText = filteredLogs.map((e) => e.toString()).join('\n');
+                  final fullText = _maskIPs(filteredLogs.map((e) => e.toString()).join('\n'));
 
                   return Container(
                     width: double.infinity,
