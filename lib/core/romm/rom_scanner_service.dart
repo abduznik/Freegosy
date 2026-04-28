@@ -133,15 +133,34 @@ class RomScannerService {
         // Strategy B: Clean name match
         if (matchedGame == null) {
           final fNameClean = _cleanName(fileNameNoExt);
-          matchedGame = platformGames.cast<Game?>().firstWhere((g) {
-            if (g == null) return false;
+          final candidates = platformGames.where((g) {
             if (_cleanName(g.name) == fNameClean) return true;
             final gFileNoExt = p.basenameWithoutExtension(g.fileName ?? '').toLowerCase();
             if (_cleanName(gFileNoExt) == fNameClean) return true;
             final gFsNoExt = p.basenameWithoutExtension(g.fsName ?? '').toLowerCase();
             if (_cleanName(gFsNoExt) == fNameClean) return true;
             return false;
-          }, orElse: () => null);
+          }).toList();
+
+          if (candidates.length == 1) {
+            final candidate = candidates.first;
+            // Additional confirmation: If both have sizes, they should be reasonably close
+            final localSize = index.fileSizes[entityPath] ?? (romsIndex?.fileSizes[entityPath] ?? 0);
+            if (candidate.fileSize > 0 && localSize > 0) {
+              // Allow for small differences in size (e.g. metadata or padding) but not completely different
+              final diff = (candidate.fileSize - localSize).abs();
+              if (diff < 1024 * 1024 * 10) { // < 10MB difference
+                matchedGame = candidate;
+              } else {
+                debugPrint('[Scanner] Fuzzy name match for $fileName -> ${candidate.name} REJECTED due to size mismatch ($localSize vs ${candidate.fileSize})');
+              }
+            } else {
+              // One side has no size, we have to trust the unique name match
+              matchedGame = candidate;
+            }
+          } else if (candidates.length > 1) {
+            debugPrint('[Scanner] Ambiguous match for $fileName: ${candidates.length} candidates found. Skipping.');
+          }
         }
 
         if (matchedGame != null) {

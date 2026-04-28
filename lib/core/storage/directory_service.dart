@@ -488,11 +488,13 @@ class DirectoryService {
         }
       }
       
-      // Fuzzy match in index
+      // Fuzzy match in index (Last resort, only if name is very similar and not ambiguous)
       for (final name in namesToCheck) {
         final lowerName = name.toLowerCase();
         for (final entry in index.files.entries) {
-          if (entry.key.startsWith(lowerName) && !entry.key.endsWith('.part')) {
+          // Strict startsWith: only if the match is very close (e.g. adding a small suffix)
+          if (entry.key.startsWith(lowerName) && entry.key.length < lowerName.length + 5 && !entry.key.endsWith('.part')) {
+            // debugPrint('[Matching] Strict startsWith hit: ${entry.key}');
             return entry.value;
           }
         }
@@ -575,9 +577,9 @@ class DirectoryService {
       try {
         await for (final entity in pDir.list()) {
           if (entity is File) {
-            final fname = p.basename(entity.path);
-            final sanitizedFName = fname.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-            if (sanitizedFName.toLowerCase().startsWith(baseName.toLowerCase()) && !fname.toLowerCase().endsWith('.part')) {
+            final fname = p.basename(entity.path).toLowerCase();
+            final target = baseName.toLowerCase();
+            if (fname == target || fname == '$target.iso' || fname == '$target.bin' || fname == '$target.pkg') {
               return p.absolute(entity.path);
             }
           }
