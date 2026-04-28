@@ -54,13 +54,15 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
     // Listen to RommService initialization to hook up background sync queue
     ref.listen(rommServiceProvider, (previous, next) {
       if (previous != next && next != null) {
-        // 1. Attempt to sync immediately on startup if online
-        if (!next.isOffline.value) {
-          final backupRepo = ref.read(backupRepositoryProvider);
-          if (scaffoldMessengerKey.currentContext != null) {
-            BackgroundSyncQueue.processQueue(next, backupRepo, scaffoldMessengerKey.currentContext!);
+        // 1. Attempt to sync immediately on startup if online (wait for first frame so context is valid)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!next.isOffline.value) {
+            final backupRepo = ref.read(backupRepositoryProvider);
+            if (scaffoldMessengerKey.currentContext != null) {
+              BackgroundSyncQueue.processQueue(next, backupRepo, scaffoldMessengerKey.currentContext!);
+            }
           }
-        }
+        });
 
         // 2. Listen to future network state changes (e.g., coming back online)
         next.isOffline.addListener(() {

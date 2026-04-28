@@ -42,12 +42,28 @@ class RommService {
         _authOptions = _computeAuthOptions(_config) {
     
     if (kDebugMode || io.Platform.isLinux || io.Platform.isMacOS) {
-      _dio.interceptors.add(LogInterceptor(
-        requestHeader: true,
-        requestBody: true,
-        responseHeader: true,
-        responseBody: true,
-        logPrint: (obj) => debugPrint('[RomM-Network] $obj'),
+      _dio.interceptors.add(InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (!options.path.contains('/api/heartbeat') && !options.path.contains('/api/roms')) {
+            debugPrint('[RomM-Network] -> ${options.method} ${options.uri}');
+          }
+          return handler.next(options);
+        },
+        onResponse: (response, handler) {
+          final path = response.requestOptions.path;
+          if (!path.contains('/api/heartbeat') && !path.contains('/api/roms')) {
+            debugPrint('[RomM-Network] <- ${response.statusCode} ${response.requestOptions.uri}');
+          } else if (path.contains('/api/roms')) {
+            final offset = response.requestOptions.queryParameters['offset'] ?? 0;
+            final limit = response.requestOptions.queryParameters['limit'] ?? 'all';
+            debugPrint('[RomM-Network] ~ Fetched games batch (offset: $offset, limit: $limit)');
+          }
+          return handler.next(response);
+        },
+        onError: (e, handler) {
+          debugPrint('[RomM-Network] ! ERROR ${e.requestOptions.uri}: ${e.message}');
+          return handler.next(e);
+        },
       ));
     }
 
