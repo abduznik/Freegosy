@@ -75,23 +75,21 @@ class DirectoryService {
   Future<String?> detectEmuDeckRoot() async {
     final home = io.Platform.environment['HOME'] ?? '/home/deck';
     
-    // 1. Check Internal Home
-    final internal = p.join(home, 'Emulation');
-    if (await io.Directory(internal).exists()) return internal.replaceAll('/Emulation', '');
-
-    // 2. Check External SD / Removable Media
+    // 1. Check External SD / Removable Media FIRST (Most Steam Deck users prefer SD)
     final mediaDir = io.Directory('/run/media');
     if (await mediaDir.exists()) {
       try {
-        await for (final userDir in mediaDir.list()) {
+        final List<io.FileSystemEntity> users = await mediaDir.list().toList();
+        for (final userDir in users) {
           if (userDir is! io.Directory) continue;
 
-          // Check 1 level deep: /run/media/LABEL/Emulation
+          // Check 1 level deep: /run/media/deck/Emulation
           final candidate1 = p.join(userDir.path, 'Emulation');
           if (await io.Directory(candidate1).exists()) return userDir.path;
 
-          // Check 2 levels deep: /run/media/USER/LABEL/Emulation
-          await for (final mountDir in userDir.list()) {
+          // Check 2 levels deep: /run/media/deck/LABEL/Emulation
+          final List<io.FileSystemEntity> mounts = await userDir.list().toList();
+          for (final mountDir in mounts) {
             if (mountDir is! io.Directory) continue;
             final candidate2 = p.join(mountDir.path, 'Emulation');
             if (await io.Directory(candidate2).exists()) {
@@ -101,6 +99,10 @@ class DirectoryService {
         }
       } catch (_) {}
     }
+
+    // 2. Check Internal Home LAST
+    final internal = p.join(home, 'Emulation');
+    if (await io.Directory(internal).exists()) return home;
 
     return null;
   }
@@ -172,8 +174,13 @@ class DirectoryService {
         final customRoms = _prefs.getString(_romsRootPathKey);
         final customEmus = _prefs.getString(_emulatorsRootPathKey);
         
-        romsRootPath = activeLinuxEnvironment.getRomsRoot(home, customRoms, emudeckRootPath);
-        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, customEmus, emudeckRootPath);
+        // IMPORTANT: If we are using a preset (EmuDeck/RetroDeck), we IGNORE the manual custom paths
+        // to ensure the computed paths from the root always take precedence.
+        final String? effectiveCustomRoms = (linuxSyncPreset == 'default') ? customRoms : null;
+        final String? effectiveCustomEmus = (linuxSyncPreset == 'default') ? customEmus : null;
+
+        romsRootPath = activeLinuxEnvironment.getRomsRoot(home, effectiveCustomRoms, emudeckRootPath);
+        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, effectiveCustomEmus, emudeckRootPath);
       } else {
         romsRootPath = _prefs.getString(_romsRootPathKey) ?? p.join(defaultBase, 'ROMs');
         emulatorsRootPath =

@@ -13,30 +13,53 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
   @override
   String getRomsRoot(String home, String? customPath, String? emudeckRoot) {
     if (emudeckRoot != null) {
-      // Robustness: if user pointed directly to 'Emulation' or 'Emulation/roms', handle it
-      if (p.basename(emudeckRoot).toLowerCase() == 'roms' && p.basename(p.dirname(emudeckRoot)).toLowerCase() == 'emulation') {
-        return customPath ?? emudeckRoot;
-      }
+      // 1. Check if user pointed directly to a 'roms' folder
+      if (p.basename(emudeckRoot).toLowerCase() == 'roms') return emudeckRoot;
+      
+      // 2. Try standard Emulation/roms (lowercase)
+      final standard = p.join(emudeckRoot, 'Emulation', 'roms');
+      if (io.Directory(standard).existsSync()) return standard;
+
+      // 3. Try Emulation/ROMs (uppercase)
+      final upper = p.join(emudeckRoot, 'Emulation', 'ROMs');
+      if (io.Directory(upper).existsSync()) return upper;
+
+      // 4. Try root/roms (some manual move scenarios)
+      final direct = p.join(emudeckRoot, 'roms');
+      if (io.Directory(direct).existsSync()) return direct;
+
+      // 5. If they pointed to 'Emulation' itself but roms folder isn't detected yet
       if (p.basename(emudeckRoot).toLowerCase() == 'emulation') {
-        return customPath ?? p.join(emudeckRoot, 'roms');
+        return p.join(emudeckRoot, 'roms');
       }
-      return customPath ?? p.join(emudeckRoot, 'Emulation/roms');
+
+      // Default back to standard EmuDeck expectation
+      return p.join(emudeckRoot, 'Emulation', 'roms');
     }
-    return customPath ?? p.join(home, 'ROMs');
+    return p.join(home, 'ROMs');
   }
 
   @override
   String getEmulatorsRoot(String home, String? customPath, String? emudeckRoot) {
     if (emudeckRoot != null) {
-      if (p.basename(emudeckRoot).toLowerCase() == 'tools' && p.basename(p.dirname(emudeckRoot)).toLowerCase() == 'emulation') {
-        return customPath ?? emudeckRoot;
-      }
+      // 1. Check if user pointed directly to 'tools'
+      if (p.basename(emudeckRoot).toLowerCase() == 'tools') return emudeckRoot;
+
+      // 2. Standard Emulation/tools
+      final standard = p.join(emudeckRoot, 'Emulation', 'tools');
+      if (io.Directory(standard).existsSync()) return standard;
+
+      // 3. Root/tools
+      final direct = p.join(emudeckRoot, 'tools');
+      if (io.Directory(direct).existsSync()) return direct;
+
       if (p.basename(emudeckRoot).toLowerCase() == 'emulation') {
-        return customPath ?? p.join(emudeckRoot, 'tools');
+        return p.join(emudeckRoot, 'tools');
       }
-      return customPath ?? p.join(emudeckRoot, 'Emulation/tools');
+
+      return p.join(emudeckRoot, 'Emulation', 'tools');
     }
-    return customPath ?? p.join(home, 'Emulators');
+    return p.join(home, 'Emulators');
   }
 
   @override
