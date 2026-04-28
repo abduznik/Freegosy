@@ -261,7 +261,7 @@ class RommService {
     } catch (_) { return []; }
   }
 
-  Future<List<Game>> searchRoms({String? sha1, String? md5, String? search}) async {
+  Future<List<Game>> searchRoms({String? sha1, String? md5, String? search, String? platformId}) async {
     final params = <String, dynamic>{
       'limit': 10,
       'offset': 0,
@@ -271,6 +271,7 @@ class RommService {
     if (sha1 != null) params['sha1'] = sha1;
     if (md5 != null) params['md5'] = md5;
     if (search != null) params['search_term'] = search;
+    if (platformId != null) params['platform_id'] = platformId;
 
     try {
       final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);

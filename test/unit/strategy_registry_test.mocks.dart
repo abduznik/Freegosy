@@ -217,6 +217,23 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
           as _i5.Future<void>);
 
   @override
+  _i5.Future<String?> getEmulatorUrlOverride(String? emulatorId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmulatorUrlOverride, [emulatorId]),
+            returnValue: _i5.Future<String?>.value(),
+          )
+          as _i5.Future<String?>);
+
+  @override
+  _i5.Future<void> setEmulatorUrlOverride(String? emulatorId, String? url) =>
+      (super.noSuchMethod(
+            Invocation.method(#setEmulatorUrlOverride, [emulatorId, url]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
   String? getEmulatorPathOverride(String? emulatorId) =>
       (super.noSuchMethod(
             Invocation.method(#getEmulatorPathOverride, [emulatorId]),
@@ -240,6 +257,14 @@ class MockDirectoryService extends _i1.Mock implements _i2.DirectoryService {
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
           as _i5.Future<void>);
+
+  @override
+  bool platformSupportsArchive(String? platformSlug) =>
+      (super.noSuchMethod(
+            Invocation.method(#platformSupportsArchive, [platformSlug]),
+            returnValue: false,
+          )
+          as bool);
 
   @override
   _i5.Future<String> getRomsDirectory() =>

@@ -39,11 +39,14 @@ class RomScannerService {
 
   /// Performs an incremental sync of the ROM directory.
   Stream<RomSyncResult> sync(String romsRoot) async* {
-    final storedMTimes = _mappingService.getMTimes();
     final mappings = _mappingService.getMappings();
     
     final rootDir = Directory(romsRoot);
     if (!await rootDir.exists()) return;
+
+    // 0. Fetch platforms to map slugs to IDs
+    final platforms = await _rommService.getPlatforms();
+    final platformSlugToId = {for (var p in platforms) p.slug.toLowerCase(): p.id.toString()};
 
     final List<Directory> platformDirs = [];
     await for (final entity in rootDir.list()) {
@@ -52,6 +55,7 @@ class RomScannerService {
       }
     }
 
+    final storedMTimes = _mappingService.getMTimes();
     final List<Directory> dirtyDirs = [];
     for (final dir in platformDirs) {
       final storedMTime = storedMTimes[dir.path];
@@ -69,102 +73,97 @@ class RomScannerService {
     }
 
     final dirsToScan = forceFullScan ? platformDirs : dirtyDirs;
-    debugPrint('[RomScanner] Scanning ${dirsToScan.length} directories (Force: $forceFullScan)...');
-
-    final List<String> dirPaths = dirsToScan.map((d) => d.path).toList();
-    final List<String> scannedFiles = await compute(_performIsolatedScan, dirPaths);
-
-    final Set<String> existingMappedFiles = mappings.keys.toSet();
-
-    final List<String> newFiles = scannedFiles.where((f) => !existingMappedFiles.contains(f)).toList();
-    
-    // 1. Identify and yield REMOVALS immediately
-    final List<String> removedFiles = [];
-    final List<String> normalizedScannedPaths = scannedFiles.map((f) => p.normalize(f)).toList();
-    final Set<String> normalizedScannedSet = normalizedScannedPaths.toSet();
-
-    for (final mappedPath in existingMappedFiles) {
-      final normalizedMappedPath = p.normalize(mappedPath);
-      
-      // Check if this mapped path is inside any of the directories we scanned
-      bool isInsideScannedDir = false;
-      for (final dir in dirsToScan) {
-        final normalizedDir = p.normalize(dir.path);
-        if (p.isWithin(normalizedDir, normalizedMappedPath) || normalizedDir == normalizedMappedPath) {
-          isInsideScannedDir = true;
-          break;
-        }
-      }
-
-      if (isInsideScannedDir && !normalizedScannedSet.contains(normalizedMappedPath)) {
-        removedFiles.add(mappedPath);
-      }
-    }
-
-    if (removedFiles.isNotEmpty) {
-      debugPrint('[RomScanner] Cleaning up ${removedFiles.length} removed files...');
-      for (final f in removedFiles) {
-        final romId = mappings[f];
-        await _mappingService.removeMapping(f);
-        if (romId != null) {
-          yield RomSyncResult(f, romId, isRemoved: true);
-        }
-      }
-    }
-
-    if (newFiles.isEmpty) {
-      debugPrint('[RomScanner] No new files found.');
-      for (final dir in dirsToScan) {
-        final stat = await dir.stat();
-        await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
-      }
-      return;
-    }
-
-    debugPrint('[RomScanner] Matching ${newFiles.length} new files...');
-
-    const int maxConcurrent = 5;
-    for (int i = 0; i < newFiles.length; i += maxConcurrent) {
-      // PERF FIX: Add a tiny pause between batches to reduce system load spikes
-      if (i > 0) await Future.delayed(const Duration(milliseconds: 100));
-
-      final chunk = newFiles.sublist(i, i + maxConcurrent > newFiles.length ? newFiles.length : i + maxConcurrent);
-      
-      final results = await Future.wait(chunk.map((filePath) async {
-        final fileName = p.basename(filePath);
-        try {
-          // Try 1: Exact filename match (safest)
-          var searchResult = await _rommService.searchRoms(search: fileName);
-          if (searchResult.isNotEmpty) {
-            final game = searchResult.first;
-            await _mappingService.updateMapping(filePath, game.id);
-            return RomSyncResult(filePath, game.id, game: game);
-          }
-
-          // Try 2: SAFE FALLBACK - Strip extension
-          // This helps with titles like "Marvel: Ultimate Alliance" where the file is "Marvel Ultimate Alliance.cso"
-          final nameWithoutExt = p.basenameWithoutExtension(fileName).trim();
-          if (nameWithoutExt.isNotEmpty && nameWithoutExt != fileName) {
-            debugPrint('[RomScanner] Exact match failed, trying without extension: $nameWithoutExt');
-            searchResult = await _rommService.searchRoms(search: nameWithoutExt);
-            if (searchResult.isNotEmpty) {
-              final game = searchResult.first;
-              await _mappingService.updateMapping(filePath, game.id);
-              return RomSyncResult(filePath, game.id, game: game);
-            }
-          }
-        } catch (e) {
-          debugPrint('[RomScanner] Error matching $fileName: $e');
-        }
-        return RomSyncResult(filePath, null);
-      }));
-
-      for (final result in results) {
-        yield result;
-      }
-    }
+    debugPrint('[RomScanner] Scanning ${dirsToScan.length} directories...');
 
     for (final dir in dirsToScan) {
+      final platformSlug = p.basename(dir.path).toLowerCase();
+      final platformId = platformSlugToId[platformSlug];
+      
+      if (platformId == null) {
+        debugPrint('[RomScanner] Skipping unknown platform folder: $platformSlug');
+        continue;
+      }
+
+      debugPrint('[RomScanner] Processing $platformSlug (ID: $platformId)...');
+      
+      // 1. Fetch all games for this platform from RomM (Bulk fetch is much faster)
+      final List<Game> platformGames = [];
+      try {
+        int offset = 0;
+        const int batchSize = 250;
+        while (true) {
+          final result = await _rommService.getGamesPage(
+            offset: offset, 
+            limit: batchSize, 
+            platformId: platformId
+          );
+          platformGames.addAll(result.games);
+          if (platformGames.length >= result.total || result.games.isEmpty) break;
+          offset += batchSize;
+        }
+      } catch (e) {
+        debugPrint('[RomScanner] Error fetching platform games for $platformSlug: $e');
+        continue;
+      }
+
+      // 2. Scan the directory
+      final List<FileSystemEntity> entities = await dir.list().toList();
+      final scannedFiles = entities.whereType<File>().toList();
+      
+      // 3. Match new files
+      for (final file in scannedFiles) {
+        final filePath = file.path;
+        if (mappings.containsKey(filePath)) continue; // Already mapped
+
+        final fileName = p.basename(filePath);
+        final fileNameNoExt = p.basenameWithoutExtension(filePath).toLowerCase();
+        
+        Game? matchedGame;
+
+        // MATCHING STRATEGY 1: Exact Filename match (Very Reliable)
+        matchedGame = platformGames.cast<Game?>().firstWhere(
+          (g) => g?.fileName == fileName || g?.fsName == fileName,
+          orElse: () => null,
+        );
+
+        // MATCHING STRATEGY 2: Clean Name match
+        if (matchedGame == null) {
+          matchedGame = platformGames.cast<Game?>().firstWhere((g) {
+            if (g == null) return false;
+            final gName = g.name.toLowerCase().replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+            final fName = fileNameNoExt.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+            return gName == fName;
+          }, orElse: () => null);
+        }
+
+        if (matchedGame != null) {
+          await _mappingService.updateMapping(filePath, matchedGame.id);
+          yield RomSyncResult(filePath, matchedGame.id, game: matchedGame);
+        } else {
+          // If bulk match failed, try one last API search specifically for this file on this platform
+          try {
+            final results = await _rommService.searchRoms(search: fileName, platformId: platformId);
+            if (results.isNotEmpty) {
+              final game = results.first;
+              await _mappingService.updateMapping(filePath, game.id);
+              yield RomSyncResult(filePath, game.id, game: game);
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 4. Identify REMOVALS for this platform
+      final Set<String> currentFiles = scannedFiles.map((f) => f.path).toSet();
+      final platformMappings = mappings.entries.where((e) => p.isWithin(dir.path, e.key));
+      
+      for (final entry in platformMappings) {
+        if (!currentFiles.contains(entry.key)) {
+          await _mappingService.removeMapping(entry.key);
+          yield RomSyncResult(entry.key, entry.value, isRemoved: true);
+        }
+      }
+
+      // Update mtime to mark directory as synced
       final stat = await dir.stat();
       await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
     }
