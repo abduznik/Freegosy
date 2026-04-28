@@ -31,7 +31,7 @@ class EmulatorDownloadService {
     
     return await _releaseService.getLatestReleaseAssets(
       platform: platform,
-      repo: repo!,
+      repo: repo,
       requiredFilters: List<String>.from(definition[requiredKey] ?? []),
       excludedFilters: List<String>.from(definition[excludedKey] ?? []),
     );

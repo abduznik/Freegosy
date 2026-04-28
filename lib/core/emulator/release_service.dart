@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 
@@ -133,6 +134,8 @@ class ReleaseService {
       }
     }
     return matchingAssets;
+  }
+
   Future<List<Map<String, String>>> _scrapeDolphin(List<String> requiredFilters, List<String> excludedFilters) async {
     try {
       final response = await http.get(Uri.parse('https://dolphin-emu.org/download/'), headers: {'User-Agent': 'Freegosy'});
