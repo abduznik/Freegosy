@@ -189,9 +189,13 @@ final romMappingServiceProvider = FutureProvider<RomMappingService>((ref) async 
 final romScannerServiceProvider = Provider<RomScannerService?>((ref) {
   final rommService = ref.watch(rommServiceProvider);
   final mappingServiceAsync = ref.watch(romMappingServiceProvider);
+  final directoryServiceAsync = ref.watch(directoryServiceProvider);
   
-  if (rommService != null && mappingServiceAsync.hasValue) {
-    return RomScannerService(rommService, mappingServiceAsync.value!);
+  final mappingService = mappingServiceAsync.asData?.value;
+  final directoryService = directoryServiceAsync.asData?.value;
+
+  if (rommService != null && mappingService != null && directoryService != null) {
+    return RomScannerService(rommService, mappingService, directoryService);
   }
   return null;
 });

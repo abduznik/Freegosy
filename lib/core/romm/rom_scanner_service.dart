@@ -5,6 +5,7 @@ import 'romm_service.dart';
 import '../storage/rom_mapping_service.dart';
 import 'romm_models.dart';
 import 'package:crypto/crypto.dart';
+import '../storage/directory_service.dart';
 
 class RomSyncResult {
   final String path;
@@ -20,8 +21,9 @@ class RomSyncResult {
 class RomScannerService {
   final RommService _rommService;
   final RomMappingService _mappingService;
+  final DirectoryService _directoryService;
 
-  RomScannerService(this._rommService, this._mappingService);
+  RomScannerService(this._rommService, this._mappingService, this._directoryService);
 
   /// Performs an incremental sync of the ROM directory.
   Stream<RomSyncResult> sync(String romsRoot) async* {
@@ -176,6 +178,34 @@ class RomScannerService {
     if (!await file.exists()) return '';
     final bytes = await file.readAsBytes();
     return sha1.convert(bytes).toString();
+  }
+
+  /// Targeted sync for a single game. Useful for "Lazy Sync" on Detail screen.
+  Future<void> syncSingleGame(Game game) async {
+    final mappings = _mappingService.getMappings();
+    
+    // Check if we already have a mapping for this game ID
+    final existingPath = mappings.entries.where((e) => e.value == game.id).map((e) => e.key).firstOrNull;
+    
+    if (existingPath != null) {
+      // Verify if the file still exists
+      if (await File(existingPath).exists()) {
+        debugPrint('[RomScanner] Single Sync: ${game.name} already correctly mapped.');
+        return;
+      } else {
+        debugPrint('[RomScanner] Single Sync: ${game.name} was mapped to missing file. Removing.');
+        await _mappingService.removeMapping(existingPath);
+      }
+    }
+
+    // Try to find the game on disk using DirectoryService's robust logic
+    final foundPath = await _directoryService.findExistingRomPath(game);
+    if (foundPath != null) {
+      debugPrint('[RomScanner] Single Sync REPAIR: Found ${game.name} at $foundPath');
+      await _mappingService.updateMapping(foundPath, game.id);
+    } else {
+      debugPrint('[RomScanner] Single Sync: ${game.name} not found on disk.');
+    }
   }
 
   /// Clean a name for fuzzy matching by removing tags in [] or () and special characters

@@ -60,8 +60,19 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     _isDownloaded = widget.isDownloaded;
     _syncStateWithGame(_currentGame);
     _checkDownloadStatus();
+    // Targeted Lazy Sync: Ensure this game is mapped if it exists on disk
+    _lazySync();
     // Initial refresh to get latest notes and status
     _refreshGame();
+  }
+
+  Future<void> _lazySync() async {
+    final scanner = ref.read(romScannerServiceProvider);
+    if (scanner != null) {
+      await scanner.syncSingleGame(_currentGame);
+      // Re-check status after sync to update the "Play" button if found
+      _checkDownloadStatus();
+    }
   }
 
   void _syncStateWithGame(Game game) {
