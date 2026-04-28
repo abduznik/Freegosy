@@ -38,7 +38,11 @@ No pressure at all — the app is and will always be free.
     - Smart binary detection and canonical naming across all platforms.
     - **New**: Dynamic architecture selection for RPCS3 on macOS (ARM64 vs x64).
 - **BIOS Management**: Fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
-- **Save Sync**: Bidirectional local-to-cloud save synchronization with RomM, featuring cross-platform path resolution and automated backups. Optimized for EmuDeck's platform-specific save structure.
+- **Save Sync**: 
+    - Bidirectional local-to-cloud save synchronization with RomM.
+    - **New**: Local Backup History (create instant restore points before experimenting).
+    - **New**: Serial Background Sync Queue (offline backups silently push to RomM automatically when you reconnect).
+    - Optimized for EmuDeck's platform-specific save structure.
 - **Refined UI/UX**:
     - **Visual-First Grid**: Interactive game cards with detailed metadata.
     - **Recently Played**: Quick access to your latest games.

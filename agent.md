@@ -30,8 +30,9 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() keeps max 3 clean versions (.bak, .bak1, .bak2), getRomStem().
 - `lib/core/save/save_sync_service.dart` — SaveSyncService. Methods: pushSaves(), pullSave(), getStrategyForSlug(). getStrategyForSlug() checks StrategyRegistry user preferences first before falling back to platform slug defaults. Wires all strategies to RommService. Exposes windowsSaveStrategy for external access.
 - `lib/core/save/backup_entry.dart` — BackupEntry plain model + hand-written BackupEntryAdapter (typeId=1). Registered in main.dart.
-- `lib/core/save/backup_repository.dart` — BackupRepository. Opens the 'freegosy_backups' Hive box. Methods: getEntries(), addEntry() (enforces 8-cap rotation + disk cleanup), removeEntry().
+- `lib/core/save/backup_repository.dart` — BackupRepository. Opens the 'freegosy_backups' Hive box. Methods: getEntries(), addEntry() (enforces 8-cap rotation + disk cleanup), removeEntry(), markAsSynced(), getUnsyncedEntries().
 - `lib/core/save/backup_service.dart` — BackupService. Methods: createImmediate() (reuses ZipFileEncoder pipeline from SaveSyncService, writes to getApplicationSupportDirectory()/backups/), restore() (extracts chosen zip back to save dir using archive package).
+- `lib/core/save/background_sync_queue.dart` — BackgroundSyncQueue. Processes unsynced local backups serially with a 5-second throttle. Triggered on app startup and network reconnection.
 - `lib/core/save/strategies/retroarch_save_strategy.dart` — RetroArch save strategy. Handles dual-stem matching for states.
 - `lib/core/save/strategies/dolphin_save_strategy.dart` — Dolphin save strategy (GC/Wii).
 - `lib/core/save/strategies/eden_save_strategy.dart` — Eden/Switch save strategy. Resolves title ID.
