@@ -310,26 +310,45 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           Consumer(
             builder: (context, ref, _) {
               final hasFilters = ref.watch(activeFiltersProvider).hasActiveFilters;
-              return Stack(
+              final isScanning = ref.watch(isScanningProvider);
+              
+              return Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.tune),
-                    tooltip: 'Filter',
-                    onPressed: () => _openFilterSheet(context, ref),
-                  ),
-                  if (hasFilters)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.deepPurple,
-                          shape: BoxShape.circle,
+                  if (isScanning)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4.0),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
                         ),
                       ),
                     ),
+                  Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.tune),
+                        tooltip: 'Filter',
+                        onPressed: () => _openFilterSheet(context, ref),
+                      ),
+                      if (hasFilters)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.deepPurple,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               );
             },

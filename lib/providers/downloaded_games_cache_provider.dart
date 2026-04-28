@@ -6,6 +6,8 @@ import 'dart:async';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 
+final isScanningProvider = StateProvider<bool>((ref) => false);
+
 class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   final Ref _ref;
   bool _isSyncing = false;
@@ -100,6 +102,7 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     }
 
     _isSyncing = true;
+    _ref.read(isScanningProvider.notifier).state = true;
     debugPrint('[DownloadedGamesCache] Starting incremental sync...');
 
     try {
@@ -148,6 +151,7 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
       debugPrint('[DownloadedGamesCache] Sync error: $e');
     } finally {
       _isSyncing = false;
+      _ref.read(isScanningProvider.notifier).state = false;
       debugPrint('[DownloadedGamesCache] Incremental sync complete.');
       // Final refresh to ensure everything is flushed and matched up
       await refresh();

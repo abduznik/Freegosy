@@ -133,11 +133,25 @@ class RomScannerService {
       final results = await Future.wait(chunk.map((filePath) async {
         final fileName = p.basename(filePath);
         try {
-          final searchResult = await _rommService.searchRoms(search: fileName);
+          // Try 1: Exact filename match (safest)
+          var searchResult = await _rommService.searchRoms(search: fileName);
           if (searchResult.isNotEmpty) {
             final game = searchResult.first;
             await _mappingService.updateMapping(filePath, game.id);
             return RomSyncResult(filePath, game.id, game: game);
+          }
+
+          // Try 2: SAFE FALLBACK - Strip extension
+          // This helps with titles like "Marvel: Ultimate Alliance" where the file is "Marvel Ultimate Alliance.cso"
+          final nameWithoutExt = p.basenameWithoutExtension(fileName).trim();
+          if (nameWithoutExt.isNotEmpty && nameWithoutExt != fileName) {
+            debugPrint('[RomScanner] Exact match failed, trying without extension: $nameWithoutExt');
+            searchResult = await _rommService.searchRoms(search: nameWithoutExt);
+            if (searchResult.isNotEmpty) {
+              final game = searchResult.first;
+              await _mappingService.updateMapping(filePath, game.id);
+              return RomSyncResult(filePath, game.id, game: game);
+            }
           }
         } catch (e) {
           debugPrint('[RomScanner] Error matching $fileName: $e');
