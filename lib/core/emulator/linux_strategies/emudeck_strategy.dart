@@ -13,6 +13,13 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
   @override
   String getRomsRoot(String home, String? customPath, String? emudeckRoot) {
     if (emudeckRoot != null) {
+      // Robustness: if user pointed directly to 'Emulation' or 'Emulation/roms', handle it
+      if (p.basename(emudeckRoot).toLowerCase() == 'roms' && p.basename(p.dirname(emudeckRoot)).toLowerCase() == 'emulation') {
+        return customPath ?? emudeckRoot;
+      }
+      if (p.basename(emudeckRoot).toLowerCase() == 'emulation') {
+        return customPath ?? p.join(emudeckRoot, 'roms');
+      }
       return customPath ?? p.join(emudeckRoot, 'Emulation/roms');
     }
     return customPath ?? p.join(home, 'ROMs');
@@ -21,6 +28,12 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
   @override
   String getEmulatorsRoot(String home, String? customPath, String? emudeckRoot) {
     if (emudeckRoot != null) {
+      if (p.basename(emudeckRoot).toLowerCase() == 'tools' && p.basename(p.dirname(emudeckRoot)).toLowerCase() == 'emulation') {
+        return customPath ?? emudeckRoot;
+      }
+      if (p.basename(emudeckRoot).toLowerCase() == 'emulation') {
+        return customPath ?? p.join(emudeckRoot, 'tools');
+      }
       return customPath ?? p.join(emudeckRoot, 'Emulation/tools');
     }
     return customPath ?? p.join(home, 'Emulators');

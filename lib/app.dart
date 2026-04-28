@@ -12,6 +12,7 @@ import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'providers/ui_provider.dart';
+import 'core/storage/file_sanity_service.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -73,6 +74,9 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         });
       }
     });
+
+    // Keep the file sanity service alive and running in the background
+    ref.watch(fileSanityServiceProvider);
 
     final currentIndex = ref.watch(currentTabIndexProvider);
 
