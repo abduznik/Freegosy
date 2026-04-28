@@ -578,7 +578,7 @@ class DirectoryService {
   Future<String> getEmulatorAppSupportDirectory(String emulatorName, {String? platformSlug}) async {
     if (io.Platform.isMacOS) {
       final appSupport = await getApplicationSupportDirectory();
-      // On macOS, getApplicationSupportDirectory() returns ~/Library/Application Support/com.example.app
+      // On macOS, getApplicationSupportDirectory() returns ~/Library/Application Support/com.abduznik.freegosy
       // We want ~/Library/Application Support/emulatorName
       return p.join(appSupport.parent.parent.path, 'Application Support', emulatorName);
     } else if (io.Platform.isWindows) {
