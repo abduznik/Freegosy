@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 enum ReleasePlatform {
   github,
   gitea,
+  dolphin,
 }
 
 class ReleaseService {
@@ -27,6 +28,9 @@ class ReleaseService {
       if (platform == ReleasePlatform.github) {
         url = 'https://api.github.com/repos/$repo/releases/latest';
         headers = {'Accept': 'application/vnd.github.v3+json'};
+      } else if (platform == ReleasePlatform.dolphin) {
+        // For Dolphin, we scrape the official download page
+        return await _scrapeDolphin(requiredFilters, excludedFilters);
       } else {
         final base = baseUrl ?? giteaBaseUrl ?? 'https://git.eden-emu.dev';
         url = '$base/api/v1/repos/$repo/releases/latest';
@@ -129,5 +133,40 @@ class ReleaseService {
       }
     }
     return matchingAssets;
+  Future<List<Map<String, String>>> _scrapeDolphin(List<String> requiredFilters, List<String> excludedFilters) async {
+    try {
+      final response = await http.get(Uri.parse('https://dolphin-emu.org/download/'), headers: {'User-Agent': 'Freegosy'});
+      if (response.statusCode != 200) return [];
+
+      final html = response.body;
+      // Scrape for dl.dolphin-emu.org links within the "download-releases" section
+      // The links look like: https://dl.dolphin-emu.org/releases/2603a/dolphin-2603a-x64.7z
+      final regex = RegExp(r'href="(https://dl\.dolphin-emu\.org/releases/[^"]+)"');
+      final matches = regex.allMatches(html);
+      final List<Map<String, String>> matchingAssets = [];
+
+      for (final match in matches) {
+        final fullUrl = match.group(1)!;
+        final name = fullUrl.split('/').last;
+
+        final matchesRequired = requiredFilters.isEmpty ||
+            requiredFilters.every((f) => name.toLowerCase().contains(f.toLowerCase()));
+        final matchesExcluded = excludedFilters.any((f) => name.toLowerCase().contains(f.toLowerCase()));
+
+        if (matchesRequired && !matchesExcluded) {
+          // Check if we already added this URL (prevent duplicates from different sections)
+          if (!matchingAssets.any((a) => a['url'] == fullUrl)) {
+            matchingAssets.add({'name': name, 'url': fullUrl});
+          }
+        }
+      }
+      
+      // Sort to get the most recent version first (if there are multiple versions on page)
+      // Usually the latest is first in the HTML anyway.
+      return matchingAssets;
+    } catch (e) {
+      debugPrint('[Dolphin Scrape] Error: $e');
+      return [];
+    }
   }
 }

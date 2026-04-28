@@ -31,7 +31,7 @@ class ExtractionService {
         await _handleSevenZip(archivePath, destDir);
       } else if (pathLower.endsWith('.exe') && !Platform.isLinux) {
         await _handleExe(archivePath, destDir);
-      } else if (pathLower.endsWith('.appimage')) {
+      } else if (pathLower.endsWith('.appimage') || pathLower.endsWith('.flatpak')) {
         await _handleAppImage(archivePath, destDir);
       } else {
         await _handleGeneric(archivePath, destDir);

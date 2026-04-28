@@ -22,8 +22,8 @@ class EmulatorDownloadService {
 
   Future<List<Map<String, String>>> getLatestAssetsForEmulator(String emulatorId) async {
     final definition = kEmulatorDefinitions.firstWhere((d) => d['id'] == emulatorId);
-    final repo = definition['github_repo'] as String? ?? definition['gitea_repo'] as String?;
-    final platform = definition['type'] == 'github' ? ReleasePlatform.github : ReleasePlatform.gitea;
+    final repo = definition['github_repo'] as String? ?? definition['gitea_repo'] as String? ?? '';
+    final platform = definition['type'] == 'github' ? ReleasePlatform.github : (definition['type'] == 'dolphin' ? ReleasePlatform.dolphin : ReleasePlatform.gitea);
     
     // Simplification: Re-use filters from definition
     final requiredKey = Platform.isWindows ? 'github_asset_required_windows' : 'github_asset_required_linux';
@@ -205,6 +205,27 @@ class EmulatorDownloadService {
         return;
       } else if (assets.length > 1) {
         yield DownloadProgress(id: emulatorId, gameName: emulatorName, status: 'selection_required');
+        return;
+      }
+      downloadUrl = assets.first['url'];
+    } else if (downloadUrl == null && type == 'dolphin') {
+      yield DownloadProgress(
+        id: emulatorId,
+        gameName: emulatorName,
+        status: 'Fetching latest release from Dolphin site...',
+      );
+
+      final requiredKey = Platform.isWindows ? 'asset_required_windows' : (Platform.isMacOS ? 'asset_required_macos' : 'asset_required_linux');
+      final required = List<String>.from(definition[requiredKey] ?? []);
+
+      final assets = await _releaseService.getLatestReleaseAssets(
+        platform: ReleasePlatform.dolphin,
+        repo: '',
+        requiredFilters: required,
+      );
+
+      if (assets.isEmpty) {
+        yield DownloadProgress(id: emulatorId, gameName: emulatorName, error: 'No matching release asset found on Dolphin site');
         return;
       }
       downloadUrl = assets.first['url'];
