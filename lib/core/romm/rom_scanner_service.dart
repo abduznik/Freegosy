@@ -132,30 +132,12 @@ class RomScannerService {
       
       final results = await Future.wait(chunk.map((filePath) async {
         final fileName = p.basename(filePath);
-        // 1. Try exact filename match first
         try {
-          var searchResult = await _rommService.searchRoms(search: fileName);
+          final searchResult = await _rommService.searchRoms(search: fileName);
           if (searchResult.isNotEmpty) {
             final game = searchResult.first;
             await _mappingService.updateMapping(filePath, game.id);
             return RomSyncResult(filePath, game.id, game: game);
-          }
-
-          // 2. FUZZY FALLBACK: Strip extension and clean up symbols
-          // This fixes the issue where 'Game! - (USA).gba' wouldn't match 'Game'
-          final cleanName = p.basenameWithoutExtension(fileName)
-              .replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ') // Clean more symbols
-              .replaceAll(RegExp(r'\s+'), ' ')
-              .trim();
-          
-          if (cleanName.isNotEmpty && cleanName != fileName) {
-            debugPrint('[RomScanner] Exact match failed, trying fuzzy search for: $cleanName');
-            searchResult = await _rommService.searchRoms(search: cleanName);
-            if (searchResult.isNotEmpty) {
-              final game = searchResult.first;
-              await _mappingService.updateMapping(filePath, game.id);
-              return RomSyncResult(filePath, game.id, game: game);
-            }
           }
         } catch (e) {
           debugPrint('[RomScanner] Error matching $fileName: $e');
