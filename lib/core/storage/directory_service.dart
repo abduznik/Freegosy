@@ -1,5 +1,5 @@
 import 'dart:io' as io;
-import 'dart:io' show Directory, File, Process;
+import 'dart:io' show Directory, File, Process, FileSystemEntity;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,6 +21,50 @@ class StorageStatus {
   const StorageStatus({this.error = StorageError.none, this.message, this.failedPath});
 
   bool get hasError => error != StorageError.none;
+}
+
+class FileSystemIndex {
+  final String rootPath;
+  final Map<String, String> files; // lowercase name -> absolute path
+  final Map<String, String> dirs;  // lowercase name -> absolute path
+  final Map<String, int> fileSizes; // absolute path -> size
+
+  FileSystemIndex({
+    required this.rootPath,
+    required this.files,
+    required this.dirs,
+    required this.fileSizes,
+  });
+
+  static Future<FileSystemIndex> build(String path) async {
+    final Map<String, String> files = {};
+    final Map<String, String> dirs = {};
+    final Map<String, int> fileSizes = {};
+
+    final rootDir = io.Directory(path);
+    if (await rootDir.exists()) {
+      try {
+        await for (final entity in rootDir.list(recursive: false)) {
+          final name = p.basename(entity.path).toLowerCase();
+          if (entity is io.File) {
+            files[name] = p.absolute(entity.path);
+            try {
+              fileSizes[p.absolute(entity.path)] = await entity.length();
+            } catch (_) {}
+          } else if (entity is io.Directory) {
+            dirs[name] = p.absolute(entity.path);
+          }
+        }
+      } catch (_) {}
+    }
+
+    return FileSystemIndex(
+      rootPath: path,
+      files: files,
+      dirs: dirs,
+      fileSizes: fileSizes,
+    );
+  }
 }
 
 class DirectoryService {
@@ -404,45 +448,67 @@ class DirectoryService {
   /// Tries to find the actual ROM file on disk.
   /// First checks the exact path, then tries common extensions for the platform.
   /// Returns the found path or null if not found.
-  Future<String?> findExistingRomPath(Game game) async {
+  Future<String?> findExistingRomPath(Game game, {FileSystemIndex? index}) async {
     final romDir = await getRomDirectory(game);
-    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final platformLower = game.platformSlug?.toLowerCase();
     
-    // 1. Check exact path first (file or directory) in primary platform folder
+    // Names to check (in order of priority)
+    final namesToCheck = <String>[];
+    if (game.fsName != null) namesToCheck.add(game.fsName!);
+    if (game.fileName != null) namesToCheck.add(game.fileName!);
+    
+    final sanitizedName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    namesToCheck.add(sanitizedName);
+
+    // 1. Check using Index if provided (Case-Insensitive & Fast)
+    if (index != null && (index.rootPath == romDir || index.rootPath == p.join(romDir, 'roms'))) {
+      for (final name in namesToCheck) {
+        final lowerName = name.toLowerCase();
+        
+        // Try exact name match (files)
+        if (index.files.containsKey(lowerName)) return index.files[lowerName];
+        
+        // Try name match (dirs)
+        if (index.dirs.containsKey(lowerName)) {
+          final found = await _findMainRomInFolder(game, index.dirs[lowerName]!);
+          if (found != null) return found;
+        }
+
+        // Try with extensions
+        final extensions = _platformExtensions[platformLower] ?? [];
+        for (final ext in extensions) {
+          final nameWithExt = lowerName.endsWith(ext.toLowerCase()) ? lowerName : '$lowerName${ext.toLowerCase()}';
+          if (index.files.containsKey(nameWithExt)) return index.files[nameWithExt];
+        }
+      }
+      
+      // Fuzzy match in index
+      for (final name in namesToCheck) {
+        final lowerName = name.toLowerCase();
+        for (final entry in index.files.entries) {
+          if (entry.key.startsWith(lowerName) && !entry.key.endsWith('.part')) {
+            return entry.value;
+          }
+        }
+      }
+    }
+
+    // 2. Fallback to manual scanning (Legacy/Direct)
+    final baseName = game.fsName ?? game.fileName ?? sanitizedName;
+    
+    // Check exact path first (Case-sensitive check)
     final exactPath = p.join(romDir, baseName);
     if (await File(exactPath).exists()) return p.absolute(exactPath);
     
-    // 2. Check for "roms/" subfolder (common in some RomM structures)
-    final romsSubDir = p.join(romDir, 'roms');
-    if (await Directory(romsSubDir).exists()) {
-      final subExactPath = p.join(romsSubDir, baseName);
-      if (await File(subExactPath).exists()) return p.absolute(subExactPath);
-    }
-
-    // 3. Search for multi-file folder (sanitized game name)
-    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    
-    // Try both romDir and romDir/roms
-    final searchDirs = [romDir, p.join(romDir, 'roms')];
-    
-    for (final dirPath in searchDirs) {
-      final parentDir = Directory(dirPath);
-      if (!await parentDir.exists()) continue;
-
-      // Check direct folder match
-      final candidateFolder = Directory(p.join(dirPath, folderName));
-      if (await candidateFolder.exists()) {
-        final found = await _findMainRomInFolder(game, candidateFolder.path);
-        if (found != null) return found;
-      }
-
-      // Fuzzy folder match (e.g. "Captain Toad Treasure Tracker" matches "Captain Toad_ Treasure Tracker")
+    // Case-insensitive check by scanning parent directory manually if index not available
+    final parentDir = Directory(romDir);
+    if (await parentDir.exists()) {
       try {
         await for (final entity in parentDir.list()) {
-          if (entity is Directory) {
-            final dName = p.basename(entity.path);
-            final sanitizedDName = dName.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-            if (sanitizedDName.toLowerCase() == folderName.toLowerCase()) {
+          final fname = p.basename(entity.path);
+          if (fname.toLowerCase() == baseName.toLowerCase()) {
+            if (entity is File) return p.absolute(entity.path);
+            if (entity is Directory) {
               final found = await _findMainRomInFolder(game, entity.path);
               if (found != null) return found;
             }
@@ -451,34 +517,61 @@ class DirectoryService {
       } catch (_) {}
     }
 
-    // 4. Try common extensions for this platform
-    final extensions = _platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
+    // 3. Search for multi-file folder (sanitized game name)
+    final folderName = sanitizedName;
+    final searchDirs = [romDir, p.join(romDir, 'roms')];
+    
     for (final dirPath in searchDirs) {
-      final parentDir = Directory(dirPath);
-      if (!await parentDir.exists()) continue;
+      final pDir = Directory(dirPath);
+      if (!await pDir.exists()) continue;
+
+      // Check direct folder match (Case-insensitive)
+      try {
+        await for (final entity in pDir.list()) {
+          if (entity is Directory) {
+            final dName = p.basename(entity.path);
+            if (dName.toLowerCase() == folderName.toLowerCase()) {
+              final found = await _findMainRomInFolder(game, entity.path);
+              if (found != null) return found;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 4. Try common extensions for this platform (Case-insensitive)
+    final extensions = _platformExtensions[platformLower] ?? [];
+    for (final dirPath in searchDirs) {
+      final pDir = Directory(dirPath);
+      if (!await pDir.exists()) continue;
       
-      for (final ext in extensions) {
-        if (baseName.toLowerCase().endsWith(ext.toLowerCase())) continue;
-        final candidate = p.join(dirPath, '$baseName$ext');
-        if (await File(candidate).exists()) return p.absolute(candidate);
-      }
+      try {
+        final List<FileSystemEntity> entities = await pDir.list().toList();
+        for (final ext in extensions) {
+          for (final entity in entities) {
+            if (entity is File) {
+              final fname = p.basename(entity.path).toLowerCase();
+              final target = '$baseName$ext'.toLowerCase();
+              if (fname == target || fname == baseName.toLowerCase()) {
+                return p.absolute(entity.path);
+              }
+            }
+          }
+        }
+      } catch (_) {}
     }
 
     // 5. Scan directory for fuzzy file match
     for (final dirPath in searchDirs) {
-      final parentDir = Directory(dirPath);
-      if (!await parentDir.exists()) continue;
+      final pDir = Directory(dirPath);
+      if (!await pDir.exists()) continue;
 
       try {
-        await for (final entity in parentDir.list()) {
+        await for (final entity in pDir.list()) {
           if (entity is File) {
             final fname = p.basename(entity.path);
             final sanitizedFName = fname.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
             if (sanitizedFName.toLowerCase().startsWith(baseName.toLowerCase()) && !fname.toLowerCase().endsWith('.part')) {
-              // Prioritize .nds for NDS
-              if ((game.platformSlug?.toLowerCase() == 'nds' || game.platformSlug?.toLowerCase() == 'nintendo-ds') && fname.toLowerCase().endsWith('.nds')) {
-                return p.absolute(entity.path);
-              }
               return p.absolute(entity.path);
             }
           }

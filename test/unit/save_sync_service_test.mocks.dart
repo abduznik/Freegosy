@@ -704,9 +704,12 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
           as _i8.Future<String>);
 
   @override
-  _i8.Future<String?> findExistingRomPath(_i3.Game? game) =>
+  _i8.Future<String?> findExistingRomPath(
+    _i3.Game? game, {
+    _i4.FileSystemIndex? index,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#findExistingRomPath, [game]),
+            Invocation.method(#findExistingRomPath, [game], {#index: index}),
             returnValue: _i8.Future<String?>.value(),
           )
           as _i8.Future<String?>);

@@ -74,7 +74,7 @@ class RomScannerService {
 
       debugPrint('[RomScanner] Processing $platformSlug (ID: $platformId)...');
       
-      // 1. Fetch all games for this platform from RomM (Bulk fetch is much faster)
+      // 1. Fetch all games for this platform from RomM
       final List<Game> platformGames = [];
       try {
         int offset = 0;
@@ -94,74 +94,108 @@ class RomScannerService {
         continue;
       }
 
-      // 2. Scan the directory
-      final List<FileSystemEntity> entities = await dir.list().toList();
-      final scannedFiles = entities.whereType<File>().toList();
-      
-      // 3. Match new files
-      for (final file in scannedFiles) {
-        final filePath = file.path;
-        if (mappings.containsKey(filePath)) continue; // Already mapped
+      // 2. Build File System Index for this platform
+      final index = await FileSystemIndex.build(dir.path);
+      final romsSubDir = p.join(dir.path, 'roms');
+      FileSystemIndex? romsIndex;
+      if (await Directory(romsSubDir).exists()) {
+        romsIndex = await FileSystemIndex.build(romsSubDir);
+      }
 
-        final fileName = p.basename(filePath);
-        final fileNameNoExt = p.basenameWithoutExtension(filePath).toLowerCase();
+      final Set<String> mappedPathsInThisDir = {};
+      final Set<String> matchedRomIdsInThisDir = {};
+      final Set<String> allGlobalMappedIds = mappings.values.toSet();
+
+      // PASS 1: File-centric matching (Identify existing files)
+      final allLocalEntities = [...index.files.values, ...index.dirs.values];
+      if (romsIndex != null) {
+        allLocalEntities.addAll([...romsIndex.files.values, ...romsIndex.dirs.values]);
+      }
+
+      for (final entityPath in allLocalEntities) {
+        if (mappings.containsKey(entityPath)) {
+          mappedPathsInThisDir.add(entityPath);
+          matchedRomIdsInThisDir.add(mappings[entityPath]!);
+          continue;
+        }
+
+        final fileName = p.basename(entityPath);
+        final fileNameNoExt = p.basenameWithoutExtension(entityPath).toLowerCase();
         
         Game? matchedGame;
 
-        // MATCHING STRATEGY 1: Exact Filename/FSName match (100% Certainty)
+        // Strategy A: Exact match against RomM filenames/fsnames
         matchedGame = platformGames.cast<Game?>().firstWhere(
           (g) => g?.fileName == fileName || g?.fsName == fileName,
           orElse: () => null,
         );
 
-        // MATCHING STRATEGY 2: Clean name match (Ignoring tags and special chars)
+        // Strategy B: Clean name match
         if (matchedGame == null) {
           final fNameClean = _cleanName(fileNameNoExt);
           matchedGame = platformGames.cast<Game?>().firstWhere((g) {
             if (g == null) return false;
-            
-            // Try matching against Title
             if (_cleanName(g.name) == fNameClean) return true;
-            
-            // Try matching against internal FileName/FSName (without extension)
             final gFileNoExt = p.basenameWithoutExtension(g.fileName ?? '').toLowerCase();
             if (_cleanName(gFileNoExt) == fNameClean) return true;
-            
             final gFsNoExt = p.basenameWithoutExtension(g.fsName ?? '').toLowerCase();
             if (_cleanName(gFsNoExt) == fNameClean) return true;
-
             return false;
           }, orElse: () => null);
         }
 
         if (matchedGame != null) {
-          debugPrint('[Scanner] Mapped: $fileName -> ${matchedGame.name}');
-          await _mappingService.updateMapping(filePath, matchedGame.id);
-          yield RomSyncResult(filePath, matchedGame.id, game: matchedGame);
+          debugPrint('[Scanner] File Match: $fileName -> ${matchedGame.name}');
+          await _mappingService.updateMapping(entityPath, matchedGame.id);
+          mappedPathsInThisDir.add(entityPath);
+          matchedRomIdsInThisDir.add(matchedGame.id);
+          allGlobalMappedIds.add(matchedGame.id);
+          yield RomSyncResult(entityPath, matchedGame.id, game: matchedGame);
         } else {
-          debugPrint('[Scanner] No local match for: $fileName. Trying API search...');
-          try {
-            final results = await _rommService.searchRoms(search: fileName, platformId: platformId);
-            if (results.isNotEmpty) {
-              final game = results.first;
-              debugPrint('[Scanner] API Match: $fileName -> ${game.name}');
-              await _mappingService.updateMapping(filePath, game.id);
-              yield RomSyncResult(filePath, game.id, game: game);
-            } else {
-              debugPrint('[Scanner] FAILED to identify: $fileName');
+          // Strategy C: File size match (Very strong indicator if in the correct platform folder)
+          final fileSize = index.fileSizes[entityPath] ?? (romsIndex?.fileSizes[entityPath] ?? 0);
+          if (fileSize > 1024 * 1024) { // Only for files > 1MB to avoid collisions on small files
+            matchedGame = platformGames.cast<Game?>().firstWhere(
+              (g) => g?.fileSize == fileSize,
+              orElse: () => null,
+            );
+            if (matchedGame != null) {
+              debugPrint('[Scanner] Size Match: $fileName -> ${matchedGame.name} ($fileSize bytes)');
+              await _mappingService.updateMapping(entityPath, matchedGame.id);
+              mappedPathsInThisDir.add(entityPath);
+              matchedRomIdsInThisDir.add(matchedGame.id);
+              allGlobalMappedIds.add(matchedGame.id);
+              yield RomSyncResult(entityPath, matchedGame.id, game: matchedGame);
             }
-          } catch (e) {
-            debugPrint('[Scanner] Error searching for $fileName: $e');
           }
         }
       }
 
-      // 4. Identify REMOVALS for this platform
-      final Set<String> currentFiles = scannedFiles.map((f) => f.path).toSet();
+      // PASS 2: Game-centric matching (Reverse Mapping)
+      // For any game in library NOT yet matched, try to find it on disk using DirectoryService logic
+      for (final game in platformGames) {
+        if (allGlobalMappedIds.contains(game.id)) continue;
+
+        // Use robust DirectoryService logic with pre-built indices
+        String? foundPath = await _directoryService.findExistingRomPath(game, index: index);
+        if (foundPath == null && romsIndex != null) {
+          foundPath = await _directoryService.findExistingRomPath(game, index: romsIndex);
+        }
+
+        if (foundPath != null) {
+          debugPrint('[Scanner] REVERSE Match: ${game.name} -> $foundPath');
+          await _mappingService.updateMapping(foundPath, game.id);
+          mappedPathsInThisDir.add(foundPath);
+          matchedRomIdsInThisDir.add(game.id);
+          allGlobalMappedIds.add(game.id);
+          yield RomSyncResult(foundPath, game.id, game: game);
+        }
+      }
+
+      // 3. Identify REMOVALS for this platform
       final platformMappings = mappings.entries.where((e) => p.isWithin(dir.path, e.key));
-      
       for (final entry in platformMappings) {
-        if (!currentFiles.contains(entry.key)) {
+        if (!mappedPathsInThisDir.contains(entry.key) && !await File(entry.key).exists() && !await Directory(entry.key).exists()) {
           await _mappingService.removeMapping(entry.key);
           yield RomSyncResult(entry.key, entry.value, isRemoved: true);
         }
@@ -189,7 +223,7 @@ class RomScannerService {
     
     if (existingPath != null) {
       // Verify if the file still exists
-      if (await File(existingPath).exists()) {
+      if (await File(existingPath).exists() || await Directory(existingPath).exists()) {
         debugPrint('[RomScanner] Single Sync: ${game.name} already correctly mapped.');
         return;
       } else {
