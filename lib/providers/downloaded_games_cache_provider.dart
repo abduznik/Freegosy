@@ -64,12 +64,19 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   /// Also verifies they actually exist on disk to prevent 'zombie' games.
   Future<void> refresh() async {
     final mappingServiceAsync = _ref.read(romMappingServiceProvider);
-    if (!mappingServiceAsync.hasValue) return;
+    final metadataCacheAsync = _ref.read(metadataCacheServiceProvider);
+    final rommService = _ref.read(rommServiceProvider);
+    
+    if (!mappingServiceAsync.hasValue || !metadataCacheAsync.hasValue) return;
     
     final mappingService = mappingServiceAsync.value!;
+    final metadataCache = metadataCacheAsync.value!;
     final mappings = mappingService.getMappings();
     final Map<String, bool> newState = {};
     
+    final Set<String> missingMetadataIds = {};
+    final cachedIds = metadataCache.cachedGames.map((g) => g.id).toSet();
+
     for (final entry in mappings.entries) {
       final path = entry.key;
       final romId = entry.value;
@@ -77,6 +84,9 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
       // DISK CHECK: If the file was deleted manually, clean up the mapping
       if (await io.File(path).exists() || await io.Directory(path).exists()) {
         newState[romId] = true;
+        if (!cachedIds.contains(romId)) {
+          missingMetadataIds.add(romId);
+        }
       } else {
         debugPrint('[DownloadedGamesCache] Zombie detected: $path no longer exists. Removing.');
         await mappingService.removeMapping(path);
@@ -84,7 +94,22 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     }
     
     state = newState;
-    debugPrint('[DownloadedGamesCache] Loaded ${state.length} active mappings.');
+    debugPrint('[DownloadedGamesCache] Loaded ${state.length} active mappings (${missingMetadataIds.length} missing metadata).');
+
+    // AUTO-REPAIR: Fetch missing metadata in small batches
+    if (missingMetadataIds.isNotEmpty && rommService != null) {
+      debugPrint('[DownloadedGamesCache] Repairing metadata for ${missingMetadataIds.length} games...');
+      final List<Game> repairedGames = [];
+      for (final id in missingMetadataIds.take(20)) { // Limit to 20 per refresh to avoid spam
+        final game = await rommService.getGame(id);
+        if (game != null) repairedGames.add(game);
+      }
+      if (repairedGames.isNotEmpty) {
+        await metadataCache.saveGames(repairedGames);
+        debugPrint('[DownloadedGamesCache] Repaired ${repairedGames.length} metadata entries.');
+        // Don't call refresh again to avoid loops, the next state update will pick it up
+      }
+    }
   }
 
   /// Runs the high-performance incremental sync.
@@ -106,6 +131,12 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
     debugPrint('[DownloadedGamesCache] Starting incremental sync...');
 
     try {
+      // 1. Global Pruning Phase
+      final prunedCount = await scanner.pruneDeadMappings();
+      if (prunedCount > 0) {
+        debugPrint('[DownloadedGamesCache] Pruned $prunedCount dead mappings.');
+      }
+
       final romsRoot = await dirService.getRomsDirectory();
       final List<Game> matchedMetadataBuffer = [];
       final Map<String, bool> sessionMatches = {};

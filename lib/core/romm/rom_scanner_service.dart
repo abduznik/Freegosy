@@ -182,4 +182,17 @@ class RomScannerService {
     }
   }
 
+
+  /// Prunes all mappings that point to non-existent files.
+  Future<int> pruneDeadMappings() async {
+    final mappings = _mappingService.getMappings();
+    int count = 0;
+    for (final entry in mappings.entries) {
+      if (!await File(entry.key).exists() && !await Directory(entry.key).exists()) {
+        await _mappingService.removeMapping(entry.key);
+        count++;
+      }
+    }
+    return count;
+  }
 }
