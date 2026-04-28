@@ -58,9 +58,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!next.isOffline.value) {
             final backupRepo = ref.read(backupRepositoryProvider);
-            if (scaffoldMessengerKey.currentContext != null) {
-              BackgroundSyncQueue.processQueue(next, backupRepo, scaffoldMessengerKey.currentContext!);
-            }
+            BackgroundSyncQueue.processQueue(next, backupRepo);
           }
         });
 
@@ -68,9 +66,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         next.isOffline.addListener(() {
           if (!next.isOffline.value) {
             final backupRepo = ref.read(backupRepositoryProvider);
-            if (scaffoldMessengerKey.currentContext != null) {
-              BackgroundSyncQueue.processQueue(next, backupRepo, scaffoldMessengerKey.currentContext!);
-            }
+            BackgroundSyncQueue.processQueue(next, backupRepo);
           }
         });
       }

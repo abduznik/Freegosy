@@ -93,7 +93,7 @@ void main() {
                   final stopwatch = Stopwatch()..start();
                   
                   // Run the queue
-                  await BackgroundSyncQueue.processQueue(mockRommService, mockBackupRepo, context);
+                  await BackgroundSyncQueue.processQueue(mockRommService, mockBackupRepo);
                   
                   stopwatch.stop();
 

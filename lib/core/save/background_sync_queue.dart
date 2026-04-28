@@ -1,8 +1,9 @@
 import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import '../romm/romm_service.dart';
-import '../error/error_handler.dart';
 import 'backup_repository.dart';
+
+import '../../main.dart' show scaffoldMessengerKey;
 
 /// Processes pending local backups serially to avoid network and CPU spikes.
 class BackgroundSyncQueue {
@@ -12,9 +13,9 @@ class BackgroundSyncQueue {
   /// it will simply return if already running.
   static Future<void> processQueue(
     RommService rommService,
-    BackupRepository backupRepo,
-    BuildContext context,
-  ) async {
+    BackupRepository backupRepo, [
+    ScaffoldMessengerState? customMessenger,
+  ]) async {
     if (_isRunning) return;
 
     final pending = backupRepo.getUnsyncedEntries();
@@ -22,15 +23,32 @@ class BackgroundSyncQueue {
 
     _isRunning = true;
     int syncedCount = 0;
+    
+    final messenger = customMessenger ?? scaffoldMessengerKey.currentState;
 
     try {
-      if (context.mounted) {
-        ErrorHandler.showInfo(
-          context,
-          'Syncing',
-          message: 'Syncing ${pending.length} offline saves to cloud...',
-        );
-      }
+      messenger?.showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF1565C0),
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Syncing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    Text('Syncing ${pending.length} offline saves to cloud...', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
       for (final item in pending) {
         // 1. Check connectivity before attempting upload
@@ -82,11 +100,28 @@ class BackgroundSyncQueue {
         }
       }
 
-      if (context.mounted && syncedCount > 0) {
-        ErrorHandler.showSuccess(
-          context,
-          'Cloud Sync',
-          message: 'Cloud sync complete. $syncedCount saves uploaded.',
+      if (syncedCount > 0) {
+        messenger?.showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 3),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Cloud Sync', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('Cloud sync complete. $syncedCount saves uploaded.', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       }
     } finally {
