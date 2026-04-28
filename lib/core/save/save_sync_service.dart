@@ -25,6 +25,25 @@ import 'strategies/cemu_save_strategy.dart';
 import 'strategies/azahar_save_strategy.dart';
 import '../emulator/strategy_registry.dart';
 
+class SaveConflictException implements Exception {
+  final Game game;
+  final DateTime localTime;
+  final DateTime cloudTime;
+  final String? localScreenshot;
+  final String? cloudScreenshot;
+  
+  SaveConflictException({
+    required this.game, 
+    required this.localTime, 
+    required this.cloudTime,
+    this.localScreenshot,
+    this.cloudScreenshot,
+  });
+  
+  @override
+  String toString() => 'Conflict detected for ${game.name}: Local ($localTime) vs Cloud ($cloudTime)';
+}
+
 class SaveSyncService {
   final RommService _rommService;
   final DirectoryService _directoryService;
@@ -248,6 +267,34 @@ class SaveSyncService {
       );
       if (filesMap.isEmpty) return false;
 
+      // --- Conflict Detection ---
+      if (!force) {
+        final latestRemote = await _rommService.getLatestSave(game.id);
+        if (latestRemote != null) {
+          final remoteTime = DateTime.tryParse(latestRemote['updated_at']?.toString() ?? '');
+          final lastPull = _getLastPullTime(game.id);
+          
+          // If remote is newer than our last pull, and we have local changes -> Conflict!
+          if (remoteTime != null && lastPull != null && remoteTime.isAfter(lastPull)) {
+             // Find the newest local file time
+             DateTime? localTime;
+             for (final file in filesMap.keys) {
+               final mtime = await file.lastModified();
+               if (localTime == null || mtime.isAfter(localTime)) localTime = mtime;
+             }
+             
+             if (localTime != null && remoteTime.isAfter(lastPull)) {
+               throw SaveConflictException(
+                 game: game,
+                 localTime: localTime,
+                 cloudTime: remoteTime,
+                 cloudScreenshot: latestRemote['screenshot_path'] ?? latestRemote['screenshot_url'],
+               );
+             }
+          }
+        }
+      }
+
       int uploaded = 0;
       final displayStem = game.displayName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
       final tempDir = await _directoryService.getEmulatorDirectory('temp');
@@ -308,6 +355,8 @@ class SaveSyncService {
         await _rommService.pruneOldSaves(game.id);
       }
       return uploaded > 0;
+    } on SaveConflictException {
+      rethrow;
     } catch (e) {
       debugPrint('[Sync] Error in pushSaves: $e');
       return false;

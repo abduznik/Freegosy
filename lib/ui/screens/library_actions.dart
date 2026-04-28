@@ -24,6 +24,8 @@ import '../../core/emulator/strategies/windows_strategy.dart';
 import '../../core/emulator/strategies/retroarch_strategy.dart';
 import '../widgets/windows_game_config_dialog.dart';
 import '../widgets/multi_disc_picker.dart';
+import '../widgets/save_conflict_dialog.dart';
+import '../../core/save/save_sync_service.dart';
 
 mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   // These need to be implemented by the state class
@@ -205,6 +207,17 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           if (context.mounted) {
             await syncService.pushSaves(game, romPath, syncMode: syncMode);
           }
+        }
+      } on SaveConflictException catch (e) {
+        if (!context.mounted) return;
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => SaveConflictDialog(conflict: e),
+        );
+        if (choice == 'local' && context.mounted) {
+          await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+        } else if (choice == 'cloud' && context.mounted) {
+          await syncService.pullSave(game, romPath);
         }
       } catch (e) {
         // Ignore other push errors during launch to not block playing
@@ -519,6 +532,19 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         await syncService.saveActiveProfile(selectedProfile);
         if (!context.mounted) return;
         return handlePushSaves(context, ref, game);
+      }
+    } on SaveConflictException catch (e) {
+      if (!context.mounted) return;
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SaveConflictDialog(conflict: e),
+      );
+      if (choice == 'local' && context.mounted) {
+        await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+        if (context.mounted) ErrorHandler.showSuccess(context, 'Sync Resolved', message: 'Local save uploaded');
+      } else if (choice == 'cloud' && context.mounted) {
+        await syncService.pullSave(game, romPath);
+        if (context.mounted) ErrorHandler.showSuccess(context, 'Sync Resolved', message: 'Cloud save restored');
       }
     } catch (e) {
       if (!context.mounted) return;

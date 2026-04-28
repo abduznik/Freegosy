@@ -10,6 +10,7 @@ import 'core/save/background_sync_queue.dart';
 import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
+import 'ui/screens/onboarding_screen.dart';
 import 'providers/ui_provider.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
@@ -122,28 +123,44 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
             ),
           ),
         ),
-        home: Scaffold(
-          body: _screens[currentIndex],
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: currentIndex,
-            onDestinationSelected: (index) {
-              ref.read(currentTabIndexProvider.notifier).state = index;
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.library_books),
-                label: 'Library',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.download),
-                label: 'Downloads',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings),
-                label: 'Settings',
-              ),
-            ],
-          ),
+        home: Consumer(
+          builder: (context, ref, _) {
+            final isOnboardedAsync = ref.watch(rommConfigProvider);
+            
+            return isOnboardedAsync.when(
+              data: (config) {
+                if (config.baseUrl.isEmpty) {
+                  return const OnboardingScreen();
+                }
+
+                return Scaffold(
+                  body: _screens[currentIndex],
+                  bottomNavigationBar: NavigationBar(
+                    selectedIndex: currentIndex,
+                    onDestinationSelected: (index) {
+                      ref.read(currentTabIndexProvider.notifier).state = index;
+                    },
+                    destinations: const [
+                      NavigationDestination(
+                        icon: Icon(Icons.library_books),
+                        label: 'Library',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.download),
+                        label: 'Downloads',
+                      ),
+                      NavigationDestination(
+                        icon: Icon(Icons.settings),
+                        label: 'Settings',
+                      ),
+                    ],
+                  ),
+                );
+              },
+              loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+              error: (e, s) => Scaffold(body: Center(child: Text('Error: $e'))),
+            );
+          },
         ),
       ),
     );

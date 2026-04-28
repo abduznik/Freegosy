@@ -53,6 +53,7 @@ dependencies:
   hive_flutter: ^1.1.0
   synchronized: ^3.1.0+1
   uuid: ^4.5.1
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

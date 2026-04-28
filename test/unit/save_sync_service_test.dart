@@ -37,6 +37,7 @@ void main() {
         .thenAnswer((_) async => sysTemp);
     
     final prefs = await SharedPreferences.getInstance();
+    when(mockRommService.getLatestSave(any)).thenAnswer((_) async => null);
     service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry, prefs);
   });
 
@@ -50,8 +51,6 @@ void main() {
 
     test('pushSaves() uploads when local hash differs', () async {
       final tempDir = await Directory.systemTemp.createTemp('save_sync_test');
-      // Use mgba strategy (default for gba slug in SaveSyncService)
-      // It looks for .sav next to ROM
       final romPath = p.join(tempDir.path, 'game.gba');
       final saveFile = File(p.join(tempDir.path, 'game.sav'));
       await saveFile.writeAsString('new content');
@@ -65,12 +64,18 @@ void main() {
         screenshotFile: anyNamed('screenshotFile'), 
         overrideFilename: anyNamed('overrideFilename')
       )).thenAnswer((_) async => true);
-      when(mockRommService.pruneOldSaves(any)).thenAnswer((_) async => {});
+      when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
       final ok = await service.pushSaves(game, romPath);
       
       expect(ok, isTrue, reason: 'Should have found and uploaded game.sav');
-      verify(mockRommService.uploadSave('game1', any, slot: anyNamed('slot'), screenshotFile: anyNamed('screenshotFile'), overrideFilename: anyNamed('overrideFilename'))).called(1);
+      verify(mockRommService.uploadSave(
+        'game1', 
+        any, 
+        slot: anyNamed('slot'), 
+        screenshotFile: anyNamed('screenshotFile'), 
+        overrideFilename: anyNamed('overrideFilename')
+      )).called(1);
       
       await tempDir.delete(recursive: true);
     });
@@ -83,7 +88,6 @@ void main() {
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
-      // Mock upload to be sure it's called first time
       when(mockRommService.uploadSave(
         any, 
         any, 
@@ -91,17 +95,55 @@ void main() {
         screenshotFile: anyNamed('screenshotFile'), 
         overrideFilename: anyNamed('overrideFilename')
       )).thenAnswer((_) async => true);
-      when(mockRommService.pruneOldSaves(any)).thenAnswer((_) async => {});
+      when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
       await service.pushSaves(game, romPath);
-      verify(mockRommService.uploadSave('game1', any, slot: anyNamed('slot'), screenshotFile: anyNamed('screenshotFile'), overrideFilename: anyNamed('overrideFilename'))).called(1);
+      verify(mockRommService.uploadSave(
+        'game1', 
+        any, 
+        slot: anyNamed('slot'), 
+        screenshotFile: anyNamed('screenshotFile'), 
+        overrideFilename: anyNamed('overrideFilename')
+      )).called(1);
 
       // Second time should skip
       clearInteractions(mockRommService);
+      // We must re-stub because clearInteractions might affect stubs depending on implementation, 
+      // though usually it only clears call history. But to be safe:
+      when(mockRommService.getLatestSave(any)).thenAnswer((_) async => null);
+
       final ok = await service.pushSaves(game, romPath);
       expect(ok, isTrue, reason: 'Should return true (success) even if skipping due to matching hash');
       verifyNever(mockRommService.uploadSave(any, any));
 
+      await tempDir.delete(recursive: true);
+    });
+
+    test('pushSaves() throws SaveConflictException when remote is newer than last pull', () async {
+      final tempDir = await Directory.systemTemp.createTemp('save_sync_test_conflict');
+      final romPath = p.join(tempDir.path, 'game.gba');
+      final saveFile = File(p.join(tempDir.path, 'game.sav'));
+      await saveFile.writeAsString('local change');
+      
+      final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
+      
+      // Setup a last pull time (1 hour ago)
+      final prefs = await SharedPreferences.getInstance();
+      final lastPull = DateTime.now().subtract(const Duration(hours: 1));
+      await prefs.setString('last_pull_game1', lastPull.toIso8601String());
+      
+      // Mock remote to be NEWER than last pull (30 mins ago)
+      final remoteTime = DateTime.now().subtract(const Duration(minutes: 30));
+      when(mockRommService.getLatestSave('game1')).thenAnswer((_) async => {
+        'updated_at': remoteTime.toIso8601String(),
+        'screenshot_url': 'http://remote-screenshot.png',
+      });
+      
+      await expectLater(
+        service.pushSaves(game, romPath),
+        throwsA(isA<SaveConflictException>()),
+      );
+      
       await tempDir.delete(recursive: true);
     });
   });
