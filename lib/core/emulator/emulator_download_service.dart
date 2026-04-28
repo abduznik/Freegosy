@@ -332,11 +332,12 @@ class EmulatorDownloadService {
       }
 
       try {
+        final extension = downloadUrl.split('.').last.toLowerCase();
         controller.add(DownloadProgress(
           id: emulatorId,
           gameName: emulatorName,
           percent: 1.0,
-          status: 'Extracting...',
+          status: 'Extracting ($extension)...',
         ));
         await _extractionService.extract(tempFilePath, emulatorDir);
 

@@ -206,11 +206,12 @@ class DownloadService {
                              ((isZipSignature || isArchive) && !platformSupportsArchive);
         
         if (shouldExtract) {
+          final extension = currentPath.split('.').last.toLowerCase();
           yield DownloadProgress(
             id: game.id,
             gameName: game.name,
             percent: 1.0,
-            status: 'Extracting...',
+            status: 'Extracting ($extension)...',
           );
           await _extractMultiFile(game, currentPath);
         }

@@ -32,9 +32,16 @@ class DownloadProgressIndicator extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                progress.percent > 0 
-                  ? '${progress.status} — ${(progress.percent * 100).toStringAsFixed(1)}%'
-                  : progress.status,
+                () {
+                  String displayStatus = progress.status;
+                  if (progress.status == 'Downloading...' && progress.percent > 0.8 && progress.percent < 1.0) {
+                    displayStatus = 'Almost done...';
+                  }
+                  
+                  return progress.percent > 0 && !progress.isComplete
+                    ? '$displayStatus — ${(progress.percent * 100).toStringAsFixed(1)}%'
+                    : displayStatus;
+                }(),
                 style: Theme.of(context).textTheme.bodySmall,
                 overflow: TextOverflow.ellipsis,
               ),
