@@ -64,6 +64,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
   Future<void> _refreshLibrary() async {
     ref.invalidate(platformsProvider);
+    ref.invalidate(recentlyAddedProvider);
+    ref.invalidate(recentlyPlayedProvider);
     ref.read(paginatedGamesProvider.notifier).reset();
     await ref.read(paginatedGamesProvider.notifier).loadInitial(
       platformId: ref.read(selectedPlatformIdProvider)?.toString(),
@@ -533,12 +535,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                                       ),
                                     ),
                                     // 2. Recently Added
-                                    _buildHorizontalShelf(
-                                      context: context,
-                                      title: 'Recently Added',
-                                      icon: Icons.new_releases_outlined,
-                                      games: displayGames.take(15).toList(),
-                                      ref: ref,
+                                    ref.watch(recentlyAddedProvider).when(
+                                      loading: () => const SizedBox.shrink(),
+                                      error: (e, s) => const SizedBox.shrink(),
+                                      data: (games) => _buildHorizontalShelf(
+                                        context: context,
+                                        title: 'Recently Added',
+                                        icon: Icons.new_releases_outlined,
+                                        games: games,
+                                        ref: ref,
+                                      ),
                                     ),
                                     // 3. Installed Games
                                     metadataCacheAsync.when(

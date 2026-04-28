@@ -250,6 +250,27 @@ class RommService {
     return _fetchPaginatedGames(params);
   }
 
+  Future<List<Game>> getRecentlyAdded({int limit = 15}) async {
+    try {
+      final response = await _dio.get(
+        '/api/roms', 
+        queryParameters: {
+          'limit': limit, 
+          'order_by': 'id', 
+          'order_dir': 'desc', 
+          'with_char_index': false, 
+          'with_filter_values': false
+        }, 
+        options: _authOptions
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> items = response.data is Map ? (response.data['items'] ?? []) : (response.data is List ? response.data : []);
+        return items.map((e) => Game.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
+    } catch (_) { return []; }
+  }
+
   Future<List<Game>> getRecentlyPlayed({int limit = 15}) async {
     try {
       final response = await _dio.get('/api/roms', queryParameters: {'limit': limit, 'order_by': 'last_played', 'order_dir': 'desc', 'last_played': true, 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);

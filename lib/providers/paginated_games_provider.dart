@@ -375,3 +375,9 @@ final recentlyPlayedProvider = FutureProvider<List<Game>>((ref) async {
   if (service == null) return [];
   return service.getRecentlyPlayed(limit: 15);
 });
+
+final recentlyAddedProvider = FutureProvider<List<Game>>((ref) async {
+  final service = ref.watch(rommServiceProvider);
+  if (service == null) return [];
+  return service.getRecentlyAdded(limit: 15);
+});
