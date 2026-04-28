@@ -32,7 +32,8 @@ void main() {
     when(mockRommService.config).thenReturn(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
     when(mockRommService.resolveCoverUrl(any)).thenReturn(null);
     when(mockRommService.getRecentlyPlayed(limit: anyNamed('limit'))).thenAnswer((_) async => []);
-    when(mockRommService.searchRoms(search: anyNamed('search'))).thenAnswer((_) async => []);
+    when(mockRommService.searchRoms(search: anyNamed('search'), platformId: anyNamed('platformId'))).thenAnswer((_) async => []);
+    when(mockRommService.isOffline).thenReturn(ValueNotifier<bool>(false));
     when(mockDirectoryService.status).thenReturn(const StorageStatus());
     when(mockRomMappingService.getMappings()).thenReturn({});
     when(mockRomMappingService.getMTimes()).thenReturn({});
