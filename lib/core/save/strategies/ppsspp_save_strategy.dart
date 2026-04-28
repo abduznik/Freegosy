@@ -157,11 +157,15 @@ class PpssppSaveStrategy extends SaveStrategy {
 
     final statesDir = io.Directory(p.join(pspDir, 'PPSSPP_STATE'));
     if (await statesDir.exists()) {
-      final stem = getRomStem(game);
-      final stateFile = io.File(p.join(pspDir, 'PPSSPP_STATE', '$stem.ppst'));
-      if (await stateFile.exists()) {
-        if (sessionStart == null || (await stateFile.stat()).modified.isAfter(sessionStart)) {
-          result.add(stateFile);
+      final stemLower = getRomStem(game).toLowerCase();
+      await for (final entity in statesDir.list()) {
+        if (entity is! io.File) continue;
+        final fname = p.basename(entity.path).toLowerCase();
+        if (fname == '$stemLower.ppst') {
+          if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+            result.add(entity);
+          }
+          break;
         }
       }
     }

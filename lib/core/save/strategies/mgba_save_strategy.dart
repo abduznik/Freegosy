@@ -29,28 +29,26 @@ class MgbaSaveStrategy extends SaveStrategy {
     final saveDir = await getSaveDir(game, romPath);
     if (saveDir == null) return [];
 
-    final romStem = p.basenameWithoutExtension(romPath);
-    final saveFile = io.File(p.join(saveDir, '$romStem.sav'));
+    final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
+    final fallbackStem = getRomStem(game).toLowerCase();
+    
+    final dir = io.Directory(saveDir);
+    if (!await dir.exists()) return [];
 
-    if (await saveFile.exists()) {
-      if (sessionStart != null) {
-        final stat = await saveFile.stat();
-        if (stat.modified.isBefore(sessionStart)) return [];
-      }
-      return [saveFile];
-    } else {
-      // Fallback to getRomStem(game)
-      final fallbackStem = getRomStem(game);
-      final fallbackSaveFile = io.File(p.join(saveDir, '$fallbackStem.sav'));
-      if (await fallbackSaveFile.exists()) {
+    final List<io.File> foundFiles = [];
+    await for (final entity in dir.list()) {
+      if (entity is! io.File) continue;
+      final fname = p.basename(entity.path).toLowerCase();
+      if ((fname == '$romStem.sav' || fname == '$fallbackStem.sav')) {
         if (sessionStart != null) {
-          final stat = await fallbackSaveFile.stat();
-          if (stat.modified.isBefore(sessionStart)) return [];
+          final stat = await entity.stat();
+          if (stat.modified.isBefore(sessionStart)) continue;
         }
-        return [fallbackSaveFile];
+        foundFiles.add(entity);
+        break; 
       }
     }
-    return [];
+    return foundFiles;
   }
 
   @override
@@ -60,13 +58,20 @@ class MgbaSaveStrategy extends SaveStrategy {
       final saveDir = await getSaveDir(game, destPath);
       if (saveDir == null) return false;
 
-      final romStem = p.basenameWithoutExtension(destPath);
+      final romStem = p.basenameWithoutExtension(destPath).toLowerCase();
+      final fallbackStem = getRomStem(game).toLowerCase();
       String targetPath = p.normalize(p.join(saveDir, '$romStem.sav'));
 
-      if (!await io.File(targetPath).exists()) {
-        // Fallback to getRomStem(game)
-        final fallbackStem = getRomStem(game);
-        targetPath = p.normalize(p.join(saveDir, '$fallbackStem.sav'));
+      final dir = io.Directory(saveDir);
+      if (await dir.exists()) {
+        await for (final entity in dir.list()) {
+          if (entity is! io.File) continue;
+          final fname = p.basename(entity.path).toLowerCase();
+          if (fname == '$romStem.sav' || fname == '$fallbackStem.sav') {
+            targetPath = entity.path;
+            break;
+          }
+        }
       }
 
       await io.Directory(p.dirname(targetPath)).create(recursive: true);

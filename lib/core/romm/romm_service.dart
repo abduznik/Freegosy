@@ -71,6 +71,29 @@ class RommService {
 
     _dio.interceptors.add(InterceptorsWrapper(
       onError: (DioException e, ErrorInterceptorHandler handler) async {
+        // Retry logic for transient network errors (especially on Steam Deck wake-up)
+        final path = e.requestOptions.path;
+        final isRetryable = e.type != DioExceptionType.cancel && 
+                          e.type != DioExceptionType.badResponse &&
+                          !path.contains('/api/heartbeat');
+        
+        if (isRetryable && e.requestOptions.extra['retry_count'] == null) {
+          e.requestOptions.extra['retry_count'] = 0;
+        }
+
+        final retryCount = e.requestOptions.extra['retry_count'] as int? ?? 0;
+        
+        if (isRetryable && retryCount < 2) {
+          e.requestOptions.extra['retry_count'] = retryCount + 1;
+          debugPrint('[RomM-Network] ! Retrying ${e.requestOptions.uri} (Attempt ${retryCount + 1})...');
+          await Future.delayed(Duration(seconds: 1 * (retryCount + 1)));
+          try {
+            final response = await _dio.fetch(e.requestOptions);
+            return handler.resolve(response);
+          } catch (retryError) {
+            return handler.next(retryError is DioException ? retryError : e);
+          }
+        }
         return handler.next(e);
       },
     ));
