@@ -9,6 +9,7 @@ import '../../core/storage/system_utils.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
+import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import 'settings_emulators_section.dart';
@@ -342,6 +343,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         icon: const Icon(Icons.folder_open),
         label: const Text('Open App Data Directory'),
       ),
+      const SizedBox(height: 16),
+      const Divider(color: Colors.white10),
+      const SizedBox(height: 8),
+      const Text('Troubleshooting', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+      const SizedBox(height: 8),
+      const Text('If games are missing from your offline library, try a full scan.', style: TextStyle(color: Colors.white54, fontSize: 13)),
+      const SizedBox(height: 12),
+      Consumer(builder: (context, ref, _) {
+        final isScanning = ref.watch(isScanningProvider);
+        return OutlinedButton.icon(
+          onPressed: isScanning ? null : () async {
+            await ref.read(downloadedGamesCacheProvider.notifier).startIncrementalSync(force: true);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full ROM scan complete.')));
+            }
+          },
+          icon: isScanning 
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.sync),
+          label: Text(isScanning ? 'Scanning...' : 'Force Full ROM Scan'),
+        );
+      }),
     ]);
   }
 

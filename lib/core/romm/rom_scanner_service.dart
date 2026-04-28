@@ -26,7 +26,7 @@ class RomScannerService {
   RomScannerService(this._rommService, this._mappingService, this._directoryService);
 
   /// Performs an incremental sync of the ROM directory.
-  Stream<RomSyncResult> sync(String romsRoot) async* {
+  Stream<RomSyncResult> sync(String romsRoot, {bool force = false}) async* {
     final mappings = _mappingService.getMappings();
     
     final rootDir = Directory(romsRoot);
@@ -53,9 +53,9 @@ class RomScannerService {
       }
     }
 
-    bool forceFullScan = mappings.length < 10 && platformDirs.length > 5;
+    bool forceFullScan = force || (mappings.length < 10 && platformDirs.length > 5);
 
-    if (dirtyDirs.isEmpty && !forceFullScan) {
+    if (!force && dirtyDirs.isEmpty && !forceFullScan) {
       debugPrint('[RomScanner] No platform directories changed. Skipping scan.');
       return;
     }

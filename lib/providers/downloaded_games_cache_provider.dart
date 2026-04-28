@@ -88,7 +88,7 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
   }
 
   /// Runs the high-performance incremental sync.
-  Future<void> startIncrementalSync() async {
+  Future<void> startIncrementalSync({bool force = false}) async {
     if (_isSyncing) return;
     
     final scanner = _ref.read(romScannerServiceProvider);
@@ -111,7 +111,7 @@ class DownloadedGamesCache extends StateNotifier<Map<String, bool>> {
       final Map<String, bool> sessionMatches = {};
       
       int count = 0;
-      await for (final result in scanner.sync(romsRoot)) {
+      await for (final result in scanner.sync(romsRoot, force: force)) {
         // Handle removals IMMEDIATELY
         if (result.isRemoved && result.romId != null) {
           final newState = Map<String, bool>.from(state);
