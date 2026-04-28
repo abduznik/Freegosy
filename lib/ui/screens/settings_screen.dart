@@ -85,11 +85,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                            (rommConfig.username.isNotEmpty || rommConfig.password.isNotEmpty);
             _preferencesLoaded = true;
           }
-
           return directoryServiceAsync.when(
             data: (directoryService) {
               if (directoryService == null) return const Center(child: Text('Storage service not available.'));
-              if (rommService == null) return const Center(child: CircularProgressIndicator());
 
               return ListView(
                 padding: const EdgeInsets.all(16.0),

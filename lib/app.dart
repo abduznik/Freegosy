@@ -10,6 +10,7 @@ import 'core/save/background_sync_queue.dart';
 import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
+import 'providers/ui_provider.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -29,7 +30,7 @@ class FreegosyApp extends ConsumerStatefulWidget {
 }
 
 class _FreegosyAppState extends ConsumerState<FreegosyApp> {
-  int _currentIndex = 0;
+
 
   final List<Widget> _screens = const [
     LibraryScreen(),
@@ -71,6 +72,8 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         });
       }
     });
+
+    final currentIndex = ref.watch(currentTabIndexProvider);
 
     return ExcludeSemantics(
       child: MaterialApp(
@@ -120,13 +123,11 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
           ),
         ),
         home: Scaffold(
-          body: _screens[_currentIndex],
+          body: _screens[currentIndex],
           bottomNavigationBar: NavigationBar(
-            selectedIndex: _currentIndex,
+            selectedIndex: currentIndex,
             onDestinationSelected: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
+              ref.read(currentTabIndexProvider.notifier).state = index;
             },
             destinations: const [
               NavigationDestination(

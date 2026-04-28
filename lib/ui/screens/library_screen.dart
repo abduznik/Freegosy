@@ -18,6 +18,7 @@ import 'game_detail_screen.dart';
 import 'library_actions.dart';
 
 import '../../providers/download_provider.dart';
+import '../../providers/ui_provider.dart';
 
 final isHomeSelectedProvider = StateProvider<bool>((ref) => true);
 
@@ -450,10 +451,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                             const SizedBox(height: 24),
                             ElevatedButton(
                               onPressed: () {
-                                // Ideally we would switch the tab, but for now just a hint
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Click the Settings icon at the bottom.')),
-                                );
+                                ref.read(currentTabIndexProvider.notifier).state = 2;
                               },
                               child: const Text('Go to Settings'),
                             ),

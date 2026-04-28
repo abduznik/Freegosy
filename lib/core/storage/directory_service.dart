@@ -193,14 +193,8 @@ class DirectoryService {
   }
 
   Future<String> getDefaultBase() async {
-    if (defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux) {
-      final appSupport = await getApplicationSupportDirectory();
-      return appSupport.path;
-    } else {
-      final docsDir = await getApplicationDocumentsDirectory();
-      return docsDir.path;
-    }
+    final appSupport = await getApplicationSupportDirectory();
+    return appSupport.path;
   }
 
   Future<void> resetRomsRoot() async {
