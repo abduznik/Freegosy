@@ -7,6 +7,7 @@ import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
 import '../../core/save/backup_entry.dart';
+import '../../core/save/background_sync_queue.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
@@ -569,8 +570,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                                     label: 'Backup',
                                     onPressed: () async {
                                       try {
-                                        final syncService = ref.read(saveSyncServiceProvider).asData?.value;
-                                        final ds = ref.read(directoryServiceProvider).value;
+                                        final syncService = await ref.read(saveSyncServiceProvider.future);
+                                        final ds = await ref.read(directoryServiceProvider.future);
+                                        if (!context.mounted) return;
                                         if (syncService == null || ds == null) {
                                           ErrorHandler.showInfo(context, 'Not Ready', message: 'Services not available');
                                           return;
@@ -591,6 +593,12 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                                           );
                                           if (context.mounted) {
                                             ErrorHandler.showSuccess(context, 'Backup Created', message: 'Local restore point saved.');
+                                          }
+                                          
+                                          // Trigger the background sync queue immediately to push this new backup
+                                          final rommService = ref.read(rommServiceProvider);
+                                          if (rommService != null && !rommService.isOffline.value) {
+                                            BackgroundSyncQueue.processQueue(rommService, backupRepo);
                                           }
                                         } else {
                                           ErrorHandler.showInfo(context, 'No Saves', message: 'No save files found to back up.');
