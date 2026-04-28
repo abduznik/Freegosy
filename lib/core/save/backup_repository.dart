@@ -8,7 +8,7 @@ import 'backup_entry.dart';
 /// so that providers stay thin.
 class BackupRepository {
   static const String _boxName = 'freegosy_backups';
-  static const int _maxBackups = 8;
+  static const int _maxBackups = 4;
 
   Box<List>? _box;
 

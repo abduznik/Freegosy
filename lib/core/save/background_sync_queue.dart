@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import '../romm/romm_service.dart';
 import 'backup_repository.dart';
+import 'backup_entry.dart';
 
 import '../../main.dart' show scaffoldMessengerKey;
 
@@ -22,8 +23,29 @@ class BackgroundSyncQueue {
       return;
     }
 
-    final pending = backupRepo.getUnsyncedEntries();
-    debugPrint('[BackgroundSyncQueue] Sweep complete. Found ${pending.length} pending jobs.');
+    final rawPending = backupRepo.getUnsyncedEntries();
+    
+    // Group by romId and only keep the newest entry for each game to be efficient
+    final Map<String, ({String romId, BackupEntry entry})> newestPerGame = {};
+    for (final item in rawPending) {
+      final existing = newestPerGame[item.romId];
+      if (existing == null || item.entry.timestamp.isAfter(existing.entry.timestamp)) {
+        newestPerGame[item.romId] = item;
+      }
+    }
+
+    final pending = newestPerGame.values.toList();
+    // Sort oldest game first to maintain chronological order across different games
+    pending.sort((a, b) => a.entry.timestamp.compareTo(b.entry.timestamp));
+
+    // Mark skipped entries as synced so they don't stay in the queue
+    for (final item in rawPending) {
+      if (!pending.contains(item)) {
+        await backupRepo.markAsSynced(item.romId, item.entry);
+      }
+    }
+
+    debugPrint('[BackgroundSyncQueue] Sweep complete. Found ${rawPending.length} pending, consolidated to ${pending.length} unique game uploads.');
     if (pending.isEmpty) return;
 
     _isRunning = true;
