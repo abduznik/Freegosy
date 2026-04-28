@@ -15,21 +15,7 @@ class RomSyncResult {
   RomSyncResult(this.path, this.romId, {this.game, this.isRemoved = false});
 }
 
-/// TOP-LEVEL function for compute() to avoid capturing 'this'
-List<String> _performIsolatedScan(List<String> paths) {
-  final List<String> files = [];
-  for (final path in paths) {
-    final dir = Directory(path);
-    if (dir.existsSync()) {
-      try {
-        for (final entity in dir.listSync()) {
-          files.add(entity.path);
-        }
-      } catch (_) {}
-    }
-  }
-  return files;
-}
+
 
 class RomScannerService {
   final RommService _rommService;
@@ -127,14 +113,12 @@ class RomScannerService {
         );
 
         // MATCHING STRATEGY 2: Clean Name match
-        if (matchedGame == null) {
-          matchedGame = platformGames.cast<Game?>().firstWhere((g) {
-            if (g == null) return false;
-            final gName = g.name.toLowerCase().replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-            final fName = fileNameNoExt.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-            return gName == fName;
-          }, orElse: () => null);
-        }
+        matchedGame ??= platformGames.cast<Game?>().firstWhere((g) {
+          if (g == null) return false;
+          final gName = g.name.toLowerCase().replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+          final fName = fileNameNoExt.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+          return gName == fName;
+        }, orElse: () => null);
 
         if (matchedGame != null) {
           await _mappingService.updateMapping(filePath, matchedGame.id);
