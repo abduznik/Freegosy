@@ -88,15 +88,17 @@ class DownloadService {
       existingBytes = await partFile.length();
     }
 
+
+
+    debugPrint("[DownloadService] Starting download for: ${game.name}");
+    
     yield DownloadProgress(
       id: game.id,
       gameName: game.name,
       percent: 0.0,
       bytesReceived: existingBytes,
-      status: 'Starting...',
+      status: 'Downloading...',
     );
-
-    debugPrint("[DownloadService] Starting download for: ${game.name}");
     debugPrint("[DownloadService] URL: $downloadUrl");
     debugPrint("[DownloadService] Final Path: $finalPath");
     debugPrint("[DownloadService] Part Path: $partPath");

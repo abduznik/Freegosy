@@ -110,6 +110,12 @@ class EmulatorDownloadService {
     final String emulatorName = definition['name'] as String? ?? emulatorId;
     final String type = definition['type'] as String? ?? 'direct';
 
+    yield DownloadProgress(
+      id: emulatorId,
+      gameName: emulatorName,
+      status: 'Downloading...',
+    );
+
     String? downloadUrl = urlOverride;
     downloadUrl ??= await _directoryService.getEmulatorUrlOverride(emulatorId);
 
@@ -137,11 +143,7 @@ class EmulatorDownloadService {
           }
         }
 
-        yield DownloadProgress(
-          id: emulatorId,
-          gameName: emulatorName,
-          status: 'Fetching latest $buildType release...',
-        );
+
 
         final assets = await _releaseService.getLatestReleaseAssets(
           platform: ReleasePlatform.gitea,
@@ -163,11 +165,7 @@ class EmulatorDownloadService {
     }
 
     if (downloadUrl == null && type == 'github') {
-      yield DownloadProgress(
-        id: emulatorId,
-        gameName: emulatorName,
-        status: 'Fetching latest release...',
-      );
+
       
       String repo = definition['github_repo'] as String;
       if (Platform.isWindows && definition.containsKey('github_repo_windows')) {
@@ -209,11 +207,7 @@ class EmulatorDownloadService {
       }
       downloadUrl = assets.first['url'];
     } else if (downloadUrl == null && type == 'dolphin') {
-      yield DownloadProgress(
-        id: emulatorId,
-        gameName: emulatorName,
-        status: 'Fetching latest release from Dolphin site...',
-      );
+
 
       final requiredKey = Platform.isWindows ? 'asset_required_windows' : (Platform.isMacOS ? 'asset_required_macos' : 'asset_required_linux');
       final required = List<String>.from(definition[requiredKey] ?? []);
@@ -230,11 +224,7 @@ class EmulatorDownloadService {
       }
       downloadUrl = assets.first['url'];
     } else if (downloadUrl == null && type == 'gitea') {
-      yield DownloadProgress(
-        id: emulatorId,
-        gameName: emulatorName,
-        status: 'Fetching latest release...',
-      );
+
 
       final repo = definition['gitea_repo'] as String;
       final baseUrl = definition['gitea_host'] != null ? 'https://${definition['gitea_host']}' : null;
