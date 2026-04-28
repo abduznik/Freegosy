@@ -44,6 +44,7 @@ final emulatorStatusProvider = FutureProvider<Map<String, bool>>((ref) async {
 
 final firmwareServiceProvider = FutureProvider<FirmwareService?>((ref) async {
   final rommService = ref.watch(rommServiceProvider);
+  ref.watch(isOfflineProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
   final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
   if (rommService == null || directoryService == null || strategyRegistry == null) return null;
@@ -135,6 +136,7 @@ final strategyRegistryProvider = FutureProvider<StrategyRegistry?>((ref) async {
 // SaveSyncService provider
 final saveSyncServiceProvider = FutureProvider<SaveSyncService?>((ref) async {
   final rommService = ref.watch(rommServiceProvider);
+  ref.watch(isOfflineProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
   final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
   final prefs = ref.watch(sharedPreferencesProvider);
@@ -188,6 +190,7 @@ final romMappingServiceProvider = FutureProvider<RomMappingService>((ref) async 
 
 final romScannerServiceProvider = Provider<RomScannerService?>((ref) {
   final rommService = ref.watch(rommServiceProvider);
+  ref.watch(isOfflineProvider);
   final mappingServiceAsync = ref.watch(romMappingServiceProvider);
   final directoryServiceAsync = ref.watch(directoryServiceProvider);
   
@@ -199,6 +202,28 @@ final romScannerServiceProvider = Provider<RomScannerService?>((ref) {
   }
   return null;
 });
+
+final isOfflineProvider = StateNotifierProvider<ConnectivityNotifier, bool>((ref) {
+  final service = ref.watch(rommServiceProvider);
+  return ConnectivityNotifier(service);
+});
+
+class ConnectivityNotifier extends StateNotifier<bool> {
+  final RommService? _service;
+  ConnectivityNotifier(this._service) : super(_service?.isOffline.value ?? true) {
+    _service?.isOffline.addListener(_listener);
+  }
+
+  void _listener() {
+    if (mounted) state = _service?.isOffline.value ?? true;
+  }
+
+  @override
+  void dispose() {
+    _service?.isOffline.removeListener(_listener);
+    super.dispose();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Backup providers

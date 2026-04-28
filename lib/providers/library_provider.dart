@@ -104,6 +104,7 @@ final activePresetLoaderProvider = FutureProvider<void>((ref) async {});
 
 final platformsProvider = FutureProvider<List<Platform>>((ref) async {
   final service = ref.watch(rommServiceProvider);
+  ref.watch(isOfflineProvider);
   if (service == null) return [];
 
   final cached = await _loadPlatformsCache(ref);
@@ -144,6 +145,7 @@ final platformsProvider = FutureProvider<List<Platform>>((ref) async {
 
 final allGamesProvider = FutureProvider<List<Game>>((ref) async {
   final service = ref.watch(rommServiceProvider);
+  ref.watch(isOfflineProvider);
   final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
   if (service == null) return [];
 
