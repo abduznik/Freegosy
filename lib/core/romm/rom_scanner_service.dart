@@ -92,59 +92,38 @@ class RomScannerService {
         // Skip hidden files, system files, etc.
         if (fileName.startsWith('.') || fileName.toLowerCase() == 'roms' || fileName.toLowerCase() == 'gamelist.xml') continue;
 
-        debugPrint('[Scanner] Searching cloud for: $fileName');
+        debugPrint('[Scanner] Discovery: $fileName');
+        
+        // Extract key search term (First 1-2 words, at least 3 chars)
+        final words = fileName.split(RegExp(r'[\s\.\-_\[\(]')).where((w) => w.length >= 3).toList();
+        final searchTerm = words.take(2).join(' ');
+        
+        if (searchTerm.isEmpty) {
+          debugPrint('[Scanner] Skipping file with no searchable name: $fileName');
+          continue;
+        }
+
+        debugPrint('[Scanner] Searching cloud for: "$searchTerm"...');
         
         Game? matchedGame;
         
-        // A. Direct Search by FileName
         try {
-          final results = await _rommService.searchRoms(search: fileName, platformId: platformId);
-          // Look for an exact match in filenames
-          matchedGame = results.cast<Game?>().firstWhere(
-            (g) => g?.fileName == fileName || g?.fsName == fileName,
-            orElse: () => null,
-          );
+          final results = await _rommService.searchRoms(search: searchTerm, platformId: platformId);
+          debugPrint('[Scanner] Cloud returned ${results.length} candidates for "$searchTerm"');
 
-          // B. If it's a folder (PS3/Switch), try searching by its largest internal file
-          if (matchedGame == null && await Directory(entityPath).exists()) {
-             final subFiles = await Directory(entityPath).list(recursive: true).where((e) => e is File).cast<File>().toList();
-             if (subFiles.isNotEmpty) {
-               // Sort by size descending
-               subFiles.sort((a, b) => b.lengthSync().compareTo(a.lengthSync()));
-               final largestFile = subFiles.first;
-               final subFileName = p.basename(largestFile.path);
-               
-               debugPrint('[Scanner] Folder detection: searching for internal file $subFileName');
-               final subResults = await _rommService.searchRoms(search: subFileName, platformId: platformId);
-               matchedGame = subResults.cast<Game?>().firstWhere(
-                 (g) => g?.fileName == subFileName || g?.fsName == subFileName,
-                 orElse: () => null,
-               );
-             }
-          }
-
-          // C. Strict Name Match as last resort
-          if (matchedGame == null) {
-            final fileNameNoExt = p.basenameWithoutExtension(entityPath).toLowerCase();
-            final fNameClean = _cleanName(fileNameNoExt);
-            if (fNameClean.length > 3) {
-              // We reuse the results from search(fileName) or do a new search if necessary
-              final candidates = results.where((g) {
-                if (_cleanName(g.name) == fNameClean) return true;
-                final gFileNoExt = p.basenameWithoutExtension(g.fileName ?? '').toLowerCase();
-                return _cleanName(gFileNoExt) == fNameClean;
-              }).toList();
-
-              if (candidates.length == 1) {
-                final candidate = candidates.first;
-                final localSize = index.fileSizes[entityPath] ?? (romsIndex?.fileSizes[entityPath] ?? 0);
-                if (candidate.fileSize > 0 && localSize > 0) {
-                  final diff = (candidate.fileSize - localSize).abs();
-                  if (diff < 1024 * 1024 * 10) matchedGame = candidate;
-                } else {
-                  matchedGame = candidate;
-                }
-              }
+          for (final candidate in results) {
+            // VERIFICATION: Use the exact same robust logic the Detail Card uses
+            final confirmedPath = await _directoryService.findExistingRomPath(candidate, index: index);
+            
+            if (confirmedPath != null && p.canonicalize(confirmedPath) == p.canonicalize(entityPath)) {
+              matchedGame = candidate;
+              break; 
+            }
+            
+            // Fallback: If DirectoryService didn't find it (e.g. extension issue), check for direct filename match
+            if (candidate.fileName == fileName || candidate.fsName == fileName) {
+              matchedGame = candidate;
+              break;
             }
           }
         } catch (e) {
@@ -160,8 +139,8 @@ class RomScannerService {
           debugPrint('[Scanner] No cloud match for: $fileName');
         }
         
-        // Small delay to avoid hammering the API if there are many files
-        await Future.delayed(const Duration(milliseconds: 50));
+        // Small delay to avoid hammering the API
+        await Future.delayed(const Duration(milliseconds: 100));
       }
 
       await _mappingService.updateMTime(dir.path, stat.modified.millisecondsSinceEpoch);
@@ -203,13 +182,4 @@ class RomScannerService {
     }
   }
 
-  /// Clean a name for fuzzy matching by removing tags in [] or () and special characters
-  String _cleanName(String name) {
-    return name.toLowerCase()
-        .replaceAll(RegExp(r'[\(\[][^\]\)]*[\)\]]'), ' ') // Remove content inside () or []
-        .replaceAll(RegExp(r'[:-]'), ' ') // Explicitly handle dashes and colons as spaces
-        .replaceAll(RegExp(r'[<>:"/\\|?*!\(\)\[\]]'), ' ') // Remove other special chars
-        .replaceAll(RegExp(r'\s+'), ' ') // Collapse spaces
-        .trim();
-  }
 }

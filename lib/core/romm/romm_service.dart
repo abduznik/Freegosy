@@ -263,7 +263,7 @@ class RommService {
 
   Future<List<Game>> searchRoms({String? sha1, String? md5, String? search, String? platformId}) async {
     final params = <String, dynamic>{
-      'limit': 10,
+      'limit': 50,
       'offset': 0,
       'with_char_index': false,
       'with_filter_values': false,
