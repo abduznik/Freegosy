@@ -140,7 +140,7 @@ class EmulatorDownloadService {
         yield DownloadProgress(
           id: emulatorId,
           gameName: emulatorName,
-          status: 'Downloading...',
+          status: 'Fetching latest $buildType release...',
         );
 
         final assets = await _releaseService.getLatestReleaseAssets(
@@ -166,7 +166,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        status: 'Downloading...',
+        status: 'Fetching latest release...',
       );
       
       String repo = definition['github_repo'] as String;
@@ -212,7 +212,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        status: 'Downloading...',
+        status: 'Fetching latest release from Dolphin site...',
       );
 
       final requiredKey = Platform.isWindows ? 'asset_required_windows' : (Platform.isMacOS ? 'asset_required_macos' : 'asset_required_linux');
@@ -233,7 +233,7 @@ class EmulatorDownloadService {
       yield DownloadProgress(
         id: emulatorId,
         gameName: emulatorName,
-        status: 'Downloading...',
+        status: 'Fetching latest release...',
       );
 
       final repo = definition['gitea_repo'] as String;
@@ -339,8 +339,6 @@ class EmulatorDownloadService {
           percent: 1.0,
           status: 'Extracting ($extension)...',
         ));
-        // Small delay so user can actually see the status change
-        await Future.delayed(const Duration(milliseconds: 500));
         await _extractionService.extract(tempFilePath, emulatorDir);
 
         final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);

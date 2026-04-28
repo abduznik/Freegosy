@@ -93,7 +93,7 @@ class DownloadService {
       gameName: game.name,
       percent: 0.0,
       bytesReceived: existingBytes,
-      status: 'Downloading...',
+      status: 'Starting...',
     );
 
     debugPrint("[DownloadService] Starting download for: ${game.name}");
@@ -213,8 +213,6 @@ class DownloadService {
             percent: 1.0,
             status: 'Extracting ($extension)...',
           );
-          // Small delay so user can actually see the status change
-          await Future.delayed(const Duration(milliseconds: 500));
           await _extractMultiFile(game, currentPath);
         }
         
