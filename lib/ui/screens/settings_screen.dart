@@ -478,7 +478,7 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
                     if (_filter == 'NETWORK') return msg.contains('[NETWORK]') || msg.contains('[ROMMSERVICE]') || msg.contains('[ROMM-NETWORK]');
                     if (_filter == 'REGISTRY') return msg.contains('[REGISTRY]');
                     if (_filter == 'DIRECTORY') return msg.contains('[DIRECTORYSERVICE]');
-                    if (_filter == 'ERROR') return msg.contains('ERROR') || msg.contains('FAILED');
+                    if (_filter == 'ERROR') return msg.contains('ERROR') || msg.contains('FAILED') || msg.contains('EXCEPTION') || msg.contains(' 404') || msg.contains(' 403') || msg.contains(' 500');
                     return true;
                   }).toList();
 
