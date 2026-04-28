@@ -106,33 +106,51 @@ class RomScannerService {
         
         Game? matchedGame;
 
-        // MATCHING STRATEGY 1: Exact Filename match (Very Reliable)
+        // MATCHING STRATEGY 1: Exact Filename/FSName match (100% Certainty)
         matchedGame = platformGames.cast<Game?>().firstWhere(
           (g) => g?.fileName == fileName || g?.fsName == fileName,
           orElse: () => null,
         );
 
-        // MATCHING STRATEGY 2: Clean Name match
-        matchedGame ??= platformGames.cast<Game?>().firstWhere((g) {
-          if (g == null) return false;
-          final gName = g.name.toLowerCase().replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-          final fName = fileNameNoExt.replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-          return gName == fName;
-        }, orElse: () => null);
+        // MATCHING STRATEGY 2: Clean name match (Ignoring tags and special chars)
+        if (matchedGame == null) {
+          final fNameClean = _cleanName(fileNameNoExt);
+          matchedGame = platformGames.cast<Game?>().firstWhere((g) {
+            if (g == null) return false;
+            
+            // Try matching against Title
+            if (_cleanName(g.name) == fNameClean) return true;
+            
+            // Try matching against internal FileName/FSName (without extension)
+            final gFileNoExt = p.basenameWithoutExtension(g.fileName ?? '').toLowerCase();
+            if (_cleanName(gFileNoExt) == fNameClean) return true;
+            
+            final gFsNoExt = p.basenameWithoutExtension(g.fsName ?? '').toLowerCase();
+            if (_cleanName(gFsNoExt) == fNameClean) return true;
+
+            return false;
+          }, orElse: () => null);
+        }
 
         if (matchedGame != null) {
+          debugPrint('[Scanner] Mapped: $fileName -> ${matchedGame.name}');
           await _mappingService.updateMapping(filePath, matchedGame.id);
           yield RomSyncResult(filePath, matchedGame.id, game: matchedGame);
         } else {
-          // If bulk match failed, try one last API search specifically for this file on this platform
+          debugPrint('[Scanner] No local match for: $fileName. Trying API search...');
           try {
             final results = await _rommService.searchRoms(search: fileName, platformId: platformId);
             if (results.isNotEmpty) {
               final game = results.first;
+              debugPrint('[Scanner] API Match: $fileName -> ${game.name}');
               await _mappingService.updateMapping(filePath, game.id);
               yield RomSyncResult(filePath, game.id, game: game);
+            } else {
+              debugPrint('[Scanner] FAILED to identify: $fileName');
             }
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('[Scanner] Error searching for $fileName: $e');
+          }
         }
       }
 
@@ -158,5 +176,14 @@ class RomScannerService {
     if (!await file.exists()) return '';
     final bytes = await file.readAsBytes();
     return sha1.convert(bytes).toString();
+  }
+
+  /// Clean a name for fuzzy matching by removing tags in [] or () and special characters
+  String _cleanName(String name) {
+    return name.toLowerCase()
+        .replaceAll(RegExp(r'[\(\[][^\]\)]*[\)\]]'), ' ') // Remove content inside () or []
+        .replaceAll(RegExp(r'[<>:"/\\|?*!\-\(\)\[\]]'), ' ') // Remove special chars
+        .replaceAll(RegExp(r'\s+'), ' ') // Collapse spaces
+        .trim();
   }
 }
