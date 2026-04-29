@@ -32,6 +32,7 @@ void main() {
     when(mockRommService.config).thenReturn(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
     when(mockRommService.resolveCoverUrl(any)).thenReturn(null);
     when(mockRommService.getRecentlyPlayed(limit: anyNamed('limit'))).thenAnswer((_) async => []);
+    when(mockRommService.getRecentlyAdded(limit: anyNamed('limit'))).thenAnswer((_) async => []);
     when(mockRommService.searchRoms(search: anyNamed('search'), platformId: anyNamed('platformId'))).thenAnswer((_) async => []);
     when(mockRommService.isOffline).thenReturn(ValueNotifier<bool>(false));
     when(mockDirectoryService.status).thenReturn(const StorageStatus());
@@ -74,6 +75,7 @@ void main() {
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
+          isHomeSelectedProvider.overrideWith((ref) => false),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = PaginatedGamesState(games: games, total: 2, hasMore: false)),
         ],
         child: const MaterialApp(home: LibraryScreen()),

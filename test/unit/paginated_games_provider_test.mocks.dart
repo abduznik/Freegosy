@@ -153,6 +153,14 @@ class MockRommService extends _i1.Mock implements _i4.RommService {
           as _i6.Future<List<_i3.Game>>);
 
   @override
+  _i6.Future<List<_i3.Game>> getRecentlyAdded({int? limit = 15}) =>
+      (super.noSuchMethod(
+            Invocation.method(#getRecentlyAdded, [], {#limit: limit}),
+            returnValue: _i6.Future<List<_i3.Game>>.value(<_i3.Game>[]),
+          )
+          as _i6.Future<List<_i3.Game>>);
+
+  @override
   _i6.Future<List<_i3.Game>> getRecentlyPlayed({int? limit = 15}) =>
       (super.noSuchMethod(
             Invocation.method(#getRecentlyPlayed, [], {#limit: limit}),
