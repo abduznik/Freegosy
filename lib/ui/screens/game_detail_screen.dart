@@ -103,6 +103,12 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           _syncStateWithGame(updated);
         });
         _checkDownloadStatus();
+
+        // Update persistent cache so the list view and offline mode have the latest details
+        final cacheService = ref.read(metadataCacheServiceProvider).value;
+        if (cacheService != null) {
+          await cacheService.saveGames([updated]);
+        }
       }
     } catch (_) {}
   }

@@ -9,10 +9,11 @@ import 'package:freegosy/core/save/backup_repository.dart';
 import 'package:freegosy/core/save/backup_service.dart';
 import 'package:freegosy/core/emulator/strategies/windows_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_registry_data.dart';
-import 'package:freegosy/core/storage/download_cache_service.dart';
+import 'package:freegosy/core/romm/rom_scanner_service.dart';
+import 'package:freegosy/core/romm/library_snapshot_service.dart';
 import 'package:freegosy/core/storage/metadata_cache_service.dart';
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
-import 'package:freegosy/core/romm/rom_scanner_service.dart';
+import 'package:freegosy/core/storage/download_cache_service.dart';
 import 'package:freegosy/providers/custom_emulators_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/core/emulator/firmware_service.dart';
@@ -176,10 +177,13 @@ final rommServiceProvider = Provider<RommService?>((ref) {
 });
 
 final metadataCacheServiceProvider = FutureProvider<MetadataCacheService>((ref) async {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  final service = MetadataCacheService(prefs);
-  service.load();
+  final service = MetadataCacheService();
+  await service.load();
   return service;
+});
+
+final librarySnapshotServiceProvider = Provider<LibrarySnapshotService>((ref) {
+  return LibrarySnapshotService();
 });
 
 final romMappingServiceProvider = FutureProvider<RomMappingService>((ref) async {

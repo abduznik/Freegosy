@@ -122,7 +122,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
     _currentSearch = search;
     final key = _key(platformId, search);
 
-    // Serve from cache immediately if available
+    // Serve from memory cache immediately if available
     if (_cache.containsKey(key)) {
       state = PaginatedGamesState(
         games: _cache[key]!,
@@ -133,6 +133,29 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
       // Background refresh of first page only
       _backgroundRefresh(platformId: platformId, search: search, key: key);
       return;
+    }
+
+    // Serve from persistent cache if available
+    final cacheService = _ref.read(metadataCacheServiceProvider).value;
+    if (cacheService != null) {
+      final offline = cacheService.getOfflineGames(
+        platformId: platformId,
+        search: search,
+        genres: _activeFilters.genres,
+        regions: _activeFilters.regions,
+        languages: _activeFilters.languages,
+      );
+      
+      if (offline.isNotEmpty) {
+        state = PaginatedGamesState(
+          games: offline,
+          total: offline.length,
+          hasMore: true,
+          isLoading: false,
+        );
+        _backgroundRefresh(platformId: platformId, search: search, key: key);
+        return;
+      }
     }
 
     // No cache — show loading and fetch

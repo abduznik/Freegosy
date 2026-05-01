@@ -1,62 +1,12 @@
 import 'dart:typed_data';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
 import 'shared_prefs_provider.dart';
 
-const String _gamesCacheKey = 'cached_games';
-const String _platformsCacheKey = 'cached_platforms_v2';
-const String _gamesCacheTimeKey = 'cached_games_time';
-const String _platformsCacheTimeKey = 'cached_platforms_time';
-const int _cacheExpiryDays = 7;
-
-Future<bool> _isCacheValid(SharedPreferences prefs, String timeKey) async {
-  final savedTime = prefs.getString(timeKey);
-  if (savedTime == null) return false;
-  final cacheTime = DateTime.tryParse(savedTime);
-  if (cacheTime == null) return false;
-  return DateTime.now().difference(cacheTime).inDays < _cacheExpiryDays;
-}
-
-Future<List<Game>?> _loadGamesCache(Ref ref) async {
-  final prefs = ref.read(sharedPreferencesProvider);
-  final sizeExceeded = prefs.getBool('cache_size_exceeded') ?? false;
-  if (sizeExceeded) return null;
-  
-  final isValid = await _isCacheValid(prefs, _gamesCacheTimeKey);
-  if (!isValid) return null;
-  
-  final jsonString = prefs.getString(_gamesCacheKey);
-  if (jsonString == null) return null;
-  
-  try {
-    final jsonList = jsonDecode(jsonString) as List<dynamic>;
-    return jsonList
-        .map((item) => Game.fromJson(item as Map<String, dynamic>))
-        .toList();
-  } catch (e) {
-    return null;
-  }
-}
-
-Future<List<Platform>?> _loadPlatformsCache(Ref ref) async {
-  final prefs = ref.read(sharedPreferencesProvider);
-  final isValid = await _isCacheValid(prefs, _platformsCacheTimeKey);
-  if (!isValid) return null;
-  final jsonString = prefs.getString(_platformsCacheKey);
-  if (jsonString == null) return null;
-  try {
-    final jsonList = jsonDecode(jsonString) as List<dynamic>;
-    return jsonList
-        .map((item) => Platform.fromJson(item as Map<String, dynamic>))
-        .toList();
-  } catch (e) {
-    return null;
-  }
-}
+// Old cache functions removed in favor of LibrarySnapshotService and MetadataCacheService
 
 const Map<String, Map<String, dynamic>> kDisplayPresets = {
   'windows_best': {
@@ -104,83 +54,111 @@ final activePresetLoaderProvider = FutureProvider<void>((ref) async {});
 
 final platformsProvider = FutureProvider<List<Platform>>((ref) async {
   final service = ref.watch(rommServiceProvider);
+  final snapshotService = ref.watch(librarySnapshotServiceProvider);
   ref.watch(isOfflineProvider);
-  if (service == null) return [];
+  
+  final snapshot = await snapshotService.loadPlatforms();
+  
+  if (service == null) {
+    return snapshot.where((p) => p.gamesCount > 0).toList();
+  }
 
-  final cached = await _loadPlatformsCache(ref);
-  if (cached != null) {
+  if (snapshot.isNotEmpty) {
+    // Background refresh
     Future.microtask(() async {
       try {
         final fresh = await service.getPlatforms();
         if (fresh.isNotEmpty) {
-          final prefs = ref.read(sharedPreferencesProvider);
-          final jsonList = fresh.map((p) => {
-            'id': p.id,
-            'name': p.name,
-            'slug': p.slug,
-            'games_count': p.gamesCount,
-          }).toList();
-          await prefs.setString(_platformsCacheKey, jsonEncode(jsonList));
-          await prefs.setString(_platformsCacheTimeKey, DateTime.now().toIso8601String());
+          await snapshotService.savePlatforms(fresh);
         }
       } catch (_) {}
     });
-    return cached.where((p) => p.gamesCount > 0).toList();
+    return snapshot.where((p) => p.gamesCount > 0).toList();
   }
 
   final platforms = await service.getPlatforms();
   if (platforms.isNotEmpty) {
-    final prefs = ref.read(sharedPreferencesProvider);
-    final jsonList = platforms.map((p) => {
-      'id': p.id,
-      'name': p.name,
-      'slug': p.slug,
-      'games_count': p.gamesCount,
-    }).toList();
-    await prefs.setString(_platformsCacheKey, jsonEncode(jsonList));
-    await prefs.setString(_platformsCacheTimeKey, DateTime.now().toIso8601String());
+    await snapshotService.savePlatforms(platforms);
   }
   return platforms.where((p) => p.gamesCount > 0).toList();
 });
 
-final allGamesProvider = FutureProvider<List<Game>>((ref) async {
+final collectionsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final service = ref.watch(rommServiceProvider);
+  final snapshotService = ref.watch(librarySnapshotServiceProvider);
   ref.watch(isOfflineProvider);
-  final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
-  if (service == null) return [];
 
-  final platformIdStr = selectedPlatformId?.toString();
+  final snapshot = await snapshotService.loadCollections();
+  
+  if (service == null) return snapshot;
 
-  if (platformIdStr != null) {
-    try {
-      return await service.getAllGames(platformId: platformIdStr);
-    } catch (e) {
-      return await service.getAllGames();
-    }
-  }
-
-  final cached = await _loadGamesCache(ref);
-  if (cached != null) {
+  if (snapshot.isNotEmpty) {
+    // Background refresh
     Future.microtask(() async {
       try {
-        final fresh = await service.getAllGames(platformId: platformIdStr);
+        final fresh = await service.getCollections();
         if (fresh.isNotEmpty) {
-           final prefs = ref.read(sharedPreferencesProvider);
-           final jsonList = fresh.map((g) => g.toJson()).toList();
-           await prefs.setString(_gamesCacheKey, jsonEncode(jsonList));
-           await prefs.setString(_gamesCacheTimeKey, DateTime.now().toIso8601String());
+          await snapshotService.saveCollections(fresh);
+        }
+      } catch (_) {}
+    });
+    return snapshot;
+  }
+
+  final collections = await service.getCollections();
+  if (collections.isNotEmpty) {
+    await snapshotService.saveCollections(collections);
+  }
+  return collections;
+});
+
+final allGamesProvider = FutureProvider<List<Game>>((ref) async {
+  final service = ref.watch(rommServiceProvider);
+  final cacheService = await ref.watch(metadataCacheServiceProvider.future);
+  ref.watch(isOfflineProvider);
+  
+  final selectedPlatformId = ref.watch(selectedPlatformIdProvider);
+  final platformIdStr = selectedPlatformId?.toString();
+
+  if (service == null) {
+    return cacheService.getOfflineGames(platformId: platformIdStr);
+  }
+
+  if (platformIdStr != null) {
+    // Check if platform cache is valid
+    final platforms = await ref.watch(platformsProvider.future);
+    final platform = platforms.firstWhere((p) => p.id.toString() == platformIdStr, orElse: () => Platform(id: 0, name: '', slug: ''));
+    
+    if (platform.id != 0 && cacheService.isPlatformValid(platformIdStr, platform.gamesCount)) {
+      final cached = cacheService.getOfflineGames(platformId: platformIdStr);
+      if (cached.isNotEmpty) return cached;
+    }
+
+    final games = await service.getAllGames(platformId: platformIdStr);
+    if (games.isNotEmpty) {
+      await cacheService.saveGames(games);
+      await cacheService.updatePlatformCount(platformIdStr, platform.gamesCount);
+    }
+    return games;
+  }
+
+  // General all-games view
+  final cached = cacheService.cachedGames;
+  if (cached.isNotEmpty) {
+    Future.microtask(() async {
+      try {
+        final fresh = await service.getAllGames();
+        if (fresh.isNotEmpty) {
+          await cacheService.saveGames(fresh);
         }
       } catch (_) {}
     });
     return cached;
   }
 
-  final games = await service.getAllGames(platformId: platformIdStr);
+  final games = await service.getAllGames();
   if (games.isNotEmpty) {
-     final prefs = ref.read(sharedPreferencesProvider);
-     final jsonList = games.map((g) => g.toJson()).toList();
-     await prefs.setString(_gamesCacheKey, jsonEncode(jsonList));
-     await prefs.setString(_gamesCacheTimeKey, DateTime.now().toIso8601String());
+    await cacheService.saveGames(games);
   }
   return games;
 });

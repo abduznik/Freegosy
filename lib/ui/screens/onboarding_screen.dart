@@ -26,6 +26,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // Step 1: Server Config
   final _baseUrlController = TextEditingController();
   final _apiKeyController = TextEditingController();
+  final _pairingCodeController = TextEditingController();
+  bool _usePairingCode = false;
   bool _isTesting = false;
   String? _testError;
   bool _testSuccess = false;
@@ -97,9 +99,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     });
 
     try {
+      String apiKey = _apiKeyController.text.trim();
+      String? authToken;
+
+      if (_usePairingCode) {
+        final code = _pairingCodeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+        if (code.isEmpty) {
+          setState(() => _testError = 'Please enter a pairing code');
+          return;
+        }
+        final token = await RommService.exchangePairingCode(url, code);
+        _apiKeyController.text = token;
+        apiKey = token;
+      }
+
       final testConfig = RomMConfig(
         baseUrl: url,
-        apiKey: _apiKeyController.text.trim(),
+        apiKey: apiKey,
+        token: authToken,
         username: '',
         password: '',
       );
@@ -298,26 +315,75 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _apiKeyController,
-            decoration: InputDecoration(
-              labelText: 'API Key',
-              hintText: 'Found in RomM User Settings',
-              prefixIcon: const Icon(Icons.key),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.paste),
-                onPressed: () async {
-                  final data = await Clipboard.getData(Clipboard.kTextPlain);
-                  if (data != null && data.text != null) {
-                    _apiKeyController.text = data.text!;
-                  }
-                },
-                tooltip: 'Paste from clipboard',
+          const SizedBox(height: 32),
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _usePairingCode = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: !_usePairingCode ? Colors.deepPurple : Colors.transparent, width: 2)),
+                    ),
+                    child: Text('API KEY', textAlign: TextAlign.center, style: TextStyle(color: !_usePairingCode ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _usePairingCode = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: _usePairingCode ? Colors.deepPurple : Colors.transparent, width: 2)),
+                    ),
+                    child: Text('PAIRING CODE', textAlign: TextAlign.center, style: TextStyle(color: _usePairingCode ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          if (!_usePairingCode)
+            TextField(
+              controller: _apiKeyController,
+              decoration: InputDecoration(
+                labelText: 'API Key',
+                hintText: 'Found in RomM User Settings',
+                prefixIcon: const Icon(Icons.key),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.paste),
+                  onPressed: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data != null && data.text != null) {
+                      _apiKeyController.text = data.text!;
+                    }
+                  },
+                  tooltip: 'Paste from clipboard',
+                ),
+              ),
+              obscureText: true,
+            )
+          else
+            TextField(
+              controller: _pairingCodeController,
+              decoration: InputDecoration(
+                labelText: '8-Digit Pairing Code',
+                hintText: 'Generated in RomM Web UI',
+                prefixIcon: const Icon(Icons.phonelink_setup),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.paste),
+                  onPressed: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data != null && data.text != null) {
+                      _pairingCodeController.text = data.text!;
+                    }
+                  },
+                  tooltip: 'Paste from clipboard',
+                ),
               ),
             ),
-            obscureText: true,
-          ),
           const SizedBox(height: 32),
           if (_testError != null)
             Container(

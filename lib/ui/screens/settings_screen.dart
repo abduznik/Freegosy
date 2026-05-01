@@ -33,7 +33,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isLegacyAuth = false;
   bool _isTestingConnection = false;
   String? _connectionError;
-  bool _connectionSuccess = false;
+  String? _pairedToken;
 
   @override
   void initState() {
@@ -159,11 +159,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(_connectionError!, style: const TextStyle(color: Colors.red, fontSize: 13)),
         ),
-      if (_connectionSuccess)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Text('Connection successful!', style: TextStyle(color: Colors.green, fontSize: 13)),
         ),
+      Row(
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _showPairingDialog(context),
+            icon: const Icon(Icons.phonelink_setup),
+            label: const Text('Pair New Device'),
+          ),
+          const Spacer(),
+        ],
+      ),
+      const SizedBox(height: 12),
       Row(
         children: [
           ElevatedButton(
@@ -177,7 +187,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               setState(() {
                 _isTestingConnection = true;
                 _connectionError = null;
-                _connectionSuccess = false;
               });
 
               try {
@@ -186,7 +195,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   baseUrl: baseUrl,
                   username: _usernameController.text.trim(),
                   password: _passwordController.text,
-                  apiKey: _apiKeyController.text.trim(),
+                  apiKey: _pairedToken == null ? _apiKeyController.text.trim() : '',
+                  token: _pairedToken,
                 );
                 
                 final testService = RommService(testConfig);
@@ -195,7 +205,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (mounted) {
                   setState(() {
                     _isTestingConnection = false;
-                    _connectionSuccess = true;
                   });
                 }
               } catch (e) {
@@ -223,9 +232,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (_isLegacyAuth) {
                  await prefs.setString('rommUsername', _usernameController.text.trim());
                  await SecureStorageService.write('rommPassword', _passwordController.text, prefs);
+                 await SecureStorageService.delete('rommApiKey', prefs);
+                 await SecureStorageService.delete('rommAuthToken', prefs);
+              } else if (_pairedToken != null) {
+                 await SecureStorageService.write('rommAuthToken', _pairedToken!, prefs);
+                 await SecureStorageService.delete('rommApiKey', prefs);
+                 await prefs.setString('rommUsername', '');
+                 await SecureStorageService.delete('rommPassword', prefs);
               } else {
                  await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
+                 await SecureStorageService.delete('rommAuthToken', prefs);
+                 await prefs.setString('rommUsername', '');
+                 await SecureStorageService.delete('rommPassword', prefs);
               }
+              _pairedToken = null;
               ref.invalidate(rommConfigProvider);
               ref.invalidate(rommServiceProvider);
               if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
@@ -397,6 +417,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) => const SizedBox();
   Widget _buildLinuxSettingsSection(BuildContext context, WidgetRef ref, DirectoryService directoryService) => const SizedBox();
   Widget _buildLegalSection(BuildContext context) => const SizedBox();
+
+  void _showPairingDialog(BuildContext context) {
+    final codeController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pair with Web UI'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter the 8-digit code generated in your RomM Web UI settings.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: codeController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Pairing Code',
+                hintText: 'XXXXXXXX',
+                border: OutlineInputBorder(),
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, letterSpacing: 4, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final code = codeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+              if (code.length < 8) return;
+              
+              try {
+                final url = _baseUrlController.text.trim();
+                if (url.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a Server URL first.')));
+                  return;
+                }
+                final token = await RommService.exchangePairingCode(url, code);
+                _apiKeyController.text = token;
+                setState(() => _isLegacyAuth = false);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Successfully paired! Click Save to apply.')));
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pairing failed: ${e.toString().split('\n').first}')));
+                }
+              }
+            },
+            child: const Text('Pair'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LogsDialogContent extends StatefulWidget {
