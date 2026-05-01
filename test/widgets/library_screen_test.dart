@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/providers/library_provider.dart';
 import 'package:freegosy/providers/paginated_games_provider.dart';
 import 'package:freegosy/providers/romm_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
@@ -13,13 +14,17 @@ import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
+import 'package:freegosy/core/romm/library_snapshot_service.dart';
+import 'package:freegosy/core/storage/metadata_cache_service.dart';
 import 'library_screen_test.mocks.dart';
 
-@GenerateMocks([RommService, DirectoryService, RomMappingService])
+@GenerateMocks([RommService, DirectoryService, RomMappingService, LibrarySnapshotService, MetadataCacheService])
 void main() {
   late MockRommService mockRommService;
   late MockDirectoryService mockDirectoryService;
   late MockRomMappingService mockRomMappingService;
+  late MockLibrarySnapshotService mockSnapshotService;
+  late MockMetadataCacheService mockCacheService;
   late SharedPreferences prefs;
 
   setUp(() async {
@@ -28,6 +33,8 @@ void main() {
     mockRommService = MockRommService();
     mockDirectoryService = MockDirectoryService();
     mockRomMappingService = MockRomMappingService();
+    mockSnapshotService = MockLibrarySnapshotService();
+    mockCacheService = MockMetadataCacheService();
     
     when(mockRommService.config).thenReturn(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
     when(mockRommService.resolveCoverUrl(any)).thenReturn(null);
@@ -38,6 +45,9 @@ void main() {
     when(mockDirectoryService.status).thenReturn(const StorageStatus());
     when(mockRomMappingService.getMappings()).thenReturn({});
     when(mockRomMappingService.getMTimes()).thenReturn({});
+    when(mockSnapshotService.loadPlatforms()).thenAnswer((_) async => []);
+    when(mockSnapshotService.loadCollections()).thenAnswer((_) async => []);
+    when(mockCacheService.cachedGames).thenReturn([]);
   });
 
   group('LibraryScreen', () {
@@ -51,6 +61,9 @@ void main() {
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
+          librarySnapshotServiceProvider.overrideWithValue(mockSnapshotService),
+          metadataCacheServiceProvider.overrideWith((ref) => Future.value(mockCacheService)),
+          platformsProvider.overrideWith((ref) => []),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(isLoading: true)),
         ],
         child: const MaterialApp(home: LibraryScreen()),
@@ -75,6 +88,9 @@ void main() {
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
+          librarySnapshotServiceProvider.overrideWithValue(mockSnapshotService),
+          metadataCacheServiceProvider.overrideWith((ref) => Future.value(mockCacheService)),
+          platformsProvider.overrideWith((ref) => []),
           isHomeSelectedProvider.overrideWith((ref) => false),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = PaginatedGamesState(games: games, total: 2, hasMore: false)),
         ],
@@ -97,6 +113,9 @@ void main() {
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
+          librarySnapshotServiceProvider.overrideWithValue(mockSnapshotService),
+          metadataCacheServiceProvider.overrideWith((ref) => Future.value(mockCacheService)),
+          platformsProvider.overrideWith((ref) => []),
           isHomeSelectedProvider.overrideWith((ref) => false),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(games: [], total: 0, hasMore: false)),
         ],
@@ -118,6 +137,9 @@ void main() {
           romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
           romScannerServiceProvider.overrideWithValue(null),
           directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
+          librarySnapshotServiceProvider.overrideWithValue(mockSnapshotService),
+          metadataCacheServiceProvider.overrideWith((ref) => Future.value(mockCacheService)),
+          platformsProvider.overrideWith((ref) => []),
           isHomeSelectedProvider.overrideWith((ref) => false),
           paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(error: 'Connection Failed')),
         ],

@@ -10,9 +10,11 @@ import 'dart:typed_data' as _i11;
 import 'package:flutter/foundation.dart' as _i2;
 import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart'
     as _i5;
+import 'package:freegosy/core/romm/library_snapshot_service.dart' as _i13;
 import 'package:freegosy/core/romm/romm_models.dart' as _i3;
 import 'package:freegosy/core/romm/romm_service.dart' as _i6;
 import 'package:freegosy/core/storage/directory_service.dart' as _i4;
+import 'package:freegosy/core/storage/metadata_cache_service.dart' as _i14;
 import 'package:freegosy/core/storage/rom_mapping_service.dart' as _i12;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i7;
@@ -1026,6 +1028,152 @@ class MockRomMappingService extends _i1.Mock implements _i12.RomMappingService {
             returnValueForMissingStub: _i8.Future<void>.value(),
           )
           as _i8.Future<void>);
+
+  @override
+  _i8.Future<void> clear() =>
+      (super.noSuchMethod(
+            Invocation.method(#clear, []),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+}
+
+/// A class which mocks [LibrarySnapshotService].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockLibrarySnapshotService extends _i1.Mock
+    implements _i13.LibrarySnapshotService {
+  MockLibrarySnapshotService() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i8.Future<void> savePlatforms(List<_i3.Platform>? platforms) =>
+      (super.noSuchMethod(
+            Invocation.method(#savePlatforms, [platforms]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<List<_i3.Platform>> loadPlatforms() =>
+      (super.noSuchMethod(
+            Invocation.method(#loadPlatforms, []),
+            returnValue: _i8.Future<List<_i3.Platform>>.value(<_i3.Platform>[]),
+          )
+          as _i8.Future<List<_i3.Platform>>);
+
+  @override
+  _i8.Future<void> saveCollections(List<Map<String, dynamic>>? collections) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveCollections, [collections]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<List<Map<String, dynamic>>> loadCollections() =>
+      (super.noSuchMethod(
+            Invocation.method(#loadCollections, []),
+            returnValue: _i8.Future<List<Map<String, dynamic>>>.value(
+              <Map<String, dynamic>>[],
+            ),
+          )
+          as _i8.Future<List<Map<String, dynamic>>>);
+
+  @override
+  _i8.Future<void> clear() =>
+      (super.noSuchMethod(
+            Invocation.method(#clear, []),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+}
+
+/// A class which mocks [MetadataCacheService].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockMetadataCacheService extends _i1.Mock
+    implements _i14.MetadataCacheService {
+  MockMetadataCacheService() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  List<_i3.Game> get cachedGames =>
+      (super.noSuchMethod(
+            Invocation.getter(#cachedGames),
+            returnValue: <_i3.Game>[],
+          )
+          as List<_i3.Game>);
+
+  @override
+  _i8.Future<void> load() =>
+      (super.noSuchMethod(
+            Invocation.method(#load, []),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<void> saveGames(List<_i3.Game>? games) =>
+      (super.noSuchMethod(
+            Invocation.method(#saveGames, [games]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<void> updatePlatformCount(String? platformId, int? count) =>
+      (super.noSuchMethod(
+            Invocation.method(#updatePlatformCount, [platformId, count]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  bool isPlatformValid(String? platformId, int? remoteCount) =>
+      (super.noSuchMethod(
+            Invocation.method(#isPlatformValid, [platformId, remoteCount]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  _i8.Future<void> invalidatePlatform(String? platformId) =>
+      (super.noSuchMethod(
+            Invocation.method(#invalidatePlatform, [platformId]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  List<_i3.Game> getOfflineGames({
+    String? platformId,
+    String? search,
+    List<String>? genres,
+    List<String>? regions,
+    List<String>? languages,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getOfflineGames, [], {
+              #platformId: platformId,
+              #search: search,
+              #genres: genres,
+              #regions: regions,
+              #languages: languages,
+            }),
+            returnValue: <_i3.Game>[],
+          )
+          as List<_i3.Game>);
 
   @override
   _i8.Future<void> clear() =>
