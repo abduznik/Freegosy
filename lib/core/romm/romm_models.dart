@@ -238,6 +238,25 @@ class Firmware {
       updatedAt: json['updated_at'] != null ? DateTime.tryParse(json['updated_at'].toString()) : null,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'file_name': fileName,
+      'file_name_no_tags': fileNameNoTags,
+      'file_name_no_ext': fileNameNoExt,
+      'file_extension': fileExtension,
+      'file_path': filePath,
+      'file_size_bytes': fileSizeBytes,
+      'is_verified': isVerified,
+      'crc_hash': crcHash,
+      'md5_hash': md5Hash,
+      'sha1_hash': sha1Hash,
+      'missing_from_fs': missingFromFs,
+      'created_at': createdAt?.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+    };
+  }
 }
 
 class Platform {
@@ -276,6 +295,19 @@ class Platform {
       firmware: (json['firmware'] as List<dynamic>?)?.map((e) => Firmware.fromJson(e)).toList() ?? [],
       firmwareCount: json['firmware_count'] as int? ?? 0,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'slug': slug,
+      'fs_slug': fsSlug,
+      'display_name': displayName,
+      'rom_count': gamesCount,
+      'firmware': firmware.map((e) => e.toJson()).toList(),
+      'firmware_count': firmwareCount,
+    };
   }
 }
 

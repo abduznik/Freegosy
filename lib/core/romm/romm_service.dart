@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:math';
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../storage/secure_storage_service.dart';
 import 'romm_models.dart';
-import 'dart:async';
 
 class RommService {
   RomMConfig _config;
@@ -147,6 +147,9 @@ class RommService {
     final headers = <String, dynamic>{};
     
     if (config.apiKey.isNotEmpty) {
+      // Send both headers for maximum compatibility across all RomM versions and proxies.
+      // Standard API Keys often work via X-Api-Key, while Client Tokens often require Bearer.
+      // Many setups use the API Key in the Bearer field, so we provide both to be safe.
       headers['Authorization'] = 'Bearer ${config.apiKey}';
       headers['X-Api-Key'] = config.apiKey;
     } else if (config.token != null && config.token!.isNotEmpty) {
@@ -179,6 +182,26 @@ class RommService {
 
     await SecureStorageService.write('rommAuthToken', token, prefs);
     
+    return token;
+  }
+
+  static Future<String> exchangePairingCode(String baseUrl, String code) async {
+    final normalizedUrl = _normalizeBaseUrl(baseUrl);
+    final dio = Dio(BaseOptions(
+      baseUrl: normalizedUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      headers: {'User-Agent': _ua},
+    ));
+
+    final response = await dio.post(
+      '/api/client-tokens/exchange',
+      data: {'code': code},
+    );
+
+    final token = response.data['raw_token'] as String?;
+    if (token == null || token.isEmpty) throw Exception('Pairing failed: no token in response');
+
     return token;
   }
 
