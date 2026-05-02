@@ -49,12 +49,6 @@ No pressure at all — the app is and will always be free.
     - **Screenshot Gallery**: Interactive, zoomable screenshot viewer.
     - **Multi-Disc Support**: Integrated picker for multi-file games.
 
-## Roadmap: Version 0.4.0 (Upcoming)
-
-- **Android Support**: Bringing the Freegosy experience to mobile devices.
-- **Cloud Configuration**: Syncing app settings across multiple devices.
-- **API v4.8.2 Readiness**: Full support for progression bars and advanced completion tracking as RomM updates.
-
 ## Calling All Testers!
 I am currently searching for testers on **macOS** and **Windows** to help polish the experience. 
 
