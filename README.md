@@ -23,24 +23,25 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## Current Features (v0.3.x)
+## Current Features (v0.4.0)
 
-- **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** integration).
+- **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** and **RetroDECK** integration).
 - **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
 - **RomM Integration**: 
     - Browse and filter your entire library with server-side pagination.
-    - **New**: Instant "Downloaded" games filter with background deep collection scanning.
+    - Instant "Downloaded" games filter with background deep collection scanning.
     - Download ROMs directly via HTTP with real-time progress tracking.
     - Personal game properties support (rating, status, completion).
 - **Advanced Emulator Management**: 
     - Download, update, and uninstall emulators directly from Settings.
     - Automatic extraction of `.zip`, `.7z`, `.dmg`, `.tar.gz`, `.tar.xz`, and `.AppImage`.
     - Smart binary detection and canonical naming across all platforms.
-    - **New**: Dynamic architecture selection for RPCS3 on macOS (ARM64 vs x64).
+    - Dynamic architecture selection for RPCS3 on macOS (ARM64 vs x64).
+    - **New**: Linux Environment Strategies (Default, EmuDeck, RetroDECK) with automatic path detection.
 - **BIOS Management**: Fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
 - **Save Sync**: 
     - Bidirectional local-to-cloud save synchronization with RomM.
-    - **New**: Local Backup History (create instant restore points before experimenting).
+    - Local Backup History (create instant restore points before experimenting).
     - **New**: Serial Background Sync Queue (offline backups silently push to RomM automatically when you reconnect).
     - Optimized for EmuDeck's platform-specific save structure.
 - **Refined UI/UX**:
@@ -50,9 +51,9 @@ No pressure at all — the app is and will always be free.
     - **Multi-Disc Support**: Integrated picker for multi-file games.
 
 ## Calling All Testers!
-I am currently searching for testers on **macOS** and **Windows** to help polish the experience. 
+I am currently searching for testers on **macOS**, **Windows**, and **Linux (Steam Deck)** to help polish the experience. 
 
-- **Future Plans**: Steam Deck/Linux support is next, followed by **Android** for a truly unified app.
+- **Future Plans**: **Android** support is next for a truly unified app experience.
 - **Get Involved**: If you're interested in testing an early release, reach out via GitHub or join the community discussions.
 
 ## About RomM

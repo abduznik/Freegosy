@@ -50,10 +50,16 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Core — Emulator
 - `lib/core/emulator/emulator_strategy.dart` — Abstract base class for launch logic.
 - `lib/core/emulator/emulator_registry_data.dart` — Static definitions for emulator downloads and filters.
-- `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies with conflict detection.
+- `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies with conflict detection. Added OS-based strategy filtering.
 - `lib/core/emulator/emulator_download_service.dart` — Downloads emulators from direct URLs or GitHub.
 - `lib/core/emulator/github_release_service.dart` — Resolves latest GitHub release assets.
-- `lib/core/emulator/strategies/` — Specific implementations for each emulator (RetroArch, Dolphin, Eden, RPCS3, PCSX2, Azahar, Cemu, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME, Xemu, Xenia, Windows).
+- `lib/core/emulator/strategies/` — Specific implementations for each emulator (RetroArch, Dolphin, Eden, Ryujinx, RPCS3, PCSX2, Azahar, Cemu, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME, Xemu, Xenia, Windows).
+- `lib/core/emulator/linux_strategies/` — SteamOS/Linux environment strategies.
+  - `linux_environment_strategy.dart` — Interface for ROM/Save/Tool path resolution on Linux.
+  - `emudeck_strategy.dart` — EmuDeck-specific resolution (SD card detection, symlink saves).
+  - `retrodeck_strategy.dart` — RetroDECK Flatpak resolution.
+  - `native_linux_strategy.dart` — Default Linux directory structure.
+  - `linux_native_game_service.dart` — Proton/Steam prefix path resolution for native PC games on Linux.
 
 ### Core — Extraction
 - `lib/core/extraction/extraction_service.dart` — Unified extraction for .zip, .7z, .dmg, .tar.gz, .tar.xz, and .exe. Sanitizes macOS .app bundles.

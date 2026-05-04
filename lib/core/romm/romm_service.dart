@@ -29,8 +29,8 @@ class RommService {
   static String _normalizeBaseUrl(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
-  RommService(this._config)
-      : _dio = Dio(BaseOptions(
+  RommService(this._config, {Dio? dio})
+      : _dio = dio ?? Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(_config.baseUrl),
           connectTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 5),
@@ -40,6 +40,10 @@ class RommService {
           },
         )),
         _authOptions = _computeAuthOptions(_config) {
+    
+    if (dio != null) {
+      _dio.options.baseUrl = _normalizeBaseUrl(_config.baseUrl);
+    }
     
     if (kDebugMode || io.Platform.isLinux || io.Platform.isMacOS) {
       _dio.interceptors.add(InterceptorsWrapper(
