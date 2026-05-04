@@ -16,6 +16,7 @@ import '../../core/storage/logger_service.dart';
 import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
+import '../../core/constants/app_constants.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -416,7 +417,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // --- Placeholder methods for sections to pass analysis ---
   Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) => const SizedBox();
   Widget _buildLinuxSettingsSection(BuildContext context, WidgetRef ref, DirectoryService directoryService) => const SizedBox();
-  Widget _buildLegalSection(BuildContext context) => const SizedBox();
+  Widget _buildLegalSection(BuildContext context) {
+    return Column(
+      children: [
+        const Divider(color: Colors.white10),
+        const SizedBox(height: 16),
+        Text(
+          'Freegosy v${AppConstants.version}',
+          style: const TextStyle(color: Colors.white54, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => showLicensePage(
+            context: context,
+            applicationName: 'Freegosy',
+            applicationVersion: AppConstants.version,
+            applicationIcon: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Image.asset('freegosy_logo.png', height: 64, width: 64),
+            ),
+          ),
+          child: const Text('View Licenses'),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
 
   void _showPairingDialog(BuildContext context) {
     final codeController = TextEditingController();
