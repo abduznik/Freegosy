@@ -105,7 +105,14 @@ jobs:
       - name: Create Zip (Windows)
         shell: pwsh
         run: |
-          Compress-Archive -Path build\windows\x64\release\runner\* -DestinationPath freegosy-windows-x64.zip
+          $exe = Get-ChildItem -Path build/windows -Filter "freegosy.exe" -Recurse | Where-Object { $_.FullName -like "*release*" } | Select-Object -First 1
+          if (-not $exe) {
+            dir build/windows -Recurse
+            throw "Could not find freegosy.exe in build/windows"
+          }
+          $buildPath = $exe.DirectoryName
+          Write-Host "Zipping from: $buildPath"
+          Compress-Archive -Path "$buildPath/*" -DestinationPath freegosy-windows-x64.zip
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -161,7 +168,6 @@ jobs:
   release:
     name: Create Release
     needs: [build_linux, build_windows, build_macos]
-    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
