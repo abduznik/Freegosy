@@ -102,11 +102,17 @@ jobs:
         run: flutter pub get
       - name: Build Windows Installer
         run: dart run inno_bundle:build --release
-      - name: Upload Windows Installer
+      - name: Create Zip (Windows)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build\windows\x64\release\runner\* -DestinationPath freegosy-windows-x64.zip
+      - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: build/windows/x64/installer/Release/*.exe
+          path: |
+            build/windows/x64/installer/Release/*.exe
+            freegosy-windows-x64.zip
 
   build_macos:
     name: Build macOS DMG
@@ -140,11 +146,17 @@ jobs:
         run: |
           npx create-dmg build/macos/Build/Products/Release/freegosy.app --overwrite --no-code-sign
           mv *.dmg freegosy-macos.dmg
-      - name: Upload macOS DMG
+      - name: Create Zip (macOS)
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r ../../../../../freegosy-macos-x64.zip freegosy.app
+      - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: freegosy-macos.dmg
+          path: |
+            freegosy-macos.dmg
+            freegosy-macos-x64.zip
 
   release:
     name: Create Release
@@ -187,7 +199,9 @@ jobs:
             artifacts/freegosy-linux-x64.tar.gz
             artifacts/Freegosy-x86_64.AppImage
             artifacts/*.exe
+            artifacts/freegosy-windows-x64.zip
             artifacts/freegosy-macos.dmg
+            artifacts/freegosy-macos-x64.zip
           fail_on_unmatched_files: false
           draft: false
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
