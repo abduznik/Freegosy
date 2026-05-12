@@ -353,7 +353,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
             if (syncService != null) {
               final syncMode = ref.read(retroarchSyncModeProvider);
-              await syncService.pushSaves(game, romPath, syncMode: syncMode);
+              final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
 
               // --- Safety Sandwich: post-exit backup if save changed ---
               try {
@@ -381,7 +381,11 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             }
 
             if (!context.mounted) return;
-            ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
+            if (ok) {
+              ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
+            } else {
+              ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
+            }
           } catch (e) {
             // Silently ignore errors in auto-sync / backup
           }
@@ -539,7 +543,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       if (ok) {
         ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves uploaded');
       } else {
-        ErrorHandler.show(context, ErrorHandler.parse(Exception('No saves found'), context: 'Push Saves'));
+        ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
       }
     } on SaveMappingRequiredException {
       if (!context.mounted) return;

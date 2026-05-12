@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-05-12
+
+### Added
+- Initial preparation for 0.4.1 updates.
+
 ## [0.4.0] - 2026-05-04
 
 ### Added
