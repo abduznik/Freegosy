@@ -511,8 +511,8 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
   );
 
   @override
-  set emudeckRootPath(String? value) => super.noSuchMethod(
-    Invocation.setter(#emudeckRootPath, value),
+  set linuxPresetRootPath(String? value) => super.noSuchMethod(
+    Invocation.setter(#linuxPresetRootPath, value),
     returnValueForMissingStub: null,
   );
 
@@ -581,9 +581,9 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
           as _i8.Future<void>);
 
   @override
-  _i8.Future<void> setEmudeckRoot(String? path) =>
+  _i8.Future<void> setLinuxPresetRoot(String? path) =>
       (super.noSuchMethod(
-            Invocation.method(#setEmudeckRoot, [path]),
+            Invocation.method(#setLinuxPresetRoot, [path]),
             returnValue: _i8.Future<void>.value(),
             returnValueForMissingStub: _i8.Future<void>.value(),
           )

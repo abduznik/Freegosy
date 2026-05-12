@@ -12,12 +12,16 @@ class RetroDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   String getRomsRoot(String home, String? customPath, String? emudeckRoot) {
-    return customPath ?? p.join(home, 'retrodeck', 'roms');
+    if (customPath != null) return customPath;
+    if (emudeckRoot != null) return p.join(emudeckRoot, 'roms');
+    return p.join(home, 'retrodeck', 'roms');
   }
 
   @override
   String getEmulatorsRoot(String home, String? customPath, String? emudeckRoot) {
-    return customPath ?? p.join(home, 'retrodeck', 'tools');
+    if (customPath != null) return customPath;
+    if (emudeckRoot != null) return p.join(emudeckRoot, 'tools');
+    return p.join(home, 'retrodeck', 'tools');
   }
 
   @override
@@ -45,6 +49,7 @@ class RetroDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   String getBiosPath(String home, String? emudeckRoot) {
+    if (emudeckRoot != null) return p.join(emudeckRoot, 'bios');
     return p.join(home, '.var', 'app', 'net.retrodeck.retrodeck', 'config', 'bios');
   }
 

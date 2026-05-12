@@ -260,7 +260,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // --- Storage Section ---
   Widget _buildStorageSection(DirectoryService directoryService) {
-    final prefs = ref.read(sharedPreferencesProvider);
     final preset = directoryService.linuxSyncPreset;
     
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -292,67 +291,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (io.Platform.isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
         _buildPathRow(
           label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
-          currentPath: preset == 'emudeck' 
-              ? (directoryService.emudeckRootPath ?? 'Not set') 
-              : (prefs.getString('retrodeckRootPath') ?? 'Not set'),
+          currentPath: directoryService.linuxPresetRootPath ?? 'Not set',
           onChanged: (p) async { 
             if (p != null) { 
-              if (preset == 'emudeck') {
-                await directoryService.setEmudeckRoot(p);
-              } else {
-                await prefs.setString('retrodeckRootPath', p);
-                await directoryService.initialize();
-              }
+              await directoryService.setLinuxPresetRoot(p);
               ref.invalidate(directoryServiceProvider); 
             } 
           },
         ),
         const SizedBox(height: 16),
-        const Text('Computed Paths (Read-only)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
-        const SizedBox(height: 8),
-        _buildPathRow(
-          label: 'ROMs Directory',
-          currentPath: directoryService.romsRootPath,
-          onChanged: null,
-        ),
-        const SizedBox(height: 12),
-        _buildPathRow(
-          label: 'Emulators Directory',
-          currentPath: directoryService.emulatorsRootPath,
-          onChanged: null,
-        ),
-      ] else ...[
-        // This handles both non-Linux OSs and Linux 'Manual' mode
-        _buildPathRow(
-          label: 'ROMs Directory',
-          currentPath: directoryService.romsRootPath,
-          onChanged: (p) async { 
-            if (p != null) { 
-              await directoryService.setRomsRoot(p); 
-              ref.invalidate(directoryServiceProvider); 
-            } 
-          },
-          onReset: () async { 
-            await directoryService.resetRomsRoot(); 
-            ref.invalidate(directoryServiceProvider); 
-          },
-        ),
-        const SizedBox(height: 16),
-        _buildPathRow(
-          label: 'Emulators Directory',
-          currentPath: directoryService.emulatorsRootPath,
-          onChanged: (p) async { 
-            if (p != null) { 
-              await directoryService.setEmulatorsRoot(p); 
-              ref.invalidate(directoryServiceProvider); 
-            } 
-          },
-          onReset: () async { 
-            await directoryService.resetEmulatorsRoot(); 
-            ref.invalidate(directoryServiceProvider); 
-          },
-        ),
       ],
+
+      _buildPathRow(
+        label: 'ROMs Directory',
+        currentPath: directoryService.romsRootPath,
+        onChanged: (p) async { 
+          if (p != null) { 
+            await directoryService.setRomsRoot(p); 
+            ref.invalidate(directoryServiceProvider); 
+          } 
+        },
+        onReset: () async { 
+          await directoryService.resetRomsRoot(); 
+          ref.invalidate(directoryServiceProvider); 
+        },
+      ),
+      const SizedBox(height: 16),
+      _buildPathRow(
+        label: 'Emulators Directory',
+        currentPath: directoryService.emulatorsRootPath,
+        onChanged: (p) async { 
+          if (p != null) { 
+            await directoryService.setEmulatorsRoot(p); 
+            ref.invalidate(directoryServiceProvider); 
+          } 
+        },
+        onReset: () async { 
+          await directoryService.resetEmulatorsRoot(); 
+          ref.invalidate(directoryServiceProvider); 
+        },
+      ),
       const SizedBox(height: 16),
       OutlinedButton.icon(
         onPressed: () => SystemUtils.openDirectory(directoryService.romsRootPath),

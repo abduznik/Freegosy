@@ -351,9 +351,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
             ErrorHandler.showInfo(context, 'Syncing', message: 'Auto-syncing saves...');
 
+            bool ok = false;
             if (syncService != null) {
               final syncMode = ref.read(retroarchSyncModeProvider);
-              final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
+              ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
 
               // --- Safety Sandwich: post-exit backup if save changed ---
               try {
@@ -383,7 +384,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             if (!context.mounted) return;
             if (ok) {
               ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
-            } else {
+            } else if (syncService != null) {
               ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
             }
           } catch (e) {

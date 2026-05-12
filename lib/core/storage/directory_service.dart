@@ -71,7 +71,7 @@ class DirectoryService {
   static const String _romsRootPathKey = 'romsRootPath';
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
   static const String _linuxSyncPresetKey = 'linuxSyncPreset';
-  static const String _emudeckRootPathKey = 'emudeckRootPath';
+  static const String _linuxPresetRootKey = 'emudeckRootPath'; // Keeping key name for compatibility
 
   // Known extensions per platform slug
   static const Map<String, List<String>> platformExtensions = {
@@ -111,7 +111,7 @@ class DirectoryService {
   late String romsRootPath;
   late String emulatorsRootPath;
   String linuxSyncPreset = 'default';
-  String? emudeckRootPath;
+  String? linuxPresetRootPath;
   final Map<String, String> _emulatorPathOverrides = {};
   StorageStatus status = const StorageStatus();
   
@@ -184,24 +184,24 @@ class DirectoryService {
   Future<StorageStatus> initialize() async {
     try {
       linuxSyncPreset = _prefs.getString(_linuxSyncPresetKey) ?? 'default';
-      emudeckRootPath = _prefs.getString(_emudeckRootPathKey);
+      linuxPresetRootPath = _prefs.getString(_linuxPresetRootKey);
       
       // Auto-detection logic for Linux
       if (defaultTargetPlatform == TargetPlatform.linux) {
         if (linuxSyncPreset == 'auto' || linuxSyncPreset == 'default') {
           // If we are in 'auto' or 'default', try to see if EmuDeck or RetroDeck is there.
           // BUT: If the user has already explicitly chosen a root, don't overwrite it with auto-detection.
-          if (emudeckRootPath == null) {
+          if (linuxPresetRootPath == null) {
             final detectedRoot = await detectEmuDeckRoot();
             if (detectedRoot != null) {
-              emudeckRootPath = detectedRoot;
+              linuxPresetRootPath = detectedRoot;
               linuxSyncPreset = 'emudeck';
               _linuxStrategy = EmuDeckStrategy();
               await _prefs.setString(_linuxSyncPresetKey, 'emudeck');
-              await _prefs.setString(_emudeckRootPathKey, emudeckRootPath!);
+              await _prefs.setString(_linuxPresetRootKey, linuxPresetRootPath!);
             }
           } else if (linuxSyncPreset == 'default') {
-             // If they are on 'default' (manual) but have an emudeckRootPath, 
+             // If they are on 'default' (manual) but have an linuxPresetRootPath, 
              // we stay on 'default' unless it's the very first run.
           }
           
@@ -228,13 +228,8 @@ class DirectoryService {
         final customRoms = _prefs.getString(_romsRootPathKey);
         final customEmus = _prefs.getString(_emulatorsRootPathKey);
         
-        // IMPORTANT: If we are using a preset (EmuDeck/RetroDeck), we IGNORE the manual custom paths
-        // to ensure the computed paths from the root always take precedence.
-        final String? effectiveCustomRoms = (linuxSyncPreset == 'default') ? customRoms : null;
-        final String? effectiveCustomEmus = (linuxSyncPreset == 'default') ? customEmus : null;
-
-        romsRootPath = activeLinuxEnvironment.getRomsRoot(home, effectiveCustomRoms, emudeckRootPath);
-        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, effectiveCustomEmus, emudeckRootPath);
+        romsRootPath = activeLinuxEnvironment.getRomsRoot(home, customRoms, linuxPresetRootPath);
+        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, customEmus, linuxPresetRootPath);
       } else {
         romsRootPath = _prefs.getString(_romsRootPathKey) ?? p.join(defaultBase, 'ROMs');
         emulatorsRootPath =
@@ -273,7 +268,7 @@ class DirectoryService {
     final home = io.Platform.environment['HOME'] ?? '';
 
     if (defaultTargetPlatform == TargetPlatform.linux) {
-      romsRootPath = activeLinuxEnvironment.getRomsRoot(home, null, emudeckRootPath);
+      romsRootPath = activeLinuxEnvironment.getRomsRoot(home, null, linuxPresetRootPath);
     } else {
       romsRootPath = '$base/ROMs';
       }
@@ -286,7 +281,7 @@ class DirectoryService {
       final home = io.Platform.environment['HOME'] ?? '';
 
       if (defaultTargetPlatform == TargetPlatform.linux) {
-        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, null, emudeckRootPath);
+        emulatorsRootPath = activeLinuxEnvironment.getEmulatorsRoot(home, null, linuxPresetRootPath);
       } else {
         emulatorsRootPath = p.join(base, 'Emulators');
       }
@@ -299,13 +294,16 @@ class DirectoryService {
     await initialize();
   }
 
-  Future<void> setEmudeckRoot(String path) async {
-    // If user picked the 'Emulation' folder itself, go up one level
-    if (p.basename(path).toLowerCase() == 'emulation') {
-      path = p.dirname(path);
+  Future<void> setLinuxPresetRoot(String path) async {
+    // If user picked the 'Emulation' folder or 'retrodeck' folder itself, we might want to handle it
+    // But for now, we just store what they picked and strategies handle it.
+    final name = p.basename(path).toLowerCase();
+    if (name == 'emulation' || name == 'retrodeck') {
+      // If they picked the subfolder instead of the root, we can optionally go up
+      // but let's stay flexible for now.
     }
-    await _prefs.setString(_emudeckRootPathKey, path);
-    emudeckRootPath = path;
+    await _prefs.setString(_linuxPresetRootKey, path);
+    linuxPresetRootPath = path;
     // Re-initialize to update paths based on new root
     await initialize();
   }
@@ -718,7 +716,7 @@ class DirectoryService {
       return p.join(appData, emulatorName);
     } else if (io.Platform.isLinux) {
       final home = io.Platform.environment['HOME'] ?? '';
-      return activeLinuxEnvironment.getEmulatorAppSupportDirectory(home, emulatorName, emudeckRootPath, platformSlug: platformSlug);
+      return activeLinuxEnvironment.getEmulatorAppSupportDirectory(home, emulatorName, linuxPresetRootPath, platformSlug: platformSlug);
     }
     throw UnsupportedError('Platform not supported for save path resolution');
   }
@@ -726,7 +724,7 @@ class DirectoryService {
   Future<String> getEmulatorBiosDirectory(String emulatorId, {String? platformSlug}) async {
     if (io.Platform.isLinux) {
       final home = io.Platform.environment['HOME'] ?? '';
-      return activeLinuxEnvironment.getBiosPath(home, emudeckRootPath);
+      return activeLinuxEnvironment.getBiosPath(home, linuxPresetRootPath);
     }
     final emuDir = await getEmulatorDirectory(emulatorId);
     final dirPath = p.join(emuDir, 'BIOS');
@@ -776,7 +774,7 @@ class DirectoryService {
     }
 
     if (io.Platform.isLinux) {
-      final envPath = await activeLinuxEnvironment.findExecutable(emulatorId, executableName, emulatorsRootPath, emudeckRootPath);
+      final envPath = await activeLinuxEnvironment.findExecutable(emulatorId, executableName, emulatorsRootPath, linuxPresetRootPath);
       if (envPath != null) return envPath;
     }
 

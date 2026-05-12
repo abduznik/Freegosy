@@ -12,6 +12,7 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   String getRomsRoot(String home, String? customPath, String? emudeckRoot) {
+    if (customPath != null) return customPath;
     if (emudeckRoot != null) {
       // 1. Check if user pointed directly to a 'roms' folder
       if (p.basename(emudeckRoot).toLowerCase() == 'roms') return emudeckRoot;
@@ -41,6 +42,7 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
 
   @override
   String getEmulatorsRoot(String home, String? customPath, String? emudeckRoot) {
+    if (customPath != null) return customPath;
     if (emudeckRoot != null) {
       // 1. Check if user pointed directly to 'tools'
       if (p.basename(emudeckRoot).toLowerCase() == 'tools') return emudeckRoot;

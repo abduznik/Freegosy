@@ -81,6 +81,18 @@ void main() {
         final result = await emudeckStrategy.findExecutable('cemu', 'Cemu.AppImage', tempHome.path, tempHome.path);
         expect(result, p.join(tempHome.path, 'Emulation', 'tools', 'launchers', 'cemu.sh'));
       });
+
+      test('Respects custom ROMs path even if EmuDeck root is set', () {
+        final custom = p.join(tempHome.path, 'MyCustomROMs');
+        final result = emudeckStrategy.getRomsRoot(tempHome.path, custom, tempHome.path);
+        expect(result, custom);
+      });
+
+      test('Respects custom Emulators path even if EmuDeck root is set', () {
+        final custom = p.join(tempHome.path, 'MyCustomTools');
+        final result = emudeckStrategy.getEmulatorsRoot(tempHome.path, custom, tempHome.path);
+        expect(result, custom);
+      });
     });
 
     group('RetroDeckStrategy', () {
@@ -100,6 +112,24 @@ void main() {
         // We mocked PCSX2 with a 'saves' subfolder inside the flatpak config
         final result = retrodeckStrategy.getEmulatorAppSupportDirectory(tempHome.path, 'pcsx2', null);
         expect(result, p.join(retrodeckVarConfig.path, 'PCSX2', 'saves'));
+      });
+
+      test('Respects custom ROMs path', () {
+        final custom = p.join(tempHome.path, 'MyRetroROMs');
+        final result = retrodeckStrategy.getRomsRoot(tempHome.path, custom, null);
+        expect(result, custom);
+      });
+
+      test('Resolves ROMs relative to installation root (e.g. SD Card)', () {
+        final sdCardRoot = '/run/media/deck/SDCARD/retrodeck';
+        final result = retrodeckStrategy.getRomsRoot(tempHome.path, null, sdCardRoot);
+        expect(result, p.join(sdCardRoot, 'roms'));
+      });
+
+      test('Resolves BIOS relative to installation root (e.g. SD Card)', () {
+        final sdCardRoot = '/run/media/deck/SDCARD/retrodeck';
+        final result = retrodeckStrategy.getBiosPath(tempHome.path, sdCardRoot);
+        expect(result, p.join(sdCardRoot, 'bios'));
       });
     });
   });
