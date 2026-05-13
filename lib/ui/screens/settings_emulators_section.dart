@@ -233,51 +233,57 @@ Future<void> _startDownload(
   String emulatorId,
   String emulatorName,
   Map<String, bool> emulatorInstallStates,
-  Function(void Function()) setState,
-) async {
+  Function(void Function()) setState, {
+  String? urlOverride,
+}) async {
   final messenger = ScaffoldMessenger.of(context);
   String? architecture;
   String? buildType;
 
-  if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) {
-    architecture = ref.read(rpcs3ArchitectureProvider);
-  }
+  if (urlOverride == null) {
+    if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) {
+      architecture = ref.read(rpcs3ArchitectureProvider);
+    }
 
-  if (emulatorId == 'eden') {
-    if (!context.mounted) return;
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Select Eden Build"),
-        content: const Text("Choose which version of Eden to install:"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'nightly'),
-            child: const Text("Nightly (Experimental)"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'stable'),
-            child: const Text("Stable (Recommended)"),
-          ),
-        ],
-      ),
-    );
+    if (emulatorId == 'eden') {
+      if (!context.mounted) return;
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Select Eden Build"),
+          content: const Text("Choose which version of Eden to install:"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'nightly'),
+              child: const Text("Nightly (Experimental)"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'stable'),
+              child: const Text("Stable (Recommended)"),
+            ),
+          ],
+        ),
+      );
 
-    if (choice == null) return; // Cancelled
-    buildType = choice;
-    ref.read(edenBuildTypeProvider.notifier).update(buildType);
+      if (choice == null) return; // Cancelled
+      buildType = choice;
+      ref.read(edenBuildTypeProvider.notifier).update(buildType);
+    }
   }
 
   final String buildLabel = (buildType != null && buildType != 'stable') ? " ($buildType)" : "";
-  messenger.showSnackBar(SnackBar(
-    content: Text('Starting download for $emulatorName${architecture != null ? " ($architecture)" : ""}$buildLabel...'),
-  ));
+  if (urlOverride == null) {
+    messenger.showSnackBar(SnackBar(
+      content: Text('Starting download for $emulatorName${architecture != null ? " ($architecture)" : ""}$buildLabel...'),
+    ));
+  }
 
   ref.read(downloadProvider.notifier).startEmulatorDownload(
     emulatorId, 
     emulatorName,
     architecture: architecture,
     buildType: buildType,
+    urlOverride: urlOverride,
   );
 
   // Listen for download completion or selection requirement
@@ -289,14 +295,9 @@ Future<void> _startDownload(
     if (progress.status == 'selection_required') {
       sub?.cancel(); // Cancel current listener as we are entering a modal flow
       
-      // We need to fetch the assets again or retrieve from the provider.
-      // Since it's a new flow, we fetch them via the ReleaseService directly or via a provider.
-      // Given we are in the UI, we can use the ReleaseService if available, 
-      // but the assets are likely already fetched in the download service.
-      // Since we don't have direct access to the asset list in DownloadProgress,
-      // let's assume we re-fetch them based on definition.
-      
-      final assets = await ref.read(emulatorDownloadServiceProvider).value!.getLatestAssetsForEmulator(emulatorId);
+      final service = await ref.read(emulatorDownloadServiceProvider.future);
+      if (service == null) return;
+      final assets = await service.getLatestAssetsForEmulator(emulatorId);
       
       if (context.mounted) {
         final selected = await showDialog<Map<String, String>>(
@@ -308,16 +309,13 @@ Future<void> _startDownload(
         );
         
         if (selected != null) {
-          // Restart download with the selected URL
-          messenger.showSnackBar(SnackBar(content: Text('Downloading ${selected['name']}...')));
-          ref.read(downloadProvider.notifier).startEmulatorDownload(
-            emulatorId,
-            emulatorName,
-            urlOverride: selected['url'],
-          );
+          // Re-trigger _startDownload with the selected URL to re-establish the listener
+          if (context.mounted) {
+            _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState, urlOverride: selected['url']);
+          }
         }
       }
-      return; // Stop processing further for this progress update
+      return; 
     }
 
     if (progress.isComplete || progress.error != null) {

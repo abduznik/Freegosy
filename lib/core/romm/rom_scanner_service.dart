@@ -6,6 +6,7 @@ import '../storage/rom_mapping_service.dart';
 import 'romm_models.dart';
 import 'package:crypto/crypto.dart';
 import '../storage/directory_service.dart';
+import '../storage/file_system_index.dart';
 
 class RomSyncResult {
   final String path;

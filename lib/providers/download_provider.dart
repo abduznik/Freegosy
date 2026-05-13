@@ -47,7 +47,8 @@ final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
 final emulatorDownloadServiceProvider =
     FutureProvider<EmulatorDownloadService?>((ref) async {
   final directoryService = await ref.watch(directoryServiceProvider.future);
-  if (directoryService == null) return null;
+  final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
+  if (directoryService == null || strategyRegistry == null) return null;
 
   final dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 60),
@@ -71,6 +72,7 @@ final emulatorDownloadServiceProvider =
     dio,
     directoryService,
     ExtractionService(directoryService),
+    strategyRegistry,
   );
 });
 

@@ -8,32 +8,45 @@ import '../downloader/download_service.dart';
 import '../storage/directory_service.dart';
 import '../extraction/extraction_service.dart';
 import 'emulator_registry_data.dart';
+import 'strategy_registry.dart';
 import 'release_service.dart';
 
 class EmulatorDownloadService {
   final Dio _dio;
-  final DirectoryService _directoryService;
   final ExtractionService _extractionService;
+  final DirectoryService _directoryService;
+  final StrategyRegistry _strategyRegistry;
   late final ReleaseService _releaseService;
 
-  EmulatorDownloadService(this._dio, this._directoryService, this._extractionService) {
+  EmulatorDownloadService(this._dio, this._directoryService, this._extractionService, this._strategyRegistry) {
     _releaseService = ReleaseService(_dio);
   }
 
   Future<List<Map<String, String>>> getLatestAssetsForEmulator(String emulatorId) async {
     final definition = kEmulatorDefinitions.firstWhere((d) => d['id'] == emulatorId);
     final repo = definition['github_repo'] as String? ?? definition['gitea_repo'] as String? ?? '';
-    final platform = definition['type'] == 'github' ? ReleasePlatform.github : (definition['type'] == 'dolphin' ? ReleasePlatform.dolphin : ReleasePlatform.gitea);
+    final type = definition['type'] as String? ?? 'github';
+    final platform = type == 'github' || type == 'github_multi' ? ReleasePlatform.github : (type == 'dolphin' ? ReleasePlatform.dolphin : ReleasePlatform.gitea);
     
-    // Simplification: Re-use filters from definition
-    final requiredKey = Platform.isWindows ? 'github_asset_required_windows' : 'github_asset_required_linux';
-    final excludedKey = 'github_asset_excluded';
+    String requiredKey;
+    String excludedKey;
     
+    if (type == 'gitea') {
+      requiredKey = Platform.isWindows ? 'gitea_asset_required_windows' : 'gitea_asset_required_linux';
+      excludedKey = 'gitea_asset_excluded';
+    } else {
+      requiredKey = Platform.isWindows ? 'github_asset_required_windows' : 'github_asset_required_linux';
+      excludedKey = 'github_asset_excluded';
+    }
+    
+    final baseUrl = definition['gitea_host'] != null ? 'https://${definition['gitea_host']}' : null;
+
     return await _releaseService.getLatestReleaseAssets(
       platform: platform,
       repo: repo,
       requiredFilters: List<String>.from(definition[requiredKey] ?? []),
       excludedFilters: List<String>.from(definition[excludedKey] ?? []),
+      baseUrl: baseUrl,
     );
   }
 
@@ -164,7 +177,7 @@ class EmulatorDownloadService {
       }
     }
 
-    if (downloadUrl == null && type == 'github') {
+    if (downloadUrl == null && (type == 'github' || type == 'github_multi')) {
 
       
       String repo = definition['github_repo'] as String;
@@ -346,6 +359,12 @@ class EmulatorDownloadService {
               }
             }
           }
+        }
+        
+        // Run post-install hooks
+        final strategy = _strategyRegistry.getStrategyById(emulatorId);
+        if (strategy != null) {
+          await strategy.postInstall(emulatorDir);
         }
 
         controller.add(DownloadProgress(
