@@ -78,7 +78,14 @@ class DownloadService {
       return;
     }
 
-    final finalPath = await directoryService.getRomFilePath(game);
+
+    bool isSingleFileFoldered = game.files.length == 1 && game.fsExtension == '';
+
+    String finalPath = await directoryService.getRomFilePath(game);
+    if (isSingleFileFoldered) {
+      final fileName = game.files[0]["file_name"];
+      finalPath = '$finalPath/$fileName';
+    }
     final partPath = '$finalPath.part';
     final partFile = File(partPath);
     await partFile.parent.create(recursive: true);
@@ -225,7 +232,7 @@ class DownloadService {
         final shouldExtract = game.isMultiFile || 
                              (isWindowsGame && isArchive) || 
                              ((isZipSignature || isArchive) && !platformSupportsArchive);
-        
+
         if (shouldExtract) {
           final extension = currentPath.split('.').last.toLowerCase();
           yield DownloadProgress(
