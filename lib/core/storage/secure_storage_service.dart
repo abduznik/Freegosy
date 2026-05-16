@@ -16,7 +16,7 @@ import 'package:flutter/foundation.dart';
 /// caused by ad-hoc signing requirements.
 class SecureStorageService {
   static final _storage = FlutterSecureStorage(
-    aOptions: const AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: const AndroidOptions(),
     lOptions: const LinuxOptions(),
   );
 
