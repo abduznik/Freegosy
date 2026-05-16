@@ -222,9 +222,11 @@ class DownloadService {
         // 1. It's a multi-file game (RomM says it has multiple files)
         // 2. It's a Windows game in an archive (usually needs extraction to run an EXE)
         // 3. It's a ZIP/archive but the platform emulator DOES NOT support archives natively
+        // 4: It's a single file game in a folder. (RomM says it's not multi, but has an empty fs_extension, and there's only 1 file)
         final shouldExtract = game.isMultiFile || 
                              (isWindowsGame && isArchive) || 
-                             ((isZipSignature || isArchive) && !platformSupportsArchive);
+                             ((isZipSignature || isArchive) && !platformSupportsArchive) ||
+                             game.files.length == 1 && game.fsExtension == '';
         
         if (shouldExtract) {
           final extension = currentPath.split('.').last.toLowerCase();
