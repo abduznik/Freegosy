@@ -410,49 +410,56 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             ]),
           ]);
         }
-        return Center(child: GameActionButton(
-          focusNode: _focusNode,
-          icon: Icons.download, 
-          label: 'Download Game', 
-          isPrimary: true,
-          onPressed: () async { await widget.onDownload(); _checkDownloadStatus(); }
-        ));
+        return Center(
+          child: SizedBox(
+            width: 280,
+            child: GameActionButton(
+              focusNode: _focusNode,
+              icon: Icons.download, 
+              label: 'Download Game', 
+              isPrimary: true,
+              onPressed: () async { await widget.onDownload(); _checkDownloadStatus(); }
+            ),
+          ),
+        );
       }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: GameActionButton(
-              focusNode: _focusNode,
-              icon: Icons.play_arrow, 
-              label: 'Play Game', 
-              isPrimary: true,
-              onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
+          Center(
+            child: SizedBox(
+              width: 280,
+              child: GameActionButton(
+                focusNode: _focusNode,
+                icon: Icons.play_arrow, 
+                label: 'Play Game', 
+                isPrimary: true,
+                onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: GameActionButton(icon: Icons.cloud_upload, label: 'RomM Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: GameActionButton(icon: Icons.cloud_download, label: 'RomM Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: GameActionButton(icon: Icons.folder_open, label: 'Open Folder', onPressed: () async {
-              final ds = ref.read(directoryServiceProvider).value;
-              if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
-            }),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GameActionButton(icon: Icons.folder_open, label: 'Folder', onPressed: () async {
+                  final ds = ref.read(directoryServiceProvider).value;
+                  if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+                }),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           const Divider(color: Colors.white10, height: 32),

@@ -36,7 +36,7 @@ class GameNotesSection extends StatelessWidget {
               onTap: onAddNote,
               borderRadius: 12.0,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: Colors.blue.withValues(alpha: 0.1),
@@ -45,9 +45,9 @@ class GameNotesSection extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.add_comment, size: 14, color: Colors.blueAccent),
-                    SizedBox(width: 6),
-                    Text('Add Note', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                    Icon(Icons.add_comment, size: 16, color: Colors.blueAccent),
+                    SizedBox(width: 8),
+                    Text('Add Note', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
               ),
