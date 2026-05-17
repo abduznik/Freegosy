@@ -16,13 +16,13 @@ extension ThemePresetExtension on ThemePreset {
   String get displayName {
     switch (this) {
       case ThemePreset.darkDefault:
-        return 'Default (Dark)';
+        return 'Default Dark';
       case ThemePreset.light:
         return 'Light Mode';
       case ThemePreset.muscular:
-        return 'Muscular (Crimson)';
+        return 'Crimson';
       case ThemePreset.feminine:
-        return 'Feminine (Rose/Gold)';
+        return 'Rose Gold';
       case ThemePreset.neonCyan:
         return 'Neon Cyan';
       case ThemePreset.oledBlack:

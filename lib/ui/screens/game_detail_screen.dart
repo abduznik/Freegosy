@@ -481,8 +481,14 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SingleChildScrollView(
-        child: Column(
+      body: Listener(
+        onPointerHover: (event) {
+          if (event.delta.distance > 0 && ref.read(inputModeProvider) != InputMode.mouse) {
+            ref.read(inputModeProvider.notifier).state = InputMode.mouse;
+          }
+        },
+        child: SingleChildScrollView(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeroHeader(context, headerHeight, backgroundUrl, theme),
@@ -530,6 +536,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             ),
           ],
         ),
+      ),
       ),
       bottomNavigationBar: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),

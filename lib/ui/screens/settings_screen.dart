@@ -145,21 +145,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SizedBox(height: 12),
         const Text('Choose the overall visual style of Freegosy.', style: TextStyle(color: Colors.white70)),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: ThemePreset.values.map((preset) {
-            final isSelected = currentTheme == preset;
-            return FilterChip(
-              label: Text(preset.displayName),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  ref.read(themeProvider.notifier).setTheme(preset);
-                }
-              },
+        DropdownButtonFormField<ThemePreset>(
+          value: currentTheme,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          ),
+          items: ThemePreset.values.map((preset) {
+            return DropdownMenuItem(
+              value: preset,
+              child: Text(preset.displayName),
             );
           }).toList(),
+          onChanged: (preset) {
+            if (preset != null) {
+              ref.read(themeProvider.notifier).setTheme(preset);
+            }
+          },
         ),
       ],
     );
