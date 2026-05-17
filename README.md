@@ -23,7 +23,7 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## Current Features (v0.4.1)
+## Current Features (v0.5.0)
 
 - **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** and **RetroDECK** integration).
 - **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
