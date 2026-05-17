@@ -34,6 +34,7 @@ class LibraryDialogService {
                 child: FocusEffectWrapper(
                   onTap: () => Navigator.pop(context, save),
                   borderRadius: 12.0,
+                  scaleFactor: 1.0,
                   autofocus: index == 0,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -68,6 +69,7 @@ class LibraryDialogService {
           FocusEffectWrapper(
             onTap: () => Navigator.pop(context),
             borderRadius: 12.0,
+            scaleFactor: 1.0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -116,6 +118,7 @@ class LibraryDialogService {
                       child: FocusEffectWrapper(
                         onTap: () => Navigator.pop(context, id),
                         borderRadius: 12.0,
+                        scaleFactor: 1.0,
                         autofocus: index == 0,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -153,6 +156,7 @@ class LibraryDialogService {
           FocusEffectWrapper(
             onTap: () => Navigator.pop(context),
             borderRadius: 12.0,
+            scaleFactor: 1.0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -200,6 +204,7 @@ class LibraryDialogService {
                       child: FocusEffectWrapper(
                         onTap: () => Navigator.pop(context, (folder['path'] ?? folder['name']) as String),
                         borderRadius: 12.0,
+                        scaleFactor: 1.0,
                         autofocus: index == 0,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -234,6 +239,7 @@ class LibraryDialogService {
           FocusEffectWrapper(
             onTap: () => Navigator.pop(context),
             borderRadius: 12.0,
+            scaleFactor: 1.0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(

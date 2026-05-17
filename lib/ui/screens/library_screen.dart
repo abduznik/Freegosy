@@ -487,7 +487,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
         duration: const Duration(milliseconds: 300),
         transitionBuilder: (child, animation) => SlideTransition(position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)), child: child),
         child: ref.watch(inputModeProvider) != InputMode.mouse
-            ? const ControllerHintsBar(hints: [ControllerHintItem(label: 'Select', button: 'A'), ControllerHintItem(label: 'Filter', button: 'X'), ControllerHintItem(label: 'Search', button: 'Y')])
+            ? const ControllerHintsBar(hints: [
+                ControllerHintItem(label: 'Select', button: 'A'), 
+                ControllerHintItem(label: 'Filter', button: 'X'), 
+                ControllerHintItem(label: 'Search', button: 'Y'),
+                ControllerHintItem(label: 'Tab', button: 'L1/R1 (Q/E)'),
+              ])
             : const SizedBox.shrink(key: ValueKey('hide_hints')),
       ),
     );

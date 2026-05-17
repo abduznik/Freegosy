@@ -47,8 +47,22 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       if (event is KeyDownEvent) {
         // Protection: Ignore if typing in a text field
         final focusNode = FocusManager.instance.primaryFocus;
-        if (focusNode?.context?.widget is EditableText) {
-          return false; 
+        if (focusNode != null) {
+          bool isTyping = false;
+          if (focusNode.context?.widget is EditableText) {
+            isTyping = true;
+          } else {
+            focusNode.context?.visitAncestorElements((element) {
+              if (element.widget is EditableText) {
+                isTyping = true;
+                return false;
+              }
+              return true;
+            });
+          }
+          if (isTyping) {
+            return false;
+          }
         }
 
         final action = _mapPhysicalKeyToAction(event.logicalKey);

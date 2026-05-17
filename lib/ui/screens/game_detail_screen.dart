@@ -431,23 +431,28 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
               onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
             ),
           ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.center,
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              alignment: WrapAlignment.center,
-              children: [
-                GameActionButton(icon: Icons.cloud_upload, label: 'RomM Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
-                GameActionButton(icon: Icons.cloud_download, label: 'RomM Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
-                GameActionButton(icon: Icons.folder_open, label: 'Open Folder', onPressed: () async {
-                  final ds = ref.read(directoryServiceProvider).value;
-                  if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
-                }),
-                GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
-              ],
-            ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: GameActionButton(icon: Icons.cloud_upload, label: 'RomM Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: GameActionButton(icon: Icons.cloud_download, label: 'RomM Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: GameActionButton(icon: Icons.folder_open, label: 'Open Folder', onPressed: () async {
+              final ds = ref.read(directoryServiceProvider).value;
+              if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+            }),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
           ),
           const SizedBox(height: 24),
           const Divider(color: Colors.white10, height: 32),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../focus_effect_wrapper.dart';
 
 class GamePersonalSection extends StatelessWidget {
@@ -49,88 +50,275 @@ class GamePersonalSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Status dropdown
-        Row(
-          children: [
-            const Text('Status', style: TextStyle(color: Colors.white54, fontSize: 13)),
-            const Spacer(),
-            DropdownButton<String>(
-              value: const [
-                'never_playing',
-                'incomplete',
-                'finished',
-                'completed_100',
-                'retired'
-              ].contains(status) ? status : null,
-              dropdownColor: Colors.grey[900],
-              style: const TextStyle(color: Colors.white),
-              hint: const Text('Not set', style: TextStyle(color: Colors.white54)),
-              underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: 'never_playing', child: Text('Never Played')),
-                DropdownMenuItem(value: 'incomplete', child: Text('Incomplete')),
-                DropdownMenuItem(value: 'finished', child: Text('Finished')),
-                DropdownMenuItem(value: 'completed_100', child: Text('100% Completed')),
-                DropdownMenuItem(value: 'retired', child: Text('Dropped')),
-              ],
-              onChanged: onStatusChanged,
-            ),
-          ],
-        ),
+        // Status Button (Focusable, opens gorgeous focusable dialog)
+        FocusEffectWrapper(
+          onTap: () async {
+            final selected = await showDialog<String>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Select Status'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    'never_playing',
+                    'incomplete',
+                    'finished',
+                    'completed_100',
+                    'retired'
+                  ].map((val) {
+                    String label = 'Not set';
+                    IconData icon = Icons.help_outline;
+                    if (val == 'never_playing') { label = 'Never Played'; icon = Icons.star_border; }
+                    else if (val == 'incomplete') { label = 'Incomplete'; icon = Icons.hourglass_empty; }
+                    else if (val == 'finished') { label = 'Finished'; icon = Icons.check_circle_outline; }
+                    else if (val == 'completed_100') { label = '100% Completed'; icon = Icons.emoji_events; }
+                    else if (val == 'retired') { label = 'Dropped'; icon = Icons.cancel_outlined; }
 
-        // Rating stars
-        Row(
-          children: [
-            const Text('Rating', style: TextStyle(color: Colors.white54, fontSize: 13)),
-            const Spacer(),
-            Row(
-              children: List.generate(10, (i) => GestureDetector(
-                onTap: () => onRatingChanged(i + 1),
-                child: Icon(
-                  i < rating ? Icons.star : Icons.star_border,
-                  color: Colors.amber,
-                  size: 20,
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: FocusEffectWrapper(
+                        onTap: () => Navigator.pop(ctx, val),
+                        borderRadius: 12.0,
+                        scaleFactor: 1.0,
+                        autofocus: val == (status ?? 'never_playing'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: status == val ? Colors.indigo.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
+                            border: Border.all(color: status == val ? Colors.indigo.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(icon, color: status == val ? Colors.indigoAccent : Colors.white54),
+                              const SizedBox(width: 16),
+                              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-              )),
+                actions: [
+                  FocusEffectWrapper(
+                    onTap: () => Navigator.pop(ctx),
+                    borderRadius: 12.0,
+                    scaleFactor: 1.0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white.withValues(alpha: 0.05),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+            if (selected != null) onStatusChanged(selected);
+          },
+          borderRadius: 12.0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withValues(alpha: 0.03),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
             ),
-          ],
+            child: Row(
+              children: [
+                const Text('Status', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text(
+                  status == 'never_playing' ? 'Never Played' :
+                  status == 'incomplete' ? 'Incomplete' :
+                  status == 'finished' ? 'Finished' :
+                  status == 'completed_100' ? '100% Completed' :
+                  status == 'retired' ? 'Dropped' : 'Not set',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_drop_down, color: Colors.white54),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 12),
 
-        // Completion slider
-        Row(
-          children: [
-            const Text('Completion', style: TextStyle(color: Colors.white54, fontSize: 13)),
-            const Spacer(),
-            Text('$completion%', style: const TextStyle(color: Colors.white)),
-          ],
-        ),
-        Slider(
-          value: completion.toDouble(),
-          min: 0,
-          max: 100,
-          divisions: 20,
-          label: '$completion%',
-          onChanged: (val) => onCompletionChanged(val.toInt()),
-        ),
-
-        // Toggles row
-        Row(
-          children: [
-            Expanded(
-              child: SwitchListTile(
-                title: const Text('Backlog', style: TextStyle(fontSize: 13)),
-                value: backlogged,
-                onChanged: onBacklogChanged,
-                contentPadding: EdgeInsets.zero,
+        // Rating Stars (Focusable, Arrow Left/Right controls)
+        FocusEffectWrapper(
+          onTap: () {},
+          borderRadius: 12.0,
+          child: Focus(
+            onKeyEvent: (node, event) {
+              if (event is! KeyUpEvent) {
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  if (rating > 0) onRatingChanged(rating - 1);
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  if (rating < 10) onRatingChanged(rating + 1);
+                  return KeyEventResult.handled;
+                }
+              }
+              return KeyEventResult.ignored;
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.03),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              child: Row(
+                children: [
+                  const Text('Rating', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  Row(
+                    children: List.generate(10, (i) => GestureDetector(
+                      onTap: () => onRatingChanged(i + 1),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                        child: Icon(
+                          i < rating ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 20,
+                        ),
+                      ),
+                    )),
+                  ),
+                ],
               ),
             ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Completion Slider (Focusable, Arrow Left/Right controls)
+        FocusEffectWrapper(
+          onTap: () {},
+          borderRadius: 12.0,
+          child: Focus(
+            onKeyEvent: (node, event) {
+              if (event is! KeyUpEvent) {
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  if (completion > 0) onCompletionChanged((completion - 5).clamp(0, 100));
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  if (completion < 100) onCompletionChanged((completion + 5).clamp(0, 100));
+                  return KeyEventResult.handled;
+                }
+              }
+              return KeyEventResult.ignored;
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.03),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Completion', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Text('$completion%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Slider(
+                    value: completion.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    label: '$completion%',
+                    activeColor: Colors.indigoAccent,
+                    onChanged: (val) => onCompletionChanged(val.toInt()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Toggles list (Focusable switch toggles)
+        Row(
+          children: [
             Expanded(
-              child: SwitchListTile(
-                title: const Text('Now Playing', style: TextStyle(fontSize: 13)),
-                value: nowPlaying,
-                onChanged: onNowPlayingChanged,
-                contentPadding: EdgeInsets.zero,
+              child: FocusEffectWrapper(
+                onTap: () => onBacklogChanged(!backlogged),
+                borderRadius: 12.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: backlogged ? Colors.indigo.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
+                    border: Border.all(color: backlogged ? Colors.indigo.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(backlogged ? Icons.bookmark : Icons.bookmark_border, color: backlogged ? Colors.indigoAccent : Colors.white54, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Backlog', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Spacer(),
+                      SizedBox(
+                        width: 32,
+                        height: 20,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          child: Switch(
+                            value: backlogged,
+                            onChanged: onBacklogChanged,
+                            activeColor: Colors.indigoAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FocusEffectWrapper(
+                onTap: () => onNowPlayingChanged(!nowPlaying),
+                borderRadius: 12.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: nowPlaying ? Colors.indigo.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
+                    border: Border.all(color: nowPlaying ? Colors.indigo.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, color: nowPlaying ? Colors.indigoAccent : Colors.white54, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Playing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Spacer(),
+                      SizedBox(
+                        width: 32,
+                        height: 20,
+                        child: FittedBox(
+                          fit: BoxFit.contain,
+                          child: Switch(
+                            value: nowPlaying,
+                            onChanged: onNowPlayingChanged,
+                            activeColor: Colors.indigoAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],

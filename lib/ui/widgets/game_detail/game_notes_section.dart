@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/romm/romm_models.dart';
+import '../focus_effect_wrapper.dart';
 
 class GameNotesSection extends StatelessWidget {
   final List<RomNote> notes;
@@ -31,9 +32,25 @@ class GameNotesSection extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.add_comment, color: Colors.blue),
-              onPressed: onAddNote,
+            FocusEffectWrapper(
+              onTap: onAddNote,
+              borderRadius: 12.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.add_comment, size: 14, color: Colors.blueAccent),
+                    SizedBox(width: 6),
+                    Text('Add Note', style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -41,27 +58,57 @@ class GameNotesSection extends StatelessWidget {
         if (notes.isEmpty)
           const Text('No notes added yet.', style: TextStyle(color: Colors.white54, fontSize: 13))
         else
-          ...notes.map((note) => Card(
-                color: Colors.white10,
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  onTap: () => onViewNote(note),
-                  title: Text(
-                    note.title.isNotEmpty ? note.title : 'Note',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    note.content,
-                    style: const TextStyle(color: Colors.white70),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 18),
-                    onPressed: () => onDeleteNote(note.id),
-                  ),
+          ...notes.map((note) => Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FocusEffectWrapper(
+                        onTap: () => onViewNote(note),
+                        borderRadius: 12.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withValues(alpha: 0.03),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                note.title.isNotEmpty ? note.title : 'Note',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                note.content,
+                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FocusEffectWrapper(
+                      onTap: () => onDeleteNote(note.id),
+                      borderRadius: 12.0,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.red.withValues(alpha: 0.08),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.15)),
+                        ),
+                        child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                      ),
+                    ),
+                  ],
                 ),
               )),
       ],
