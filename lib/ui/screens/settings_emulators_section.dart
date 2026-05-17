@@ -6,15 +6,106 @@ import 'package:file_picker/file_picker.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/storage/system_utils.dart';
 import '../../core/emulator/emulator_registry_data.dart';
-
 import '../../core/emulator/strategy_registry.dart';
 import '../../core/emulator/firmware_service.dart';
 import '../../ui/widgets/emulator_selection_dialog.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
+import '../widgets/focus_effect_wrapper.dart';
 
-// Function to build the Emulators section
+Widget _buildActionButton(
+  BuildContext context, {
+  required IconData icon,
+  required String label,
+  required VoidCallback? onTap,
+  bool isPrimary = false,
+  bool isDestructive = false,
+}) {
+  final theme = Theme.of(context);
+  return FocusEffectWrapper(
+    onTap: onTap,
+    borderRadius: 12.0,
+    scaleFactor: 1.05,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: isPrimary
+            ? LinearGradient(
+                colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: isPrimary
+            ? null
+            : (isDestructive
+                ? Colors.red.withValues(alpha: 0.08)
+                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: isPrimary
+              ? theme.colorScheme.primary.withValues(alpha: 0.3)
+              : (isDestructive
+                  ? Colors.red.withValues(alpha: 0.2)
+                  : theme.colorScheme.outline.withValues(alpha: 0.3)),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: isPrimary
+                ? theme.colorScheme.onPrimary
+                : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: isPrimary
+                  ? theme.colorScheme.onPrimary
+                  : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurface),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildActionIconButton(
+  BuildContext context, {
+  required IconData icon,
+  required String tooltip,
+  required VoidCallback onTap,
+  Color? color,
+}) {
+  final theme = Theme.of(context);
+  return FocusEffectWrapper(
+    onTap: onTap,
+    borderRadius: 10.0,
+    scaleFactor: 1.15,
+    child: Tooltip(
+      message: tooltip,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: (color ?? theme.colorScheme.primary).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: (color ?? theme.colorScheme.primary).withValues(alpha: 0.2)),
+        ),
+        child: Icon(icon, size: 16, color: color ?? theme.colorScheme.primary),
+      ),
+    ),
+  );
+}
+
 Widget buildEmulatorsSection(
   BuildContext context,
   DirectoryService directoryService,
@@ -23,11 +114,11 @@ Widget buildEmulatorsSection(
   Function(void Function()) setState,
   WidgetRef ref,
 ) {
+  final theme = Theme.of(context);
   final currentPlatform = defaultTargetPlatform == TargetPlatform.windows 
       ? 'windows' 
       : (defaultTargetPlatform == TargetPlatform.macOS ? 'macos' : 'linux');
 
-  // Filter emulators that are supported on the current OS
   final supportedEmulators = kEmulatorDefinitions.where((def) {
     final supported = def['supported_platforms'] as List<String>? ?? [];
     return supported.contains(currentPlatform);
@@ -43,20 +134,22 @@ Widget buildEmulatorsSection(
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh installation status',
-                onPressed: () {
+              _buildActionIconButton(
+                context,
+                icon: Icons.refresh,
+                tooltip: 'Refresh Status',
+                onTap: () {
                   ref.invalidate(emulatorStatusProvider);
                 },
+                color: theme.colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.sync),
-                label: const Text('Sync BIOS'),
-                onPressed: () async {
-                  _syncAllBios(context, ref);
-                },
+              _buildActionButton(
+                context,
+                icon: Icons.sync,
+                label: 'Sync BIOS',
+                onTap: () => _syncAllBios(context, ref),
+                isPrimary: true,
               ),
             ],
           ),
@@ -72,39 +165,81 @@ Widget buildEmulatorsSection(
           final isInstalled = emulatorInstallStates[emulatorId] ?? false;
           final overridePath = directoryService.getEmulatorPathOverride(emulatorId);
           final type = def['type'] as String? ?? 'none';
-          final canManage = type != 'none'; // Only github/direct emulators can be updated/uninstalled
+          final canManage = type != 'none';
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
+          return Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+            ),
             child: Row(
               children: [
-                Icon(
-                  isInstalled ? Icons.check_circle : Icons.cancel,
-                  color: isInstalled ? Colors.green : Colors.red,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isInstalled
+                        ? Colors.green.withValues(alpha: 0.12)
+                        : theme.colorScheme.error.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isInstalled
+                          ? Colors.green.withValues(alpha: 0.3)
+                          : theme.colorScheme.error.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isInstalled ? Icons.check_circle_outline : Icons.cancel_outlined,
+                        color: isInstalled ? Colors.green : theme.colorScheme.error,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isInstalled ? 'Installed' : 'Missing',
+                        style: TextStyle(
+                          color: isInstalled ? Colors.green : theme.colorScheme.error,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(emulatorName),
+                      Text(
+                        emulatorName,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
                       if (overridePath != null)
-                        Text(
-                          overridePath,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                          overflow: TextOverflow.ellipsis,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            overridePath,
+                            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                     ],
                   ),
                 ),
                 if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) ...[
-                  const Text('Arch: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const Text('Arch: ', style: TextStyle(fontSize: 11, color: Colors.grey)),
                   Consumer(
                     builder: (context, ref, child) {
                       final arch = ref.watch(rpcs3ArchitectureProvider);
                       return DropdownButton<String>(
                         value: arch,
-                        style: const TextStyle(fontSize: 12, color: Colors.blue),
+                        style: TextStyle(fontSize: 11, color: theme.colorScheme.primary),
+                        underline: const SizedBox(),
                         items: const [
                           DropdownMenuItem(value: 'x64', child: Text('x64')),
                           DropdownMenuItem(value: 'arm64', child: Text('ARM64')),
@@ -117,108 +252,160 @@ Widget buildEmulatorsSection(
                       );
                     },
                   ),
+                  const SizedBox(width: 8),
                 ],
-                if (emulatorId == 'eden') ...[
-                  // Build selection moved to download dialog
-                ],
-                IconButton(
-                  icon: const Icon(Icons.folder_open, size: 20),
-                  tooltip: 'Set custom directory',
-                  onPressed: () async {
-                    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-                    if (selectedDirectory != null) {
-                      await directoryService.setEmulatorPathOverride(emulatorId, selectedDirectory);
-                      setState(() {}); // Trigger parent state update
-                    }
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.folder_shared, size: 20),
-                  tooltip: 'Open emulator folder',
-                  onPressed: () async {
-                    final path = await directoryService.getEmulatorDirectory(emulatorId);
-                    await SystemUtils.openDirectory(path);
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.link, size: 20),
-                  tooltip: 'Download URL Override',
-                  onPressed: () => _showUrlOverrideDialog(context, ref, directoryService, emulatorId, type),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.library_books, size: 20),
-                  tooltip: 'Sync BIOS from RomM',
-                  onPressed: () async {
-                    _syncBiosForEmulator(context, ref, emulatorId, emulatorName);
-                  },
-                ),
-                if (isInstalled) ...[
-                  IconButton(
-                    icon: const Icon(Icons.play_arrow, color: Colors.green),
-                    tooltip: "Launch Standalone",
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final strategy = ref
-                          .read(strategyRegistryProvider)
-                          .asData
-                          ?.value
-                          ?.getStrategyById(emulatorId);
-                      if (strategy != null) {
-                        try {
-                          await strategy.launchStandalone();
-                        } catch (e) {
-                          messenger.showSnackBar(
-                              SnackBar(content: Text("Failed to launch: $e")));
-                        }
-                      }
-                    },
-                  ),
-                  if (canManage) ...[
-                    IconButton(
-                      icon: const Icon(Icons.update, color: Colors.blue),
-                      tooltip: "Update Emulator",
-                      onPressed: () async {
-                        _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState);
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      tooltip: "Uninstall Emulator",
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text("Uninstall Emulator"),
-                            content: Text("Are you sure you want to delete $emulatorName? This will remove all local files."),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-                              TextButton(
-                                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text("Uninstall"),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (confirm == true) {
-                          await directoryService.deleteEmulator(emulatorId);
-                          ref.invalidate(emulatorStatusProvider);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("$emulatorName uninstalled.")),
-                            );
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isInstalled) ...[
+                      _buildActionIconButton(
+                        context,
+                        icon: Icons.play_arrow,
+                        tooltip: 'Launch Standalone',
+                        onTap: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final strategy = ref
+                              .read(strategyRegistryProvider)
+                              .asData
+                              ?.value
+                              ?.getStrategyById(emulatorId);
+                          if (strategy != null) {
+                            try {
+                              await strategy.launchStandalone();
+                            } catch (e) {
+                              messenger.showSnackBar(
+                                  SnackBar(content: Text("Failed to launch: $e")));
+                            }
                           }
-                        }
-                      },
+                        },
+                        color: Colors.green,
+                      ),
+                      const SizedBox(width: 6),
+                      _buildActionIconButton(
+                        context,
+                        icon: Icons.library_books,
+                        tooltip: 'Sync BIOS',
+                        onTap: () async {
+                          _syncBiosForEmulator(context, ref, emulatorId, emulatorName);
+                        },
+                      ),
+                      if (canManage) ...[
+                        const SizedBox(width: 6),
+                        _buildActionIconButton(
+                          context,
+                          icon: Icons.update,
+                          tooltip: 'Update',
+                          onTap: () async {
+                            _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState);
+                          },
+                          color: Colors.blue,
+                        ),
+                      ],
+                    ],
+                    if (!isInstalled && canManage) ...[
+                      _buildActionButton(
+                        context,
+                        icon: Icons.download,
+                        label: 'Download',
+                        onTap: () => _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState),
+                        isPrimary: true,
+                      ),
+                    ],
+                    const SizedBox(width: 6),
+                    Theme(
+                      data: theme.copyWith(
+                        cardColor: theme.colorScheme.surfaceContainer,
+                      ),
+                      child: PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurfaceVariant),
+                        onSelected: (val) async {
+                          if (val == 'custom_dir') {
+                            String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+                            if (selectedDirectory != null) {
+                              await directoryService.setEmulatorPathOverride(emulatorId, selectedDirectory);
+                              setState(() {});
+                            }
+                          } else if (val == 'open_folder') {
+                            final path = await directoryService.getEmulatorDirectory(emulatorId);
+                            await SystemUtils.openDirectory(path);
+                          } else if (val == 'url_override') {
+                            _showUrlOverrideDialog(context, ref, directoryService, emulatorId, type);
+                          } else if (val == 'uninstall') {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                title: const Text("Uninstall Emulator"),
+                                content: Text("Are you sure you want to delete $emulatorName? This will remove all local files."),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+                                  TextButton(
+                                    style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text("Uninstall"),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm == true) {
+                              await directoryService.deleteEmulator(emulatorId);
+                              ref.invalidate(emulatorStatusProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("$emulatorName uninstalled.")),
+                                );
+                              }
+                            }
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          PopupMenuItem(
+                            value: 'custom_dir',
+                            child: Row(
+                              children: [
+                                Icon(Icons.folder_open, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                const Text('Set Custom Directory', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'open_folder',
+                            child: Row(
+                              children: [
+                                Icon(Icons.folder_shared, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                const Text('Open Emulator Folder', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'url_override',
+                            child: Row(
+                              children: [
+                                Icon(Icons.link, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                const Text('Download URL Override', style: TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          if (isInstalled && canManage)
+                            PopupMenuItem(
+                              value: 'uninstall',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, size: 16, color: theme.colorScheme.error),
+                                  const SizedBox(width: 8),
+                                  Text('Uninstall', style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ],
-                ],
-                if (!isInstalled && canManage)
-                  ElevatedButton(
-                    onPressed: () => _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState),
-                    child: const Text('Download'),
-                  ),
+                ),
               ],
             ),
           );
@@ -250,6 +437,7 @@ Future<void> _startDownload(
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text("Select Eden Build"),
           content: const Text("Choose which version of Eden to install:"),
           actions: [
@@ -265,7 +453,7 @@ Future<void> _startDownload(
         ),
       );
 
-      if (choice == null) return; // Cancelled
+      if (choice == null) return;
       buildType = choice;
       ref.read(edenBuildTypeProvider.notifier).update(buildType);
     }
@@ -286,14 +474,13 @@ Future<void> _startDownload(
     urlOverride: urlOverride,
   );
 
-  // Listen for download completion or selection requirement
   StreamSubscription? sub;
   sub = ref.read(downloadProvider.notifier).stream.listen((downloads) async {
     final progress = downloads[emulatorId];
     if (progress == null) return;
 
     if (progress.status == 'selection_required') {
-      sub?.cancel(); // Cancel current listener as we are entering a modal flow
+      sub?.cancel();
       
       final service = await ref.read(emulatorDownloadServiceProvider.future);
       if (service == null) return;
@@ -309,7 +496,6 @@ Future<void> _startDownload(
         );
         
         if (selected != null) {
-          // Re-trigger _startDownload with the selected URL to re-establish the listener
           if (context.mounted) {
             _startDownload(context, ref, emulatorId, emulatorName, emulatorInstallStates, setState, urlOverride: selected['url']);
           }
@@ -335,8 +521,8 @@ Future<void> _startDownload(
   });
 }
 
-// Function to build the Emulator Conflicts section
 Widget buildConflictsSection(
+  BuildContext context,
   StrategyRegistry registry,
   Function(void Function()) setState,
 ) {
@@ -348,7 +534,7 @@ Widget buildConflictsSection(
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
       const SizedBox(height: 16),
       if (conflicts.isEmpty)
-        const Text('No conflicts detected')
+        const Text('No conflicts detected', style: TextStyle(color: Colors.grey))
       else
         ...conflicts.entries.map((entry) {
           final slug = entry.key;
@@ -363,7 +549,7 @@ Widget buildConflictsSection(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(slug, style: const TextStyle(fontWeight: FontWeight.w500)),
+                      Text(slug, style: const TextStyle(fontWeight: FontWeight.bold)),
                       Text(strategies.map((s) => s.name).join(' vs '),
                           style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
@@ -371,6 +557,7 @@ Widget buildConflictsSection(
                 ),
                 DropdownButton<String>(
                   value: currentStrategy?.emulatorId,
+                  underline: const SizedBox(),
                   items: strategies.map((s) {
                     return DropdownMenuItem(
                       value: s.emulatorId,
@@ -380,7 +567,7 @@ Widget buildConflictsSection(
                   onChanged: (value) async {
                     if (value != null) {
                       await registry.setPreference(slug, value);
-                      setState(() {}); // Trigger parent state update
+                      setState(() {});
                     }
                   },
                 ),
@@ -389,15 +576,19 @@ Widget buildConflictsSection(
           );
         }),
       const SizedBox(height: 16),
-      ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.red,
-        ),
-        onPressed: () async {
-          await registry.clearPreferences();
-          setState(() {});
-        },
-        child: const Text('Reset Emulator Preferences'),
+      Row(
+        children: [
+          _buildActionButton(
+            context,
+            icon: Icons.restore_page,
+            label: 'Reset Emulator Preferences',
+            onTap: () async {
+              await registry.clearPreferences();
+              setState(() {});
+            },
+            isDestructive: true,
+          ),
+        ],
       ),
     ],
   );
@@ -437,8 +628,8 @@ void _syncBiosForEmulator(BuildContext context, WidgetRef ref, String emulatorId
 
 void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryService directoryService, String emulatorId, String type) {
   final controller = TextEditingController();
+  final theme = Theme.of(context);
 
-  // Only load the stored override (instant SharedPreferences read, no network)
   directoryService.getEmulatorUrlOverride(emulatorId).then((stored) {
     controller.text = stored ?? '';
   });
@@ -446,6 +637,7 @@ void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryServic
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text("Download URL Override"),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -458,10 +650,13 @@ void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryServic
           const SizedBox(height: 16),
           TextField(
             controller: controller,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: "Override URL",
               hintText: "https://example.com/emulator.zip",
               helperText: "Accepts .zip .7z .dmg .tar.gz .AppImage",
+              filled: true,
+              fillColor: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ],
@@ -555,6 +750,7 @@ class _FirmwareProgressDialogState extends State<_FirmwareProgressDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(widget.title),
       content: Column(
         mainAxisSize: MainAxisSize.min,
