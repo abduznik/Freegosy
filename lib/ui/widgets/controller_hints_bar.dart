@@ -58,6 +58,22 @@ class ControllerHintsBar extends ConsumerWidget {
       } else if (buttonText == 'B') {
         buttonText = 'Esc';
         width = 32;
+      } else if (buttonText == 'L1') {
+        buttonText = 'Q';
+        width = 24;
+      } else if (buttonText == 'R1') {
+        buttonText = 'E';
+        width = 24;
+      } else if (buttonText == 'X') {
+        buttonText = 'X';
+        width = 24;
+      } else if (buttonText == 'Y') {
+        buttonText = 'Y';
+        width = 24;
+      }
+    } else {
+      if (buttonText == 'L1' || buttonText == 'R1') {
+        width = 32;
       }
     }
 
@@ -72,8 +88,7 @@ class ControllerHintsBar extends ConsumerWidget {
             height: 24,
             decoration: BoxDecoration(
               color: hint.buttonColor,
-              borderRadius: width > 24 ? BorderRadius.circular(4) : null,
-              shape: width > 24 ? BoxShape.rectangle : BoxShape.circle,
+              borderRadius: BorderRadius.circular(6),
               border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
               boxShadow: [
                 BoxShadow(

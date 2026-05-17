@@ -594,7 +594,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         }
         return Center(
           child: SizedBox(
-            width: 308,
+            width: 350,
             child: GameActionButton(
               focusNode: _focusNode,
               icon: Icons.download, 
@@ -610,7 +610,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         children: [
           Center(
             child: SizedBox(
-              width: 308,
+              width: 350,
               child: GameActionButton(
                 focusNode: _focusNode,
                 icon: Icons.play_arrow, 

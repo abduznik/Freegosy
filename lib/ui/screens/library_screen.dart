@@ -491,8 +491,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                 ControllerHintItem(label: 'Select', button: 'A'), 
                 ControllerHintItem(label: 'Filter', button: 'X'), 
                 ControllerHintItem(label: 'Search', button: 'Y'),
-                ControllerHintItem(label: 'Prev Tab', button: 'L1 (Q)'),
-                ControllerHintItem(label: 'Next Tab', button: 'R1 (E)'),
+                ControllerHintItem(label: 'Prev Tab', button: 'L1'),
+                ControllerHintItem(label: 'Next Tab', button: 'R1'),
               ])
             : const SizedBox.shrink(key: ValueKey('hide_hints')),
       ),
