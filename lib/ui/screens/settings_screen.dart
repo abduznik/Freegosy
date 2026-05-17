@@ -36,6 +36,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isTestingConnection = false;
   String? _connectionError;
   String? _pairedToken;
+  bool _isEditingServer = false;
 
   @override
   void initState() {
@@ -194,20 +195,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String title,
     required String subtitle,
     required bool value,
-    required Function(bool) onChanged,
+    required void Function(bool)? onChanged,
   }) {
     final theme = Theme.of(context);
+    final isEnabled = onChanged != null;
     return FocusEffectWrapper(
-      onTap: () => onChanged(!value),
+      onTap: !isEnabled ? null : () => onChanged(!value),
       borderRadius: 16.0,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
-          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
-        ),
-        child: Row(
+      child: Opacity(
+        opacity: isEnabled ? 1.0 : 0.5,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+          ),
+          child: Row(
           children: [
             Expanded(
               child: Column(
@@ -241,6 +245,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       ),
+     ),
     );
   }
 
@@ -249,6 +254,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String title,
     required IconData icon,
     required Widget child,
+    Widget? trailing,
   }) {
     final theme = Theme.of(context);
     return Container(
@@ -265,10 +271,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Icon(icon, color: theme.colorScheme.primary, size: 22),
               const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
               ),
+              // ignore: use_null_aware_elements
+              if (trailing != null) trailing,
             ],
           ),
           const SizedBox(height: 20),
@@ -557,24 +567,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       title: 'RomM Server',
       icon: Icons.dns,
+      trailing: FocusEffectWrapper(
+        borderRadius: 24,
+        scaleFactor: 1.1,
+        useSafeScale: false,
+        onTap: () {
+          setState(() {
+            _isEditingServer = !_isEditingServer;
+          });
+        },
+        child: IconButton(
+          icon: Icon(
+            _isEditingServer ? Icons.lock_open : Icons.lock,
+            color: _isEditingServer ? theme.colorScheme.primary : Colors.grey,
+          ),
+          tooltip: _isEditingServer ? 'Lock connection details' : 'Unlock connection details to edit',
+          onPressed: () {
+            setState(() {
+              _isEditingServer = !_isEditingServer;
+            });
+          },
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(controller: _baseUrlController, decoration: _buildInputDecoration(context, 'Server URL')),
+          TextField(
+            controller: _baseUrlController,
+            readOnly: !_isEditingServer,
+            obscureText: !_isEditingServer,
+            decoration: _buildInputDecoration(context, 'Server URL'),
+          ),
           const SizedBox(height: 16),
           if (_isLegacyAuth) ...[
-            TextField(controller: _usernameController, decoration: _buildInputDecoration(context, 'Username')),
+            TextField(
+              controller: _usernameController,
+              readOnly: !_isEditingServer,
+              obscureText: !_isEditingServer,
+              decoration: _buildInputDecoration(context, 'Username'),
+            ),
             const SizedBox(height: 16),
-            TextField(controller: _passwordController, decoration: _buildInputDecoration(context, 'Password'), obscureText: true),
+            TextField(
+              controller: _passwordController,
+              readOnly: !_isEditingServer,
+              obscureText: true,
+              decoration: _buildInputDecoration(context, 'Password'),
+            ),
           ] else
-            TextField(controller: _apiKeyController, decoration: _buildInputDecoration(context, 'API Key (RomM 4.8+)'), obscureText: true),
+            TextField(
+              controller: _apiKeyController,
+              readOnly: !_isEditingServer,
+              obscureText: true,
+              decoration: _buildInputDecoration(context, 'API Key (RomM 4.8+)'),
+            ),
           const SizedBox(height: 16),
           _buildCustomToggleRow(
             context,
             title: 'Legacy Authentication',
             subtitle: 'Enable if your RomM server is below v4.8',
             value: _isLegacyAuth,
-            onChanged: (val) => setState(() => _isLegacyAuth = val),
+            onChanged: !_isEditingServer ? null : (val) => setState(() => _isLegacyAuth = val),
           ),
           const SizedBox(height: 16),
           if (_connectionError != null)
@@ -589,7 +641,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   context,
                   icon: Icons.phonelink_setup,
                   label: 'Pair Device',
-                  onTap: () => _showPairingDialog(context),
+                  onTap: !_isEditingServer ? null : () => _showPairingDialog(context),
                 ),
               ),
               const SizedBox(width: 12),
@@ -598,7 +650,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   context,
                   icon: _isTestingConnection ? Icons.hourglass_empty : Icons.network_ping,
                   label: _isTestingConnection ? 'Testing...' : 'Test Connection',
-                  onTap: _isTestingConnection ? null : () async {
+                  onTap: !_isEditingServer || _isTestingConnection ? null : () async {
                     final baseUrl = _baseUrlController.text.trim();
                     if (baseUrl.isEmpty) {
                       setState(() => _connectionError = 'Server URL is required');
@@ -646,7 +698,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             context,
             icon: Icons.save,
             label: 'Save Configuration',
-            onTap: () async {
+            onTap: !_isEditingServer ? null : () async {
               final prefs = ref.read(sharedPreferencesProvider);
               await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
               if (_isLegacyAuth) {
@@ -668,7 +720,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _pairedToken = null;
               ref.invalidate(rommConfigProvider);
               ref.invalidate(rommServiceProvider);
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
+              if (mounted) {
+                setState(() {
+                  _isEditingServer = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
+              }
             },
             isPrimary: true,
           ),
