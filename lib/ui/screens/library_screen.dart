@@ -413,13 +413,29 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                               if (mounted) ref.read(navigationLockedProvider.notifier).state = false;
                             });
                           },
-                          onSelected: (platform) {
+                           onSelected: (platform) {
+                            debugPrint('📂 Platform selected: ${platform?.name} (ID: ${platform?.id})');
                             ref.read(isHomeSelectedProvider.notifier).state = false;
                             ref.read(selectedPlatformIdProvider.notifier).state = platform?.id;
+                            
+                            // Load initial games page for selected platform
+                            ref.read(paginatedGamesProvider.notifier).reset();
+                            ref.read(paginatedGamesProvider.notifier).loadInitial(
+                              platformId: platform?.id.toString(),
+                              search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
+                            );
                           },
                           onHomeSelected: () {
+                            debugPrint('📂 Home selected: resetting platform filter');
                             ref.read(isHomeSelectedProvider.notifier).state = true;
                             ref.read(selectedPlatformIdProvider.notifier).state = null;
+                            
+                            // Load initial games page (all platforms)
+                            ref.read(paginatedGamesProvider.notifier).reset();
+                            ref.read(paginatedGamesProvider.notifier).loadInitial(
+                              platformId: null,
+                              search: ref.read(searchQueryProvider).isEmpty ? null : ref.read(searchQueryProvider),
+                            );
                           },
                         ),
                         loading: () => const LinearProgressIndicator(),

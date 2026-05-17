@@ -221,7 +221,8 @@ class GamepadService {
   }
 
   void _triggerAction(GameAction action, double value) {
-    debugPrint('🎮 Gamepad Action Triggered: $action (value: $value)');
+    // Muted to prevent console clutter:
+    // debugPrint('🎮 Gamepad Action Triggered: $action (value: $value)');
     // Broadcast the action to all listeners (screens, global handlers)
     inputActionBus.add(action);
 
