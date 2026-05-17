@@ -583,7 +583,6 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
   Widget _buildActionsRow() {
     return Consumer(builder: (context, ref, _) {
-      final theme = Theme.of(context);
       final downloads = ref.watch(downloadProvider);
       final progress = downloads[_currentGame.id];
       if (!_isDownloaded) {
@@ -608,7 +607,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         }
         return Center(
           child: SizedBox(
-            width: 350,
+            width: 384,
             child: GameActionButton(
               focusNode: _focusNode,
               icon: Icons.download, 
@@ -619,71 +618,75 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           ),
         );
       }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: SizedBox(
-              width: 350,
-              child: GameActionButton(
+      return Center(
+        child: SizedBox(
+          width: 384,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GameActionButton(
                 focusNode: _focusNode,
                 icon: Icons.play_arrow, 
                 label: 'Play Game', 
                 isPrimary: true,
                 onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: SizedBox(
-              width: 480,
-              child: Row(
+              const SizedBox(height: 16),
+              GameSegmentedGroup(
                 children: [
                   Expanded(
-                    child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
+                    child: GameSegmentItem(
+                      icon: Icons.cloud_upload_outlined,
+                      label: 'Push Saves',
+                      onTap: () async { if (_isDownloaded) await widget.onPushSaves(); },
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  Container(width: 1.0, height: 24, color: Colors.white.withValues(alpha: 0.08)),
                   Expanded(
-                    child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GameActionButton(icon: Icons.folder, label: 'Folder', onPressed: () async {
-                      final ds = ref.read(directoryServiceProvider).value;
-                      if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
-                    }),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
+                    child: GameSegmentItem(
+                      icon: Icons.cloud_download_outlined,
+                      label: 'Pull Saves',
+                      onTap: () async { if (_isDownloaded) await widget.onPullSaves(); },
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Divider(color: Colors.white12),
-          const SizedBox(height: 8),
-          _buildSectionTitle(theme, 'Local Saves'),
-          const SizedBox(height: 16),
-          Center(
-            child: SizedBox(
-              width: 320,
-              child: Row(
+              const SizedBox(height: 12),
+              GameSegmentedGroup(
                 children: [
                   Expanded(
-                    child: GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup', onPressed: () async => _handleLocalBackup(ref)),
+                    child: GameSegmentItem(
+                      icon: Icons.folder_open_outlined,
+                      label: 'Folder',
+                      onTap: () async {
+                        final ds = ref.read(directoryServiceProvider).value;
+                        if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+                      },
+                    ),
                   ),
-                  const SizedBox(width: 12),
+                  Container(width: 1.0, height: 24, color: Colors.white.withValues(alpha: 0.08)),
                   Expanded(
-                    child: GameActionButton(icon: Icons.history, label: 'Restore', onPressed: () async => _handleLocalRestore(ref)),
+                    child: GameSegmentItem(
+                      icon: Icons.backup_outlined,
+                      label: 'Backups',
+                      onTap: () => _showLocalBackupsMenu(ref),
+                    ),
+                  ),
+                  Container(width: 1.0, height: 24, color: Colors.white.withValues(alpha: 0.08)),
+                  Expanded(
+                    child: GameSegmentItem(
+                      icon: Icons.delete_outline,
+                      label: 'Delete',
+                      iconColor: Colors.redAccent,
+                      textColor: Colors.redAccent,
+                      onTap: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); },
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       );
     });
   }
@@ -749,4 +752,128 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 
   Widget _buildSectionTitle(ThemeData theme, String title) => Text(title, style: theme.textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold));
+
+  Future<void> _showLocalBackupsMenu(WidgetRef ref) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1a1a1a),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.backup_outlined, color: Colors.indigoAccent),
+            SizedBox(width: 12),
+            Text('Local Saves', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Choose an action to perform on your local save backups.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          FocusEffectWrapper(
+            onTap: () {
+              Navigator.pop(ctx);
+              _handleLocalBackup(ref);
+            },
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.indigo.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Create Backup', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () {
+              Navigator.pop(ctx);
+              _handleLocalRestore(ref);
+            },
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Restore Backup', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class GameSegmentedGroup extends StatelessWidget {
+  final List<Widget> children;
+  const GameSegmentedGroup({super.key, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1.0),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Row(
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+class GameSegmentItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? textColor;
+  final Color? iconColor;
+
+  const GameSegmentItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.textColor,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusEffectWrapper(
+      onTap: onTap,
+      borderRadius: 14.0,
+      scaleFactor: 1.03,
+      child: Container(
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: iconColor ?? Colors.white70),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: textColor ?? Colors.white.withValues(alpha: 0.8),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
