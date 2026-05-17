@@ -241,21 +241,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                 TextField(
                   controller: titleController,
                   autofocus: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Title',
-                    labelStyle: TextStyle(color: Colors.white70),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: contentController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Content',
-                    labelStyle: TextStyle(color: Colors.white70),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
                   ),
                   maxLines: 4,
                 ),
@@ -271,10 +271,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: Colors.white.withValues(alpha: 0.05),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
                 ),
-                child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ),
             ),
             const SizedBox(width: 8),
@@ -286,10 +286,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  color: Colors.indigo.withValues(alpha: 0.1),
-                  border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
                 ),
-                child: const Text('Add Note', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+                child: Text('Add Note', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -335,10 +335,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
               ),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
           const SizedBox(width: 8),
@@ -377,11 +377,11 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(note.title.isNotEmpty ? note.title : 'Note', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(note.title.isNotEmpty ? note.title : 'Note', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
         content: SizedBox(
           width: 500,
           child: SingleChildScrollView(
-            child: Text(note.content, style: const TextStyle(height: 1.5, color: Colors.white70)),
+            child: Text(note.content, style: TextStyle(height: 1.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ),
         ),
         actions: [
@@ -411,10 +411,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
               ),
-              child: const Text('Close', style: TextStyle(color: Colors.white70)),
+              child: Text('Close', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
         ],
@@ -503,7 +503,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   const SizedBox(height: 24),
                   _buildSectionTitle(theme, 'About'),
                   const SizedBox(height: 8),
-                  Text(_currentGame.summary ?? 'No description available', style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70, height: 1.5)),
+                  Text(_currentGame.summary ?? 'No description available', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5)),
                   const SizedBox(height: 24),
                   _buildSectionTitle(theme, 'Details'),
                   const SizedBox(height: 12),
@@ -598,7 +598,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(_currentGame.name, style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      if (_currentGame.platformDisplayName != null) Text(_currentGame.platformDisplayName!, style: theme.textTheme.titleMedium?.copyWith(color: Colors.white70)),
+                      if (_currentGame.platformDisplayName != null) Text(_currentGame.platformDisplayName!, style: theme.textTheme.titleMedium?.copyWith(color: Colors.white60)),
                     ],
                   ),
                 ),
@@ -780,7 +780,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     ]);
   }
 
-  Widget _buildSectionTitle(ThemeData theme, String title) => Text(title, style: theme.textTheme.titleLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold));
+  Widget _buildSectionTitle(ThemeData theme, String title) => Text(title, style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold));
 
   Future<void> _showLocalBackupsMenu(WidgetRef ref) async {
     showDialog(
@@ -788,16 +788,16 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       builder: (ctx) => AlertDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.backup_outlined, color: Colors.indigoAccent),
-            SizedBox(width: 12),
-            Text('Local Saves', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Icon(Icons.backup_outlined, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Text('Local Saves', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
+        content: Text(
           'Choose an action to perform on your local save backups.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         actions: [
           FocusEffectWrapper(
@@ -810,10 +810,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.indigo.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
               ),
-              child: const Text('Create Backup', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+              child: Text('Create Backup', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
             ),
           ),
           const SizedBox(width: 8),
@@ -827,10 +827,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
               ),
-              child: const Text('Restore Backup', style: TextStyle(color: Colors.white70)),
+              child: Text('Restore Backup', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
         ],
@@ -857,6 +857,7 @@ class GameDetailActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isDestructive = textColor == Colors.red || textColor == Colors.redAccent;
     return FocusEffectWrapper(
       onTap: onTap,
@@ -867,12 +868,12 @@ class GameDetailActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDestructive
               ? Colors.red.withValues(alpha: 0.05)
-              : Colors.white.withValues(alpha: 0.03),
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDestructive
                 ? Colors.red.withValues(alpha: 0.15)
-                : Colors.white.withValues(alpha: 0.08),
+                : theme.colorScheme.outline.withValues(alpha: 0.3),
             width: 1.0,
           ),
         ),
@@ -880,7 +881,7 @@ class GameDetailActionButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: iconColor ?? (isDestructive ? Colors.redAccent : Colors.white70)),
+            Icon(icon, size: 16, color: iconColor ?? (isDestructive ? Colors.redAccent : theme.colorScheme.onSurfaceVariant)),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
@@ -890,7 +891,7 @@ class GameDetailActionButton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: textColor ?? Colors.white.withValues(alpha: 0.8),
+                  color: textColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.85),
                   letterSpacing: 0.2,
                 ),
               ),

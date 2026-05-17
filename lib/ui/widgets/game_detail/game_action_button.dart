@@ -21,6 +21,7 @@ class GameActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isDestructive = color == Colors.red || color == Colors.redAccent;
 
     return FocusEffectWrapper(
@@ -37,8 +38,8 @@ class GameActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: isPrimary
-              ? const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+              ? LinearGradient(
+                  colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 )
@@ -47,13 +48,13 @@ class GameActionButton extends StatelessWidget {
               ? null
               : (isDestructive
                   ? Colors.red.withValues(alpha: 0.08)
-                  : Colors.white.withValues(alpha: 0.05)),
+                  : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
           border: Border.all(
             color: isPrimary
-                ? Colors.white.withValues(alpha: 0.15)
+                ? theme.colorScheme.primary.withValues(alpha: 0.3)
                 : (isDestructive
                     ? Colors.red.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.08)),
+                    : theme.colorScheme.outline.withValues(alpha: 0.3)),
             width: 1.0,
           ),
         ),
@@ -65,8 +66,8 @@ class GameActionButton extends StatelessWidget {
               icon,
               size: isPrimary ? 22 : 16,
               color: isPrimary
-                  ? Colors.white
-                  : (isDestructive ? Colors.redAccent : Colors.white70),
+                  ? theme.colorScheme.onPrimary
+                  : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(width: 8),
             Flexible(
@@ -78,8 +79,8 @@ class GameActionButton extends StatelessWidget {
                   fontSize: isPrimary ? 15 : 12,
                   fontWeight: isPrimary ? FontWeight.bold : FontWeight.w600,
                   color: isPrimary
-                      ? Colors.white
-                      : (isDestructive ? Colors.redAccent : Colors.white.withValues(alpha: 0.9)),
+                      ? theme.colorScheme.onPrimary
+                      : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurface.withValues(alpha: 0.9)),
                   letterSpacing: 0.3,
                 ),
               ),

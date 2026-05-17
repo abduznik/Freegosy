@@ -6,12 +6,12 @@ import '../../providers/ui_provider.dart';
 class ControllerHintItem {
   final String label;
   final String button;
-  final Color buttonColor;
+  final Color? buttonColor;
 
   const ControllerHintItem({
     required this.label,
     required this.button,
-    this.buttonColor = Colors.white24,
+    this.buttonColor,
   });
 }
 
@@ -26,31 +26,33 @@ class ControllerHintsBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(inputModeProvider);
-    
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.5),
+            color: theme.colorScheme.surface.withValues(alpha: isDark ? 0.6 : 0.85),
             border: Border(
-              top: BorderSide(color: Colors.white.withValues(alpha: 0.1), width: 1),
+              top: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
             ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.end,
-            children: hints.map((hint) => _buildHint(context, hint, mode)).toList(),
+            children: hints.map((hint) => _buildHint(context, hint, mode, theme)).toList(),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildHint(BuildContext context, ControllerHintItem hint, InputMode mode) {
+  Widget _buildHint(BuildContext context, ControllerHintItem hint, InputMode mode, ThemeData theme) {
     String buttonText = hint.button;
     double width = 24;
-    
+
     if (mode == InputMode.keyboard) {
       if (buttonText == 'A') {
         buttonText = 'Enter';
@@ -77,22 +79,27 @@ class ControllerHintsBar extends ConsumerWidget {
       }
     }
 
+    final glyphBg = hint.buttonColor ?? theme.colorScheme.secondaryContainer;
+    final glyphFg = theme.colorScheme.onSecondaryContainer;
+
     return Padding(
       padding: const EdgeInsets.only(left: 20),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Button Glyph
           Container(
             width: width,
             height: 24,
             decoration: BoxDecoration(
-              color: hint.buttonColor,
+              color: glyphBg,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                width: 1.5,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: Colors.black.withValues(alpha: 0.2),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -102,7 +109,7 @@ class ControllerHintsBar extends ConsumerWidget {
               child: Text(
                 buttonText,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: glyphFg,
                   fontSize: width > 32 ? 10 : 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -110,11 +117,10 @@ class ControllerHintsBar extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Label
           Text(
             hint.label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.85),
               fontSize: 13,
               fontWeight: FontWeight.w500,
               letterSpacing: 0.5,

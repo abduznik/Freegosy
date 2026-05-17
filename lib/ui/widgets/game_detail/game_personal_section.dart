@@ -46,12 +46,12 @@ class GamePersonalSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(color: Colors.white12),
+        Divider(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
         const SizedBox(height: 8),
         Text(
           'Personal',
           style: theme.textTheme.titleLarge?.copyWith(
-            color: Colors.white,
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -97,14 +97,14 @@ class GamePersonalSection extends StatelessWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16),
-                                    color: status == val ? Colors.indigo.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
-                                    border: Border.all(color: status == val ? Colors.indigo.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
+                                    color: status == val ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                                    border: Border.all(color: status == val ? theme.colorScheme.primary.withValues(alpha: 0.4) : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)),
                                   ),
                                   child: Row(
                                     children: [
                                       Icon(icon, color: status == val ? Colors.indigoAccent : Colors.white54),
                                       const SizedBox(width: 16),
-                                      Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                      Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
                                     ],
                                   ),
                                 ),
@@ -121,10 +121,10 @@ class GamePersonalSection extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                color: Colors.white.withValues(alpha: 0.05),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                                border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
                               ),
-                              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                              child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
                             ),
                           ),
                         ],
@@ -137,16 +137,16 @@ class GamePersonalSection extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
-                      color: Colors.white.withValues(alpha: 0.05),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline, size: 14, color: Colors.white70),
+                        Icon(Icons.info_outline, size: 14, color: theme.colorScheme.onSurfaceVariant),
                         const SizedBox(width: 8),
-                        const Text(
+                        Text(
                           'Status',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
                         ),
                         const Spacer(),
                         Text(
@@ -155,7 +155,7 @@ class GamePersonalSection extends StatelessWidget {
                           status == 'finished' ? 'Finished' :
                           status == 'completed_100' ? '100% Completed' :
                           status == 'retired' ? 'Dropped' : 'Not set',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                         const SizedBox(width: 4),
                         const Icon(Icons.arrow_drop_down, color: Colors.white54, size: 18),
@@ -178,12 +178,12 @@ class GamePersonalSection extends StatelessWidget {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             color: adjustingRating 
-                                ? Colors.indigo.withValues(alpha: 0.1) 
-                                : Colors.white.withValues(alpha: 0.05),
+                                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
                             border: Border.all(
                               color: adjustingRating 
                                   ? Colors.indigoAccent 
-                                  : Colors.white.withValues(alpha: 0.08),
+                                  : theme.colorScheme.outline.withValues(alpha: 0.3),
                               width: adjustingRating ? 2.0 : 1.0,
                             ),
                           ),
@@ -200,9 +200,9 @@ class GamePersonalSection extends StatelessWidget {
                                           padding: const EdgeInsets.all(4),
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Colors.white.withValues(alpha: 0.1),
+                                            color: theme.colorScheme.outline.withValues(alpha: 0.25),
                                           ),
-                                          child: const Icon(Icons.remove, size: 12, color: Colors.white),
+                                          child: Icon(Icons.remove, size: 12, color: theme.colorScheme.onSurface),
                                         ),
                                       ),
                                     ),
@@ -215,10 +215,10 @@ class GamePersonalSection extends StatelessWidget {
                                           child: Text(
                                             rating > 0 ? '$rating Star' : 'No Rating',
                                             textAlign: TextAlign.center,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12, 
                                               fontWeight: FontWeight.bold, 
-                                              color: Colors.indigoAccent
+                                              color: theme.colorScheme.primary
                                             ),
                                           ),
                                         ),
@@ -233,9 +233,9 @@ class GamePersonalSection extends StatelessWidget {
                                           padding: const EdgeInsets.all(4),
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Colors.white.withValues(alpha: 0.1),
+                                            color: theme.colorScheme.outline.withValues(alpha: 0.25),
                                           ),
-                                          child: const Icon(Icons.add, size: 12, color: Colors.white),
+                                          child: Icon(Icons.add, size: 12, color: theme.colorScheme.onSurface),
                                         ),
                                       ),
                                     ),
@@ -254,7 +254,7 @@ class GamePersonalSection extends StatelessWidget {
                                         style: TextStyle(
                                           fontSize: 12, 
                                           fontWeight: FontWeight.bold, 
-                                          color: Colors.white.withValues(alpha: 0.9)
+                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.9)
                                         ),
                                       ),
                                     ),
@@ -274,12 +274,12 @@ class GamePersonalSection extends StatelessWidget {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             color: adjustingCompletion 
-                                ? Colors.indigo.withValues(alpha: 0.1) 
-                                : Colors.white.withValues(alpha: 0.05),
+                                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
                             border: Border.all(
                               color: adjustingCompletion 
                                   ? Colors.indigoAccent 
-                                  : Colors.white.withValues(alpha: 0.08),
+                                  : theme.colorScheme.outline.withValues(alpha: 0.3),
                               width: adjustingCompletion ? 2.0 : 1.0,
                             ),
                           ),
@@ -296,9 +296,9 @@ class GamePersonalSection extends StatelessWidget {
                                           padding: const EdgeInsets.all(4),
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Colors.white.withValues(alpha: 0.1),
+                                            color: theme.colorScheme.outline.withValues(alpha: 0.25),
                                           ),
-                                          child: const Icon(Icons.remove, size: 12, color: Colors.white),
+                                          child: Icon(Icons.remove, size: 12, color: theme.colorScheme.onSurface),
                                         ),
                                       ),
                                     ),
@@ -311,10 +311,10 @@ class GamePersonalSection extends StatelessWidget {
                                           child: Text(
                                             '$completion%',
                                             textAlign: TextAlign.center,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12, 
                                               fontWeight: FontWeight.bold, 
-                                              color: Colors.indigoAccent
+                                              color: theme.colorScheme.primary
                                             ),
                                           ),
                                         ),
@@ -329,9 +329,9 @@ class GamePersonalSection extends StatelessWidget {
                                           padding: const EdgeInsets.all(4),
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color: Colors.white.withValues(alpha: 0.1),
+                                            color: theme.colorScheme.outline.withValues(alpha: 0.25),
                                           ),
-                                          child: const Icon(Icons.add, size: 12, color: Colors.white),
+                                          child: Icon(Icons.add, size: 12, color: theme.colorScheme.onSurface),
                                         ),
                                       ),
                                     ),
@@ -340,7 +340,7 @@ class GamePersonalSection extends StatelessWidget {
                               : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.hourglass_empty, size: 14, color: Colors.white70),
+                                    Icon(Icons.hourglass_empty, size: 14, color: theme.colorScheme.onSurfaceVariant),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
@@ -350,7 +350,7 @@ class GamePersonalSection extends StatelessWidget {
                                         style: TextStyle(
                                           fontSize: 12, 
                                           fontWeight: FontWeight.bold, 
-                                          color: Colors.white.withValues(alpha: 0.9)
+                                          color: theme.colorScheme.onSurface.withValues(alpha: 0.9)
                                         ),
                                       ),
                                     ),
@@ -376,18 +376,18 @@ class GamePersonalSection extends StatelessWidget {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             color: backlogged 
-                                ? Colors.indigo.withValues(alpha: 0.1) 
-                                : Colors.white.withValues(alpha: 0.05),
+                                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
                             border: Border.all(
                               color: backlogged 
                                   ? Colors.indigoAccent 
-                                  : Colors.white.withValues(alpha: 0.08),
+                                  : theme.colorScheme.outline.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(backlogged ? Icons.bookmark : Icons.bookmark_border, size: 14, color: backlogged ? Colors.indigoAccent : Colors.white70),
+                              Icon(backlogged ? Icons.bookmark : Icons.bookmark_border, size: 14, color: backlogged ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
                               const SizedBox(width: 8),
                               Flexible(
                                 child: Text(
@@ -397,7 +397,7 @@ class GamePersonalSection extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12, 
                                     fontWeight: FontWeight.bold, 
-                                    color: backlogged ? Colors.white : Colors.white.withValues(alpha: 0.9)
+                                    color: backlogged ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface.withValues(alpha: 0.9)
                                   ),
                                 ),
                               ),
@@ -417,18 +417,18 @@ class GamePersonalSection extends StatelessWidget {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             color: nowPlaying 
-                                ? Colors.indigo.withValues(alpha: 0.1) 
-                                : Colors.white.withValues(alpha: 0.05),
+                                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
                             border: Border.all(
                               color: nowPlaying 
                                   ? Colors.indigoAccent 
-                                  : Colors.white.withValues(alpha: 0.08),
+                                  : theme.colorScheme.outline.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, size: 14, color: nowPlaying ? Colors.indigoAccent : Colors.white70),
+                              Icon(nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, size: 14, color: nowPlaying ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
                               const SizedBox(width: 8),
                               Flexible(
                                 child: Text(
@@ -438,7 +438,7 @@ class GamePersonalSection extends StatelessWidget {
                                   style: TextStyle(
                                     fontSize: 12, 
                                     fontWeight: FontWeight.bold, 
-                                    color: nowPlaying ? Colors.white : Colors.white.withValues(alpha: 0.9)
+                                    color: nowPlaying ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface.withValues(alpha: 0.9)
                                   ),
                                 ),
                               ),
@@ -474,22 +474,22 @@ class GamePersonalSection extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                  color: isSaving ? Colors.white.withValues(alpha: 0.05) : null,
+                  color: isSaving ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25) : null,
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.3),
                     width: 1.0,
                   ),
                 ),
                 child: isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 16,
                         width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.onPrimary),
                       )
-                    : const Text(
+                    : Text(
                         'Save Changes',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: theme.colorScheme.onSurface,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                           letterSpacing: 0.3,
