@@ -10,6 +10,7 @@ class Game {
   final String? fileUrl; // Now nullable, to be replaced by constructed URL
   final String? fileName; // Added: maps to 'file_name' in JSON
   final String? fsName; // Added: maps to 'fs_name' in JSON
+  final String? fsExtension; // maps to 'fs_extension' in JSON
   final int fileSize; // Kept
   final String? multiFilePath; // maps to 'multi_file_path' in JSON
   final bool hasMultipleFiles;
@@ -71,6 +72,7 @@ class Game {
     this.fileUrl, // Now nullable
     this.fileName, // Added
     this.fsName, // Added
+    this.fsExtension,
     required this.fileSize, // Kept
     this.multiFilePath,
     this.hasMultipleFiles = false,
@@ -109,6 +111,7 @@ class Game {
       fileUrl: json['url_download']?.toString(), // Maps to original download URL, if present
       fileName: json['file_name']?.toString(), // Mapped from JSON
       fsName: json['fs_name']?.toString(), // Mapped from JSON
+      fsExtension: json['fs_extension']?.toString(),
       fileSize: json['file_size_bytes'] is int ? json['file_size_bytes'] : 0,
       multiFilePath: json['multi_file_path']?.toString(),
       hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
