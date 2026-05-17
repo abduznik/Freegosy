@@ -40,20 +40,20 @@ class LibraryDialogService {
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      color: Colors.white.withValues(alpha: 0.03),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                      border: Border.all(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.cloud_download, color: Colors.indigoAccent),
+                        Icon(Icons.cloud_download, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(fileName.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              Text(fileName.toString(), style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                               const SizedBox(height: 4),
-                              Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                              Text(subtitle, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
                             ],
                           ),
                         ),
@@ -74,10 +74,10 @@ class LibraryDialogService {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
               ),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
         ],
@@ -124,20 +124,20 @@ class LibraryDialogService {
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            color: Colors.white.withValues(alpha: 0.03),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                            border: Border.all(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.account_circle, color: Colors.indigoAccent),
+                              Icon(Icons.account_circle, color: Theme.of(context).colorScheme.primary),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(id, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    Text(id, style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                                     const SizedBox(height: 4),
-                                    Text('Last active: $timeAgo', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                    Text('Last active: $timeAgo', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
                                   ],
                                 ),
                               ),
@@ -161,10 +161,10 @@ class LibraryDialogService {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
               ),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
         ],
@@ -210,20 +210,20 @@ class LibraryDialogService {
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            color: Colors.white.withValues(alpha: 0.03),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                            border: Border.all(color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.folder, color: Colors.indigoAccent),
+                              Icon(Icons.folder, color: Theme.of(context).colorScheme.primary),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
                                     const SizedBox(height: 4),
-                                    Text('Last active: $timeAgo', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                    Text('Last active: $timeAgo', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
                                   ],
                                 ),
                               ),
@@ -244,10 +244,10 @@ class LibraryDialogService {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
               ),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
           ),
         ],

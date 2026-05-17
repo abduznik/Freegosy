@@ -114,14 +114,14 @@ class PlatformFilterBar extends StatelessWidget {
           color: isSelected ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? theme.colorScheme.primary : Colors.white24,
+            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outline.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? theme.colorScheme.onPrimary : Colors.white,
+            color: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
