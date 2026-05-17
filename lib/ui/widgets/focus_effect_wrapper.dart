@@ -10,6 +10,7 @@ class FocusEffectWrapper extends ConsumerStatefulWidget {
   final double borderRadius;
   final bool showGlow;
   final FocusNode? focusNode;
+  final bool autofocus;
 
   const FocusEffectWrapper({
     super.key,
@@ -19,6 +20,7 @@ class FocusEffectWrapper extends ConsumerStatefulWidget {
     this.borderRadius = 12.0,
     this.showGlow = true,
     this.focusNode,
+    this.autofocus = false,
   });
 
   @override
@@ -53,6 +55,7 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
         : _isFocused;
 
     return Focus(
+      autofocus: widget.autofocus,
       focusNode: widget.focusNode,
       onFocusChange: _handleFocusChange,
       onKeyEvent: (node, event) {

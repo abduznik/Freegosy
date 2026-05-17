@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/save/save_sync_service.dart';
 import '../widgets/save_conflict_dialog.dart';
+import '../widgets/focus_effect_wrapper.dart';
 
 class LibraryDialogService {
   static Future<Map<String, dynamic>?> showSaveSelectionDialog(BuildContext context, List<Map<String, dynamic>> saves) async {
@@ -28,16 +29,55 @@ class LibraryDialogService {
                 else subtitle = 'just now';
               }
 
-              return ListTile(
-                title: Text(fileName.toString()),
-                subtitle: Text(subtitle),
-                onTap: () => Navigator.pop(context, save),
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: FocusEffectWrapper(
+                  onTap: () => Navigator.pop(context, save),
+                  borderRadius: 12.0,
+                  autofocus: index == 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white.withValues(alpha: 0.03),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_download, color: Colors.indigoAccent),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(fileName.toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              const SizedBox(height: 4),
+                              Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               );
             },
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context),
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
         ],
       ),
     );
@@ -71,10 +111,37 @@ class LibraryDialogService {
                     else if (diff.inMinutes > 0) timeAgo = '${diff.inMinutes}m ago';
                     else timeAgo = 'just now';
 
-                    return ListTile(
-                      title: Text(id),
-                      subtitle: Text('Last active: $timeAgo'),
-                      onTap: () => Navigator.pop(context, id),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: FocusEffectWrapper(
+                        onTap: () => Navigator.pop(context, id),
+                        borderRadius: 12.0,
+                        autofocus: index == 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withValues(alpha: 0.03),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.account_circle, color: Colors.indigoAccent),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(id, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    const SizedBox(height: 4),
+                                    Text('Last active: $timeAgo', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -83,7 +150,19 @@ class LibraryDialogService {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context),
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
         ],
       ),
     );
@@ -116,16 +195,55 @@ class LibraryDialogService {
                     else if (diff.inMinutes > 0) timeAgo = '${diff.inMinutes}m ago';
                     else timeAgo = 'just now';
 
-                    return ListTile(
-                      title: Text(name),
-                      subtitle: Text('Last active: $timeAgo'),
-                      onTap: () => Navigator.pop(context, (folder['path'] ?? folder['name']) as String),
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: FocusEffectWrapper(
+                        onTap: () => Navigator.pop(context, (folder['path'] ?? folder['name']) as String),
+                        borderRadius: 12.0,
+                        autofocus: index == 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withValues(alpha: 0.03),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.folder, color: Colors.indigoAccent),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    const SizedBox(height: 4),
+                                    Text('Last active: $timeAgo', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context),
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
         ],
       ),
     );

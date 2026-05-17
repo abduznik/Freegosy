@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../focus_effect_wrapper.dart';
 
 class GamePersonalSection extends StatelessWidget {
   final String? status;
@@ -136,14 +137,43 @@ class GamePersonalSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // Save button
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: isSaving ? null : onSave,
+        FocusEffectWrapper(
+          onTap: isSaving ? null : onSave,
+          borderRadius: 16.0,
+          child: Container(
+            width: double.infinity,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: isSaving
+                  ? null
+                  : const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              color: isSaving ? Colors.white.withValues(alpha: 0.05) : null,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 1.0,
+              ),
+            ),
             child: isSaving
-                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Save'),
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text(
+                    'Save Changes',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
           ),
         ),
       ],

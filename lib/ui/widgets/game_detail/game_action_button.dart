@@ -29,6 +29,7 @@ class GameActionButton extends StatelessWidget {
       borderRadius: 16.0,
       scaleFactor: isPrimary ? 1.03 : 1.05,
       child: Container(
+        alignment: Alignment.center,
         padding: EdgeInsets.symmetric(
           horizontal: isPrimary ? 40 : 16,
           vertical: isPrimary ? 14 : 10,

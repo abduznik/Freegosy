@@ -26,6 +26,7 @@ import '../widgets/windows_game_config_dialog.dart';
 import '../widgets/multi_disc_picker.dart';
 import '../../core/save/save_sync_service.dart';
 import './library_dialog_service.dart';
+import '../widgets/focus_effect_wrapper.dart';
 
 mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   Map<String, bool> get downloadedStates;
@@ -224,7 +225,43 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   Future<void> handleDeleteRom(BuildContext context, WidgetRef ref, Game game) async {
     final dirService = ref.read(directoryServiceProvider).asData?.value;
     if (dirService == null) return;
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('Delete ROM?'), content: Text('Are you sure you want to delete the local files for ${game.name}?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete'))]));
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete ROM?'),
+        content: Text('Are you sure you want to delete the local files for ${game.name}?'),
+        actions: [
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(ctx, false),
+            borderRadius: 12.0,
+            autofocus: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(ctx, true),
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.red.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
     if (confirmed != true) return;
     try {
       await dirService.deleteRom(game);
@@ -306,16 +343,136 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         if (context.mounted) ErrorHandler.showSuccess(context, 'Sync Resolved', message: 'Cloud save restored');
       }
     } else if (!push) {
-       return await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('Save Sync Warning'), content: Text('${e.toString().replaceAll('Exception: ', '')}\n\nPlay anyway?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Play Anyway'))]));
+       return await showDialog<bool>(
+         context: context,
+         builder: (ctx) => AlertDialog(
+           title: const Text('Save Sync Warning'),
+           content: Text('${e.toString().replaceAll('Exception: ', '')}\n\nPlay anyway?'),
+           actions: [
+             FocusEffectWrapper(
+               onTap: () => Navigator.pop(ctx, false),
+               borderRadius: 12.0,
+               autofocus: true,
+               child: Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                 decoration: BoxDecoration(
+                   borderRadius: BorderRadius.circular(12),
+                   color: Colors.white.withValues(alpha: 0.05),
+                   border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                 ),
+                 child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+               ),
+             ),
+             const SizedBox(width: 8),
+             FocusEffectWrapper(
+               onTap: () => Navigator.pop(ctx, true),
+               borderRadius: 12.0,
+               child: Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                 decoration: BoxDecoration(
+                   borderRadius: BorderRadius.circular(12),
+                   color: Colors.indigo.withValues(alpha: 0.1),
+                   border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+                 ),
+                 child: const Text('Play Anyway', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+               ),
+             ),
+           ],
+         ),
+       );
     } else { ErrorHandler.showException(context, e, contextLabel: push ? 'Push Saves Error' : 'Pull Saves Error'); }
     return null;
   }
 
   Future<bool?> _showMissingRomDialog(BuildContext context, String gameName, String expectedPath) {
-    return showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('ROM not found'), content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text('$gameName is not downloaded yet.'), const SizedBox(height: 8), const Text('Expected location:', style: TextStyle(fontWeight: FontWeight.bold)), const SizedBox(height: 4), SelectableText(expectedPath, style: const TextStyle(fontSize: 12, color: Colors.grey)), const SizedBox(height: 12), const Text('Download now?')]), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Download'))]));
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ROM not found'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$gameName is not downloaded yet.'),
+            const SizedBox(height: 8),
+            const Text('Expected location:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            SelectableText(expectedPath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            const Text('Download now?'),
+          ],
+        ),
+        actions: [
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(ctx, false),
+            borderRadius: 12.0,
+            autofocus: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(ctx, true),
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.indigo.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Download', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool?> _showMissingCoreDialog(BuildContext context, String coreName) {
-    return showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('RetroArch Core Missing'), content: Text('The core $coreName is required. Download and install it automatically?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')), ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Install'))]));
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('RetroArch Core Missing'),
+        content: Text('The core $coreName is required. Download and install it automatically?'),
+        actions: [
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(ctx, false),
+            borderRadius: 12.0,
+            autofocus: true,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(ctx, true),
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.indigo.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Install', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
