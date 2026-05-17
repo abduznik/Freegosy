@@ -54,6 +54,7 @@ dependencies:
   synchronized: ^3.1.0+1
   uuid: ^4.5.1
   intl: ^0.20.2
+  gamepads: ^0.1.8+2
 
 dev_dependencies:
   flutter_test:
@@ -115,6 +116,8 @@ inno_bundle:
 flutter:
   assets:
     - freegosy_logo.png
+    - thirdparty/gamecontrollerdb.txt
+    - thirdparty/gamecontrollerdb_license.txt
     - thirdparty/7zr.exe
     - thirdparty/7zz
     - thirdparty/7zip_license.txt

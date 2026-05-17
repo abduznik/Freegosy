@@ -13,6 +13,7 @@ final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LoggerService.init();
+
   Hive.registerAdapter(BackupEntryAdapter());
   await Hive.initFlutter();
   await Hive.openBox<List>('freegosy_backups');

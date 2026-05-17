@@ -408,6 +408,62 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  gamepads:
+    dependency: "direct main"
+    description:
+      name: gamepads
+      sha256: "5f8f1f31e241bce1c77e7bc5dcf5c03d9ea51a04ed775c8c299e788c512e0b54"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.8+2"
+  gamepads_android:
+    dependency: transitive
+    description:
+      name: gamepads_android
+      sha256: aa71cb514f6aea3fddb21734ff52f38870c5054100fc44b798b6b9f91c4eef16
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.7"
+  gamepads_darwin:
+    dependency: transitive
+    description:
+      name: gamepads_darwin
+      sha256: a7668dc17f2e4b95c29c54e961c3ef6e34e3997718383e96dd0bdf5a5c3b03c8
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2+4"
+  gamepads_ios:
+    dependency: transitive
+    description:
+      name: gamepads_ios
+      sha256: "514a37d4b1b17bf47fe911ee1b750eca6be2b8abbdb71f200b9ad3186014d413"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.3+3"
+  gamepads_linux:
+    dependency: transitive
+    description:
+      name: gamepads_linux
+      sha256: "80bf70df6da6185926e6d8b2feb98e725e6fe99290afafaea91dba471e8c1c1e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
+  gamepads_platform_interface:
+    dependency: transitive
+    description:
+      name: gamepads_platform_interface
+      sha256: "9ddb3b61c780284a17739d759929d2e32b912d12d9145ee493ffe2b43fc6256a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.3"
+  gamepads_windows:
+    dependency: transitive
+    description:
+      name: gamepads_windows
+      sha256: "454320638b8ad73890530545a2f788d83a752471010edade0f00b1636c1b382d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.4+1"
   glob:
     dependency: transitive
     description:

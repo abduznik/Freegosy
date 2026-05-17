@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'main.dart' show scaffoldMessengerKey;
@@ -13,6 +14,9 @@ import 'ui/screens/settings_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'providers/ui_provider.dart';
 import 'core/storage/file_sanity_service.dart';
+import 'core/input/gamepad_service.dart';
+import 'core/input/input_action_bus.dart';
+import 'package:flutter/services.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -32,6 +36,77 @@ class FreegosyApp extends ConsumerStatefulWidget {
 }
 
 class _FreegosyAppState extends ConsumerState<FreegosyApp> {
+  StreamSubscription<GameAction>? _inputSub;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Global Keyboard Listener - Maps physical keys to Action Bus commands
+    HardwareKeyboard.instance.addHandler((event) {
+      if (event is KeyDownEvent) {
+        // Protection: Ignore if typing in a text field
+        final focusNode = FocusManager.instance.primaryFocus;
+        if (focusNode?.context?.widget is EditableText) {
+          return false; 
+        }
+
+        final action = _mapPhysicalKeyToAction(event.logicalKey);
+        if (action != null) {
+          // 1. Switch to Keyboard Mode
+          if (ref.read(inputModeProvider) != InputMode.keyboard) {
+            debugPrint('⌨️ Switching to KEYBOARD mode.');
+            ref.read(inputModeProvider.notifier).state = InputMode.keyboard;
+          }
+          
+          // 2. Broadcast the action
+          inputActionBus.add(action);
+        }
+      }
+      return false;
+    });
+
+    // Global Action Executor: Listen for actions that apply everywhere
+    _inputSub = inputActionBus.stream.listen((action) {
+      if (action == GameAction.confirm) {
+        final focusedAction = ref.read(focusedActionProvider);
+        if (focusedAction != null) {
+          debugPrint('🎯 Global: Executing focused action.');
+          focusedAction();
+        }
+      } else if (action == GameAction.l1) {
+        final current = ref.read(currentTabIndexProvider);
+        if (current > 0) {
+          ref.read(currentTabIndexProvider.notifier).state = current - 1;
+        }
+      } else if (action == GameAction.r1) {
+        final current = ref.read(currentTabIndexProvider);
+        if (current < _screens.length - 1) {
+          ref.read(currentTabIndexProvider.notifier).state = current + 1;
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _inputSub?.cancel();
+    super.dispose();
+  }
+
+  GameAction? _mapPhysicalKeyToAction(LogicalKeyboardKey key) {
+    if (key == LogicalKeyboardKey.escape) return GameAction.back;
+    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) return GameAction.confirm;
+    if (key == LogicalKeyboardKey.arrowUp) return GameAction.up;
+    if (key == LogicalKeyboardKey.arrowDown) return GameAction.down;
+    if (key == LogicalKeyboardKey.arrowLeft) return GameAction.left;
+    if (key == LogicalKeyboardKey.arrowRight) return GameAction.right;
+    if (key == LogicalKeyboardKey.keyX) return GameAction.detail;
+    if (key == LogicalKeyboardKey.keyY) return GameAction.favorite;
+    if (key == LogicalKeyboardKey.keyQ) return GameAction.l1;
+    if (key == LogicalKeyboardKey.keyE) return GameAction.r1;
+    return null;
+  }
 
 
   final List<Widget> _screens = const [
@@ -75,8 +150,9 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       }
     });
 
-    // Keep the file sanity service alive and running in the background
+    // Keep services alive in the background
     ref.watch(fileSanityServiceProvider);
+    ref.watch(gamepadServiceProvider);
 
     final currentIndex = ref.watch(currentTabIndexProvider);
 

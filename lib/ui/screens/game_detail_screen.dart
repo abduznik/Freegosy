@@ -19,6 +19,12 @@ import '../widgets/game_detail/game_metadata_chip.dart';
 import '../widgets/game_detail/game_details_grid.dart';
 import '../widgets/game_detail/game_notes_section.dart';
 import '../widgets/game_detail/game_personal_section.dart';
+import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/controller_hints_bar.dart';
+import '../../providers/ui_provider.dart';
+import '../../core/input/input_action_bus.dart';
+import '../../core/input/gamepad_service.dart';
+import 'dart:async';
 
 class GameDetailScreen extends ConsumerStatefulWidget {
   final Game game;
@@ -57,6 +63,8 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   late String? _status;
   late int _completion;
   bool _isSaving = false;
+  StreamSubscription<GameAction>? _inputSub;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -67,12 +75,36 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     _checkDownloadStatus();
     _lazySync();
     _refreshGame();
+
+    // Action Bus: Listen for Back command regardless of focus state
+    _inputSub = inputActionBus.stream.listen((action) {
+      if (action == GameAction.back && mounted) {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      }
+    });
+
+    // Autofocus: Ensure the screen is ready for input on open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _inputSub?.cancel();
+    _focusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _lazySync() async {
     final scanner = ref.read(romScannerServiceProvider);
     if (scanner != null) {
       await scanner.syncSingleGame(_currentGame);
+      if (!mounted) return;
       _checkDownloadStatus();
     }
   }
@@ -86,6 +118,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 
   Future<void> _checkDownloadStatus() async {
+    if (!mounted) return;
     final ds = ref.read(directoryServiceProvider).value;
     if (ds != null) {
       final exists = await ds.isRomDownloaded(_currentGame);
@@ -94,7 +127,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 
   Future<void> _refreshGame() async {
-    if (widget.rommService == null) return;
+    if (!mounted || widget.rommService == null) return;
     try {
       final updated = await widget.rommService!.getGame(_currentGame.id);
       if (updated != null && mounted) {
@@ -136,8 +169,12 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       final content = contentController.text.trim();
       if (title.isNotEmpty || content.isNotEmpty) {
         final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
-        if (success) _refreshGame();
-        else if (mounted) ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
+        if (success) {
+          if (!mounted) return;
+          _refreshGame();
+        } else if (mounted) {
+          ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
+        }
       }
     }
   }
@@ -157,8 +194,12 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     );
     if (confirm == true) {
       final success = await widget.rommService!.deleteRomNote(_currentGame.id, noteId);
-      if (success) _refreshGame();
-      else if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete note')));
+      if (success) {
+        if (!mounted) return;
+        _refreshGame();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete note')));
+      }
     }
   }
 
@@ -273,6 +314,32 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (child, animation) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+        child: ref.watch(inputModeProvider) != InputMode.mouse
+            ? ControllerHintsBar(
+                hints: [
+                  ControllerHintItem(
+                    label: _isDownloaded ? 'Play' : 'Download', 
+                    button: 'A'
+                  ),
+                  const ControllerHintItem(label: 'Back', button: 'B'),
+                ],
+              )
+            : const SizedBox.shrink(key: ValueKey('hide_detail_hints')),
+      ),
     );
   }
 
@@ -340,11 +407,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             ]),
           ]);
         }
-        return Center(child: GameActionButton(icon: Icons.download, label: 'Download', onPressed: () async { await widget.onDownload(); _checkDownloadStatus(); }));
+        return Center(child: GameActionButton(
+          focusNode: _focusNode,
+          icon: Icons.download, 
+          label: 'Download', 
+          onPressed: () async { await widget.onDownload(); _checkDownloadStatus(); }
+        ));
       }
       return Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-          Expanded(child: GameActionButton(icon: Icons.play_arrow, label: 'Play', onPressed: () async { if (_isDownloaded) await widget.onLaunch(); })),
+          Expanded(child: GameActionButton(
+            focusNode: _focusNode,
+            icon: Icons.play_arrow, 
+            label: 'Play', 
+            onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
+          )),
           Expanded(child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); })),
           Expanded(child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); })),
           Expanded(child: GameActionButton(icon: Icons.folder_open, label: 'Open Folder', onPressed: () async {
