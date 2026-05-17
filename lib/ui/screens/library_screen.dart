@@ -70,39 +70,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
     _inputSub = inputActionBus.stream.listen((action) {
       if (!mounted) return;
-
-      if (action == GameAction.down) {
-        final primary = FocusManager.instance.primaryFocus;
-        if (primary != null) {
-          bool isPlatformTab = (primary == _platformTabsFocusNode || primary == _firstPlatformChipFocusNode);
-          if (!isPlatformTab) {
-            for (var ancestor in primary.ancestors) {
-              if (ancestor == _platformTabsFocusNode) {
-                isPlatformTab = true;
-                break;
-              }
-            }
-          }
-          
-          if (isPlatformTab) {
-            ref.read(navigationLockedProvider.notifier).state = true;
-            
-            // Wait a tick for the UI to settle (if grid changed), then focus the left-most game
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _firstContentItemFocusNode.requestFocus();
-                // Ensure scroll jumps to the top so the first item is actually visible
-                if (_scrollController.hasClients) {
-                  _scrollController.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
-                }
-                ref.read(navigationLockedProvider.notifier).state = false;
-              }
-            });
-            return;
-          }
-        }
-      }
-
       switch (action) {
         case GameAction.detail:
           if (_isFilterSheetOpen) Navigator.pop(context);
@@ -435,6 +402,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                           firstChipFocusNode: _firstPlatformChipFocusNode,
                           onNavigateUp: () => _scrollToTopAndFocusSearch(),
                           onNavigateDown: () {
+                            if (_scrollController.hasClients) {
+                              _scrollController.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+                            }
                             _firstContentItemFocusNode.requestFocus();
                           },
                           onSelected: (platform) {
