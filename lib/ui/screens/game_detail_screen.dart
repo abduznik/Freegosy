@@ -67,6 +67,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   bool _adjustingCompletion = false;
   bool _justEnteredRating = false;
   bool _justEnteredCompletion = false;
+  bool _isAddingNote = false;
   StreamSubscription<GameAction>? _inputSub;
   final FocusNode _focusNode = FocusNode();
   late ProviderContainer _container;
@@ -220,87 +221,100 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 
   Future<void> _addNote() async {
+    if (_isAddingNote) return;
+    _isAddingNote = true;
+    
     final titleController = TextEditingController();
     final contentController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Note'),
-        content: SizedBox(
-          width: 500,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+    bool? result;
+    
+    try {
+      result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add Note'),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: contentController,
-                decoration: const InputDecoration(
-                  labelText: 'Content',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Content',
+                    labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                  ),
+                  maxLines: 4,
                 ),
-                maxLines: 4,
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            FocusEffectWrapper(
+              onTap: () => Navigator.pop(context, false),
+              borderRadius: 12.0,
+              scaleFactor: 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withValues(alpha: 0.05),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FocusEffectWrapper(
+              onTap: () => Navigator.pop(context, true),
+              borderRadius: 12.0,
+              scaleFactor: 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.indigo.withValues(alpha: 0.1),
+                  border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+                ),
+                child: const Text('Add Note', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          FocusEffectWrapper(
-            onTap: () => Navigator.pop(context, false),
-            borderRadius: 12.0,
-            scaleFactor: 1.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FocusEffectWrapper(
-            onTap: () => Navigator.pop(context, true),
-            borderRadius: 12.0,
-            scaleFactor: 1.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.indigo.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
-              ),
-              child: const Text('Add Note', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (result == true && widget.rommService != null) {
-      final title = titleController.text.trim();
-      final content = contentController.text.trim();
-      if (title.isNotEmpty || content.isNotEmpty) {
-        final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
-        if (success) {
-          if (!mounted) return;
-          _refreshGame();
-        } else if (mounted) {
-          ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
+      if (result == true && widget.rommService != null) {
+        final title = titleController.text.trim();
+        final content = contentController.text.trim();
+        if (title.isNotEmpty || content.isNotEmpty) {
+          final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
+          if (success) {
+            if (!mounted) return;
+            _refreshGame();
+          } else if (mounted) {
+            ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
+          }
         }
       }
+    } finally {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _isAddingNote = false;
+        }
+      });
     }
   }
 
