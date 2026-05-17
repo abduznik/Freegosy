@@ -61,6 +61,7 @@ class GameNotesSection extends StatelessWidget {
                 child: FocusEffectWrapper(
                   onTap: () => onViewNote(note),
                   borderRadius: 12.0,
+                  scaleFactor: 1.015,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
