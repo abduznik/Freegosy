@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import '../../providers/paginated_games_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/romm/romm_service.dart';
 import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
 import '../widgets/filter_bottom_sheet.dart';
@@ -295,16 +297,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
             Image.asset('freegosy_logo.png', height: 32, width: 32),
             const SizedBox(width: 12),
             Expanded(
-              child: rommService == null 
-                ? Consumer(builder: (context, ref, _) => Text(ref.watch(rommConfigProvider).value?.baseUrl ?? 'Loading...', style: const TextStyle(color: Colors.grey), overflow: TextOverflow.ellipsis))
-                : ValueListenableBuilder<bool>(
-                    valueListenable: rommService.isOffline,
-                    builder: (context, offline, _) => Text(
-                      offline ? "${rommService.config.baseUrl} - Offline Mode" : rommService.config.baseUrl,
-                      style: offline ? const TextStyle(color: Colors.orange) : null,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+              child: _buildAppBarTitle(context, ref, rommService),
             ),
           ],
         ),
@@ -538,6 +531,115 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
               ])
             : const SizedBox.shrink(key: ValueKey('hide_hints')),
       ),
+    );
+  }
+
+  Widget _buildAppBarTitle(BuildContext context, WidgetRef ref, RommService? rommService) {
+    final theme = Theme.of(context);
+    final cacheAsync = ref.watch(metadataCacheServiceProvider);
+    final isOffline = rommService?.isOffline.value ?? false;
+
+    return cacheAsync.when(
+      data: (cache) {
+        final games = cache.cachedGames;
+        if (games.isEmpty) {
+          return _buildDefaultGreeting(isOffline);
+        }
+
+        // Stable daily random recommendation seeded with the calendar date
+        final now = DateTime.now();
+        final seed = now.year * 10000 + now.month * 100 + now.day;
+        final rng = Random(seed);
+        final randomIndex = rng.nextInt(games.length);
+        final dailyGame = games[randomIndex];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "TODAY'S GAME RECOMMENDATION",
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                if (isOffline) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: const Text(
+                      'OFFLINE',
+                      style: TextStyle(color: Colors.orange, fontSize: 8, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              dailyGame.displayName,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        );
+      },
+      loading: () => const Text('Freegosy Launcher', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      error: (_, __) => _buildDefaultGreeting(isOffline),
+    );
+  }
+
+  Widget _buildDefaultGreeting(bool isOffline) {
+    final greetings = [
+      "Let's play some retro games!",
+      "Welcome back to Freegosy!",
+      "Ready for your next adventure?",
+      "Grab a controller and play!",
+      "Discover your next favorite game!",
+    ];
+    final now = DateTime.now();
+    final seed = now.year * 10000 + now.month * 100 + now.day;
+    final rng = Random(seed);
+    final greeting = greetings[rng.nextInt(greetings.length)];
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            greeting,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (isOffline)
+          Container(
+            margin: const EdgeInsets.only(left: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            ),
+            child: const Text(
+              'OFFLINE',
+              style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+      ],
     );
   }
 }
