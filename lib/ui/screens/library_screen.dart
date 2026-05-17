@@ -387,7 +387,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                           ),
                           onChanged: (value) {
                             ref.read(searchQueryProvider.notifier).state = value;
-                            ref.read(paginatedGamesProvider.notifier).loadInitial(platformId: ref.read(selectedPlatformIdProvider)?.toString(), search: value.isEmpty ? null : value);
+                            if (value.isNotEmpty) {
+                              // Force visual tab transition to "All" platform tab
+                              ref.read(isHomeSelectedProvider.notifier).state = false;
+                              ref.read(selectedPlatformIdProvider.notifier).state = null;
+                              
+                              // Load initial games globally matching the search term
+                              ref.read(paginatedGamesProvider.notifier).reset();
+                              ref.read(paginatedGamesProvider.notifier).loadInitial(platformId: null, search: value);
+                            } else {
+                              // Reset visual tab transition back to "Home" tab
+                              ref.read(isHomeSelectedProvider.notifier).state = true;
+                              ref.read(selectedPlatformIdProvider.notifier).state = null;
+                              
+                              // Clear search and reload Home page content
+                              ref.read(paginatedGamesProvider.notifier).reset();
+                              ref.read(paginatedGamesProvider.notifier).loadInitial(platformId: null, search: null);
+                            }
                           },
                         ),
                       ),
@@ -460,7 +476,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                         builder: (context, ref, _) {
                           final isHome = ref.watch(isHomeSelectedProvider);
                           final displayGames = paginatedState.games;
-                          if (isHome) {
+                          final isSearching = ref.watch(searchQueryProvider).isNotEmpty;
+                          if (isHome && !isSearching) {
                             return SliverList(
                               delegate: SliverChildListDelegate([
                                 ref.watch(recentlyPlayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Continue Playing', icon: Icons.play_circle_outline, games: games, ref: ref, isFirst: true), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
