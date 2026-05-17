@@ -54,6 +54,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     
+    _searchFocusNode.onKeyEvent = (node, event) {
+      if (event is! KeyUpEvent) {
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _firstPlatformChipFocusNode.requestFocus();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _topActionsFocusNode.requestFocus();
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
+    };
+
     _inputSub = inputActionBus.stream.listen((action) {
       if (!mounted) return;
       switch (action) {
@@ -63,6 +77,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           break;
         case GameAction.favorite:
           _scrollToTopAndFocusSearch();
+          break;
+        case GameAction.back:
+          if (_isFilterSheetOpen) {
+            Navigator.pop(context);
+          }
           break;
         default:
           break;
@@ -350,41 +369,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                       sliver: SliverToBoxAdapter(
-                        child: Focus(
+                        child: TextField(
                           focusNode: _searchFocusNode,
-                          onKeyEvent: (node, event) {
-                            if (event is! KeyUpEvent) {
-                              if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                                _firstPlatformChipFocusNode.requestFocus();
-                                return KeyEventResult.handled;
-                              }
-                              if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                                _topActionsFocusNode.requestFocus();
-                                return KeyEventResult.handled;
-                              }
-                            }
-                            return KeyEventResult.ignored;
-                          },
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              hintText: 'Search games...', 
-                              prefixIcon: const Icon(Icons.search), 
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
-                              // Exclusive Focus Visuals:
-                              // Only show the focused border color if we are NOT in mouse mode
-                              enabledBorder: (inputMode == InputMode.mouse) 
-                                ? null 
-                                : OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8.0),
-                                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
-                                  ),
-                            ),
-                            onChanged: (value) {
-                              ref.read(searchQueryProvider.notifier).state = value;
-                              ref.read(paginatedGamesProvider.notifier).loadInitial(platformId: ref.read(selectedPlatformIdProvider)?.toString(), search: value.isEmpty ? null : value);
-                            },
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search games...', 
+                            prefixIcon: const Icon(Icons.search), 
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
+                            // Exclusive Focus Visuals:
+                            // Only show the focused border color if we are NOT in mouse mode
+                            enabledBorder: (inputMode == InputMode.mouse) 
+                              ? null 
+                              : OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8.0),
+                                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
+                                ),
                           ),
+                          onChanged: (value) {
+                            ref.read(searchQueryProvider.notifier).state = value;
+                            ref.read(paginatedGamesProvider.notifier).loadInitial(platformId: ref.read(selectedPlatformIdProvider)?.toString(), search: value.isEmpty ? null : value);
+                          },
                         ),
                       ),
                     ),

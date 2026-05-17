@@ -7,6 +7,7 @@ class GameActionButton extends StatelessWidget {
   final VoidCallback onPressed;
   final Color? color;
   final FocusNode? focusNode;
+  final bool isPrimary;
 
   const GameActionButton({
     super.key,
@@ -15,32 +16,71 @@ class GameActionButton extends StatelessWidget {
     required this.onPressed,
     this.color,
     this.focusNode,
+    this.isPrimary = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDestructive = color == Colors.red || color == Colors.redAccent;
+
     return FocusEffectWrapper(
       focusNode: focusNode,
       onTap: onPressed,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton.filledTonal(
-            onPressed: onPressed,
-            icon: Icon(icon, color: color),
-            style: IconButton.styleFrom(
-              padding: const EdgeInsets.all(12),
+      borderRadius: 16.0,
+      scaleFactor: isPrimary ? 1.03 : 1.05,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: isPrimary ? 40 : 16,
+          vertical: isPrimary ? 14 : 10,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: isPrimary
+              ? const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isPrimary
+              ? null
+              : (isDestructive
+                  ? Colors.red.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(
+            color: isPrimary
+                ? Colors.white.withValues(alpha: 0.15)
+                : (isDestructive
+                    ? Colors.red.withValues(alpha: 0.2)
+                    : Colors.white.withValues(alpha: 0.08)),
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: isPrimary ? 22 : 16,
+              color: isPrimary
+                  ? Colors.white
+                  : (isDestructive ? Colors.redAccent : Colors.white70),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: color ?? Colors.white70,
-                ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: isPrimary ? 15 : 12,
+                fontWeight: isPrimary ? FontWeight.bold : FontWeight.w600,
+                color: isPrimary
+                    ? Colors.white
+                    : (isDestructive ? Colors.redAccent : Colors.white.withValues(alpha: 0.9)),
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

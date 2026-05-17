@@ -394,12 +394,15 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         if (progress != null) {
           return Column(children: [
             Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: DownloadProgressIndicator(progress: progress, compact: true)),
-            const SizedBox(height: 12),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-              if (!progress.isComplete && progress.error == null) GameActionButton(icon: progress.isPaused ? Icons.play_arrow : Icons.pause, label: progress.isPaused ? 'Resume' : 'Pause', onPressed: () {
-                if (progress.isPaused) { if (progress.game != null && progress.downloadUrl != null) ref.read(downloadProvider.notifier).startDownload(progress.game!, progress.downloadUrl!); }
-                else { ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id); }
-              }),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (!progress.isComplete && progress.error == null) ...[
+                GameActionButton(icon: progress.isPaused ? Icons.play_arrow : Icons.pause, label: progress.isPaused ? 'Resume' : 'Pause', onPressed: () {
+                  if (progress.isPaused) { if (progress.game != null && progress.downloadUrl != null) ref.read(downloadProvider.notifier).startDownload(progress.game!, progress.downloadUrl!); }
+                  else { ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id); }
+                }),
+                const SizedBox(width: 16),
+              ],
               GameActionButton(icon: Icons.close, label: 'Cancel', color: Colors.red, onPressed: () async {
                 if (progress.isComplete || progress.error != null) ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
                 else if (await _showCancelConfirmation(context, progress.gameName)) ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
@@ -410,36 +413,56 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         return Center(child: GameActionButton(
           focusNode: _focusNode,
           icon: Icons.download, 
-          label: 'Download', 
+          label: 'Download Game', 
+          isPrimary: true,
           onPressed: () async { await widget.onDownload(); _checkDownloadStatus(); }
         ));
       }
-      return Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-          Expanded(child: GameActionButton(
-            focusNode: _focusNode,
-            icon: Icons.play_arrow, 
-            label: 'Play', 
-            onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
-          )),
-          Expanded(child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); })),
-          Expanded(child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); })),
-          Expanded(child: GameActionButton(icon: Icons.folder_open, label: 'Open Folder', onPressed: () async {
-            final ds = ref.read(directoryServiceProvider).value;
-            if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
-          })),
-          Expanded(child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); })),
-        ]),
-        const SizedBox(height: 24),
-        const Divider(color: Colors.white10, height: 32),
-        const Center(child: Text('LOCAL SAVE STATES', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5))),
-        const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup', onPressed: () async => _handleLocalBackup(ref)),
-          const SizedBox(width: 48),
-          GameActionButton(icon: Icons.history, label: 'Restore', onPressed: () async => _handleLocalRestore(ref)),
-        ]),
-      ]);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: GameActionButton(
+              focusNode: _focusNode,
+              icon: Icons.play_arrow, 
+              label: 'Play Game', 
+              isPrimary: true,
+              onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
+            ),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.center,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                GameActionButton(icon: Icons.cloud_upload, label: 'RomM Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
+                GameActionButton(icon: Icons.cloud_download, label: 'RomM Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
+                GameActionButton(icon: Icons.folder_open, label: 'Open Folder', onPressed: () async {
+                  final ds = ref.read(directoryServiceProvider).value;
+                  if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+                }),
+                GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(color: Colors.white10, height: 32),
+          const Center(child: Text('LOCAL SAVE STATES', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5))),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup Local', onPressed: () async => _handleLocalBackup(ref)),
+              const SizedBox(width: 24),
+              GameActionButton(icon: Icons.history, label: 'Restore Local', onPressed: () async => _handleLocalRestore(ref)),
+            ],
+          ),
+        ],
+      );
     });
   }
 
