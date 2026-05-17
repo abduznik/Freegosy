@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/file_system_index.dart';
 import 'package:freegosy/providers/romm_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/settings_screen.dart';

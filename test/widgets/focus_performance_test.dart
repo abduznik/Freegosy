@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freegosy/ui/widgets/focus_effect_wrapper.dart';
 
 void main() {
   group('FocusEffectWrapper Performance Benchmarks', () {
     testWidgets('Should handle 100 simultaneous wrappers without overflow or errors', (WidgetTester tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10),
-              itemCount: 100,
-              itemBuilder: (context, index) => FocusEffectWrapper(
-                child: Container(
-                  height: 100,
-                  width: 100,
-                  color: Colors.blue,
-                  child: Text('Item $index'),
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10),
+                itemCount: 100,
+                itemBuilder: (context, index) => FocusEffectWrapper(
+                  child: Container(
+                    height: 100,
+                    width: 100,
+                    color: Colors.blue,
+                    child: Text('Item $index'),
+                  ),
                 ),
               ),
             ),
@@ -31,14 +34,18 @@ void main() {
     testWidgets('Should remain stable during rapid-fire focus transitions', (WidgetTester tester) async {
       // Create a small list to test rapid transitions
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: List.generate(5, (index) => 
-                FocusEffectWrapper(
-                  key: ValueKey('item_$index'),
-                  child: SizedBox(height: 50, width: 200, child: Text('Item $index')),
-                )
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: Column(
+                  children: List.generate(5, (index) => 
+                    FocusEffectWrapper(
+                      key: ValueKey('item_$index'),
+                      child: SizedBox(height: 50, width: 200, child: Text('Item $index')),
+                    )
+                  ),
+                ),
               ),
             ),
           ),

@@ -26,11 +26,17 @@ final gamepadServiceProvider = Provider<GamepadService>((ref) {
   return service;
 });
 
+class AxisState {
+  bool isNegativeActive = false;
+  bool isPositiveActive = false;
+}
+
 class GamepadService {
   final Ref _ref;
   StreamSubscription<GamepadEvent>? _subscription;
   Timer? _scanTimer;
   final Map<String, String> _controllerNames = {};
+  final Map<String, AxisState> _axisStates = {};
 
   GamepadService(this._ref);
 
@@ -45,16 +51,7 @@ class GamepadService {
 
     _subscription = Gamepads.events.listen(
       (event) {
-        final normalized = _normalize(event);
-        
-        // --- SMART LOGGING ---
-        if (normalized == null && event.value.abs() > 0.5) {
-          debugPrint('🎮 UNMAPPED HID [${event.gamepadId}]: ${event.key} = ${event.value}');
-        }
-
-        if (normalized != null) {
-          _handleAction(normalized);
-        }
+        _handleGamepadEvent(event);
       },
       onError: (err) => debugPrint('🎮 Gamepad Stream Error: $err'),
     );
@@ -97,21 +94,75 @@ class GamepadService {
     return null;
   }
 
-  void _handleAction(NormalizedInput input) {
+  void _handleGamepadEvent(GamepadEvent event) {
+    // 1. Switch to Gamepad input mode if significant event occurs
     if (_ref.read(inputModeProvider) != InputMode.gamepad) {
-      if (input.value.abs() > 0.5) {
+      if (event.value.abs() > 0.5) {
         debugPrint('🎮 Switching to GAMEPAD mode.');
         _ref.read(inputModeProvider.notifier).state = InputMode.gamepad;
       }
     }
 
-    if (input.value.abs() < 0.5) return;
+    final normalized = _normalize(event);
+    
+    // --- SMART LOGGING ---
+    if (normalized == null && event.value.abs() > 0.5) {
+      debugPrint('🎮 UNMAPPED HID [${event.gamepadId}]: ${event.key} = ${event.value}');
+    }
 
+    if (normalized == null) return;
+
+    // 2. Handle Axes (Analog Sticks & D-Pad Axes)
+    if (normalized.action == GameAction.horizontalAxis || normalized.action == GameAction.verticalAxis) {
+      final axisKey = '${event.gamepadId}_${event.key}';
+      final state = _axisStates.putIfAbsent(axisKey, () => AxisState());
+
+      // Invert vertical D-pad axis because D-pad UP is positive on macOS, 
+      // but analog stick UP is negative. This unifies their behavior.
+      final bool isInverted = event.key.contains('dpad') && normalized.action == GameAction.verticalAxis;
+      final double adjustedValue = isInverted ? -event.value : event.value;
+
+      // Negative threshold (-0.5)
+      if (adjustedValue < -0.5) {
+        if (!state.isNegativeActive) {
+          state.isNegativeActive = true;
+          final mappedAction = (normalized.action == GameAction.horizontalAxis)
+              ? GameAction.left
+              : GameAction.up;
+          _triggerAction(mappedAction, adjustedValue);
+        }
+      } else if (adjustedValue > -0.15) {
+        state.isNegativeActive = false;
+      }
+
+      // Positive threshold (0.5)
+      if (adjustedValue > 0.5) {
+        if (!state.isPositiveActive) {
+          state.isPositiveActive = true;
+          final mappedAction = (normalized.action == GameAction.horizontalAxis)
+              ? GameAction.right
+              : GameAction.down;
+          _triggerAction(mappedAction, adjustedValue);
+        }
+      } else if (adjustedValue < 0.15) {
+        state.isPositiveActive = false;
+      }
+    } else {
+      // 3. Handle Digital Buttons
+      // Only trigger on press (value > 0.5) to avoid double triggers on release
+      if (event.value.abs() > 0.5) {
+        _triggerAction(normalized.action, event.value);
+      }
+    }
+  }
+
+  void _triggerAction(GameAction action, double value) {
+    debugPrint('🎮 Gamepad Action Triggered: $action (value: $value)');
     // Broadcast the action to all listeners (screens, global handlers)
-    inputActionBus.add(input.action);
+    inputActionBus.add(action);
 
-    // Some actions still require direct focus manipulation for snappy navigation
-    switch (input.action) {
+    // Snappy navigation via direct focus movement
+    switch (action) {
       case GameAction.up:
         _moveFocus(TraversalDirection.up);
         break;
@@ -123,20 +174,6 @@ class GamepadService {
         break;
       case GameAction.right:
         _moveFocus(TraversalDirection.right);
-        break;
-      case GameAction.horizontalAxis:
-        if (input.value < -0.5) {
-          _moveFocus(TraversalDirection.left);
-        } else if (input.value > 0.5) {
-          _moveFocus(TraversalDirection.right);
-        }
-        break;
-      case GameAction.verticalAxis:
-        if (input.value < -0.5) {
-          _moveFocus(TraversalDirection.up);
-        } else if (input.value > 0.5) {
-          _moveFocus(TraversalDirection.down);
-        }
         break;
       default:
         break;

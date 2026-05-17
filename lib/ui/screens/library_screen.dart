@@ -423,7 +423,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     if (rommService == null)
                       const SliverFillRemaining(child: Center(child: Text('Setup Required in Settings')))
                     else if (paginatedState.isLoading)
-                      SliverToBoxAdapter(child: buildSkeletonGrid(cardAspectRatio, gridColumnCount, cardSpacing, context, showTitle: showTitle))
+                      buildSkeletonSliverGrid(cardAspectRatio, gridColumnCount, cardSpacing, context, showTitle: showTitle)
+                    else if (paginatedState.error != null)
+                      SliverFillRemaining(child: Center(child: Text('Error: ${paginatedState.error}')))
                     else
                       Consumer(
                         builder: (context, ref, _) {

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/file_system_index.dart';
 import 'package:freegosy/providers/library_provider.dart';
 import 'package:freegosy/providers/paginated_games_provider.dart';
 import 'package:freegosy/providers/romm_provider.dart';
@@ -69,7 +70,7 @@ void main() {
         child: const MaterialApp(home: LibraryScreen()),
       ));
 
-      expect(find.byType(GridView), findsOneWidget);
+      expect(find.byType(SliverGrid), findsOneWidget);
     });
 
     testWidgets('shows game grid when games are loaded', (WidgetTester tester) async {

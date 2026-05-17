@@ -10,12 +10,13 @@ import 'dart:typed_data' as _i11;
 import 'package:flutter/foundation.dart' as _i2;
 import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart'
     as _i5;
-import 'package:freegosy/core/romm/library_snapshot_service.dart' as _i13;
+import 'package:freegosy/core/romm/library_snapshot_service.dart' as _i14;
 import 'package:freegosy/core/romm/romm_models.dart' as _i3;
 import 'package:freegosy/core/romm/romm_service.dart' as _i6;
-import 'package:freegosy/core/storage/directory_service.dart' as _i4;
-import 'package:freegosy/core/storage/metadata_cache_service.dart' as _i14;
-import 'package:freegosy/core/storage/rom_mapping_service.dart' as _i12;
+import 'package:freegosy/core/storage/directory_service.dart' as _i12;
+import 'package:freegosy/core/storage/file_system_index.dart' as _i4;
+import 'package:freegosy/core/storage/metadata_cache_service.dart' as _i15;
+import 'package:freegosy/core/storage/rom_mapping_service.dart' as _i13;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i7;
 import 'package:shared_preferences/shared_preferences.dart' as _i9;
@@ -431,7 +432,7 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
 /// A class which mocks [DirectoryService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
+class MockDirectoryService extends _i1.Mock implements _i12.DirectoryService {
   MockDirectoryService() {
     _i1.throwOnMissingStub(this);
   }
@@ -555,6 +556,14 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
           as _i8.Future<String>);
 
   @override
+  _i8.Future<String?> resolveSevenZipPath() =>
+      (super.noSuchMethod(
+            Invocation.method(#resolveSevenZipPath, []),
+            returnValue: _i8.Future<String?>.value(),
+          )
+          as _i8.Future<String?>);
+
+  @override
   _i8.Future<void> resetRomsRoot() =>
       (super.noSuchMethod(
             Invocation.method(#resetRomsRoot, []),
@@ -656,6 +665,14 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
           as bool);
 
   @override
+  _i8.Future<bool> isRomDownloaded(_i3.Game? game) =>
+      (super.noSuchMethod(
+            Invocation.method(#isRomDownloaded, [game]),
+            returnValue: _i8.Future<bool>.value(false),
+          )
+          as _i8.Future<bool>);
+
+  @override
   _i8.Future<String> getRomsDirectory() =>
       (super.noSuchMethod(
             Invocation.method(#getRomsDirectory, []),
@@ -667,24 +684,6 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
             ),
           )
           as _i8.Future<String>);
-
-  @override
-  _i8.Future<Set<String>> getAllDownloadedFileNames() =>
-      (super.noSuchMethod(
-            Invocation.method(#getAllDownloadedFileNames, []),
-            returnValue: _i8.Future<Set<String>>.value(<String>{}),
-          )
-          as _i8.Future<Set<String>>);
-
-  @override
-  _i8.Future<Map<String, Set<String>>> getAllDownloadedFileNamesByPlatform() =>
-      (super.noSuchMethod(
-            Invocation.method(#getAllDownloadedFileNamesByPlatform, []),
-            returnValue: _i8.Future<Map<String, Set<String>>>.value(
-              <String, Set<String>>{},
-            ),
-          )
-          as _i8.Future<Map<String, Set<String>>>);
 
   @override
   _i8.Future<String> getRomDirectory(_i3.Game? game) =>
@@ -719,14 +718,6 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
   }) =>
       (super.noSuchMethod(
             Invocation.method(#findExistingRomPath, [game], {#index: index}),
-            returnValue: _i8.Future<String?>.value(),
-          )
-          as _i8.Future<String?>);
-
-  @override
-  _i8.Future<String?> resolveSevenZipPath() =>
-      (super.noSuchMethod(
-            Invocation.method(#resolveSevenZipPath, []),
             returnValue: _i8.Future<String?>.value(),
           )
           as _i8.Future<String?>);
@@ -826,26 +817,13 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
           as _i8.Future<void>);
 
   @override
-  _i8.Future<String> getEmulatorExecutable(
-    String? emulatorId,
-    String? executableName,
-  ) =>
+  _i8.Future<void> deleteRom(_i3.Game? game) =>
       (super.noSuchMethod(
-            Invocation.method(#getEmulatorExecutable, [
-              emulatorId,
-              executableName,
-            ]),
-            returnValue: _i8.Future<String>.value(
-              _i7.dummyValue<String>(
-                this,
-                Invocation.method(#getEmulatorExecutable, [
-                  emulatorId,
-                  executableName,
-                ]),
-              ),
-            ),
+            Invocation.method(#deleteRom, [game]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
           )
-          as _i8.Future<String>);
+          as _i8.Future<void>);
 
   @override
   _i8.Future<String?> findEmulatorExecutable(
@@ -860,36 +838,6 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
             returnValue: _i8.Future<String?>.value(),
           )
           as _i8.Future<String?>);
-
-  @override
-  _i8.Future<bool> isEmulatorInstalled(
-    String? emulatorId,
-    String? executableName,
-  ) =>
-      (super.noSuchMethod(
-            Invocation.method(#isEmulatorInstalled, [
-              emulatorId,
-              executableName,
-            ]),
-            returnValue: _i8.Future<bool>.value(false),
-          )
-          as _i8.Future<bool>);
-
-  @override
-  _i8.Future<bool> isRomDownloaded(_i3.Game? game) =>
-      (super.noSuchMethod(
-            Invocation.method(#isRomDownloaded, [game]),
-            returnValue: _i8.Future<bool>.value(false),
-          )
-          as _i8.Future<bool>);
-
-  @override
-  bool isEmuLaunchScript(String? path) =>
-      (super.noSuchMethod(
-            Invocation.method(#isEmuLaunchScript, [path]),
-            returnValue: false,
-          )
-          as bool);
 
   @override
   _i8.Future<void> launchGame(
@@ -946,19 +894,24 @@ class MockDirectoryService extends _i1.Mock implements _i4.DirectoryService {
           as _i8.Future<void>);
 
   @override
-  _i8.Future<void> deleteRom(_i3.Game? game) =>
+  _i8.Future<bool> isEmulatorInstalled(
+    String? emulatorId,
+    String? executableName,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#deleteRom, [game]),
-            returnValue: _i8.Future<void>.value(),
-            returnValueForMissingStub: _i8.Future<void>.value(),
+            Invocation.method(#isEmulatorInstalled, [
+              emulatorId,
+              executableName,
+            ]),
+            returnValue: _i8.Future<bool>.value(false),
           )
-          as _i8.Future<void>);
+          as _i8.Future<bool>);
 }
 
 /// A class which mocks [RomMappingService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockRomMappingService extends _i1.Mock implements _i12.RomMappingService {
+class MockRomMappingService extends _i1.Mock implements _i13.RomMappingService {
   MockRomMappingService() {
     _i1.throwOnMissingStub(this);
   }
@@ -1043,7 +996,7 @@ class MockRomMappingService extends _i1.Mock implements _i12.RomMappingService {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockLibrarySnapshotService extends _i1.Mock
-    implements _i13.LibrarySnapshotService {
+    implements _i14.LibrarySnapshotService {
   MockLibrarySnapshotService() {
     _i1.throwOnMissingStub(this);
   }
@@ -1098,7 +1051,7 @@ class MockLibrarySnapshotService extends _i1.Mock
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockMetadataCacheService extends _i1.Mock
-    implements _i14.MetadataCacheService {
+    implements _i15.MetadataCacheService {
   MockMetadataCacheService() {
     _i1.throwOnMissingStub(this);
   }
