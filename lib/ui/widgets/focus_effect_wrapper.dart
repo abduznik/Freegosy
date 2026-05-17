@@ -11,6 +11,7 @@ class FocusEffectWrapper extends ConsumerStatefulWidget {
   final bool showGlow;
   final FocusNode? focusNode;
   final bool autofocus;
+  final FocusOnKeyEventCallback? onKeyEvent;
 
   const FocusEffectWrapper({
     super.key,
@@ -21,6 +22,7 @@ class FocusEffectWrapper extends ConsumerStatefulWidget {
     this.showGlow = true,
     this.focusNode,
     this.autofocus = false,
+    this.onKeyEvent,
   });
 
   @override
@@ -59,6 +61,12 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
       focusNode: widget.focusNode,
       onFocusChange: _handleFocusChange,
       onKeyEvent: (node, event) {
+        if (widget.onKeyEvent != null) {
+          final res = widget.onKeyEvent!(node, event);
+          if (res == KeyEventResult.handled) {
+            return KeyEventResult.handled;
+          }
+        }
         if (event is KeyDownEvent && 
             (event.logicalKey == LogicalKeyboardKey.enter || 
              event.logicalKey == LogicalKeyboardKey.space)) {

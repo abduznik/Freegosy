@@ -562,16 +562,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           const SizedBox(height: 8),
           _buildSectionTitle(theme, 'Local Saves'),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup Local', onPressed: () async => _handleLocalBackup(ref)),
+          Center(
+            child: SizedBox(
+              width: 320,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup', onPressed: () async => _handleLocalBackup(ref)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GameActionButton(icon: Icons.history, label: 'Restore', onPressed: () async => _handleLocalRestore(ref)),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GameActionButton(icon: Icons.history, label: 'Restore Local', onPressed: () async => _handleLocalRestore(ref)),
-              ),
-            ],
+            ),
           ),
         ],
       );

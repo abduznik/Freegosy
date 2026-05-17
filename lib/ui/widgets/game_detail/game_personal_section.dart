@@ -37,6 +37,7 @@ class GamePersonalSection extends StatefulWidget {
 }
 
 class _GamePersonalSectionState extends State<GamePersonalSection> {
+  bool _adjustingRating = false;
   bool _adjustingCompletion = false;
 
   @override
@@ -160,48 +161,96 @@ class _GamePersonalSectionState extends State<GamePersonalSection> {
             const SizedBox(width: 12),
             Expanded(
               child: FocusEffectWrapper(
-                onTap: () {},
-                borderRadius: 12.0,
-                child: Focus(
-                  onKeyEvent: (node, event) {
-                    if (event is! KeyUpEvent) {
+                onTap: () {
+                  setState(() {
+                    _adjustingRating = !_adjustingRating;
+                  });
+                },
+                onKeyEvent: (node, event) {
+                  if (event is! KeyUpEvent) {
+                    if (_adjustingRating) {
+                      if (event.logicalKey == LogicalKeyboardKey.enter || 
+                          event.logicalKey == LogicalKeyboardKey.space ||
+                          event.logicalKey == LogicalKeyboardKey.escape) {
+                        setState(() {
+                          _adjustingRating = false;
+                        });
+                        return KeyEventResult.handled;
+                      }
                       if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                        if (widget.rating > 0) widget.onRatingChanged(widget.rating - 1);
+                        if (widget.rating > 0) {
+                          widget.onRatingChanged(widget.rating - 1);
+                        }
                         return KeyEventResult.handled;
                       }
                       if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                        if (widget.rating < 10) widget.onRatingChanged(widget.rating + 1);
+                        if (widget.rating < 10) {
+                          widget.onRatingChanged(widget.rating + 1);
+                        }
+                        return KeyEventResult.handled;
+                      }
+                      // Block D-pad Up/Down while adjusting rating!
+                      if (event.logicalKey == LogicalKeyboardKey.arrowUp || 
+                          event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                        return KeyEventResult.handled;
+                      }
+                    } else {
+                      // Press enter/space to enter adjust mode
+                      if (event.logicalKey == LogicalKeyboardKey.enter || 
+                          event.logicalKey == LogicalKeyboardKey.space) {
+                        setState(() {
+                          _adjustingRating = true;
+                        });
                         return KeyEventResult.handled;
                       }
                     }
-                    return KeyEventResult.ignored;
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.white.withValues(alpha: 0.03),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                  }
+                  return KeyEventResult.ignored;
+                },
+                borderRadius: 12.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: _adjustingRating 
+                        ? Colors.indigo.withValues(alpha: 0.1) 
+                        : Colors.white.withValues(alpha: 0.03),
+                    border: Border.all(
+                      color: _adjustingRating 
+                          ? Colors.indigoAccent 
+                          : Colors.white.withValues(alpha: 0.05),
+                      width: _adjustingRating ? 2.0 : 1.0,
                     ),
-                    child: Row(
-                      children: [
-                        const Text('Rating', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                        const Spacer(),
-                        Row(
-                          children: List.generate(5, (i) => GestureDetector(
-                            onTap: () => widget.onRatingChanged((i + 1) * 2),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 1.0),
-                              child: Icon(
-                                i * 2 < widget.rating ? Icons.star : Icons.star_border,
-                                color: Colors.amber,
-                                size: 16,
-                              ),
+                  ),
+                  child: Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Rating', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                          if (_adjustingRating)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2.0),
+                              child: Text('[←/→] Adjust', style: TextStyle(color: Colors.indigoAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                             ),
-                          )),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: List.generate(10, (i) => GestureDetector(
+                          onTap: _adjustingRating ? () => widget.onRatingChanged(i + 1) : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 1.0),
+                            child: Icon(
+                              i < widget.rating ? Icons.star : Icons.star_border,
+                              color: Colors.amber,
+                              size: 13,
+                            ),
+                          ),
+                        )),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -217,101 +266,99 @@ class _GamePersonalSectionState extends State<GamePersonalSection> {
               _adjustingCompletion = !_adjustingCompletion;
             });
           },
-          borderRadius: 12.0,
-          child: Focus(
-            onKeyEvent: (node, event) {
-              if (event is! KeyUpEvent) {
-                if (_adjustingCompletion) {
-                  if (event.logicalKey == LogicalKeyboardKey.enter || 
-                      event.logicalKey == LogicalKeyboardKey.space ||
-                      event.logicalKey == LogicalKeyboardKey.escape) {
-                    setState(() {
-                      _adjustingCompletion = false;
-                    });
-                    return KeyEventResult.handled;
+          onKeyEvent: (node, event) {
+            if (event is! KeyUpEvent) {
+              if (_adjustingCompletion) {
+                if (event.logicalKey == LogicalKeyboardKey.enter || 
+                    event.logicalKey == LogicalKeyboardKey.space ||
+                    event.logicalKey == LogicalKeyboardKey.escape) {
+                  setState(() {
+                    _adjustingCompletion = false;
+                  });
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                  if (widget.completion > 0) {
+                    widget.onCompletionChanged((widget.completion - 5).clamp(0, 100));
                   }
-                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                    if (widget.completion > 0) {
-                      widget.onCompletionChanged((widget.completion - 5).clamp(0, 100));
-                    }
-                    return KeyEventResult.handled;
+                  return KeyEventResult.handled;
+                }
+                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                  if (widget.completion < 100) {
+                    widget.onCompletionChanged((widget.completion + 5).clamp(0, 100));
                   }
-                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                    if (widget.completion < 100) {
-                      widget.onCompletionChanged((widget.completion + 5).clamp(0, 100));
-                    }
-                    return KeyEventResult.handled;
-                  }
-                  // Block D-pad Up/Down while adjusting to avoid navigation slip!
-                  if (event.logicalKey == LogicalKeyboardKey.arrowUp || 
-                      event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                    return KeyEventResult.handled;
-                  }
-                } else {
-                  // Enter adjust mode on Enter/Space
-                  if (event.logicalKey == LogicalKeyboardKey.enter || 
-                      event.logicalKey == LogicalKeyboardKey.space) {
-                    setState(() {
-                      _adjustingCompletion = true;
-                    });
-                    return KeyEventResult.handled;
-                  }
+                  return KeyEventResult.handled;
+                }
+                // Block D-pad Up/Down while adjusting to avoid navigation slip!
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp || 
+                    event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                  return KeyEventResult.handled;
+                }
+              } else {
+                // Enter adjust mode on Enter/Space
+                if (event.logicalKey == LogicalKeyboardKey.enter || 
+                    event.logicalKey == LogicalKeyboardKey.space) {
+                  setState(() {
+                    _adjustingCompletion = true;
+                  });
+                  return KeyEventResult.handled;
                 }
               }
-              return KeyEventResult.ignored;
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+            }
+            return KeyEventResult.ignored;
+          },
+          borderRadius: 12.0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: _adjustingCompletion 
+                  ? Colors.indigo.withValues(alpha: 0.1) 
+                  : Colors.white.withValues(alpha: 0.03),
+              border: Border.all(
                 color: _adjustingCompletion 
-                    ? Colors.indigo.withValues(alpha: 0.1) 
-                    : Colors.white.withValues(alpha: 0.03),
-                border: Border.all(
-                  color: _adjustingCompletion 
-                      ? Colors.indigoAccent 
-                      : Colors.white.withValues(alpha: 0.05),
-                  width: _adjustingCompletion ? 2.0 : 1.0,
-                ),
+                    ? Colors.indigoAccent 
+                    : Colors.white.withValues(alpha: 0.05),
+                width: _adjustingCompletion ? 2.0 : 1.0,
               ),
-              child: Row(
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Completion', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
-                      if (_adjustingCompletion)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 2.0),
-                          child: Text('[←/→] Adjust  [Enter] Save', style: TextStyle(color: Colors.indigoAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 2,
-                        thumbShape: RoundSliderThumbShape(enabledThumbRadius: _adjustingCompletion ? 8 : 6),
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Completion', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                    if (_adjustingCompletion)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2.0),
+                        child: Text('[←/→] Adjust  [Enter] Save', style: TextStyle(color: Colors.indigoAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
-                      child: Slider(
-                        value: widget.completion.toDouble(),
-                        min: 0,
-                        max: 100,
-                        divisions: 20,
-                        activeColor: Colors.indigoAccent,
-                        onChanged: _adjustingCompletion 
-                            ? (val) => widget.onCompletionChanged(val.toInt())
-                            : null,
-                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 2,
+                      thumbShape: RoundSliderThumbShape(enabledThumbRadius: _adjustingCompletion ? 8 : 6),
+                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                    ),
+                    child: Slider(
+                      value: widget.completion.toDouble(),
+                      min: 0,
+                      max: 100,
+                      divisions: 20,
+                      activeColor: Colors.indigoAccent,
+                      onChanged: _adjustingCompletion 
+                          ? (val) => widget.onCompletionChanged(val.toInt())
+                          : null,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text('${widget.completion}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Text('${widget.completion}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
             ),
           ),
         ),
