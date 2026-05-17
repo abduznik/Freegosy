@@ -63,6 +63,8 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   late String? _status;
   late int _completion;
   bool _isSaving = false;
+  bool _adjustingRating = false;
+  bool _adjustingCompletion = false;
   StreamSubscription<GameAction>? _inputSub;
   final FocusNode _focusNode = FocusNode();
 
@@ -78,9 +80,41 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
     // Action Bus: Listen for Back command regardless of focus state
     _inputSub = inputActionBus.stream.listen((action) {
-      if (action == GameAction.back && mounted) {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+      if (mounted) {
+        if (_adjustingCompletion) {
+          if (action == GameAction.left) {
+            setState(() {
+              _completion = (_completion - 5).clamp(0, 100);
+            });
+          } else if (action == GameAction.right) {
+            setState(() {
+              _completion = (_completion + 5).clamp(0, 100);
+            });
+          } else if (action == GameAction.confirm || action == GameAction.back) {
+            _toggleAdjustingCompletion();
+          }
+          return;
+        }
+
+        if (_adjustingRating) {
+          if (action == GameAction.left) {
+            setState(() {
+              _rating = (_rating - 1).clamp(0, 10);
+            });
+          } else if (action == GameAction.right) {
+            setState(() {
+              _rating = (_rating + 1).clamp(0, 10);
+            });
+          } else if (action == GameAction.confirm || action == GameAction.back) {
+            _toggleAdjustingRating();
+          }
+          return;
+        }
+
+        if (action == GameAction.back) {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
         }
       }
     });
@@ -93,10 +127,27 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     });
   }
 
+  void _toggleAdjustingRating() {
+    setState(() {
+      _adjustingRating = !_adjustingRating;
+      _adjustingCompletion = false;
+      ref.read(navigationLockedProvider.notifier).state = _adjustingRating;
+    });
+  }
+
+  void _toggleAdjustingCompletion() {
+    setState(() {
+      _adjustingCompletion = !_adjustingCompletion;
+      _adjustingRating = false;
+      ref.read(navigationLockedProvider.notifier).state = _adjustingCompletion;
+    });
+  }
+
   @override
   void dispose() {
     _inputSub?.cancel();
     _focusNode.dispose();
+    ref.read(navigationLockedProvider.notifier).state = false;
     super.dispose();
   }
 
@@ -394,12 +445,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   const SizedBox(height: 24),
                   _buildScreenshotsSection(theme),
                   GamePersonalSection(
-                    status: _status, rating: _rating, completion: _completion, backlogged: _backlogged, nowPlaying: _nowPlaying, isSaving: _isSaving,
+                    status: _status,
+                    rating: _rating,
+                    completion: _completion,
+                    backlogged: _backlogged,
+                    nowPlaying: _nowPlaying,
+                    isSaving: _isSaving,
+                    adjustingRating: _adjustingRating,
+                    adjustingCompletion: _adjustingCompletion,
                     onStatusChanged: (val) => setState(() => _status = val),
                     onRatingChanged: (val) => setState(() => _rating = val),
                     onCompletionChanged: (val) => setState(() => _completion = val),
                     onBacklogChanged: (val) => setState(() => _backlogged = val),
                     onNowPlayingChanged: (val) => setState(() => _nowPlaying = val),
+                    onToggleAdjustingRating: _toggleAdjustingRating,
+                    onToggleAdjustingCompletion: _toggleAdjustingCompletion,
                     onSave: () => _saveProps(context),
                   ),
                   const SizedBox(height: 24),
@@ -535,27 +595,32 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
+          Center(
+            child: SizedBox(
+              width: 340,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: GameActionButton(icon: Icons.folder, label: 'Folder', onPressed: () async {
+                      final ds = ref.read(directoryServiceProvider).value;
+                      if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+                    }),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: GameActionButton(icon: Icons.folder_open, label: 'Folder', onPressed: () async {
-                  final ds = ref.read(directoryServiceProvider).value;
-                  if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
-                }),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 24),
           const Divider(color: Colors.white12),

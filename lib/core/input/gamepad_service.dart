@@ -162,21 +162,23 @@ class GamepadService {
     inputActionBus.add(action);
 
     // Snappy navigation via direct focus movement
-    switch (action) {
-      case GameAction.up:
-        _moveFocus(TraversalDirection.up);
-        break;
-      case GameAction.down:
-        _moveFocus(TraversalDirection.down);
-        break;
-      case GameAction.left:
-        _moveFocus(TraversalDirection.left);
-        break;
-      case GameAction.right:
-        _moveFocus(TraversalDirection.right);
-        break;
-      default:
-        break;
+    if (!_ref.read(navigationLockedProvider)) {
+      switch (action) {
+        case GameAction.up:
+          _moveFocus(TraversalDirection.up);
+          break;
+        case GameAction.down:
+          _moveFocus(TraversalDirection.down);
+          break;
+        case GameAction.left:
+          _moveFocus(TraversalDirection.left);
+          break;
+        case GameAction.right:
+          _moveFocus(TraversalDirection.right);
+          break;
+        default:
+          break;
+      }
     }
   }
 
