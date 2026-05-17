@@ -78,6 +78,170 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  Widget _buildCustomDropdown<T>({
+    required BuildContext context,
+    required String label,
+    required T currentValue,
+    required String currentValueLabel,
+    required List<Map<String, dynamic>> items,
+    required Function(T) onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return FocusEffectWrapper(
+      onTap: () async {
+        final selected = await showDialog<T>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Text('Select $label'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: items.map((item) {
+                final isSelected = item['value'] == currentValue;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: FocusEffectWrapper(
+                    onTap: () => Navigator.pop(ctx, item['value']),
+                    borderRadius: 16.0,
+                    autofocus: isSelected,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: isSelected 
+                            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                        border: Border.all(
+                          color: isSelected 
+                              ? theme.colorScheme.primary.withValues(alpha: 0.4) 
+                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected ? Icons.check_circle : Icons.radio_button_off,
+                            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            item['label'] as String,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            actions: [
+              FocusEffectWrapper(
+                onTap: () => Navigator.pop(ctx),
+                borderRadius: 16.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                    border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                  ),
+                  child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (selected != null) {
+          onChanged(selected);
+        }
+      },
+      borderRadius: 16.0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const Spacer(),
+            Text(
+              currentValueLabel,
+              style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_drop_down, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomToggleRow(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required bool value,
+    required Function(bool) onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return FocusEffectWrapper(
+      onTap: () => onChanged(!value),
+      borderRadius: 16.0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11)),
+                ],
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: value ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: value ? theme.colorScheme.primary : theme.colorScheme.outline.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                value ? 'ON' : 'OFF',
+                style: TextStyle(
+                  color: value ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionCard({
     required BuildContext context,
     required String title,
@@ -367,19 +531,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 13),
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<ThemePreset>(
-            value: currentTheme,
-            decoration: _buildInputDecoration(context, 'Active Theme'),
-            items: ThemePreset.values.map((preset) {
-              return DropdownMenuItem(
-                value: preset,
-                child: Text(preset.displayName),
-              );
+          _buildCustomDropdown<ThemePreset>(
+            context: context,
+            label: 'Active Theme',
+            currentValue: currentTheme,
+            currentValueLabel: currentTheme.displayName,
+            items: ThemePreset.values.map((preset) => {
+              'value': preset,
+              'label': preset.displayName,
             }).toList(),
             onChanged: (preset) {
-              if (preset != null) {
-                ref.read(themeProvider.notifier).setTheme(preset);
-              }
+              ref.read(themeProvider.notifier).setTheme(preset);
             },
           ),
         ],
@@ -405,12 +567,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ] else
             TextField(controller: _apiKeyController, decoration: _buildInputDecoration(context, 'API Key (RomM 4.8+)'), obscureText: true),
           const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text('Legacy Authentication', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text('Enable if your RomM server is below v4.8', style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 12)),
+          _buildCustomToggleRow(
+            context,
+            title: 'Legacy Authentication',
+            subtitle: 'Enable if your RomM server is below v4.8',
             value: _isLegacyAuth,
-            activeColor: theme.colorScheme.primary,
-            contentPadding: EdgeInsets.zero,
             onChanged: (val) => setState(() => _isLegacyAuth = val),
           ),
           const SizedBox(height: 16),
@@ -526,20 +687,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (io.Platform.isLinux) ...[
-            DropdownButtonFormField<String>(
-              key: ValueKey(preset),
-              value: preset,
-              decoration: _buildInputDecoration(context, 'Linux App Layout'),
+            _buildCustomDropdown<String>(
+              context: context,
+              label: 'Linux App Layout',
+              currentValue: preset,
+              currentValueLabel: preset == 'default'
+                  ? 'Manual / Native'
+                  : (preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'),
               items: const [
-                DropdownMenuItem(value: 'default', child: Text('Manual / Native')),
-                DropdownMenuItem(value: 'emudeck', child: Text('EmuDeck')),
-                DropdownMenuItem(value: 'retrodeck', child: Text('RetroDeck')),
+                {'value': 'default', 'label': 'Manual / Native'},
+                {'value': 'emudeck', 'label': 'EmuDeck'},
+                {'value': 'retrodeck', 'label': 'RetroDeck'},
               ],
               onChanged: (val) async {
-                if (val != null) {
-                  await directoryService.setLinuxSyncPreset(val);
-                  ref.invalidate(directoryServiceProvider);
-                }
+                await directoryService.setLinuxSyncPreset(val);
+                ref.invalidate(directoryServiceProvider);
               },
             ),
             const SizedBox(height: 16),
