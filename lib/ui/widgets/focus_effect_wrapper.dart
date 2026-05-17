@@ -49,8 +49,12 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
   @override
   void didUpdateWidget(FocusEffectWrapper oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (mounted && _isFocused && oldWidget.onTap != widget.onTap) {
-      ref.read(focusedActionProvider.notifier).state = widget.onTap;
+    if (_isFocused && oldWidget.onTap != widget.onTap) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isFocused) {
+          ref.read(focusedActionProvider.notifier).state = widget.onTap;
+        }
+      });
     }
   }
 

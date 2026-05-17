@@ -170,10 +170,10 @@ class GamePersonalSection extends StatelessWidget {
                   children: [
                     Expanded(
                       child: FocusEffectWrapper(
-                        onTap: onToggleAdjustingRating,
+                        onTap: adjustingRating ? null : onToggleAdjustingRating,
                         borderRadius: 16.0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
@@ -187,35 +187,89 @@ class GamePersonalSection extends StatelessWidget {
                               width: adjustingRating ? 2.0 : 1.0,
                             ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.star, size: 14, color: adjustingRating ? Colors.indigoAccent : Colors.amber),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  adjustingRating ? 'Rating [←/→]' : (rating > 0 ? '$rating Star' : 'Rating'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12, 
-                                    fontWeight: FontWeight.bold, 
-                                    color: adjustingRating ? Colors.indigoAccent : Colors.white.withValues(alpha: 0.9)
-                                  ),
+                          child: adjustingRating
+                              ? Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => onRatingChanged((rating - 1).clamp(0, 10)),
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                          ),
+                                          child: const Icon(Icons.remove, size: 12, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: onToggleAdjustingRating,
+                                        child: MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: Text(
+                                            rating > 0 ? '$rating Star' : 'No Rating',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              fontSize: 12, 
+                                              fontWeight: FontWeight.bold, 
+                                              color: Colors.indigoAccent
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => onRatingChanged((rating + 1).clamp(0, 10)),
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                          ),
+                                          child: const Icon(Icons.add, size: 12, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.star, size: 14, color: Colors.amber),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        rating > 0 ? '$rating Star' : 'Rating',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12, 
+                                          fontWeight: FontWeight.bold, 
+                                          color: Colors.white.withValues(alpha: 0.9)
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FocusEffectWrapper(
-                        onTap: onToggleAdjustingCompletion,
+                        onTap: adjustingCompletion ? null : onToggleAdjustingCompletion,
                         borderRadius: 16.0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
@@ -229,25 +283,79 @@ class GamePersonalSection extends StatelessWidget {
                               width: adjustingCompletion ? 2.0 : 1.0,
                             ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.hourglass_empty, size: 14, color: adjustingCompletion ? Colors.indigoAccent : Colors.white70),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  adjustingCompletion ? 'Progress [←/→]' : '$completion% Done',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12, 
-                                    fontWeight: FontWeight.bold, 
-                                    color: adjustingCompletion ? Colors.indigoAccent : Colors.white.withValues(alpha: 0.9)
-                                  ),
+                          child: adjustingCompletion
+                              ? Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => onCompletionChanged((completion - 5).clamp(0, 100)),
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                          ),
+                                          child: const Icon(Icons.remove, size: 12, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: onToggleAdjustingCompletion,
+                                        child: MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: Text(
+                                            '$completion%',
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              fontSize: 12, 
+                                              fontWeight: FontWeight.bold, 
+                                              color: Colors.indigoAccent
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => onCompletionChanged((completion + 5).clamp(0, 100)),
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                          ),
+                                          child: const Icon(Icons.add, size: 12, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.hourglass_empty, size: 14, color: Colors.white70),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        '$completion% Done',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12, 
+                                          fontWeight: FontWeight.bold, 
+                                          color: Colors.white.withValues(alpha: 0.9)
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
                         ),
                       ),
                     ),

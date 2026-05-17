@@ -62,9 +62,11 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   late int _rating;
   late String? _status;
   late int _completion;
-  bool _isSaving = false;
+   bool _isSaving = false;
   bool _adjustingRating = false;
   bool _adjustingCompletion = false;
+  bool _justEnteredRating = false;
+  bool _justEnteredCompletion = false;
   StreamSubscription<GameAction>? _inputSub;
   final FocusNode _focusNode = FocusNode();
 
@@ -82,6 +84,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     _inputSub = inputActionBus.stream.listen((action) {
       if (mounted) {
         if (_adjustingCompletion) {
+          if (_justEnteredCompletion) {
+            _justEnteredCompletion = false;
+            return;
+          }
           if (action == GameAction.left) {
             setState(() {
               _completion = (_completion - 5).clamp(0, 100);
@@ -97,6 +103,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         }
 
         if (_adjustingRating) {
+          if (_justEnteredRating) {
+            _justEnteredRating = false;
+            return;
+          }
           if (action == GameAction.left) {
             setState(() {
               _rating = (_rating - 1).clamp(0, 10);
@@ -131,6 +141,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     setState(() {
       _adjustingRating = !_adjustingRating;
       _adjustingCompletion = false;
+      if (_adjustingRating) {
+        _justEnteredRating = true;
+      }
       ref.read(navigationLockedProvider.notifier).state = _adjustingRating;
     });
   }
@@ -139,6 +152,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     setState(() {
       _adjustingCompletion = !_adjustingCompletion;
       _adjustingRating = false;
+      if (_adjustingCompletion) {
+        _justEnteredCompletion = true;
+      }
       ref.read(navigationLockedProvider.notifier).state = _adjustingCompletion;
     });
   }
