@@ -469,14 +469,16 @@ class GamePersonalSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   gradient: isSaving
                       ? null
-                      : const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                      : LinearGradient(
+                          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                   color: isSaving ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25) : null,
                   border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                    color: isSaving
+                        ? theme.colorScheme.outline.withValues(alpha: 0.3)
+                        : theme.colorScheme.primary.withValues(alpha: 0.3),
                     width: 1.0,
                   ),
                 ),
