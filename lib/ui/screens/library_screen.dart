@@ -570,9 +570,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       );
     }
 
-    // 3. If mode is "greetings", show random retro greetings
+    // 3. If mode is "greetings", show random legendary gaming quotes
     if (headerMode == 'greetings') {
-      return _buildDefaultGreeting(isOffline);
+      return _buildLegendaryQuote(isOffline);
     }
 
     // 4. If mode is "last_played", fetch from recentlyPlayedProvider
@@ -581,7 +581,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       return recentlyPlayed.when(
         data: (games) {
           if (games.isEmpty) {
-            return _buildDefaultGreeting(isOffline);
+            return _buildLegendaryQuote(isOffline);
           }
           final lastPlayed = games.first;
           return Column(
@@ -619,7 +619,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           );
         },
         loading: () => const Text('Freegosy Launcher', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        error: (_, __) => _buildDefaultGreeting(isOffline),
+        error: (_, __) => _buildLegendaryQuote(isOffline),
       );
     }
 
@@ -629,7 +629,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       data: (cache) {
         final games = cache.cachedGames;
         if (games.isEmpty) {
-          return _buildDefaultGreeting(isOffline);
+          return _buildLegendaryQuote(isOffline);
         }
 
         final int seed;
@@ -682,7 +682,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
         );
       },
       loading: () => const Text('Freegosy Launcher', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-      error: (_, __) => _buildDefaultGreeting(isOffline),
+      error: (_, __) => _buildLegendaryQuote(isOffline),
     );
   }
 
@@ -701,42 +701,65 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     );
   }
 
-  Widget _buildDefaultGreeting(bool isOffline) {
-    final greetings = [
-      "Let's play some retro games!",
-      "Welcome back to Freegosy!",
-      "Ready for your next adventure?",
-      "Grab a controller and play!",
-      "Discover your next favorite game!",
+  Widget _buildLegendaryQuote(bool isOffline) {
+    final theme = Theme.of(context);
+    final quotes = const [
+      {'quote': 'Kept you waiting, huh?', 'game': 'Metal Gear Solid'},
+      {'quote': "It's dangerous to go alone! Take this.", 'game': 'The Legend of Zelda'},
+      {'quote': 'The cake is a lie.', 'game': 'Portal'},
+      {'quote': 'War... war never changes.', 'game': 'Fallout'},
+      {'quote': 'Would you kindly?', 'game': 'BioShock'},
+      {'quote': 'Thank you Mario! But our princess is in another castle!', 'game': 'Super Mario Bros.'},
+      {'quote': 'What is a man? A miserable little pile of secrets!', 'game': 'Castlevania: SotN'},
+      {'quote': 'Praise the Sun!', 'game': 'Dark Souls'},
+      {'quote': 'Hey! Listen!', 'game': 'The Legend of Zelda: Ocarina of Time'},
+      {'quote': 'You Died.', 'game': 'Dark Souls'},
+      {'quote': 'Snake? Snake!? SNAAAAAAKE!', 'game': 'Metal Gear Solid'},
+      {'quote': 'Do a barrel roll!', 'game': 'Star Fox 64'},
+      {'quote': 'Rise and shine, Mr. Freeman.', 'game': 'Half-Life 2'},
+      {'quote': 'Nothing is true, everything is permitted.', 'game': 'Assassin\'s Creed'},
+      {'quote': 'Protocol 3: Protect the Pilot.', 'game': 'Titanfall 2'},
+      {'quote': 'Our destiny is not written for us, but by us.', 'game': 'Halo 4'},
+      {'quote': 'You cannot kill me! I am sub-human!', 'game': 'Devil May Cry V'},
+      {'quote': 'A man chooses, a slave obeys.', 'game': 'BioShock'},
     ];
     final now = DateTime.now();
     final seed = now.year * 10000 + now.month * 100 + now.day;
     final rng = Random(seed);
-    final greeting = greetings[rng.nextInt(greetings.length)];
+    final selected = quotes[rng.nextInt(quotes.length)];
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: Text(
-            greeting,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-            overflow: TextOverflow.ellipsis,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "LEGENDARY GAMING QUOTE",
+              style: TextStyle(
+                fontSize: 9,
+                color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+            ),
+            if (isOffline) ...[
+              const SizedBox(width: 8),
+              _buildOfflineBadge(),
+            ],
+          ],
         ),
-        if (isOffline)
-          Container(
-            margin: const EdgeInsets.only(left: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-            ),
-            child: const Text(
-              'OFFLINE',
-              style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
-            ),
+        const SizedBox(height: 2),
+        Text(
+          '"${selected['quote']}" — ${selected['game']}',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            fontStyle: FontStyle.italic,
           ),
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }
