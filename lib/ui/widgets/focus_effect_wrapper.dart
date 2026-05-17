@@ -34,6 +34,7 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
   bool _isHovered = false;
 
   void _handleFocusChange(bool hasFocus) {
+    if (!mounted) return;
     setState(() => _isFocused = hasFocus);
     
     if (hasFocus) {

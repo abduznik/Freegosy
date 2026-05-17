@@ -69,15 +69,19 @@ class GameActionButton extends StatelessWidget {
                   : (isDestructive ? Colors.redAccent : Colors.white70),
             ),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: isPrimary ? 15 : 12,
-                fontWeight: isPrimary ? FontWeight.bold : FontWeight.w600,
-                color: isPrimary
-                    ? Colors.white
-                    : (isDestructive ? Colors.redAccent : Colors.white.withValues(alpha: 0.9)),
-                letterSpacing: 0.3,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: isPrimary ? 15 : 12,
+                  fontWeight: isPrimary ? FontWeight.bold : FontWeight.w600,
+                  color: isPrimary
+                      ? Colors.white
+                      : (isDestructive ? Colors.redAccent : Colors.white.withValues(alpha: 0.9)),
+                  letterSpacing: 0.3,
+                ),
               ),
             ),
           ],

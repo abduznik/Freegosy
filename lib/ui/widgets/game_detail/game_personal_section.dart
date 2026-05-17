@@ -57,334 +57,340 @@ class GamePersonalSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 1. Status Button (Full width 320)
+        // Centered Grid 2 per row
         Center(
           child: SizedBox(
             width: 320,
-            child: FocusEffectWrapper(
-              onTap: () async {
-                final selected = await showDialog<String>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Select Status'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        'never_playing',
-                        'incomplete',
-                        'finished',
-                        'completed_100',
-                        'retired'
-                      ].map((val) {
-                        String label = 'Not set';
-                        IconData icon = Icons.help_outline;
-                        if (val == 'never_playing') { label = 'Never Played'; icon = Icons.star_border; }
-                        else if (val == 'incomplete') { label = 'Incomplete'; icon = Icons.hourglass_empty; }
-                        else if (val == 'finished') { label = 'Finished'; icon = Icons.check_circle_outline; }
-                        else if (val == 'completed_100') { label = '100% Completed'; icon = Icons.emoji_events; }
-                        else if (val == 'retired') { label = 'Dropped'; icon = Icons.cancel_outlined; }
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
-                          child: FocusEffectWrapper(
-                            onTap: () => Navigator.pop(ctx, val),
-                            borderRadius: 16.0,
-                            scaleFactor: 1.0,
-                            autofocus: val == (status ?? 'never_playing'),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color: status == val ? Colors.indigo.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
-                                border: Border.all(color: status == val ? Colors.indigo.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
-                              ),
-                              child: Row(
+            child: Column(
+              children: [
+                // Row 1: Status & Rating
+                Row(
+                  children: [
+                    Expanded(
+                      child: FocusEffectWrapper(
+                        onTap: () async {
+                          final selected = await showDialog<String>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Select Status'),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(icon, color: status == val ? Colors.indigoAccent : Colors.white54),
-                                  const SizedBox(width: 16),
-                                  Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                                ],
+                                  'never_playing',
+                                  'incomplete',
+                                  'finished',
+                                  'completed_100',
+                                  'retired'
+                                ].map((val) {
+                                  String label = 'Not set';
+                                  IconData icon = Icons.help_outline;
+                                  if (val == 'never_playing') { label = 'Never Played'; icon = Icons.star_border; }
+                                  else if (val == 'incomplete') { label = 'Incomplete'; icon = Icons.hourglass_empty; }
+                                  else if (val == 'finished') { label = 'Finished'; icon = Icons.check_circle_outline; }
+                                  else if (val == 'completed_100') { label = '100% Completed'; icon = Icons.emoji_events; }
+                                  else if (val == 'retired') { label = 'Dropped'; icon = Icons.cancel_outlined; }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                    child: FocusEffectWrapper(
+                                      onTap: () => Navigator.pop(ctx, val),
+                                      borderRadius: 16.0,
+                                      scaleFactor: 1.0,
+                                      autofocus: val == (status ?? 'never_playing'),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(16),
+                                          color: status == val ? Colors.indigo.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
+                                          border: Border.all(color: status == val ? Colors.indigo.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(icon, color: status == val ? Colors.indigoAccent : Colors.white54),
+                                            const SizedBox(width: 16),
+                                            Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
                               ),
+                              actions: [
+                                FocusEffectWrapper(
+                                  onTap: () => Navigator.pop(ctx),
+                                  borderRadius: 16.0,
+                                  scaleFactor: 1.0,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      color: Colors.white.withValues(alpha: 0.05),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                                    ),
+                                    child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    actions: [
-                      FocusEffectWrapper(
-                        onTap: () => Navigator.pop(ctx),
+                          );
+                          if (selected != null) onStatusChanged(selected);
+                        },
                         borderRadius: 16.0,
-                        scaleFactor: 1.0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          height: 38,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             color: Colors.white.withValues(alpha: 0.05),
                             border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                           ),
-                          child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.info_outline, size: 14, color: Colors.white70),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  status == 'never_playing' ? 'Never' :
+                                  status == 'incomplete' ? 'Incomplete' :
+                                  status == 'finished' ? 'Finished' :
+                                  status == 'completed_100' ? '100%' :
+                                  status == 'retired' ? 'Dropped' : 'Status',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-                if (selected != null) onStatusChanged(selected);
-              },
-              borderRadius: 16.0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.white.withValues(alpha: 0.05),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 14, color: Colors.white70),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Status',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70),
-                    ),
-                    const Spacer(),
-                    Text(
-                      status == 'never_playing' ? 'Never Played' :
-                      status == 'incomplete' ? 'Incomplete' :
-                      status == 'finished' ? 'Finished' :
-                      status == 'completed_100' ? '100% Completed' :
-                      status == 'retired' ? 'Dropped' : 'Not set',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_drop_down, color: Colors.white54, size: 18),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // 2. Rating Button (Full width 320 with console locks)
-        Center(
-          child: SizedBox(
-            width: 320,
-            child: FocusEffectWrapper(
-              onTap: onToggleAdjustingRating,
-              borderRadius: 16.0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: adjustingRating 
-                      ? Colors.indigo.withValues(alpha: 0.1) 
-                      : Colors.white.withValues(alpha: 0.05),
-                  border: Border.all(
-                    color: adjustingRating 
-                        ? Colors.indigoAccent 
-                        : Colors.white.withValues(alpha: 0.08),
-                    width: adjustingRating ? 2.0 : 1.0,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.star, size: 14, color: adjustingRating ? Colors.indigoAccent : Colors.amber),
-                    const SizedBox(width: 8),
-                    Text(
-                      adjustingRating ? 'Rating [←/→]' : 'Rating',
-                      style: TextStyle(
-                        fontSize: 12, 
-                        fontWeight: FontWeight.w600, 
-                        color: adjustingRating ? Colors.indigoAccent : Colors.white.withValues(alpha: 0.9)
-                      ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: List.generate(10, (i) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 1.0),
-                        child: Icon(
-                          i < rating ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                          size: 11,
-                        ),
-                      )),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // 3. Completion Button (Full width 320 with console locks)
-        Center(
-          child: SizedBox(
-            width: 320,
-            child: FocusEffectWrapper(
-              onTap: onToggleAdjustingCompletion,
-              borderRadius: 16.0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: adjustingCompletion 
-                      ? Colors.indigo.withValues(alpha: 0.1) 
-                      : Colors.white.withValues(alpha: 0.05),
-                  border: Border.all(
-                    color: adjustingCompletion 
-                        ? Colors.indigoAccent 
-                        : Colors.white.withValues(alpha: 0.08),
-                    width: adjustingCompletion ? 2.0 : 1.0,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.hourglass_empty, size: 14, color: adjustingCompletion ? Colors.indigoAccent : Colors.white70),
-                    const SizedBox(width: 8),
-                    Text(
-                      adjustingCompletion ? 'Progress [←/→]' : 'Progress',
-                      style: TextStyle(
-                        fontSize: 12, 
-                        fontWeight: FontWeight.w600, 
-                        color: adjustingCompletion ? Colors.indigoAccent : Colors.white.withValues(alpha: 0.9)
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: completion / 100.0,
-                          backgroundColor: Colors.white.withValues(alpha: 0.1),
-                          valueColor: AlwaysStoppedAnimation<Color>(adjustingCompletion ? Colors.indigoAccent : Colors.indigo),
-                          minHeight: 3,
+                      child: FocusEffectWrapper(
+                        onTap: onToggleAdjustingRating,
+                        borderRadius: 16.0,
+                        child: Container(
+                          height: 38,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: adjustingRating 
+                                ? Colors.indigo.withValues(alpha: 0.1) 
+                                : Colors.white.withValues(alpha: 0.05),
+                            border: Border.all(
+                              color: adjustingRating 
+                                  ? Colors.indigoAccent 
+                                  : Colors.white.withValues(alpha: 0.08),
+                              width: adjustingRating ? 2.0 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.star, size: 14, color: adjustingRating ? Colors.indigoAccent : Colors.amber),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  adjustingRating ? 'Rating [←/→]' : (rating > 0 ? '$rating/10 Star' : 'Rating'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11, 
+                                    fontWeight: FontWeight.bold, 
+                                    color: adjustingRating ? Colors.indigoAccent : Colors.white70
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Row 2: Progress & Backlog
+                Row(
+                  children: [
+                    Expanded(
+                      child: FocusEffectWrapper(
+                        onTap: onToggleAdjustingCompletion,
+                        borderRadius: 16.0,
+                        child: Container(
+                          height: 38,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: adjustingCompletion 
+                                ? Colors.indigo.withValues(alpha: 0.1) 
+                                : Colors.white.withValues(alpha: 0.05),
+                            border: Border.all(
+                              color: adjustingCompletion 
+                                  ? Colors.indigoAccent 
+                                  : Colors.white.withValues(alpha: 0.08),
+                              width: adjustingCompletion ? 2.0 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.hourglass_empty, size: 14, color: adjustingCompletion ? Colors.indigoAccent : Colors.white70),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  adjustingCompletion ? 'Progress [←/→]' : '$completion% Done',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11, 
+                                    fontWeight: FontWeight.bold, 
+                                    color: adjustingCompletion ? Colors.indigoAccent : Colors.white70
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
-                      '$completion%',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                    Expanded(
+                      child: FocusEffectWrapper(
+                        onTap: () => onBacklogChanged(!backlogged),
+                        borderRadius: 16.0,
+                        child: Container(
+                          height: 38,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: backlogged 
+                                ? Colors.indigo.withValues(alpha: 0.1) 
+                                : Colors.white.withValues(alpha: 0.05),
+                            border: Border.all(
+                              color: backlogged 
+                                  ? Colors.indigoAccent 
+                                  : Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(backlogged ? Icons.bookmark : Icons.bookmark_border, size: 14, color: backlogged ? Colors.indigoAccent : Colors.white70),
+                              const SizedBox(width: 6),
+                              const Flexible(
+                                child: Text(
+                                  'Backlog',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-        // 4. Backlog & Playing Toggles (Side-by-side inside 320, styling matches backup/restore)
-        Center(
-          child: SizedBox(
-            width: 320,
-            child: Row(
-              children: [
-                Expanded(
-                  child: FocusEffectWrapper(
-                    onTap: () => onBacklogChanged(!backlogged),
-                    borderRadius: 16.0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: backlogged 
-                            ? Colors.indigo.withValues(alpha: 0.1) 
-                            : Colors.white.withValues(alpha: 0.05),
-                        border: Border.all(
-                          color: backlogged 
-                              ? Colors.indigoAccent 
-                              : Colors.white.withValues(alpha: 0.08),
+                // Row 3: Playing & Save Changes
+                Row(
+                  children: [
+                    Expanded(
+                      child: FocusEffectWrapper(
+                        onTap: () => onNowPlayingChanged(!nowPlaying),
+                        borderRadius: 16.0,
+                        child: Container(
+                          height: 38,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            color: nowPlaying 
+                                ? Colors.indigo.withValues(alpha: 0.1) 
+                                : Colors.white.withValues(alpha: 0.05),
+                            border: Border.all(
+                              color: nowPlaying 
+                                  ? Colors.indigoAccent 
+                                  : Colors.white.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, size: 14, color: nowPlaying ? Colors.indigoAccent : Colors.white70),
+                              const SizedBox(width: 6),
+                              const Flexible(
+                                child: Text(
+                                  'Playing',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(backlogged ? Icons.bookmark : Icons.bookmark_border, size: 14, color: backlogged ? Colors.indigoAccent : Colors.white70),
-                          const SizedBox(width: 6),
-                          const Text('Backlog', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70)),
-                        ],
-                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FocusEffectWrapper(
-                    onTap: () => onNowPlayingChanged(!nowPlaying),
-                    borderRadius: 16.0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: nowPlaying 
-                            ? Colors.indigo.withValues(alpha: 0.1) 
-                            : Colors.white.withValues(alpha: 0.05),
-                        border: Border.all(
-                          color: nowPlaying 
-                              ? Colors.indigoAccent 
-                              : Colors.white.withValues(alpha: 0.08),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FocusEffectWrapper(
+                        onTap: isSaving ? null : onSave,
+                        borderRadius: 16.0,
+                        child: Container(
+                          height: 38,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: isSaving
+                                ? null
+                                : const LinearGradient(
+                                    colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                            color: isSaving ? Colors.white.withValues(alpha: 0.05) : null,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: isSaving
+                              ? const SizedBox(
+                                  height: 14,
+                                  width: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Flexible(
+                                  child: Text(
+                                    'Save',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ),
                         ),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, size: 14, color: nowPlaying ? Colors.indigoAccent : Colors.white70),
-                          const SizedBox(width: 6),
-                          const Text('Playing', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70)),
-                        ],
-                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // 5. Save Changes (Full width 240)
-        Center(
-          child: SizedBox(
-            width: 240,
-            child: FocusEffectWrapper(
-              onTap: isSaving ? null : onSave,
-              borderRadius: 16.0,
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: isSaving
-                      ? null
-                      : const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  color: isSaving ? Colors.white.withValues(alpha: 0.05) : null,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    width: 1.0,
-                  ),
-                ),
-                child: isSaving
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text(
-                        'Save Changes',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-              ),
             ),
           ),
         ),

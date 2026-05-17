@@ -181,7 +181,8 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     if (!mounted || widget.rommService == null) return;
     try {
       final updated = await widget.rommService!.getGame(_currentGame.id);
-      if (updated != null && mounted) {
+      if (!mounted) return;
+      if (updated != null) {
         setState(() {
           _currentGame = updated;
           _syncStateWithGame(updated);
@@ -651,17 +652,20 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   Future<void> _handleLocalBackup(WidgetRef ref) async {
     try {
       final syncService = await ref.read(saveSyncServiceProvider.future);
+      if (!mounted) return;
       final ds = await ref.read(directoryServiceProvider.future);
       if (!mounted || syncService == null || ds == null) return;
       final backupService = ref.read(backupServiceProvider);
       final result = await backupService.createImmediate(_currentGame, await ds.getRomFilePath(_currentGame), syncService);
-      if (mounted && result != null) {
+      if (!mounted) return;
+      if (result != null) {
         final backupRepo = ref.read(backupRepositoryProvider);
         await backupRepo.addEntry(_currentGame.id, BackupEntry(timestamp: DateTime.now(), md5Hash: result.md5, localZipPath: result.zipPath));
+        if (!mounted) return;
         ErrorHandler.showSuccess(context, 'Backup Created', message: 'Local restore point saved.');
         final rommService = ref.read(rommServiceProvider);
         if (rommService != null && !rommService.isOffline.value) BackgroundSyncQueue.processQueue(rommService, backupRepo);
-      } else if (mounted) {
+      } else {
         ErrorHandler.showInfo(context, 'No Saves', message: 'No save files found to back up.');
       }
     } catch (e) { if (mounted) ErrorHandler.showException(context, e, contextLabel: 'Local Backup'); }
