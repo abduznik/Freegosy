@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../focus_effect_wrapper.dart';
 
-class GamePersonalSection extends StatelessWidget {
+class GamePersonalSection extends StatefulWidget {
   final String? status;
   final int rating;
   final int completion;
@@ -31,6 +31,13 @@ class GamePersonalSection extends StatelessWidget {
     required this.onNowPlayingChanged,
     required this.onSave,
   });
+
+  @override
+  State<GamePersonalSection> createState() => _GamePersonalSectionState();
+}
+
+class _GamePersonalSectionState extends State<GamePersonalSection> {
+  bool _adjustingCompletion = false;
 
   @override
   Widget build(BuildContext context) {
@@ -83,17 +90,17 @@ class GamePersonalSection extends StatelessWidget {
                               onTap: () => Navigator.pop(ctx, val),
                               borderRadius: 12.0,
                               scaleFactor: 1.0,
-                              autofocus: val == (status ?? 'never_playing'),
+                              autofocus: val == (widget.status ?? 'never_playing'),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
-                                  color: status == val ? Colors.indigo.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
-                                  border: Border.all(color: status == val ? Colors.indigo.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
+                                  color: widget.status == val ? Colors.indigo.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.03),
+                                  border: Border.all(color: widget.status == val ? Colors.indigo.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05)),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(icon, color: status == val ? Colors.indigoAccent : Colors.white54),
+                                    Icon(icon, color: widget.status == val ? Colors.indigoAccent : Colors.white54),
                                     const SizedBox(width: 16),
                                     Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                                   ],
@@ -121,7 +128,7 @@ class GamePersonalSection extends StatelessWidget {
                       ],
                     ),
                   );
-                  if (selected != null) onStatusChanged(selected);
+                  if (selected != null) widget.onStatusChanged(selected);
                 },
                 borderRadius: 12.0,
                 child: Container(
@@ -136,11 +143,11 @@ class GamePersonalSection extends StatelessWidget {
                       const Text('Status', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
                       const Spacer(),
                       Text(
-                        status == 'never_playing' ? 'Never' :
-                        status == 'incomplete' ? 'Incomplete' :
-                        status == 'finished' ? 'Finished' :
-                        status == 'completed_100' ? '100%' :
-                        status == 'retired' ? 'Dropped' : 'Not set',
+                        widget.status == 'never_playing' ? 'Never' :
+                        widget.status == 'incomplete' ? 'Incomplete' :
+                        widget.status == 'finished' ? 'Finished' :
+                        widget.status == 'completed_100' ? '100%' :
+                        widget.status == 'retired' ? 'Dropped' : 'Not set',
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       const SizedBox(width: 4),
@@ -159,11 +166,11 @@ class GamePersonalSection extends StatelessWidget {
                   onKeyEvent: (node, event) {
                     if (event is! KeyUpEvent) {
                       if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                        if (rating > 0) onRatingChanged(rating - 1);
+                        if (widget.rating > 0) widget.onRatingChanged(widget.rating - 1);
                         return KeyEventResult.handled;
                       }
                       if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                        if (rating < 10) onRatingChanged(rating + 1);
+                        if (widget.rating < 10) widget.onRatingChanged(widget.rating + 1);
                         return KeyEventResult.handled;
                       }
                     }
@@ -182,11 +189,11 @@ class GamePersonalSection extends StatelessWidget {
                         const Spacer(),
                         Row(
                           children: List.generate(5, (i) => GestureDetector(
-                            onTap: () => onRatingChanged((i + 1) * 2),
+                            onTap: () => widget.onRatingChanged((i + 1) * 2),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 1.0),
                               child: Icon(
-                                i * 2 < rating ? Icons.star : Icons.star_border,
+                                i * 2 < widget.rating ? Icons.star : Icons.star_border,
                                 color: Colors.amber,
                                 size: 16,
                               ),
@@ -203,54 +210,106 @@ class GamePersonalSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // Row 2: Completion Slider horizontally aligned
+        // Row 2: Completion Slider horizontally aligned with Console Slider Locking Mode
         FocusEffectWrapper(
-          onTap: () {},
+          onTap: () {
+            setState(() {
+              _adjustingCompletion = !_adjustingCompletion;
+            });
+          },
           borderRadius: 12.0,
           child: Focus(
             onKeyEvent: (node, event) {
               if (event is! KeyUpEvent) {
-                if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                  if (completion > 0) onCompletionChanged((completion - 5).clamp(0, 100));
-                  return KeyEventResult.handled;
-                }
-                if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-                  if (completion < 100) onCompletionChanged((completion + 5).clamp(0, 100));
-                  return KeyEventResult.handled;
+                if (_adjustingCompletion) {
+                  if (event.logicalKey == LogicalKeyboardKey.enter || 
+                      event.logicalKey == LogicalKeyboardKey.space ||
+                      event.logicalKey == LogicalKeyboardKey.escape) {
+                    setState(() {
+                      _adjustingCompletion = false;
+                    });
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    if (widget.completion > 0) {
+                      widget.onCompletionChanged((widget.completion - 5).clamp(0, 100));
+                    }
+                    return KeyEventResult.handled;
+                  }
+                  if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+                    if (widget.completion < 100) {
+                      widget.onCompletionChanged((widget.completion + 5).clamp(0, 100));
+                    }
+                    return KeyEventResult.handled;
+                  }
+                  // Block D-pad Up/Down while adjusting to avoid navigation slip!
+                  if (event.logicalKey == LogicalKeyboardKey.arrowUp || 
+                      event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                    return KeyEventResult.handled;
+                  }
+                } else {
+                  // Enter adjust mode on Enter/Space
+                  if (event.logicalKey == LogicalKeyboardKey.enter || 
+                      event.logicalKey == LogicalKeyboardKey.space) {
+                    setState(() {
+                      _adjustingCompletion = true;
+                    });
+                    return KeyEventResult.handled;
+                  }
                 }
               }
               return KeyEventResult.ignored;
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: Colors.white.withValues(alpha: 0.03),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                color: _adjustingCompletion 
+                    ? Colors.indigo.withValues(alpha: 0.1) 
+                    : Colors.white.withValues(alpha: 0.03),
+                border: Border.all(
+                  color: _adjustingCompletion 
+                      ? Colors.indigoAccent 
+                      : Colors.white.withValues(alpha: 0.05),
+                  width: _adjustingCompletion ? 2.0 : 1.0,
+                ),
               ),
               child: Row(
                 children: [
-                  const Text('Completion', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Completion', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+                      if (_adjustingCompletion)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2.0),
+                          child: Text('[←/→] Adjust  [Enter] Save', style: TextStyle(color: Colors.indigoAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                    ],
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         trackHeight: 2,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        thumbShape: RoundSliderThumbShape(enabledThumbRadius: _adjustingCompletion ? 8 : 6),
                         overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                       ),
                       child: Slider(
-                        value: completion.toDouble(),
+                        value: widget.completion.toDouble(),
                         min: 0,
                         max: 100,
                         divisions: 20,
                         activeColor: Colors.indigoAccent,
-                        onChanged: (val) => onCompletionChanged(val.toInt()),
+                        onChanged: _adjustingCompletion 
+                            ? (val) => widget.onCompletionChanged(val.toInt())
+                            : null,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('$completion%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text('${widget.completion}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                 ],
               ),
             ),
@@ -263,18 +322,18 @@ class GamePersonalSection extends StatelessWidget {
           children: [
             Expanded(
               child: FocusEffectWrapper(
-                onTap: () => onBacklogChanged(!backlogged),
+                onTap: () => widget.onBacklogChanged(!widget.backlogged),
                 borderRadius: 12.0,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: backlogged ? Colors.indigo.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
-                    border: Border.all(color: backlogged ? Colors.indigo.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
+                    color: widget.backlogged ? Colors.indigo.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
+                    border: Border.all(color: widget.backlogged ? Colors.indigo.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
                   ),
                   child: Row(
                     children: [
-                      Icon(backlogged ? Icons.bookmark : Icons.bookmark_border, color: backlogged ? Colors.indigoAccent : Colors.white54, size: 18),
+                      Icon(widget.backlogged ? Icons.bookmark : Icons.bookmark_border, color: widget.backlogged ? Colors.indigoAccent : Colors.white54, size: 18),
                       const SizedBox(width: 8),
                       const Text('Backlog', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                       const Spacer(),
@@ -284,8 +343,8 @@ class GamePersonalSection extends StatelessWidget {
                         child: FittedBox(
                           fit: BoxFit.contain,
                           child: Switch(
-                            value: backlogged,
-                            onChanged: onBacklogChanged,
+                            value: widget.backlogged,
+                            onChanged: widget.onBacklogChanged,
                             activeColor: Colors.indigoAccent,
                           ),
                         ),
@@ -298,18 +357,18 @@ class GamePersonalSection extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: FocusEffectWrapper(
-                onTap: () => onNowPlayingChanged(!nowPlaying),
+                onTap: () => widget.onNowPlayingChanged(!widget.nowPlaying),
                 borderRadius: 12.0,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: nowPlaying ? Colors.indigo.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
-                    border: Border.all(color: nowPlaying ? Colors.indigo.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
+                    color: widget.nowPlaying ? Colors.indigo.withValues(alpha: 0.06) : Colors.white.withValues(alpha: 0.03),
+                    border: Border.all(color: widget.nowPlaying ? Colors.indigo.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.05)),
                   ),
                   child: Row(
                     children: [
-                      Icon(nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, color: nowPlaying ? Colors.indigoAccent : Colors.white54, size: 18),
+                      Icon(widget.nowPlaying ? Icons.play_circle_fill : Icons.play_circle_outline, color: widget.nowPlaying ? Colors.indigoAccent : Colors.white54, size: 18),
                       const SizedBox(width: 8),
                       const Text('Playing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                       const Spacer(),
@@ -319,8 +378,8 @@ class GamePersonalSection extends StatelessWidget {
                         child: FittedBox(
                           fit: BoxFit.contain,
                           child: Switch(
-                            value: nowPlaying,
-                            onChanged: onNowPlayingChanged,
+                            value: widget.nowPlaying,
+                            onChanged: widget.onNowPlayingChanged,
                             activeColor: Colors.indigoAccent,
                           ),
                         ),
@@ -339,27 +398,27 @@ class GamePersonalSection extends StatelessWidget {
           child: SizedBox(
             width: 240,
             child: FocusEffectWrapper(
-              onTap: isSaving ? null : onSave,
+              onTap: widget.isSaving ? null : widget.onSave,
               borderRadius: 12.0,
               child: Container(
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  gradient: isSaving
+                  gradient: widget.isSaving
                       ? null
                       : const LinearGradient(
                           colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                  color: isSaving ? Colors.white.withValues(alpha: 0.05) : null,
+                  color: widget.isSaving ? Colors.white.withValues(alpha: 0.05) : null,
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.08),
                     width: 1.0,
                   ),
                 ),
-                child: isSaving
+                child: widget.isSaving
                     ? const SizedBox(
                         height: 16,
                         width: 16,

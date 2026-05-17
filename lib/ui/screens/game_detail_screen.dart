@@ -149,17 +149,65 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add Note'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Title')),
-            const SizedBox(height: 8),
-            TextField(controller: contentController, decoration: const InputDecoration(labelText: 'Content'), maxLines: 3),
-          ],
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contentController,
+                decoration: const InputDecoration(
+                  labelText: 'Content',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.indigoAccent)),
+                ),
+                maxLines: 4,
+              ),
+            ],
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context, false),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context, true),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.indigo.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Add Note', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ],
       ),
     );
@@ -187,8 +235,35 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         title: const Text('Delete Note'),
         content: const Text('Are you sure you want to delete this note?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context, false),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context, true),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.red.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ],
       ),
     );
@@ -208,8 +283,28 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(note.title.isNotEmpty ? note.title : 'Note'),
-        content: SingleChildScrollView(child: Text(note.content)),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Text(note.content, style: const TextStyle(height: 1.5)),
+          ),
+        ),
+        actions: [
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: const Text('Close', style: TextStyle(color: Colors.white70)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -388,6 +483,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
   Widget _buildActionsRow() {
     return Consumer(builder: (context, ref, _) {
+      final theme = Theme.of(context);
       final downloads = ref.watch(downloadProvider);
       final progress = downloads[_currentGame.id];
       if (!_isDownloaded) {
@@ -462,15 +558,19 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          const Divider(color: Colors.white10, height: 32),
-          const Center(child: Text('LOCAL SAVE STATES', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5))),
+          const Divider(color: Colors.white12),
+          const SizedBox(height: 8),
+          _buildSectionTitle(theme, 'Local Saves'),
           const SizedBox(height: 16),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup Local', onPressed: () async => _handleLocalBackup(ref)),
-              const SizedBox(width: 24),
-              GameActionButton(icon: Icons.history, label: 'Restore Local', onPressed: () async => _handleLocalRestore(ref)),
+              Expanded(
+                child: GameActionButton(icon: Icons.save_alt_outlined, label: 'Backup Local', onPressed: () async => _handleLocalBackup(ref)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GameActionButton(icon: Icons.history, label: 'Restore Local', onPressed: () async => _handleLocalRestore(ref)),
+              ),
             ],
           ),
         ],
