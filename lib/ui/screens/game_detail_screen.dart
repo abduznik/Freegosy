@@ -598,24 +598,24 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           const SizedBox(height: 16),
           Center(
             child: SizedBox(
-              width: 340,
+              width: 480,
               child: Row(
                 children: [
                   Expanded(
                     child: GameActionButton(icon: Icons.cloud_upload, label: 'Push', onPressed: () async { if (_isDownloaded) await widget.onPushSaves(); }),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: GameActionButton(icon: Icons.cloud_download, label: 'Pull', onPressed: () async { if (_isDownloaded) await widget.onPullSaves(); }),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: GameActionButton(icon: Icons.folder, label: 'Folder', onPressed: () async {
                       final ds = ref.read(directoryServiceProvider).value;
                       if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
                     }),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: GameActionButton(icon: Icons.delete, label: 'Delete', color: Colors.red, onPressed: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); }),
                   ),
