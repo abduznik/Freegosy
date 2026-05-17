@@ -11,6 +11,7 @@ import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/romm_service.dart';
+import '../../core/constants/gaming_quotes.dart';
 import '../widgets/game_card.dart';
 import '../widgets/platform_filter_bar.dart';
 import '../widgets/filter_bottom_sheet.dart';
@@ -703,30 +704,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
   Widget _buildLegendaryQuote(bool isOffline) {
     final theme = Theme.of(context);
-    final quotes = const [
-      {'quote': 'Kept you waiting, huh?', 'game': 'Metal Gear Solid'},
-      {'quote': "It's dangerous to go alone! Take this.", 'game': 'The Legend of Zelda'},
-      {'quote': 'The cake is a lie.', 'game': 'Portal'},
-      {'quote': 'War... war never changes.', 'game': 'Fallout'},
-      {'quote': 'Would you kindly?', 'game': 'BioShock'},
-      {'quote': 'Thank you Mario! But our princess is in another castle!', 'game': 'Super Mario Bros.'},
-      {'quote': 'What is a man? A miserable little pile of secrets!', 'game': 'Castlevania: SotN'},
-      {'quote': 'Praise the Sun!', 'game': 'Dark Souls'},
-      {'quote': 'Hey! Listen!', 'game': 'The Legend of Zelda: Ocarina of Time'},
-      {'quote': 'You Died.', 'game': 'Dark Souls'},
-      {'quote': 'Snake? Snake!? SNAAAAAAKE!', 'game': 'Metal Gear Solid'},
-      {'quote': 'Do a barrel roll!', 'game': 'Star Fox 64'},
-      {'quote': 'Rise and shine, Mr. Freeman.', 'game': 'Half-Life 2'},
-      {'quote': 'Nothing is true, everything is permitted.', 'game': 'Assassin\'s Creed'},
-      {'quote': 'Protocol 3: Protect the Pilot.', 'game': 'Titanfall 2'},
-      {'quote': 'Our destiny is not written for us, but by us.', 'game': 'Halo 4'},
-      {'quote': 'You cannot kill me! I am sub-human!', 'game': 'Devil May Cry V'},
-      {'quote': 'A man chooses, a slave obeys.', 'game': 'BioShock'},
-    ];
     final now = DateTime.now();
-    final seed = now.year * 10000 + now.month * 100 + now.day;
+    
+    // Split the 24-hour day into three 8-hour intervals (0: 00:00-07:59, 1: 08:00-15:59, 2: 16:00-23:59)
+    final interval = now.hour ~/ 8; 
+    final seed = now.year * 100000 + now.month * 1000 + now.day * 10 + interval;
+    
     final rng = Random(seed);
-    final selected = quotes[rng.nextInt(quotes.length)];
+    final selected = GamingQuotes.quotes[rng.nextInt(GamingQuotes.quotes.length)];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -752,7 +737,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
         ),
         const SizedBox(height: 2),
         Text(
-          '"${selected['quote']}" — ${selected['game']}',
+          '"${selected.quote}" — ${selected.game}',
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
