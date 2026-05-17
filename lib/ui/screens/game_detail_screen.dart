@@ -632,18 +632,18 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                 onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
               ),
               const SizedBox(height: 16),
-              GameSegmentedGroup(
+              Row(
                 children: [
                   Expanded(
-                    child: GameSegmentItem(
+                    child: GameDetailActionButton(
                       icon: Icons.cloud_upload_outlined,
                       label: 'Push Saves',
                       onTap: () async { if (_isDownloaded) await widget.onPushSaves(); },
                     ),
                   ),
-                  Container(width: 1.0, height: 24, color: Colors.white.withValues(alpha: 0.08)),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: GameSegmentItem(
+                    child: GameDetailActionButton(
                       icon: Icons.cloud_download_outlined,
                       label: 'Pull Saves',
                       onTap: () async { if (_isDownloaded) await widget.onPullSaves(); },
@@ -652,10 +652,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              GameSegmentedGroup(
+              Row(
                 children: [
                   Expanded(
-                    child: GameSegmentItem(
+                    child: GameDetailActionButton(
                       icon: Icons.folder_open_outlined,
                       label: 'Folder',
                       onTap: () async {
@@ -664,17 +664,17 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       },
                     ),
                   ),
-                  Container(width: 1.0, height: 24, color: Colors.white.withValues(alpha: 0.08)),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: GameSegmentItem(
+                    child: GameDetailActionButton(
                       icon: Icons.backup_outlined,
                       label: 'Backups',
                       onTap: () => _showLocalBackupsMenu(ref),
                     ),
                   ),
-                  Container(width: 1.0, height: 24, color: Colors.white.withValues(alpha: 0.08)),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: GameSegmentItem(
+                    child: GameDetailActionButton(
                       icon: Icons.delete_outline,
                       label: 'Delete',
                       iconColor: Colors.redAccent,
@@ -810,37 +810,14 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 }
 
-class GameSegmentedGroup extends StatelessWidget {
-  final List<Widget> children;
-  const GameSegmentedGroup({super.key, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1.0),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Row(
-          children: children,
-        ),
-      ),
-    );
-  }
-}
-
-class GameSegmentItem extends StatelessWidget {
+class GameDetailActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final Color? textColor;
   final Color? iconColor;
 
-  const GameSegmentItem({
+  const GameDetailActionButton({
     super.key,
     required this.icon,
     required this.label,
@@ -851,24 +828,42 @@ class GameSegmentItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDestructive = textColor == Colors.red || textColor == Colors.redAccent;
     return FocusEffectWrapper(
       onTap: onTap,
       borderRadius: 14.0,
-      scaleFactor: 1.03,
+      scaleFactor: 1.05,
       child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: isDestructive
+              ? Colors.red.withValues(alpha: 0.05)
+              : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDestructive
+                ? Colors.red.withValues(alpha: 0.15)
+                : Colors.white.withValues(alpha: 0.08),
+            width: 1.0,
+          ),
+        ),
         alignment: Alignment.center,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 16, color: iconColor ?? Colors.white70),
+            Icon(icon, size: 16, color: iconColor ?? (isDestructive ? Colors.redAccent : Colors.white70)),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: textColor ?? Colors.white.withValues(alpha: 0.8),
-                letterSpacing: 0.2,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: textColor ?? Colors.white.withValues(alpha: 0.8),
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
           ],

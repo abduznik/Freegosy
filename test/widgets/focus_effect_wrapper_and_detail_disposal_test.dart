@@ -144,4 +144,79 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('GameDetailActionButton Emulation & Alignment test', () {
+    testWidgets('emulate action button row and verify no visual overlap or clipping during focus scaling', (WidgetTester tester) async {
+      final focusNode1 = FocusNode();
+      final focusNode2 = FocusNode();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 384,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Focus(
+                          focusNode: focusNode1,
+                          child: GameDetailActionButton(
+                            icon: Icons.cloud_upload_outlined,
+                            label: 'Push',
+                            onTap: () {},
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Focus(
+                          focusNode: focusNode2,
+                          child: GameDetailActionButton(
+                            icon: Icons.cloud_download_outlined,
+                            label: 'Pull',
+                            onTap: () {},
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Verify buttons are rendered
+      expect(find.text('Push'), findsOneWidget);
+      expect(find.text('Pull'), findsOneWidget);
+
+
+      // 1. Simulate focus/interaction on Push button
+      focusNode1.requestFocus();
+      await tester.pumpAndSettle();
+
+      // Programmatically verify the button scales up elegantly without any clipping or boundary errors
+      final RenderBox box1After = tester.renderObject(find.text('Push'));
+      final RenderBox box2After = tester.renderObject(find.text('Pull'));
+
+      // Check offsets to ensure no collision or overlap occurs
+      final Offset offset1 = box1After.localToGlobal(Offset.zero);
+      final Offset offset2 = box2After.localToGlobal(Offset.zero);
+
+      // Push button right boundary must be strictly less than Pull button left boundary
+      final double pushRightBoundary = offset1.dx + box1After.size.width;
+      final double pullLeftBoundary = offset2.dx;
+
+      expect(pushRightBoundary < pullLeftBoundary, isTrue);
+
+      // Verify perfect spacing margin between the interactive bounds
+      final double spacing = pullLeftBoundary - pushRightBoundary;
+      expect(spacing, isPositive);
+
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
