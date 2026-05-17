@@ -71,47 +71,47 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
 
     final screenSize = MediaQuery.of(context).size;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        double safeScale = widget.scaleFactor;
-        
-        // Ensure the scale effect never exceeds the physical screen boundaries
-        if (constraints.maxWidth != double.infinity && constraints.maxWidth > 0) {
-          final maxAllowedScaleX = screenSize.width / constraints.maxWidth;
-          if (safeScale > maxAllowedScaleX) safeScale = maxAllowedScaleX;
+    return Focus(
+      autofocus: widget.autofocus,
+      focusNode: widget.focusNode,
+      onFocusChange: _handleFocusChange,
+      onKeyEvent: (node, event) {
+        if (widget.onKeyEvent != null) {
+          final res = widget.onKeyEvent!(node, event);
+          if (res == KeyEventResult.handled) {
+            return KeyEventResult.handled;
+          }
         }
-        if (constraints.maxHeight != double.infinity && constraints.maxHeight > 0) {
-          final maxAllowedScaleY = screenSize.height / constraints.maxHeight;
-          if (safeScale > maxAllowedScaleY) safeScale = maxAllowedScaleY;
+        if (event is KeyDownEvent && 
+            (event.logicalKey == LogicalKeyboardKey.enter || 
+             event.logicalKey == LogicalKeyboardKey.space)) {
+          widget.onTap?.call();
+          return KeyEventResult.handled;
         }
-
-        return Focus(
-          autofocus: widget.autofocus,
-          focusNode: widget.focusNode,
-          onFocusChange: _handleFocusChange,
-          onKeyEvent: (node, event) {
-            if (widget.onKeyEvent != null) {
-              final res = widget.onKeyEvent!(node, event);
-              if (res == KeyEventResult.handled) {
-                return KeyEventResult.handled;
+        return KeyEventResult.ignored;
+      },
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque, 
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              double safeScale = widget.scaleFactor;
+              
+              // Ensure the scale effect never exceeds the physical screen boundaries
+              if (constraints.maxWidth != double.infinity && constraints.maxWidth > 0) {
+                final maxAllowedScaleX = screenSize.width / constraints.maxWidth;
+                if (safeScale > maxAllowedScaleX) safeScale = maxAllowedScaleX;
               }
-            }
-            if (event is KeyDownEvent && 
-                (event.logicalKey == LogicalKeyboardKey.enter || 
-                 event.logicalKey == LogicalKeyboardKey.space)) {
-              widget.onTap?.call();
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _isHovered = true),
-            onExit: (_) => setState(() => _isHovered = false),
-            cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
-            child: GestureDetector(
-              onTap: widget.onTap,
-              behavior: HitTestBehavior.opaque, 
-              child: AnimatedScale(
+              if (constraints.maxHeight != double.infinity && constraints.maxHeight > 0) {
+                final maxAllowedScaleY = screenSize.height / constraints.maxHeight;
+                if (safeScale > maxAllowedScaleY) safeScale = maxAllowedScaleY;
+              }
+
+              return AnimatedScale(
                 scale: showEffect ? safeScale : 1.0,
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutBack,
@@ -157,11 +157,11 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
                     ),
                   ],
                 ),
-              ),
-            ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
