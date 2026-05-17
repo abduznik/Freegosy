@@ -48,10 +48,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
   late ScrollController _scrollController;
   StreamSubscription<GameAction>? _inputSub;
   bool _isFilterSheetOpen = false;
+  late final int _sessionSeed;
 
   @override
   void initState() {
     super.initState();
+    _sessionSeed = DateTime.now().millisecondsSinceEpoch;
     _searchController = TextEditingController(text: ref.read(searchQueryProvider));
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
@@ -536,9 +538,93 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
 
   Widget _buildAppBarTitle(BuildContext context, WidgetRef ref, RommService? rommService) {
     final theme = Theme.of(context);
-    final cacheAsync = ref.watch(metadataCacheServiceProvider);
     final isOffline = rommService?.isOffline.value ?? false;
+    final headerMode = ref.watch(libraryHeaderTitleModeProvider);
 
+    // 1. If mode is "none", just show simple app title
+    if (headerMode == 'none') {
+      return Row(
+        children: [
+          const Text('Freegosy Launcher', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          if (isOffline) ...[
+            const SizedBox(width: 8),
+            _buildOfflineBadge(),
+          ],
+        ],
+      );
+    }
+
+    // 2. If mode is "server_ip", show unmasked server URL / IP
+    if (headerMode == 'server_ip') {
+      final baseUrl = rommService?.config.baseUrl ?? ref.watch(rommConfigProvider).value?.baseUrl ?? 'Loading...';
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              isOffline ? "$baseUrl - Offline Mode" : baseUrl,
+              style: isOffline ? const TextStyle(color: Colors.orange, fontSize: 13, fontWeight: FontWeight.bold) : const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 3. If mode is "greetings", show random retro greetings
+    if (headerMode == 'greetings') {
+      return _buildDefaultGreeting(isOffline);
+    }
+
+    // 4. If mode is "last_played", fetch from recentlyPlayedProvider
+    if (headerMode == 'last_played') {
+      final recentlyPlayed = ref.watch(recentlyPlayedProvider);
+      return recentlyPlayed.when(
+        data: (games) {
+          if (games.isEmpty) {
+            return _buildDefaultGreeting(isOffline);
+          }
+          final lastPlayed = games.first;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "LAST PLAYED GAME",
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  if (isOffline) ...[
+                    const SizedBox(width: 8),
+                    _buildOfflineBadge(),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                lastPlayed.displayName,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          );
+        },
+        loading: () => const Text('Freegosy Launcher', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        error: (_, __) => _buildDefaultGreeting(isOffline),
+      );
+    }
+
+    // 5. Default: "daily" or "session" recommendation using cache
+    final cacheAsync = ref.watch(metadataCacheServiceProvider);
     return cacheAsync.when(
       data: (cache) {
         final games = cache.cachedGames;
@@ -546,12 +632,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           return _buildDefaultGreeting(isOffline);
         }
 
-        // Stable daily random recommendation seeded with the calendar date
-        final now = DateTime.now();
-        final seed = now.year * 10000 + now.month * 100 + now.day;
+        final int seed;
+        final String label;
+        if (headerMode == 'session') {
+          seed = _sessionSeed;
+          label = "SESSION GAME RECOMMENDATION";
+        } else {
+          final now = DateTime.now();
+          seed = now.year * 10000 + now.month * 100 + now.day;
+          label = "TODAY'S GAME RECOMMENDATION";
+        }
+
         final rng = Random(seed);
         final randomIndex = rng.nextInt(games.length);
-        final dailyGame = games[randomIndex];
+        final recommendedGame = games[randomIndex];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -561,7 +655,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  "TODAY'S GAME RECOMMENDATION",
+                  label,
                   style: TextStyle(
                     fontSize: 9,
                     color: theme.colorScheme.primary.withValues(alpha: 0.8),
@@ -571,24 +665,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                 ),
                 if (isOffline) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                    ),
-                    child: const Text(
-                      'OFFLINE',
-                      style: TextStyle(color: Colors.orange, fontSize: 8, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  _buildOfflineBadge(),
                 ],
               ],
             ),
             const SizedBox(height: 2),
             Text(
-              dailyGame.displayName,
+              recommendedGame.displayName,
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -600,6 +683,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       },
       loading: () => const Text('Freegosy Launcher', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
       error: (_, __) => _buildDefaultGreeting(isOffline),
+    );
+  }
+
+  Widget _buildOfflineBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: const Text(
+        'OFFLINE',
+        style: TextStyle(color: Colors.orange, fontSize: 8, fontWeight: FontWeight.bold),
+      ),
     );
   }
 

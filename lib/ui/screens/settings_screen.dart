@@ -470,7 +470,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   _buildRommServerSection(context, ref, rommService, rommConfig),
                   const SizedBox(height: 20),
-                  _buildAppThemeSection(context, ref),
+                  _buildAppearanceSection(context, ref),
                   const SizedBox(height: 20),
                   _buildSectionCard(
                     context: context,
@@ -528,18 +528,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildAppThemeSection(BuildContext context, WidgetRef ref) {
+  Widget _buildAppearanceSection(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final currentTheme = ref.watch(themeProvider);
+    final headerMode = ref.watch(libraryHeaderTitleModeProvider);
     return _buildSectionCard(
       context: context,
-      title: 'App Theme',
+      title: 'Appearance & Customization',
       icon: Icons.palette,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Choose the overall visual style of Freegosy.',
+            'Choose the overall visual style and header personalization of Freegosy.',
             style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 13),
           ),
           const SizedBox(height: 16),
@@ -556,9 +557,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ref.read(themeProvider.notifier).setTheme(preset);
             },
           ),
+          const SizedBox(height: 16),
+          _buildCustomDropdown<String>(
+            context: context,
+            label: 'Library Header Title',
+            currentValue: headerMode,
+            currentValueLabel: _getHeaderTitleModeLabel(headerMode),
+            items: const [
+              {'value': 'daily', 'label': 'Daily Game Recommendation'},
+              {'value': 'session', 'label': 'Session Game Recommendation'},
+              {'value': 'last_played', 'label': 'Last Played Game'},
+              {'value': 'server_ip', 'label': 'Server URL / IP'},
+              {'value': 'greetings', 'label': 'Fun Retro Greetings'},
+              {'value': 'none', 'label': 'None / Just App Logo'},
+            ],
+            onChanged: (mode) {
+              ref.read(libraryHeaderTitleModeProvider.notifier).update(mode);
+            },
+          ),
         ],
       ),
     );
+  }
+
+  String _getHeaderTitleModeLabel(String mode) {
+    switch (mode) {
+      case 'daily':
+        return 'Daily Game Recommendation';
+      case 'session':
+        return 'Session Game Recommendation';
+      case 'last_played':
+        return 'Last Played Game';
+      case 'server_ip':
+        return 'Server URL / IP';
+      case 'greetings':
+        return 'Fun Retro Greetings';
+      case 'none':
+        return 'None / Just App Logo';
+      default:
+        return 'Daily Game Recommendation';
+    }
   }
 
   Widget _buildRommServerSection(BuildContext context, WidgetRef ref, RommService? rommService, RomMConfig rommConfig) {
