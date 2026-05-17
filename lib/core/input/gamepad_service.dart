@@ -183,7 +183,13 @@ class GamepadService {
   }
 
   void _moveFocus(TraversalDirection direction) {
-    FocusManager.instance.primaryFocus?.focusInDirection(direction);
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null && primary.context != null) {
+      final renderObject = primary.context!.findRenderObject();
+      if (renderObject != null && renderObject.attached) {
+        primary.focusInDirection(direction);
+      }
+    }
   }
 
   void dispose() {

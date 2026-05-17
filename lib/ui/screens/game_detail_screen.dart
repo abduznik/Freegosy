@@ -69,6 +69,13 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   bool _justEnteredCompletion = false;
   StreamSubscription<GameAction>? _inputSub;
   final FocusNode _focusNode = FocusNode();
+  late ProviderContainer _container;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _container = ProviderScope.containerOf(context);
+  }
 
   @override
   void initState() {
@@ -163,7 +170,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   void dispose() {
     _inputSub?.cancel();
     _focusNode.dispose();
-    ref.read(navigationLockedProvider.notifier).state = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _container.read(navigationLockedProvider.notifier).state = false;
+    });
     super.dispose();
   }
 
