@@ -29,6 +29,7 @@ Widget _buildCustomDropdown<T>({
                   onTap: () => Navigator.pop(ctx, item['value']),
                   borderRadius: 16.0,
                   autofocus: isSelected,
+                  useSafeScale: false,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
@@ -68,6 +69,7 @@ Widget _buildCustomDropdown<T>({
             FocusEffectWrapper(
               onTap: () => Navigator.pop(ctx),
               borderRadius: 16.0,
+              useSafeScale: false,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(

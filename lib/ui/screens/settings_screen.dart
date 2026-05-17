@@ -104,6 +104,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onTap: () => Navigator.pop(ctx, item['value']),
                     borderRadius: 16.0,
                     autofocus: isSelected,
+                    useSafeScale: false,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
@@ -143,6 +144,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               FocusEffectWrapper(
                 onTap: () => Navigator.pop(ctx),
                 borderRadius: 16.0,
+                useSafeScale: false,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
@@ -904,6 +906,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
             borderRadius: 12.0,
             scaleFactor: 1.05,
+            useSafeScale: false,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
