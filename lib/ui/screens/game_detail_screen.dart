@@ -488,7 +488,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     onToggleAdjustingCompletion: _toggleAdjustingCompletion,
                     onSave: () => _saveProps(context),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
@@ -594,7 +594,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         }
         return Center(
           child: SizedBox(
-            width: 280,
+            width: 308,
             child: GameActionButton(
               focusNode: _focusNode,
               icon: Icons.download, 
@@ -610,7 +610,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         children: [
           Center(
             child: SizedBox(
-              width: 280,
+              width: 308,
               child: GameActionButton(
                 focusNode: _focusNode,
                 icon: Icons.play_arrow, 

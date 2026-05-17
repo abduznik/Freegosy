@@ -59,7 +59,7 @@ class GamePersonalSection extends StatelessWidget {
 
         Center(
           child: SizedBox(
-            width: 320,
+            width: 384,
             child: Column(
               children: [
                 // 1. Status Button Alone (Full width 320, with label on left and status value on the right)
@@ -458,7 +458,7 @@ class GamePersonalSection extends StatelessWidget {
         // 4. Save Changes Button Alone at the very bottom
         Center(
           child: SizedBox(
-            width: 240,
+            width: 288,
             child: FocusEffectWrapper(
               onTap: isSaving ? null : onSave,
               borderRadius: 16.0,
