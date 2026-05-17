@@ -17,7 +17,7 @@ import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
 import '../../core/constants/app_constants.dart';
-
+import '../../providers/theme_provider.dart';
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -98,6 +98,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   _buildRommServerSection(context, ref, rommService, rommConfig),
                   const SizedBox(height: 24),
+                  _buildAppThemeSection(context, ref),
+                  const SizedBox(height: 24),
                   buildDisplaySection(context, cardAspectRatio, columnCount, cardSpacing, showTitle, activePreset, ref),
                   const SizedBox(height: 24),
                   _buildStorageSection(directoryService),
@@ -131,6 +133,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text('Error: $e')),
       ),
+    );
+  }
+
+  Widget _buildAppThemeSection(BuildContext context, WidgetRef ref) {
+    final currentTheme = ref.watch(themeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('App Theme', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        const Text('Choose the overall visual style of Freegosy.', style: TextStyle(color: Colors.white70)),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: ThemePreset.values.map((preset) {
+            final isSelected = currentTheme == preset;
+            return FilterChip(
+              label: Text(preset.displayName),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  ref.read(themeProvider.notifier).setTheme(preset);
+                }
+              },
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 

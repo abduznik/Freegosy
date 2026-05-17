@@ -17,6 +17,7 @@ import 'core/storage/file_sanity_service.dart';
 import 'core/input/gamepad_service.dart';
 import 'core/input/input_action_bus.dart';
 import 'package:flutter/services.dart';
+import 'providers/theme_provider.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -176,47 +177,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         debugShowCheckedModeBanner: false,
         scaffoldMessengerKey: scaffoldMessengerKey,
         scrollBehavior: CustomScrollBehavior(),
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-            surface: const Color(0xFF1a1a1a),
-          ),
-          scaffoldBackgroundColor: const Color(0xFF0f0f0f),
-          cardTheme: const CardThemeData(
-            color: Color(0xFF1a1a1a),
-            elevation: 2,
-          ),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF0f0f0f),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-          ),
-          navigationBarTheme: NavigationBarThemeData(
-            backgroundColor: const Color(0xFF1a1a1a),
-            indicatorColor: Colors.deepPurple.withValues(alpha: 0.3),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFF1a1a1a),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.deepPurple.shade800),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.deepPurple.shade900),
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
+        theme: getThemeData(ref.watch(themeProvider)),
         home: Consumer(
           builder: (context, ref, _) {
             final isOnboardedAsync = ref.watch(rommConfigProvider);

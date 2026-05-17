@@ -69,81 +69,99 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
         ? _isHovered 
         : _isFocused;
 
-    return Focus(
-      autofocus: widget.autofocus,
-      focusNode: widget.focusNode,
-      onFocusChange: _handleFocusChange,
-      onKeyEvent: (node, event) {
-        if (widget.onKeyEvent != null) {
-          final res = widget.onKeyEvent!(node, event);
-          if (res == KeyEventResult.handled) {
-            return KeyEventResult.handled;
-          }
-        }
-        if (event is KeyDownEvent && 
-            (event.logicalKey == LogicalKeyboardKey.enter || 
-             event.logicalKey == LogicalKeyboardKey.space)) {
-          widget.onTap?.call();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          behavior: HitTestBehavior.opaque, 
-          child: AnimatedScale(
-            scale: showEffect ? widget.scaleFactor : 1.0,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutBack,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                if (widget.showGlow)
-                  Positioned.fill(
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
-                      opacity: showEffect ? 1.0 : 0.0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(widget.borderRadius),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              blurRadius: 25,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                
-                widget.child,
+    final screenSize = MediaQuery.of(context).size;
 
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(widget.borderRadius),
-                        border: Border.all(
-                          color: showEffect ? Colors.white : Colors.transparent,
-                          width: 1.5,
-                          strokeAlign: BorderSide.strokeAlignInside,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double safeScale = widget.scaleFactor;
+        
+        // Ensure the scale effect never exceeds the physical screen boundaries
+        if (constraints.maxWidth != double.infinity && constraints.maxWidth > 0) {
+          final maxAllowedScaleX = screenSize.width / constraints.maxWidth;
+          if (safeScale > maxAllowedScaleX) safeScale = maxAllowedScaleX;
+        }
+        if (constraints.maxHeight != double.infinity && constraints.maxHeight > 0) {
+          final maxAllowedScaleY = screenSize.height / constraints.maxHeight;
+          if (safeScale > maxAllowedScaleY) safeScale = maxAllowedScaleY;
+        }
+
+        return Focus(
+          autofocus: widget.autofocus,
+          focusNode: widget.focusNode,
+          onFocusChange: _handleFocusChange,
+          onKeyEvent: (node, event) {
+            if (widget.onKeyEvent != null) {
+              final res = widget.onKeyEvent!(node, event);
+              if (res == KeyEventResult.handled) {
+                return KeyEventResult.handled;
+              }
+            }
+            if (event is KeyDownEvent && 
+                (event.logicalKey == LogicalKeyboardKey.enter || 
+                 event.logicalKey == LogicalKeyboardKey.space)) {
+              widget.onTap?.call();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
+            cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            child: GestureDetector(
+              onTap: widget.onTap,
+              behavior: HitTestBehavior.opaque, 
+              child: AnimatedScale(
+                scale: showEffect ? safeScale : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutBack,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    if (widget.showGlow)
+                      Positioned.fill(
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: showEffect ? 1.0 : 0.0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(widget.borderRadius),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  blurRadius: 15,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    
+                    widget.child,
+
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(widget.borderRadius),
+                            border: Border.all(
+                              color: showEffect ? Colors.white.withValues(alpha: 0.8) : Colors.transparent,
+                              width: 1.5,
+                              strokeAlign: BorderSide.strokeAlignInside,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
