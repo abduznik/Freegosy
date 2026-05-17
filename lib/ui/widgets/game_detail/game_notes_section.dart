@@ -5,14 +5,12 @@ import '../focus_effect_wrapper.dart';
 class GameNotesSection extends StatelessWidget {
   final List<RomNote> notes;
   final VoidCallback onAddNote;
-  final Function(int) onDeleteNote;
   final Function(RomNote) onViewNote;
 
   const GameNotesSection({
     super.key,
     required this.notes,
     required this.onAddNote,
-    required this.onDeleteNote,
     required this.onViewNote,
   });
 
@@ -60,55 +58,36 @@ class GameNotesSection extends StatelessWidget {
         else
           ...notes.map((note) => Padding(
                 padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: FocusEffectWrapper(
-                        onTap: () => onViewNote(note),
-                        borderRadius: 12.0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: Colors.white.withValues(alpha: 0.03),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                note.title.isNotEmpty ? note.title : 'Note',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                note.content,
-                                style: const TextStyle(color: Colors.white70, fontSize: 13),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                child: FocusEffectWrapper(
+                  onTap: () => onViewNote(note),
+                  borderRadius: 12.0,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white.withValues(alpha: 0.03),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                     ),
-                    const SizedBox(width: 8),
-                    FocusEffectWrapper(
-                      onTap: () => onDeleteNote(note.id),
-                      borderRadius: 12.0,
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.red.withValues(alpha: 0.08),
-                          border: Border.all(color: Colors.red.withValues(alpha: 0.15)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          note.title.isNotEmpty ? note.title : 'Note',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                      ),
+                        const SizedBox(height: 4),
+                        Text(
+                          note.content,
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               )),
       ],

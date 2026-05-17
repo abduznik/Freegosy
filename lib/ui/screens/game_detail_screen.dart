@@ -373,18 +373,36 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(note.title.isNotEmpty ? note.title : 'Note'),
+        backgroundColor: const Color(0xFF1a1a1a),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(note.title.isNotEmpty ? note.title : 'Note', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: SizedBox(
           width: 500,
           child: SingleChildScrollView(
-            child: Text(note.content, style: const TextStyle(height: 1.5)),
+            child: Text(note.content, style: const TextStyle(height: 1.5, color: Colors.white70)),
           ),
         ),
         actions: [
           FocusEffectWrapper(
+            onTap: () {
+              Navigator.pop(context);
+              _deleteNote(note.id);
+            },
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.red.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Delete Note', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
             onTap: () => Navigator.pop(context),
             borderRadius: 12.0,
-            scaleFactor: 1.0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -481,7 +499,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   const SizedBox(height: 12),
                   GameDetailsGrid(game: _currentGame),
                   const SizedBox(height: 24),
-                  GameNotesSection(notes: _currentGame.notes, onAddNote: _addNote, onDeleteNote: _deleteNote, onViewNote: _viewNote),
+                  GameNotesSection(notes: _currentGame.notes, onAddNote: _addNote, onViewNote: _viewNote),
                   const SizedBox(height: 24),
                   _buildScreenshotsSection(theme),
                   GamePersonalSection(
