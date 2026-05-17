@@ -330,6 +330,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             onTap: () => Navigator.pop(context, false),
             borderRadius: 12.0,
             scaleFactor: 1.0,
+            useSafeScale: false,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -345,6 +346,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
             onTap: () => Navigator.pop(context, true),
             borderRadius: 12.0,
             scaleFactor: 1.0,
+            useSafeScale: false,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -389,6 +391,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
               _deleteNote(note.id);
             },
             borderRadius: 12.0,
+            useSafeScale: false,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -403,6 +406,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           FocusEffectWrapper(
             onTap: () => Navigator.pop(context),
             borderRadius: 12.0,
+            useSafeScale: false,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
