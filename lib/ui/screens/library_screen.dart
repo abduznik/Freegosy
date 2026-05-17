@@ -402,10 +402,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                           firstChipFocusNode: _firstPlatformChipFocusNode,
                           onNavigateUp: () => _scrollToTopAndFocusSearch(),
                           onNavigateDown: () {
+                            // Lock navigation so the GamepadService's geometric _moveFocus
+                            // does not fire after us and jump to a random grid item.
+                            ref.read(navigationLockedProvider.notifier).state = true;
                             if (_scrollController.hasClients) {
                               _scrollController.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
                             }
                             _firstContentItemFocusNode.requestFocus();
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) ref.read(navigationLockedProvider.notifier).state = false;
+                            });
                           },
                           onSelected: (platform) {
                             ref.read(isHomeSelectedProvider.notifier).state = false;

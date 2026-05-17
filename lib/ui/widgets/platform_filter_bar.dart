@@ -4,25 +4,6 @@ import 'package:flutter/services.dart';
 import '../../core/romm/romm_models.dart';
 import 'focus_effect_wrapper.dart';
 
-class PlatformTabTraversalPolicy extends WidgetOrderTraversalPolicy {
-  final VoidCallback? onNavigateDown;
-  final VoidCallback? onNavigateUp;
-
-  PlatformTabTraversalPolicy({this.onNavigateDown, this.onNavigateUp});
-
-  @override
-  bool inDirection(FocusNode currentNode, TraversalDirection direction) {
-    if (direction == TraversalDirection.down && onNavigateDown != null) {
-      onNavigateDown!();
-      return true; // Cancel default geometric traversal
-    }
-    if (direction == TraversalDirection.up && onNavigateUp != null) {
-      onNavigateUp!();
-      return true;
-    }
-    return super.inDirection(currentNode, direction);
-  }
-}
 
 class PlatformFilterBar extends StatelessWidget {
   final List<Platform> platforms;
@@ -69,10 +50,7 @@ class PlatformFilterBar extends StatelessWidget {
         return KeyEventResult.ignored;
       },
       child: FocusTraversalGroup(
-        policy: PlatformTabTraversalPolicy(
-          onNavigateDown: onNavigateDown,
-          onNavigateUp: onNavigateUp,
-        ),
+        policy: WidgetOrderTraversalPolicy(),
         child: ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(
             dragDevices: {

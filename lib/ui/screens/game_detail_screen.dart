@@ -375,7 +375,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a1a),
+        backgroundColor: Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(note.title.isNotEmpty ? note.title : 'Note', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: SizedBox(
@@ -480,7 +480,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         : (_currentGame.mergedScreenshots.isNotEmpty ? _normalizeUrl(_currentGame.mergedScreenshots.first) : null);
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Listener(
         onPointerHover: (event) {
           if (event.delta.distance > 0 && ref.read(inputModeProvider) != InputMode.mouse) {
@@ -786,7 +786,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a1a),
+      backgroundColor: Theme.of(context).colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
