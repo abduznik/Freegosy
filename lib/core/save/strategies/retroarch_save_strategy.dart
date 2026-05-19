@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 import 'dart:typed_data';
+import 'package:archive/archive_io.dart';
 
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
@@ -22,6 +23,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   @override
   String get strategyId => 'retroarch';
+
+  @override
+  bool get shouldZip => false;
 
   // _CoreInfo maps platform slugs to RetroArch core info, including save and state directories.
   static const Map<String, _CoreInfo> _coreMap = {
@@ -253,6 +257,61 @@ class RetroArchSaveStrategy extends SaveStrategy {
       }
 
       if (coreInfo == null) return false;
+
+      if (filename.toLowerCase().endsWith('.zip')) {
+        final archive = ZipDecoder().decodeBytes(data);
+        for (final file in archive) {
+          if (!file.isFile) continue;
+          if (file.name == 'freegosy_sync.txt') continue;
+          
+          final isFileState = file.name.contains('.state');
+          String? fileTargetDir;
+          if (io.Platform.isLinux) {
+            final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+            if (_directoryService.linuxSyncPreset == 'emudeck') {
+              if (isFileState) {
+                final emulationRoot = p.dirname(p.dirname(baseDir));
+                fileTargetDir = p.join(emulationRoot, 'states', 'retroarch', coreInfo.statesFolder);
+              } else {
+                fileTargetDir = p.join(baseDir, coreInfo.saveFolder);
+              }
+            } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
+              fileTargetDir = isFileState
+                  ? p.join(baseDir, 'states', coreInfo.statesFolder)
+                  : p.join(baseDir, 'saves', coreInfo.saveFolder);
+            } else {
+              fileTargetDir = isFileState
+                  ? p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder)
+                  : p.join(baseDir, coreInfo.saveFolder);
+            }
+          } else {
+            final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
+            if (exePath != null) {
+              String exeDir = io.Platform.isMacOS ? p.join(io.File(exePath).parent.parent.parent.parent.path) : io.File(exePath).parent.path;
+              if (await io.FileSystemEntity.isDirectory(exePath)) {
+                exeDir = exePath;
+              }
+              fileTargetDir = isFileState
+                  ? p.join(exeDir, 'states', coreInfo.statesFolder)
+                  : p.join(exeDir, 'saves', coreInfo.saveFolder);
+            }
+          }
+          
+          if (fileTargetDir == null) continue;
+          final dir = io.Directory(fileTargetDir);
+          if (!await dir.exists()) await dir.create(recursive: true);
+          
+          String targetFilename = file.name;
+          if (!isFileState && file.name.toLowerCase().endsWith('.sav')) {
+            targetFilename = '${p.basenameWithoutExtension(file.name)}.srm';
+          }
+          
+          final targetPath = p.normalize(p.join(fileTargetDir, targetFilename));
+          await backupSave(targetPath);
+          await io.File(targetPath).writeAsBytes(file.content as Uint8List);
+        }
+        return true;
+      }
 
       String? targetDir;
       final isState = filename.contains('.state');

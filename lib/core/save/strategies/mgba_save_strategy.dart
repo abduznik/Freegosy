@@ -1,6 +1,7 @@
 import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
+import 'package:archive/archive_io.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -13,6 +14,9 @@ class MgbaSaveStrategy extends SaveStrategy {
 
   @override
   String get strategyId => 'mgba';
+
+  @override
+  bool get shouldZip => false;
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
@@ -61,6 +65,21 @@ class MgbaSaveStrategy extends SaveStrategy {
       final romStem = p.basenameWithoutExtension(destPath).toLowerCase();
       final fallbackStem = getRomStem(game).toLowerCase();
       String targetPath = p.normalize(p.join(saveDir, '$romStem.sav'));
+
+      if (filename.toLowerCase().endsWith('.zip')) {
+        final archive = ZipDecoder().decodeBytes(data);
+        for (final file in archive) {
+          if (!file.isFile) continue;
+          if (file.name == 'freegosy_sync.txt') continue;
+          if (file.name.toLowerCase().endsWith('.sav')) {
+            await io.Directory(p.dirname(targetPath)).create(recursive: true);
+            await backupSave(targetPath);
+            await io.File(targetPath).writeAsBytes(file.content as Uint8List);
+            return true;
+          }
+        }
+        return true;
+      }
 
       final dir = io.Directory(saveDir);
       if (await dir.exists()) {

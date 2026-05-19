@@ -260,11 +260,35 @@ class SaveSyncService {
         strategy.setManualMapping(mapping);
       }
 
-      final filesMap = await strategy.getSaveFilesWithScreenshots(
+      var filesMap = await strategy.getSaveFilesWithScreenshots(
         game, romPath,
         sessionStart: sessionStart,
         syncMode: syncMode,
       );
+      if (filesMap.isEmpty) return false;
+
+      // If the strategy does not support zipping, filter filesMap to only keep the primary save file 
+      // (typically ending in .srm, .sav, or .gci) to ensure it is uploaded raw/unzipped.
+      if (!strategy.shouldZip) {
+        final filteredMap = <io.File, io.File?>{};
+        for (final entry in filesMap.entries) {
+          final pathLower = entry.key.path.toLowerCase();
+          if (pathLower.endsWith('.srm') || pathLower.endsWith('.sav') || pathLower.endsWith('.gci')) {
+            filteredMap[entry.key] = entry.value;
+            break; // Keep only the first primary save file
+          }
+        }
+        // Fallback if no specific extension matches: keep the first file entry if it's not a directory
+        if (filteredMap.isEmpty) {
+          for (final entry in filesMap.entries) {
+            if (!await io.FileSystemEntity.isDirectory(entry.key.path)) {
+              filteredMap[entry.key] = entry.value;
+              break;
+            }
+          }
+        }
+        filesMap = filteredMap;
+      }
       if (filesMap.isEmpty) return false;
 
       // --- Conflict Detection ---

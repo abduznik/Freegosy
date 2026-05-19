@@ -20,6 +20,11 @@ abstract class SaveStrategy {
   /// Whether this strategy supports save synchronization.
   bool get supportsSaveSync => false;
 
+  /// Whether this strategy prefers to upload/download saves as zipped archives.
+  /// Strategies that return false will upload the raw save file directly,
+  /// which is needed for emulators like emulator.js in RomM to read the files (e.g. .srm, .sav).
+  bool get shouldZip => true;
+
   /// Returns the local save directory for [game] given its [romPath].
   Future<String?> getSaveDir(Game game, String romPath);
 
