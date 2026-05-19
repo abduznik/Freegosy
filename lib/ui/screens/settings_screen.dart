@@ -18,6 +18,7 @@ import 'settings_custom_emulators_section.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/theme_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/dialog_back_bridge.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -92,71 +93,73 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       onTap: () async {
         final selected = await showDialog<T>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: Text('Select $label'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: items.map((item) {
-                final isSelected = item['value'] == currentValue;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: FocusEffectWrapper(
-                    onTap: () => Navigator.pop(ctx, item['value']),
-                    borderRadius: 16.0,
-                    autofocus: isSelected,
-                    useSafeScale: false,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: isSelected 
-                            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
-                            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
-                        border: Border.all(
+          builder: (ctx) => DialogBackBridge(
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Text('Select $label'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: items.map((item) {
+                  final isSelected = item['value'] == currentValue;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: FocusEffectWrapper(
+                      onTap: () => Navigator.pop(ctx, item['value']),
+                      borderRadius: 16.0,
+                      autofocus: isSelected,
+                      useSafeScale: false,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
                           color: isSelected 
-                              ? theme.colorScheme.primary.withValues(alpha: 0.4) 
-                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                          border: Border.all(
+                            color: isSelected 
+                                ? theme.colorScheme.primary.withValues(alpha: 0.4) 
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected ? Icons.check_circle : Icons.radio_button_off,
+                              color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              item['label'] as String,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isSelected ? Icons.check_circle : Icons.radio_button_off,
-                            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            item['label'] as String,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-            actions: [
-              FocusEffectWrapper(
-                onTap: () => Navigator.pop(ctx),
-                borderRadius: 16.0,
-                useSafeScale: false,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-                    border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                  ),
-                  child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-                ),
+                  );
+                }).toList(),
               ),
-            ],
+              actions: [
+                FocusEffectWrapper(
+                  onTap: () => Navigator.pop(ctx),
+                  borderRadius: 16.0,
+                  useSafeScale: false,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                    ),
+                    child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
         if (selected != null) {
@@ -217,7 +220,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 2),
                   Text(subtitle, style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11)),
                 ],
@@ -364,10 +367,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant)),
+        ),
         const SizedBox(height: 8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(16),
@@ -916,7 +922,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showLogsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => const _LogsDialogContent(),
+      builder: (context) => const DialogBackBridge(child: _LogsDialogContent()),
     );
   }
 
@@ -954,67 +960,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final theme = Theme.of(context);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Pair with Web UI'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter the 8-digit code generated in your RomM Web UI settings.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              autofocus: true,
-              decoration: _buildInputDecoration(context, 'Pairing Code').copyWith(
-                hintText: 'XXXXXXXX',
+      builder: (context) => DialogBackBridge(
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Pair with Web UI'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter the 8-digit code generated in your RomM Web UI settings.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeController,
+                autofocus: true,
+                decoration: _buildInputDecoration(context, 'Pairing Code').copyWith(
+                  hintText: 'XXXXXXXX',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 24, letterSpacing: 4, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
               ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, letterSpacing: 4, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FocusEffectWrapper(
+              onTap: () async {
+                final code = codeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+                if (code.length < 8) return;
+                
+                try {
+                  final url = _baseUrlController.text.trim();
+                  if (url.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a Server URL first.')));
+                    return;
+                  }
+                  final token = await RommService.exchangePairingCode(url, code);
+                  _apiKeyController.text = token;
+                  setState(() => _isLegacyAuth = false);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Successfully paired! Click Save to apply.')));
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pairing failed: ${e.toString().split('\n').first}')));
+                  }
+                }
+              },
+              borderRadius: 12.0,
+              scaleFactor: 1.05,
+              useSafeScale: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)]),
+                ),
+                child: Text(
+                  'Pair',
+                  style: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FocusEffectWrapper(
-            onTap: () async {
-              final code = codeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-              if (code.length < 8) return;
-              
-              try {
-                final url = _baseUrlController.text.trim();
-                if (url.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a Server URL first.')));
-                  return;
-                }
-                final token = await RommService.exchangePairingCode(url, code);
-                _apiKeyController.text = token;
-                setState(() => _isLegacyAuth = false);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Successfully paired! Click Save to apply.')));
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pairing failed: ${e.toString().split('\n').first}')));
-                }
-              }
-            },
-            borderRadius: 12.0,
-            scaleFactor: 1.05,
-            useSafeScale: false,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)]),
-              ),
-              child: Text(
-                'Pair',
-                style: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -93,6 +93,7 @@ class GamePersonalSection extends StatelessWidget {
                                 borderRadius: 16.0,
                                 scaleFactor: 1.0,
                                 autofocus: val == (status ?? 'never_playing'),
+                                useSafeScale: false,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                   decoration: BoxDecoration(
@@ -117,6 +118,7 @@ class GamePersonalSection extends StatelessWidget {
                             onTap: () => Navigator.pop(ctx),
                             borderRadius: 16.0,
                             scaleFactor: 1.0,
+                            useSafeScale: false,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(

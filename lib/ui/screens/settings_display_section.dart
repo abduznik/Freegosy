@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/library_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/dialog_back_bridge.dart';
 
 Widget _buildCustomDropdown<T>({
   required BuildContext context,
@@ -16,71 +17,73 @@ Widget _buildCustomDropdown<T>({
     onTap: () async {
       final selected = await showDialog<T>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text('Select $label'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: items.map((item) {
-              final isSelected = item['value'] == currentValue;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                child: FocusEffectWrapper(
-                  onTap: () => Navigator.pop(ctx, item['value']),
-                  borderRadius: 16.0,
-                  autofocus: isSelected,
-                  useSafeScale: false,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      color: isSelected 
-                          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
-                          : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
-                      border: Border.all(
+        builder: (ctx) => DialogBackBridge(
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: Text('Select $label'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: items.map((item) {
+                final isSelected = item['value'] == currentValue;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: FocusEffectWrapper(
+                    onTap: () => Navigator.pop(ctx, item['value']),
+                    borderRadius: 16.0,
+                    autofocus: isSelected,
+                    useSafeScale: false,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
                         color: isSelected 
-                            ? theme.colorScheme.primary.withValues(alpha: 0.4) 
-                            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                        border: Border.all(
+                          color: isSelected 
+                              ? theme.colorScheme.primary.withValues(alpha: 0.4) 
+                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected ? Icons.check_circle : Icons.radio_button_off,
+                            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            item['label'] as String,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected ? Icons.check_circle : Icons.radio_button_off,
-                          color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                          size: 18,
-                        ),
-                        const SizedBox(width: 16),
-                        Text(
-                          item['label'] as String,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-          actions: [
-            FocusEffectWrapper(
-              onTap: () => Navigator.pop(ctx),
-              borderRadius: 16.0,
-              useSafeScale: false,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-                  border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                ),
-                child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-              ),
+                );
+              }).toList(),
             ),
-          ],
+            actions: [
+              FocusEffectWrapper(
+                onTap: () => Navigator.pop(ctx),
+                borderRadius: 16.0,
+                useSafeScale: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                    border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                  ),
+                  child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                ),
+              ),
+            ],
+          ),
         ),
       );
       if (selected != null) {
@@ -138,7 +141,7 @@ Widget _buildCustomToggleRow(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
                 const SizedBox(height: 2),
                 Text(subtitle, style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11)),
               ],
@@ -269,46 +272,52 @@ Widget buildDisplaySection(
         },
       ),
       const SizedBox(height: 20),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Columns per row',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Columns per row',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
             ),
-            child: Text(
-              '$columnCount',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$columnCount',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       const SizedBox(height: 8),
-      SliderTheme(
-        data: SliderTheme.of(context).copyWith(
-          activeTrackColor: theme.colorScheme.primary,
-          inactiveTrackColor: theme.colorScheme.outline.withValues(alpha: 0.2),
-          thumbColor: theme.colorScheme.primary,
-          overlayColor: theme.colorScheme.primary.withValues(alpha: 0.15),
-          valueIndicatorColor: theme.colorScheme.primary,
-          valueIndicatorTextStyle: TextStyle(color: theme.colorScheme.onPrimary),
-        ),
-        child: Slider(
-          value: columnCount.toDouble(),
-          min: 2,
-          max: 8,
-          divisions: 6,
-          label: '$columnCount',
-          onChanged: (value) {
-            ref.read(activePresetProvider.notifier).update('custom');
-            ref.read(columnCountProvider.notifier).update(value.toInt());
-          },
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: theme.colorScheme.primary,
+            inactiveTrackColor: theme.colorScheme.outline.withValues(alpha: 0.2),
+            thumbColor: theme.colorScheme.primary,
+            overlayColor: theme.colorScheme.primary.withValues(alpha: 0.15),
+            valueIndicatorColor: theme.colorScheme.primary,
+            valueIndicatorTextStyle: TextStyle(color: theme.colorScheme.onPrimary),
+          ),
+          child: Slider(
+            value: columnCount.toDouble(),
+            min: 2,
+            max: 8,
+            divisions: 6,
+            label: '$columnCount',
+            onChanged: (value) {
+              ref.read(activePresetProvider.notifier).update('custom');
+              ref.read(columnCountProvider.notifier).update(value.toInt());
+            },
+          ),
         ),
       ),
       const SizedBox(height: 8),

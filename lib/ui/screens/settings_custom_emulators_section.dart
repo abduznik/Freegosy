@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/emulator/custom_emulator_config.dart';
 import '../../providers/custom_emulators_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/dialog_back_bridge.dart';
 
 InputDecoration _buildInputDecoration(BuildContext context, String label, {String? hintText, String? helperText}) {
   final theme = Theme.of(context);
@@ -216,8 +217,9 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (context) => DialogBackBridge(
+        child: StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Row(
             children: [
@@ -400,6 +402,7 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

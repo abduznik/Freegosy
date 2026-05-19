@@ -172,7 +172,11 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     _inputSub?.cancel();
     _focusNode.dispose();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _container.read(navigationLockedProvider.notifier).state = false;
+      try {
+        _container.read(navigationLockedProvider.notifier).state = false;
+      } catch (_) {
+        // Container already disposed (e.g. during test teardown), safe to ignore!
+      }
     });
     super.dispose();
   }

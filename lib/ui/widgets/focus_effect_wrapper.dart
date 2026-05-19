@@ -61,6 +61,13 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
   }
 
   Widget _buildVisuals(bool showEffect, double scaleValue) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final glowColor = isLight ? Colors.black.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.15);
+    final borderColor = showEffect
+        ? (isLight ? Colors.black.withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.8))
+        : Colors.transparent;
+
     return AnimatedScale(
       scale: showEffect ? scaleValue : 1.0,
       duration: const Duration(milliseconds: 250),
@@ -78,7 +85,7 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
                     borderRadius: BorderRadius.circular(widget.borderRadius),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: glowColor,
                         blurRadius: 15,
                         spreadRadius: 1,
                       ),
@@ -97,7 +104,7 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(widget.borderRadius),
                   border: Border.all(
-                    color: showEffect ? Colors.white.withValues(alpha: 0.8) : Colors.transparent,
+                    color: borderColor,
                     width: 1.5,
                     strokeAlign: BorderSide.strokeAlignInside,
                   ),

@@ -219,4 +219,73 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('GamePersonalSection Status Dialog Intrinsic dimensions test', () {
+    testWidgets('Opening Status Dialog in GameDetailScreen does not crash with LayoutBuilder intrinsic dimensions exception', (WidgetTester tester) async {
+      // Configure larger screen size to ensure all elements fit without being off-screen
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      final testGame = Game(
+        id: '123',
+        name: 'Test Game',
+        fileSize: 1024,
+      );
+
+      // Render the GameDetailScreen
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            romScannerServiceProvider.overrideWithValue(null),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: GameDetailScreen(
+                game: testGame,
+                rommBaseUrl: 'http://test',
+                isDownloaded: false,
+                onLaunch: () {},
+                onDownload: () {},
+                onPushSaves: () {},
+                onPullSaves: () {},
+                onDelete: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Find the status button (labeled 'Not set' by default, or just status title/label)
+      expect(find.text('Status'), findsOneWidget);
+      expect(find.text('Not set'), findsOneWidget);
+
+      // Tap the status selector button to open the dialog
+      await tester.tap(find.text('Not set'));
+      await tester.pumpAndSettle();
+
+      // Verify that the Dialog has successfully opened by checking if the select title 'Select Status' is visible
+      expect(find.text('Select Status'), findsOneWidget);
+      expect(find.text('Never Played'), findsOneWidget);
+      expect(find.text('Finished'), findsOneWidget);
+
+      // Tap 'Finished' to dismiss and select a status
+      await tester.tap(find.text('Finished'));
+      await tester.pumpAndSettle();
+
+      // Verify that the dialog is dismissed and the main detailed card status updates
+      expect(find.text('Select Status'), findsNothing);
+      expect(find.text('Finished'), findsOneWidget);
+
+      // Verify absolutely no intrinsic dimension layout exceptions were thrown
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

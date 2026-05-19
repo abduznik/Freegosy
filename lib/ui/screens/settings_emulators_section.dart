@@ -13,6 +13,7 @@ import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/dialog_back_bridge.dart';
 
 Widget _buildActionButton(
   BuildContext context, {
@@ -333,18 +334,20 @@ Widget buildEmulatorsSection(
                           } else if (val == 'uninstall') {
                             final confirm = await showDialog<bool>(
                               context: context,
-                              builder: (ctx) => AlertDialog(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                title: const Text("Uninstall Emulator"),
-                                content: Text("Are you sure you want to delete $emulatorName? This will remove all local files."),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-                                  TextButton(
-                                    style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text("Uninstall"),
-                                  ),
-                                ],
+                              builder: (ctx) => DialogBackBridge(
+                                child: AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                  title: const Text("Uninstall Emulator"),
+                                  content: Text("Are you sure you want to delete $emulatorName? This will remove all local files."),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+                                    TextButton(
+                                      style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text("Uninstall"),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
 
@@ -436,20 +439,22 @@ Future<void> _startDownload(
       if (!context.mounted) return;
       final choice = await showDialog<String>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text("Select Eden Build"),
-          content: const Text("Choose which version of Eden to install:"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'nightly'),
-              child: const Text("Nightly (Experimental)"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'stable'),
-              child: const Text("Stable (Recommended)"),
-            ),
-          ],
+        builder: (ctx) => DialogBackBridge(
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Text("Select Eden Build"),
+            content: const Text("Choose which version of Eden to install:"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'nightly'),
+                child: const Text("Nightly (Experimental)"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'stable'),
+                child: const Text("Stable (Recommended)"),
+              ),
+            ],
+          ),
         ),
       );
 
@@ -489,9 +494,11 @@ Future<void> _startDownload(
       if (context.mounted) {
         final selected = await showDialog<Map<String, String>>(
           context: context,
-          builder: (ctx) => EmulatorSelectionDialog(
-            assets: assets,
-            onSelect: (url) => Navigator.pop(ctx, assets.firstWhere((a) => a['url'] == url)),
+          builder: (ctx) => DialogBackBridge(
+            child: EmulatorSelectionDialog(
+              assets: assets,
+              onSelect: (url) => Navigator.pop(ctx, assets.firstWhere((a) => a['url'] == url)),
+            ),
           ),
         );
         
@@ -636,56 +643,58 @@ void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryServic
 
   showDialog(
     context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Text("Download URL Override"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Source: $type — paste a direct download URL to override",
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText: "Override URL",
-              hintText: "https://example.com/emulator.zip",
-              helperText: "Accepts .zip .7z .dmg .tar.gz .AppImage",
-              filled: true,
-              fillColor: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+    builder: (ctx) => DialogBackBridge(
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Download URL Override"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Source: $type — paste a direct download URL to override",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: "Override URL",
+                hintText: "https://example.com/emulator.zip",
+                helperText: "Accepts .zip .7z .dmg .tar.gz .AppImage",
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () async {
+              await directoryService.setEmulatorUrlOverride(emulatorId, null);
+              controller.text = '';
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Reset"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              await directoryService.setEmulatorUrlOverride(
+                emulatorId,
+                text.isEmpty ? null : text,
+              );
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Confirm"),
           ),
         ],
       ),
-      actions: [
-        OutlinedButton(
-          onPressed: () async {
-            await directoryService.setEmulatorUrlOverride(emulatorId, null);
-            controller.text = '';
-            if (ctx.mounted) Navigator.pop(ctx);
-          },
-          child: const Text("Reset"),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text("Cancel"),
-        ),
-        FilledButton(
-          onPressed: () async {
-            final text = controller.text.trim();
-            await directoryService.setEmulatorUrlOverride(
-              emulatorId,
-              text.isEmpty ? null : text,
-            );
-            if (ctx.mounted) Navigator.pop(ctx);
-          },
-          child: const Text("Confirm"),
-        ),
-      ],
     ),
   );
 }

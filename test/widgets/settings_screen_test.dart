@@ -13,6 +13,8 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/input/input_action_bus.dart';
+import 'package:freegosy/core/input/gamepad_service.dart';
 
 import 'settings_screen_test.mocks.dart';
 
@@ -130,6 +132,33 @@ void main() {
       expect(toggleText, findsOneWidget);
       await tester.tap(toggleText);
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('combo selector dialog can be dismissed using GameAction.back', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createSettingsScreen());
+      await tester.pumpAndSettle();
+
+      // Find the Active Theme combo box card
+      final activeThemeButton = find.text('Active Theme');
+      expect(activeThemeButton, findsOneWidget);
+
+      // Tap on it to open the dialog
+      await tester.tap(activeThemeButton);
+      await tester.pumpAndSettle();
+
+      // Check that the dialog is open by looking for 'Select Active Theme'
+      expect(find.text('Select Active Theme'), findsOneWidget);
+
+      // Trigger GameAction.back via the bus
+      inputActionBus.add(GameAction.back);
+      await tester.pumpAndSettle();
+
+      // Verify the dialog is dismissed
+      expect(find.text('Select Active Theme'), findsNothing);
     });
   });
 }
