@@ -225,7 +225,11 @@ void main() {
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'snes', fileSize: 0);
       final ok = await strategy!.restoreSave(game, romPath, zipBytes, 'game.zip');
-
+      if (!ok) {
+        // Verify the directory was created even if restoreSave returned false
+        final files = await tempDir.list(recursive: true).toList();
+        print('DEBUG: restoreSave returned false. Files in tempDir: ${files.map((f) => f.path).toList()}');
+      }
       expect(ok, isTrue);
 
       // Find the restored file anywhere in tempDir (path differs by platform)

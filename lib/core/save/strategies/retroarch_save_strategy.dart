@@ -418,6 +418,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
       await io.File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
+      debugPrint('[RestoreSave Error] $e');
       return false;
     }
   }
