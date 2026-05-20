@@ -75,13 +75,6 @@ class DolphinSaveStrategy extends SaveStrategy {
     return name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
-  Uint8List _readExact(Uint8List data, int offset, int length) {
-    if (offset + length > data.length) {
-      throw Exception('Unexpected EOF');
-    }
-
-    return Uint8List.sublistView(data, offset, offset + length);
-  }
 
   bool _isValidGameIdByte(int byte) {
     final c = String.fromCharCode(byte);
@@ -102,11 +95,28 @@ class DolphinSaveStrategy extends SaveStrategy {
   Future<String?> _extractGameId(String romPath) async {
 
     // Attempt to read the game ID from the file
-    if (romPath.toLowerCase().endsWith(".rvz")) {
+    final allowedFileExtensions = [".rvz", ".iso"];
+    final fileExtension = p.extension(romPath).toLowerCase();
+    if (allowedFileExtensions.contains(fileExtension)) {
       
-      final Uint8List data = await File(romPath).readAsBytes();
-      final bytes = _readExact(data, 0x58, 4);
+      final file = await File(romPath).open(mode: FileMode.read);
+      final bytes = Uint8List(4);
+      
+      int offset = 0;
 
+      switch (fileExtension){
+        case ".rvz":
+          offset = 0x58;
+          break;
+        case ".iso":
+          offset = 0x00;
+          break;
+      }
+
+      await file.setPosition(offset);
+      await file.readInto(bytes);
+      await file.close();
+    
       for (final b in bytes) {
         if (!_isValidGameIdByte(b)) {
           return null;
