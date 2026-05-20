@@ -14,7 +14,7 @@ class DuckstationStrategy extends EmulatorStrategy {
   DirectoryService get directoryService => _directoryService;
 
   @override
-  List<String> get launchArgs => ['-batch', '-fullname'];
+  List<String> get launchArgs => ['-batch', '-fullscreen'];
 
   @override
   String get name => 'DuckStation';

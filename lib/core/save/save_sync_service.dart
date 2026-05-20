@@ -144,13 +144,13 @@ class SaveSyncService {
       case 'nintendo-ds':
       case 'ds':
         return _melonds;
-      case 'psx':
-      case 'ps1':
-      case 'playstation':
-        return _duckstation;
       case 'psp':
       case 'playstation-portable':
         return _ppsspp;
+      case 'ps1':
+      case 'playstation':
+      case 'psx':
+        return _duckstation;
       case 'dc':
       case 'dreamcast':
         return _retroarch;
@@ -412,6 +412,26 @@ class SaveSyncService {
     return _rommService.getSavesList(gameId);
   }
 
+  /// Checks if [data] begins with ZIP magic bytes (PK\x03\x04).
+  bool _isZipBytes(Uint8List data) =>
+      data.length >= 4 &&
+      data[0] == 0x50 &&
+      data[1] == 0x4B &&
+      data[2] == 0x03 &&
+      data[3] == 0x04;
+
+  /// Ensures the filename matches the actual content format. If [data] is a
+  /// ZIP but [filename] doesn't end with .zip, appends .zip so strategies
+  /// can correctly extract the save inside. This makes manually-uploaded ZIPs
+  /// and any ZIP whose cloud filename lacks the extension work seamlessly.
+  String _adjustFilenameForFormat(Uint8List data, String filename) {
+    if (filename.toLowerCase().endsWith('.zip')) return filename;
+    if (_isZipBytes(data)) {
+      return '${p.basenameWithoutExtension(filename)}.zip';
+    }
+    return filename;
+  }
+
   /// Downloads a specific save for [game] from RomM and restores it locally.
   Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
     try {
@@ -459,8 +479,12 @@ class SaveSyncService {
       final filename = save['file_name'] as String?
           ?? downloadUrl.split('/').last;
 
+      // Sniff actual bytes so that ZIP files (even those manually uploaded or
+      // stored under a non-.zip name) are correctly extracted on restore.
+      final adjustedFilename = _adjustFilenameForFormat(bytes, filename);
+
       final ok = await strategy.restoreSave(
-          game, romPath, bytes, filename);
+          game, romPath, bytes, adjustedFilename);
 
       if (ok) {
         await _setLastPullTime(game.id);

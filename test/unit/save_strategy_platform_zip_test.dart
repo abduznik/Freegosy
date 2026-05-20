@@ -5,6 +5,7 @@ import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
+import 'package:freegosy/core/save/strategies/retroarch_save_strategy.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,12 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     when(mockRommService.getLatestSave(any)).thenAnswer((_) async => null);
     service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry, prefs);
+
+    // Prevent RetroArch strategy from reading real retroarch.cfg during tests
+    final retroarch = service.getStrategyForSlug('snes');
+    if (retroarch is RetroArchSaveStrategy) {
+      retroarch.skipConfigRead = true;
+    }
   });
 
   group('SaveStrategy shouldZip Platform-Specific Settings', () {
@@ -198,7 +205,7 @@ void main() {
     test('RetroArchSaveStrategy successfully extracts and restores a zipped save file', () async {
       final tempDir = await Directory.systemTemp.createTemp('retroarch_restore_zip');
       final romPath = p.join(tempDir.path, 'game.sfc');
-      
+
       final strategy = service.getStrategyForSlug('snes');
       expect(strategy, isNotNull);
 
@@ -215,14 +222,93 @@ void main() {
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'snes', fileSize: 0);
       final ok = await strategy!.restoreSave(game, romPath, zipBytes, 'game.zip');
-      
+
       expect(ok, isTrue);
-      
+
       // Verify the file was correctly extracted to saves/SNES/game.srm
-      final expectedPath = p.join(tempDir.path, 'saves', 'SNES', 'game.srm');
+      final expectedPath = p.join(tempDir.path, 'saves', 'Snes9x', 'game.srm');
       final restoredFile = File(expectedPath);
       expect(restoredFile.existsSync(), isTrue);
       expect(await restoredFile.readAsString(), saveFileContent);
+
+      await tempDir.delete(recursive: true);
+    });
+  });
+
+  group('pullSave zip content sniffing', () {
+    test('pullSave detects ZIP bytes even when cloud filename lacks .zip extension', () async {
+      final tempDir = await Directory.systemTemp.createTemp('pull_zip_sniff');
+      final romPath = p.join(tempDir.path, 'game.sfc');
+      // Touch the rom file so path operations work
+      await File(romPath).writeAsString('rom');
+
+      // Build a minimal ZIP payload
+      final encoder = ZipEncoder();
+      final archive = Archive();
+      final saveContent = 'extracted save data';
+      archive.addFile(ArchiveFile('game.srm', saveContent.length, saveContent.codeUnits));
+      final zipBytes = encoder.encode(archive) as Uint8List;
+
+      // Provide a save entry whose file_name is NOT .zip
+      final saveEntry = <String, dynamic>{
+        'file_name': 'game.srm',                          // <-- no .zip extension
+        'download_path': 'http://fake/download/game.srm',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      when(mockRommService.getLatestSave('game1'))
+          .thenAnswer((_) async => saveEntry);
+      when(mockRommService.downloadSave(any))
+          .thenAnswer((_) async => zipBytes);
+
+      // Route RetroArch to our tempDir for the save target path
+      when(mockDirectoryService.findEmulatorExecutable(any, any))
+          .thenAnswer((_) async => tempDir.path);
+
+      final game = Game(id: 'game1', name: 'game', platformSlug: 'snes', fileSize: 0);
+      final ok = await service.pullSave(game, romPath);
+
+      expect(ok, isTrue);
+
+      // Verify the save was extracted (not written as raw zip bytes)
+      final extractedPath = p.join(tempDir.path, 'saves', 'Snes9x', 'game.srm');
+      final extracted = File(extractedPath);
+      expect(await extracted.exists(), isTrue);
+      expect(await extracted.readAsString(), saveContent);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('pullSave passes raw bytes through unchanged when data is not a ZIP', () async {
+      final tempDir = await Directory.systemTemp.createTemp('pull_raw_pass');
+      final romPath = p.join(tempDir.path, 'game.sfc');
+      await File(romPath).writeAsString('rom');
+
+      final rawBytes = Uint8List.fromList('plain save data'.codeUnits);
+
+      final saveEntry = <String, dynamic>{
+        'file_name': 'game.srm',
+        'download_path': 'http://fake/download/game.srm',
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      when(mockRommService.getLatestSave('game2'))
+          .thenAnswer((_) async => saveEntry);
+      when(mockRommService.downloadSave(any))
+          .thenAnswer((_) async => rawBytes);
+      when(mockDirectoryService.findEmulatorExecutable(any, any))
+          .thenAnswer((_) async => tempDir.path);
+
+      final game = Game(id: 'game2', name: 'game', platformSlug: 'snes', fileSize: 0);
+      final ok = await service.pullSave(game, romPath);
+
+      expect(ok, isTrue);
+
+      // Verify the raw data was written directly (no zip extraction)
+      final expectedPath = p.join(tempDir.path, 'saves', 'Snes9x', 'game.srm');
+      final restored = File(expectedPath);
+      expect(await restored.exists(), isTrue);
+      expect(await restored.readAsString(), 'plain save data');
 
       await tempDir.delete(recursive: true);
     });

@@ -7,8 +7,12 @@ import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
 
 /// Save strategy for melonDS (Nintendo DS).
+///
+/// Checks the RetroArch save directory as fallback for users running
+/// RetroArch with the melonDS / DeSmuME core.
 class MelonDsSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  String? _cachedRetroarchDir;
 
   MelonDsSaveStrategy(this._directoryService);
 
@@ -24,7 +28,27 @@ class MelonDsSaveStrategy extends SaveStrategy {
       final emuDir = await _directoryService.getEmulatorAppSupportDirectory('melonds');
       if (await io.Directory(emuDir).exists()) return emuDir;
     }
-    return io.File(romPath).parent.path;
+
+    final romDir = io.File(romPath).parent.path;
+
+    // 1. ROM-adjacent (standalone melonDS)
+    if (await io.Directory(romDir).exists()) {
+      final stem = p.basenameWithoutExtension(romPath).toLowerCase();
+      final dir = io.Directory(romDir);
+      await for (final entity in dir.list()) {
+        if (entity is io.File) {
+          final fname = p.basename(entity.path).toLowerCase();
+          if (fname == '$stem.sav' || fname == '$stem.srm') return romDir;
+        }
+      }
+    }
+
+    // 2. Fallback: RetroArch melonDS/DeSmuME core save directory
+    _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'NDS');
+    if (_cachedRetroarchDir != null) return _cachedRetroarchDir;
+
+    // 3. Absolute fallback
+    return romDir;
   }
 
   @override
@@ -35,7 +59,12 @@ class MelonDsSaveStrategy extends SaveStrategy {
 
     final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
     final fallbackStem = getRomStem(game).toLowerCase();
-    
+    final stemWords = romStem
+        .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+        .split(' ')
+        .where((w) => w.length >= 3)
+        .toList();
+
     final dir = io.Directory(saveDir);
     if (!await dir.exists()) return [];
 
@@ -43,15 +72,33 @@ class MelonDsSaveStrategy extends SaveStrategy {
     await for (final entity in dir.list()) {
       if (entity is! io.File) continue;
       final fname = p.basename(entity.path).toLowerCase();
-      if ((fname == '$romStem.sav' || fname == '$fallbackStem.sav')) {
+      if ((fname == '$romStem.sav' || fname == '$fallbackStem.sav' || fname == '$romStem.srm' || fname == '$fallbackStem.srm')) {
         if (sessionStart != null) {
           final stat = await entity.stat();
           if (stat.modified.isBefore(sessionStart)) continue;
         }
         foundFiles.add(entity);
-        break; 
+        break;
       }
     }
+
+    // Fuzzy fallback: match by word tokens (e.g. "Dragon Ball Z: Legacy" matches "Dragon Ball Z - Legacy.srm")
+    if (foundFiles.isEmpty && stemWords.isNotEmpty) {
+      await for (final entity in dir.list()) {
+        if (entity is! io.File) continue;
+        final fname = p.basename(entity.path).toLowerCase();
+        if (!fname.endsWith('.srm') && !fname.endsWith('.sav')) continue;
+        if (stemWords.any((word) => fname.contains(word))) {
+          if (sessionStart != null) {
+            final stat = await entity.stat();
+            if (stat.modified.isBefore(sessionStart)) continue;
+          }
+          foundFiles.add(entity);
+          break;
+        }
+      }
+    }
+
     return foundFiles;
   }
 
@@ -74,7 +121,7 @@ class MelonDsSaveStrategy extends SaveStrategy {
           if (file.name.toLowerCase().endsWith('.sav')) {
             await io.Directory(p.dirname(targetPath)).create(recursive: true);
             await backupSave(targetPath);
-            await io.File(targetPath).writeAsBytes(file.content as Uint8List);
+            await io.File(targetPath).writeAsBytes(file.content);
             return true;
           }
         }
@@ -86,9 +133,28 @@ class MelonDsSaveStrategy extends SaveStrategy {
         await for (final entity in dir.list()) {
           if (entity is! io.File) continue;
           final fname = p.basename(entity.path).toLowerCase();
-          if (fname == '$romStem.sav' || fname == '$fallbackStem.sav') {
+          if (fname == '$romStem.sav' || fname == '$fallbackStem.sav' || fname == '$romStem.srm' || fname == '$fallbackStem.srm') {
             targetPath = entity.path;
             break;
+          }
+        }
+        // Fuzzy fallback if strict match failed
+        if (targetPath == p.normalize(p.join(saveDir, '$romStem.sav'))) {
+          final stemWords = romStem
+              .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+              .split(' ')
+              .where((w) => w.length >= 3)
+              .toList();
+          if (stemWords.isNotEmpty) {
+            await for (final entity in dir.list()) {
+              if (entity is! io.File) continue;
+              final fname = p.basename(entity.path).toLowerCase();
+              if (!fname.endsWith('.srm') && !fname.endsWith('.sav')) continue;
+              if (stemWords.any((word) => fname.contains(word))) {
+                targetPath = entity.path;
+                break;
+              }
+            }
           }
         }
       }

@@ -233,7 +233,7 @@ class DolphinSaveStrategy extends SaveStrategy {
           final targetPath = p.normalize(p.join(saveDir, file.name));
           await io.Directory(p.dirname(targetPath)).create(recursive: true);
           await backupSave(targetPath);
-          await io.File(targetPath).writeAsBytes(file.content as Uint8List);
+          await io.File(targetPath).writeAsBytes(file.content);
         }
         return true;
       }

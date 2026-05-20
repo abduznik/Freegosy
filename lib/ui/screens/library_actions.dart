@@ -232,6 +232,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         content: Text('Are you sure you want to delete the local files for ${game.name}?'),
         actions: [
           FocusEffectWrapper(
+            useSafeScale: false,
             onTap: () => Navigator.pop(ctx, false),
             borderRadius: 12.0,
             autofocus: true,
@@ -247,6 +248,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           ),
           const SizedBox(width: 8),
           FocusEffectWrapper(
+            useSafeScale: false,
             onTap: () => Navigator.pop(ctx, true),
             borderRadius: 12.0,
             child: Container(
@@ -350,6 +352,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
            content: Text('${e.toString().replaceAll('Exception: ', '')}\n\nPlay anyway?'),
            actions: [
              FocusEffectWrapper(
+               useSafeScale: false,
                onTap: () => Navigator.pop(ctx, false),
                borderRadius: 12.0,
                autofocus: true,
@@ -387,12 +390,12 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   Future<bool?> _showMissingRomDialog(BuildContext context, String gameName, String expectedPath) {
     return showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('ROM not found'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      builder: (ctx) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('ROM not found', style: Theme.of(ctx).textTheme.titleLarge),
+            const SizedBox(height: 12),
             Text('$gameName is not downloaded yet.'),
             const SizedBox(height: 8),
             const Text('Expected location:', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -400,38 +403,38 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             SelectableText(expectedPath, style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 12),
             const Text('Download now?'),
-          ],
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              FocusEffectWrapper(
+                onTap: () => Navigator.pop(ctx, false),
+                borderRadius: 12.0, autofocus: true, useSafeScale: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                    border: Border.all(color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3)),
+                  ),
+                  child: Text('Cancel', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FocusEffectWrapper(
+                onTap: () => Navigator.pop(ctx, true),
+                borderRadius: 12.0, useSafeScale: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.indigo.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+                  ),
+                  child: const Text('Download', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ]),
+          ]),
         ),
-        actions: [
-          FocusEffectWrapper(
-            onTap: () => Navigator.pop(ctx, false),
-            borderRadius: 12.0,
-            autofocus: true,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                border: Border.all(color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3)),
-              ),
-              child: Text('Cancel', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FocusEffectWrapper(
-            onTap: () => Navigator.pop(ctx, true),
-            borderRadius: 12.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.indigo.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
-              ),
-              child: const Text('Download', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -439,39 +442,45 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   Future<bool?> _showMissingCoreDialog(BuildContext context, String coreName) {
     return showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('RetroArch Core Missing'),
-        content: Text('The core $coreName is required. Download and install it automatically?'),
-        actions: [
-          FocusEffectWrapper(
-            onTap: () => Navigator.pop(ctx, false),
-            borderRadius: 12.0,
-            autofocus: true,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                border: Border.all(color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3)),
+      builder: (ctx) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('RetroArch Core Missing', style: Theme.of(ctx).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            Text('The core $coreName is required. Download and install it automatically?'),
+            const SizedBox(height: 24),
+            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              FocusEffectWrapper(
+                onTap: () => Navigator.pop(ctx, false),
+                borderRadius: 12.0, autofocus: true, useSafeScale: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                    border: Border.all(color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3)),
+                  ),
+                  child: Text('Cancel', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                ),
               ),
-              child: Text('Cancel', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FocusEffectWrapper(
-            onTap: () => Navigator.pop(ctx, true),
-            borderRadius: 12.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.indigo.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+              const SizedBox(width: 8),
+              FocusEffectWrapper(
+                onTap: () => Navigator.pop(ctx, true),
+                borderRadius: 12.0, useSafeScale: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.indigo.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
+                  ),
+                  child: const Text('Install', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+                ),
               ),
-              child: const Text('Install', style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
+            ]),
+          ]),
+        ),
       ),
     );
   }
