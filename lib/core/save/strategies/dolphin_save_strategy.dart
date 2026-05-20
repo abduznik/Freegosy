@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io' as io;
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 
@@ -42,7 +44,17 @@ class DolphinSaveStrategy extends SaveStrategy {
       }
     }
 
-    // 2. Fall back to app support directory
+    // 2. On Linux, if running via Flatpak, which is the default installation method of Dolphin
+    if (io.Platform.isLinux){
+      final home = io.Platform.environment['HOME'] ?? '';
+      final flatpakPath = "$home/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu";
+      if (await io.Directory(flatpakPath).exists()) {
+        return flatpakPath;
+      }
+    }
+    
+
+    // 3. Fall back to app support directory
     final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('Dolphin', platformSlug: platformSlug);
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for Dolphin at $resolvedPath. Please launch Dolphin at least once to generate save data.');
@@ -63,9 +75,59 @@ class DolphinSaveStrategy extends SaveStrategy {
     return name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
-  /// Extracts Game ID/Code from filename if possible.
+
+  bool _isValidGameIdByte(int byte) {
+    final c = String.fromCharCode(byte);
+
+    final isUpper =
+        c.codeUnitAt(0) >= 'A'.codeUnitAt(0) &&
+        c.codeUnitAt(0) <= 'Z'.codeUnitAt(0);
+
+    final isDigit =
+        c.codeUnitAt(0) >= '0'.codeUnitAt(0) &&
+        c.codeUnitAt(0) <= '9'.codeUnitAt(0);
+
+    return isUpper || isDigit;
+  }
+
+  /// Extracts Game ID/Code from file if possible.
   /// Often formatted as [GAMEID] Name.ext or Name [GAMEID].ext
-  String? _extractGameId(String filename) {
+  Future<String?> _extractGameId(String romPath) async {
+
+    // Attempt to read the game ID from the file
+    final allowedFileExtensions = [".rvz", ".iso"];
+    final fileExtension = p.extension(romPath).toLowerCase();
+    if (allowedFileExtensions.contains(fileExtension)) {
+      
+      final file = await File(romPath).open(mode: FileMode.read);
+      final bytes = Uint8List(4);
+      
+      int offset = 0;
+
+      switch (fileExtension){
+        case ".rvz":
+          offset = 0x58;
+          break;
+        case ".iso":
+          offset = 0x00;
+          break;
+      }
+
+      await file.setPosition(offset);
+      await file.readInto(bytes);
+      await file.close();
+    
+      for (final b in bytes) {
+        if (!_isValidGameIdByte(b)) {
+          return null;
+        }
+      }
+
+      return ascii.decode(bytes);
+    }
+
+
+    final filename = p.basename(romPath);
     final base = p.basenameWithoutExtension(filename);
     // Look for 4 or 6 character uppercase alphanumeric codes
     final match = RegExp(r'\[([A-Z0-9]{4,6})\]').firstMatch(base);
@@ -89,7 +151,7 @@ class DolphinSaveStrategy extends SaveStrategy {
 
     if (isWii) {
       // Wii saves are in Wii/title/00010000/[TITLE_ID_HEX]
-      String? titleId = _extractGameId(p.basename(romPath));
+      String? titleId = await _extractGameId(romPath);
       
       final String wiiBase = (isIntegratedEnv && p.basename(userDir).toLowerCase() == 'wii')
           ? userDir
@@ -143,10 +205,10 @@ class DolphinSaveStrategy extends SaveStrategy {
         // GameCube fuzzy matching
         final dir = io.Directory(rootSaveDir);
         if (await dir.exists()) {
-          final gameId = _extractGameId(p.basename(romPath))?.toUpperCase();
+          final gameId = (await _extractGameId(romPath))?.toUpperCase();
           final normalizedTarget = _normalizeGameName(game.displayName);
 
-          await for (final entity in dir.list()) {
+          await for (final entity in dir.list(recursive: true)) {
             if (entity is! io.File) continue;
             final filename = p.basename(entity.path).toUpperCase();
 
@@ -188,7 +250,7 @@ class DolphinSaveStrategy extends SaveStrategy {
       final stateDir = p.join(userDir, 'StateSaves');
       final stateDirObj = io.Directory(stateDir);
       if (await stateDirObj.exists()) {
-        final gameId = _extractGameId(p.basename(romPath))?.toUpperCase();
+        final gameId = (await _extractGameId(romPath))?.toUpperCase();
         final romStem = p.basenameWithoutExtension(romPath).toUpperCase();
 
         await for (final entity in stateDirObj.list()) {

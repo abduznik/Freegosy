@@ -532,7 +532,11 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
 
     final dir = ref.read(directoryServiceProvider).asData?.value;
-    final romPath = dir != null ? await dir.getRomFilePath(game) : '';
+    String romPath = '';
+    if (dir != null) {
+      romPath = await dir.findExistingRomPath(game) ?? await dir.getRomFilePath(game);
+    }
+    
     if (!context.mounted) return;
     final syncMode = ref.read(retroarchSyncModeProvider);
 
