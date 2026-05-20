@@ -63,11 +63,11 @@ No pressure at all — the app is and will always be free.
 | **mGBA** | 🟢 Full | GBA/GBC/GB `.sav`/`.srm` fully synced (standalone, outside RetroArch). |
 | **MelonDS** | 🟡 Partial | NDS save files synced (limited testing). |
 | **Dolphin** | 🟡 Partial | GC/Wii save files synced. |
-| **Cemu** | 🔴 Untested | Wii U — implemented but not verified. |
-| **Azahar** | 🔴 Untested | 3DS — implemented but not verified. |
-| **RPCS3** | 🔴 Untested | PS3 — implemented but not verified. |
-| **Xenia** | 🔴 Untested | Xbox 360 — implemented but not verified. |
-| **Windows Native** | 🔴 Untested | PC games — implemented but not verified. |
+| **Cemu** | 🟡 Partial | Wii U — confirmed working on Windows, needs macOS/Linux testing. |
+| **Azahar** | 🔴 Untested | 3DS — not yet tested on any platform. |
+| **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
+| **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
+| **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
 
 **Per-OS Notes:**
 - **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure.
