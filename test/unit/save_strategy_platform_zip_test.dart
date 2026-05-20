@@ -30,6 +30,7 @@ void main() {
     
     when(mockDirectoryService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
         .thenAnswer((_) async => '/nonexistent_directory_for_testing');
+    when(mockDirectoryService.linuxSyncPreset).thenReturn('default');
 
     final sysTemp = Directory.systemTemp.path;
     when(mockDirectoryService.getEmulatorDirectory('temp'))
