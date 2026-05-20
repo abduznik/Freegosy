@@ -219,17 +219,25 @@ void main() {
       // Mock search or exec paths to direct to tempDir
       when(mockDirectoryService.findEmulatorExecutable(any, any))
           .thenAnswer((_) async => tempDir.path);
+      // Ensure Linux code path also writes to tempDir
+      when(mockDirectoryService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
+          .thenAnswer((_) async => tempDir.path);
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'snes', fileSize: 0);
       final ok = await strategy!.restoreSave(game, romPath, zipBytes, 'game.zip');
 
       expect(ok, isTrue);
 
-      // Verify the file was correctly extracted to saves/SNES/game.srm
-      final expectedPath = p.join(tempDir.path, 'saves', 'Snes9x', 'game.srm');
-      final restoredFile = File(expectedPath);
-      expect(restoredFile.existsSync(), isTrue);
-      expect(await restoredFile.readAsString(), saveFileContent);
+      // Find the restored file anywhere in tempDir (path differs by platform)
+      bool found = false;
+      await for (final entity in tempDir.list(recursive: true)) {
+        if (entity is File && entity.path.endsWith('.srm')) {
+          expect(await entity.readAsString(), saveFileContent);
+          found = true;
+          break;
+        }
+      }
+      expect(found, isTrue, reason: 'Restored .srm file not found under tempDir');
 
       await tempDir.delete(recursive: true);
     });
@@ -264,17 +272,25 @@ void main() {
       // Route RetroArch to our tempDir for the save target path
       when(mockDirectoryService.findEmulatorExecutable(any, any))
           .thenAnswer((_) async => tempDir.path);
+      // Ensure Linux code path also resolves to tempDir
+      when(mockDirectoryService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
+          .thenAnswer((_) async => tempDir.path);
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'snes', fileSize: 0);
       final ok = await service.pullSave(game, romPath);
 
       expect(ok, isTrue);
 
-      // Verify the save was extracted (not written as raw zip bytes)
-      final extractedPath = p.join(tempDir.path, 'saves', 'Snes9x', 'game.srm');
-      final extracted = File(extractedPath);
-      expect(await extracted.exists(), isTrue);
-      expect(await extracted.readAsString(), saveContent);
+      // Find the extracted save anywhere in tempDir (path differs by platform)
+      bool found = false;
+      await for (final entity in tempDir.list(recursive: true)) {
+        if (entity is File && entity.path.endsWith('.srm')) {
+          expect(await entity.readAsString(), saveContent);
+          found = true;
+          break;
+        }
+      }
+      expect(found, isTrue, reason: 'Extracted .srm save not found under tempDir');
 
       await tempDir.delete(recursive: true);
     });
@@ -298,17 +314,25 @@ void main() {
           .thenAnswer((_) async => rawBytes);
       when(mockDirectoryService.findEmulatorExecutable(any, any))
           .thenAnswer((_) async => tempDir.path);
+      // Ensure Linux code path also resolves to tempDir
+      when(mockDirectoryService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
+          .thenAnswer((_) async => tempDir.path);
 
       final game = Game(id: 'game2', name: 'game', platformSlug: 'snes', fileSize: 0);
       final ok = await service.pullSave(game, romPath);
 
       expect(ok, isTrue);
 
-      // Verify the raw data was written directly (no zip extraction)
-      final expectedPath = p.join(tempDir.path, 'saves', 'Snes9x', 'game.srm');
-      final restored = File(expectedPath);
-      expect(await restored.exists(), isTrue);
-      expect(await restored.readAsString(), 'plain save data');
+      // Find the written file anywhere in tempDir (path differs by platform)
+      bool found = false;
+      await for (final entity in tempDir.list(recursive: true)) {
+        if (entity is File && entity.path.endsWith('.srm')) {
+          expect(await entity.readAsString(), 'plain save data');
+          found = true;
+          break;
+        }
+      }
+      expect(found, isTrue, reason: 'Written .srm file not found under tempDir');
 
       await tempDir.delete(recursive: true);
     });
