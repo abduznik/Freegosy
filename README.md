@@ -50,6 +50,32 @@ No pressure at all — the app is and will always be free.
     - **Screenshot Gallery**: Interactive, zoomable screenshot viewer.
     - **Multi-Disc Support**: Integrated picker for multi-file games.
 
+## Platform / Emulator Status
+
+| Emulator | Status | Notes |
+|---|---|---|
+| **RetroArch** | 🟡 Partial | GBA, SNES, NES, Dreamcast, Mega Drive — anything using `.srm`/`.sav` save files. NDS via DeSmuME/mGBA core. PSP may work. |
+| **DuckStation** | 🟢 Full | PS1 `.mcd` memory card saves fully synced. |
+| **PPSSPP** | 🟢 Full | PSP save data directory fully synced. |
+| **Ryujinx** | 🟢 Full | Switch save directory fully synced (configurable Title ID mapping). |
+| **Eden** | 🟢 Full | Switch save directory fully synced (configurable Title ID + profile). |
+| **PCSX2** | 🟢 Full | PS2 `.mcd` format fully synced (folder saves not supported). |
+| **mGBA** | 🟢 Full | GBA/GBC/GB `.sav`/`.srm` fully synced (standalone, outside RetroArch). |
+| **MelonDS** | 🟡 Partial | NDS save files synced (limited testing). |
+| **Dolphin** | 🟡 Partial | GC/Wii save files synced. |
+| **Cemu** | 🔴 Untested | Wii U — implemented but not verified. |
+| **Azahar** | 🔴 Untested | 3DS — implemented but not verified. |
+| **RPCS3** | 🔴 Untested | PS3 — implemented but not verified. |
+| **Xenia** | 🔴 Untested | Xbox 360 — implemented but not verified. |
+| **Windows Native** | 🔴 Untested | PC games — implemented but not verified. |
+
+**Per-OS Notes:**
+- **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure.
+- **Windows**: Same emulator support. DuckStation portable mode auto-configured via `portable.txt`. RetroArch config file resolution via `APPDATA`.
+- **Linux** (Steam Deck / EmuDeck / RetroDECK): RetroArch, DuckStation, Dolphin, PPSSPP, PCSX2 all supported via EmuDeck/RetroDECK save structure presets.
+
+> Help wanted — if you're using an emulator marked 🔴 or 🟡 and can confirm compatibility, please report your experience!
+
 ## Calling All Testers!
 I am currently searching for testers on **macOS**, **Windows**, and **Linux (Steam Deck)** to help polish the experience. 
 
