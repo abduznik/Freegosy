@@ -685,15 +685,9 @@ void main() {
     testWidgets('empty files list renders without crash', (tester) async {
       final game = Game(id: '1', name: 'Test Game', fileSize: 0, files: const []);
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () => MultiDiscPicker.show(context, game: game, files: [], onSelect: (_) {}),
-            child: const Text('Open'),
-          ),
-        )),
+        home: Scaffold(body: MultiDiscPicker(game: game, files: [], onSelect: (_) {})),
       ));
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(tester.takeException(), isNull);
     });
 
@@ -701,15 +695,9 @@ void main() {
       final game = Game(id: '1', name: 'Test Game', fileSize: 0);
       final files = [<String, dynamic>{}];
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () => MultiDiscPicker.show(context, game: game, files: files, onSelect: (_) {}),
-            child: const Text('Open'),
-          ),
-        )),
+        home: Scaffold(body: MultiDiscPicker(game: game, files: files, onSelect: (_) {})),
       ));
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(tester.takeException(), isNull);
     });
 
@@ -719,15 +707,9 @@ void main() {
         {'file_name': 'game.disc1.iso', 'file_size_bytes': null},
       ];
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () => MultiDiscPicker.show(context, game: game, files: files, onSelect: (_) {}),
-            child: const Text('Open'),
-          ),
-        )),
+        home: Scaffold(body: MultiDiscPicker(game: game, files: files, onSelect: (_) {})),
       ));
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(find.text('Disc 1'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -738,15 +720,9 @@ void main() {
         {'file_name': 'random_file.iso', 'file_size_bytes': 1048576},
       ];
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () => MultiDiscPicker.show(context, game: game, files: files, onSelect: (_) {}),
-            child: const Text('Open'),
-          ),
-        )),
+        home: Scaffold(body: MultiDiscPicker(game: game, files: files, onSelect: (_) {})),
       ));
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(find.text('File 1'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
