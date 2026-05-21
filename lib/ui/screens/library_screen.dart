@@ -671,13 +671,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
               ],
             ),
             const SizedBox(height: 2),
-            Text(
-              recommendedGame.displayName,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
+            GestureDetector(
+              onTap: () => _handleGameTap(context, ref, recommendedGame),
+              child: Text(
+                recommendedGame.displayName,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         );
