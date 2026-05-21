@@ -276,7 +276,11 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (!context.mounted || syncService == null) { ErrorHandler.showInfo(context, 'Sync Unavailable', message: 'Save sync not available'); return; }
     final dir = ref.read(directoryServiceProvider).asData?.value;
-    final romPath = dir != null ? await dir.getRomFilePath(game) : '';
+    String romPath = '';
+    if (dir != null) {
+      romPath = await dir.findExistingRomPath(game) ?? await dir.getRomFilePath(game);
+    }
+    
     if (!context.mounted) return;
     final syncMode = ref.read(retroarchSyncModeProvider);
     try {
