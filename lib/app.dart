@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'main.dart' show scaffoldMessengerKey;
@@ -13,6 +14,10 @@ import 'ui/screens/settings_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
 import 'providers/ui_provider.dart';
 import 'core/storage/file_sanity_service.dart';
+import 'core/input/gamepad_service.dart';
+import 'core/input/input_action_bus.dart';
+import 'package:flutter/services.dart';
+import 'providers/theme_provider.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -32,6 +37,91 @@ class FreegosyApp extends ConsumerStatefulWidget {
 }
 
 class _FreegosyAppState extends ConsumerState<FreegosyApp> {
+  StreamSubscription<GameAction>? _inputSub;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Global Keyboard Listener - Maps physical keys to Action Bus commands
+    HardwareKeyboard.instance.addHandler((event) {
+      if (event is KeyDownEvent) {
+        // Protection: Ignore if typing in a text field
+        final focusNode = FocusManager.instance.primaryFocus;
+        if (focusNode != null) {
+          bool isTyping = false;
+          if (focusNode.context?.widget is EditableText) {
+            isTyping = true;
+          } else {
+            focusNode.context?.visitAncestorElements((element) {
+              if (element.widget is EditableText) {
+                isTyping = true;
+                return false;
+              }
+              return true;
+            });
+          }
+          if (isTyping) {
+            return false;
+          }
+        }
+
+        final action = _mapPhysicalKeyToAction(event.logicalKey);
+        if (action != null) {
+          // 1. Switch to Keyboard Mode
+          if (ref.read(inputModeProvider) != InputMode.keyboard) {
+            debugPrint('⌨️ Switching to KEYBOARD mode.');
+            ref.read(inputModeProvider.notifier).state = InputMode.keyboard;
+          }
+          
+          // 2. Broadcast the action
+          inputActionBus.add(action);
+        }
+      }
+      return false;
+    });
+
+    // Global Action Executor: Listen for actions that apply everywhere
+    _inputSub = inputActionBus.stream.listen((action) {
+      if (action == GameAction.confirm) {
+        final focusedAction = ref.read(focusedActionProvider);
+        if (focusedAction != null) {
+          debugPrint('🎯 Global: Executing focused action.');
+          focusedAction();
+        }
+      } else if (action == GameAction.l1) {
+        final current = ref.read(currentTabIndexProvider);
+        if (current > 0) {
+          ref.read(currentTabIndexProvider.notifier).state = current - 1;
+        }
+      } else if (action == GameAction.r1) {
+        final current = ref.read(currentTabIndexProvider);
+        if (current < _screens.length - 1) {
+          ref.read(currentTabIndexProvider.notifier).state = current + 1;
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _inputSub?.cancel();
+    super.dispose();
+  }
+
+  GameAction? _mapPhysicalKeyToAction(LogicalKeyboardKey key) {
+    if (key == LogicalKeyboardKey.escape) return GameAction.back;
+    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) return GameAction.confirm;
+    if (key == LogicalKeyboardKey.arrowUp) return GameAction.up;
+    if (key == LogicalKeyboardKey.arrowDown) return GameAction.down;
+    if (key == LogicalKeyboardKey.arrowLeft) return GameAction.left;
+    if (key == LogicalKeyboardKey.arrowRight) return GameAction.right;
+    if (key == LogicalKeyboardKey.keyX) return GameAction.detail;
+    if (key == LogicalKeyboardKey.keyY) return GameAction.favorite;
+    if (key == LogicalKeyboardKey.keyQ) return GameAction.l1;
+    if (key == LogicalKeyboardKey.keyE) return GameAction.r1;
+    return null;
+  }
 
 
   final List<Widget> _screens = const [
@@ -75,8 +165,9 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       }
     });
 
-    // Keep the file sanity service alive and running in the background
+    // Keep services alive in the background
     ref.watch(fileSanityServiceProvider);
+    ref.watch(gamepadServiceProvider);
 
     final currentIndex = ref.watch(currentTabIndexProvider);
 
@@ -86,47 +177,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
         debugShowCheckedModeBanner: false,
         scaffoldMessengerKey: scaffoldMessengerKey,
         scrollBehavior: CustomScrollBehavior(),
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-            surface: const Color(0xFF1a1a1a),
-          ),
-          scaffoldBackgroundColor: const Color(0xFF0f0f0f),
-          cardTheme: const CardThemeData(
-            color: Color(0xFF1a1a1a),
-            elevation: 2,
-          ),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF0f0f0f),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-          ),
-          navigationBarTheme: NavigationBarThemeData(
-            backgroundColor: const Color(0xFF1a1a1a),
-            indicatorColor: Colors.deepPurple.withValues(alpha: 0.3),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFF1a1a1a),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.deepPurple.shade800),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.deepPurple.shade900),
-            ),
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ),
+        theme: getThemeData(ref.watch(themeProvider)),
         home: Consumer(
           builder: (context, ref, _) {
             final isOnboardedAsync = ref.watch(rommConfigProvider);

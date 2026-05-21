@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
@@ -121,15 +122,17 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
     _currentPlatformId = platformId;
     _currentSearch = search;
     final key = _key(platformId, search);
-
+    
     // Serve from memory cache immediately if available
     if (_cache.containsKey(key)) {
+      final cachedList = _cache[key]!;
       state = PaginatedGamesState(
-        games: _cache[key]!,
-        total: _totals[key] ?? _cache[key]!.length,
+        games: cachedList,
+        total: _totals[key] ?? cachedList.length,
         hasMore: (_offsets[key] ?? 0) < (_totals[key] ?? 0),
         isLoading: false,
       );
+      debugPrint('📂 [Library-Fetch] Served ${cachedList.length} games from memory cache for platformId: $platformId');
       // Background refresh of first page only
       _backgroundRefresh(platformId: platformId, search: search, key: key);
       return;
@@ -153,6 +156,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
           hasMore: true,
           isLoading: false,
         );
+        debugPrint('📂 [Library-Fetch] Served ${offline.length} games from persistent SQLite cache for platformId: $platformId');
         _backgroundRefresh(platformId: platformId, search: search, key: key);
         return;
       }
@@ -163,12 +167,13 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
     final service = _ref.read(rommServiceProvider);
     
     if (service == null) {
-      // Fallback to offline cache
+      debugPrint('📂 [Library-Fetch] Offline fallback (Service is null) for platformId: $platformId');
       await _loadOffline(platformId, search);
       return;
     }
 
     try {
+      debugPrint('📂 [Library-Fetch] Fetching initial games page from RomM server for platformId: $platformId');
       // SPECIAL CASE: If filtering for 'Downloaded Only', we want it to be "instant"
       // and show everything we've identified on disk.
       if (_activeFilters.downloadedOnly) {
@@ -198,6 +203,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
             hasMore: false,
             isLoading: false,
           );
+          debugPrint('📂 [Library-Fetch] Served ${filtered.length} locally filtered downloaded-only games for platformId: $platformId');
           return;
         }
       }
@@ -235,6 +241,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         hasMore: result.games.length < result.total,
         isLoading: false,
       );
+      debugPrint('📂 [Library-Fetch] RomM server fetched successfully: ${filteredGames.length} games for platformId: $platformId (Total matching: ${result.total})');
 
       // Persist results for offline use
       final cacheService = _ref.read(metadataCacheServiceProvider).value;
@@ -242,6 +249,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         await cacheService.saveGames(result.games);
       }
     } catch (e) {
+      debugPrint('📂 [Library-Fetch] RomM server fetch failed: $e. Falling back to offline.');
       // On error, also try fallback
       await _loadOffline(platformId, search, error: e.toString());
     }
@@ -281,6 +289,7 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
       isLoading: false,
       error: error != null ? 'Offline Mode (Server: $error)' : 'Offline Mode',
     );
+    debugPrint('📂 [Library-Fetch] Loaded offline fallback with ${filteredOffline.length} games for platformId: $platformId');
   }
 
   Future<void> _backgroundRefresh({

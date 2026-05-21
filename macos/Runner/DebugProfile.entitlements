@@ -10,5 +10,13 @@
     <true/>
     <key>com.apple.security.network.server</key>
     <true/>
+    <key>com.apple.security.device.bluetooth</key>
+    <true/>
+    <key>com.apple.security.device.usb</key>
+    <true/>
+    <key>com.apple.security.temporary-exception.iokit-user-client-class</key>
+    <array>
+        <string>IOHIDDeviceClient</string>
+    </array>
 </dict>
 </plist>

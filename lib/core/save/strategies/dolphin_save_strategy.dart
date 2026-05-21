@@ -3,6 +3,7 @@ import 'dart:io' as io;
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
+import 'package:archive/archive_io.dart';
 
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
@@ -19,6 +20,9 @@ class DolphinSaveStrategy extends SaveStrategy {
 
   @override
   String get strategyId => 'dolphin';
+
+  @override
+  bool get shouldZip => false;
 
   String _getEmuExe() {
     if (io.Platform.isWindows) return 'Dolphin.exe';
@@ -281,6 +285,20 @@ class DolphinSaveStrategy extends SaveStrategy {
 
       final dir = io.Directory(saveDir);
       if (!await dir.exists()) await dir.create(recursive: true);
+
+      if (filename.toLowerCase().endsWith('.zip')) {
+        final archive = ZipDecoder().decodeBytes(data);
+        for (final file in archive) {
+          if (!file.isFile) continue;
+          if (file.name == 'freegosy_sync.txt') continue;
+          
+          final targetPath = p.normalize(p.join(saveDir, file.name));
+          await io.Directory(p.dirname(targetPath)).create(recursive: true);
+          await backupSave(targetPath);
+          await io.File(targetPath).writeAsBytes(file.content);
+        }
+        return true;
+      }
 
       final targetPath = p.normalize(p.join(saveDir, filename));
       await backupSave(targetPath);

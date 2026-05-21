@@ -16,6 +16,25 @@ double calculateCardHeight(int columnCount, double cardSpacing,
   return totalHeight.clamp(80.0, 900.0);
 }
 
+Widget buildSkeletonSliverGrid(
+    double cardAspectRatio, int columnCount, double cardSpacing, BuildContext context, {bool showTitle = true}) {
+  return SliverPadding(
+    padding: const EdgeInsets.all(12),
+    sliver: SliverGrid(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columnCount,
+        crossAxisSpacing: cardSpacing,
+        mainAxisSpacing: cardSpacing,
+        mainAxisExtent: calculateCardHeight(columnCount, cardSpacing, cardAspectRatio, context, showTitle: showTitle),
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => const _SkeletonCard(),
+        childCount: 20,
+      ),
+    ),
+  );
+}
+
 Widget buildSkeletonGrid(
     double cardAspectRatio, int columnCount, double cardSpacing, BuildContext context, {bool showTitle = true}) {
   return GridView.builder(

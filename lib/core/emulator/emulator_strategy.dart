@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:io' as io;
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/romm/romm_models.dart';
@@ -56,6 +56,9 @@ abstract class EmulatorStrategy {
 
   Future<void> preLaunch(Game game, String romPath) async {}
   Future<void> postLaunch(Game game, String romPath) async {}
+
+  /// Hook called after the emulator has been downloaded and extracted.
+  Future<void> postInstall(String installDir) async {}
 
   Future<void> launchStandalone() async {
     final exePath = await findExecutable();

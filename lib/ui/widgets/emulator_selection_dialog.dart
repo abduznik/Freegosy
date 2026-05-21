@@ -27,7 +27,6 @@ class EmulatorSelectionDialog extends StatelessWidget {
                 final url = asset['url'];
                 if (url != null) {
                   onSelect(url);
-                  Navigator.of(context).pop();
                 }
               },
             );

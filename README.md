@@ -23,7 +23,7 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## Current Features (v0.4.1)
+## Current Features (v0.5.0)
 
 - **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** and **RetroDECK** integration).
 - **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
@@ -49,6 +49,32 @@ No pressure at all — the app is and will always be free.
     - **Recently Played**: Quick access to your latest games.
     - **Screenshot Gallery**: Interactive, zoomable screenshot viewer.
     - **Multi-Disc Support**: Integrated picker for multi-file games.
+
+## Platform / Emulator Status
+
+| Emulator | Status | Notes |
+|---|---|---|
+| **RetroArch** | 🟡 Partial | GBA, SNES, NES, Dreamcast, Mega Drive — anything using `.srm`/`.sav` save files. NDS via DeSmuME/mGBA core. PSP may work. |
+| **DuckStation** | 🟢 Full | PS1 `.mcd` memory card saves fully synced. |
+| **PPSSPP** | 🟢 Full | PSP save data directory fully synced. |
+| **Ryujinx** | 🟢 Full | Switch save directory fully synced (configurable Title ID mapping). |
+| **Eden** | 🟢 Full | Switch save directory fully synced (configurable Title ID + profile). |
+| **PCSX2** | 🟢 Full | PS2 `.mcd` format fully synced (folder saves not supported). |
+| **mGBA** | 🟢 Full | GBA/GBC/GB `.sav`/`.srm` fully synced (standalone, outside RetroArch). |
+| **MelonDS** | 🟡 Partial | NDS save files synced (limited testing). |
+| **Dolphin** | 🟡 Partial | GC/Wii save files synced. |
+| **Cemu** | 🟡 Partial | Wii U — confirmed working on Windows, needs macOS/Linux testing. |
+| **Azahar** | 🔴 Untested | 3DS — not yet tested on any platform. |
+| **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
+| **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
+| **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
+
+**Per-OS Notes:**
+- **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure.
+- **Windows**: Same emulator support. DuckStation portable mode auto-configured via `portable.txt`. RetroArch config file resolution via `APPDATA`.
+- **Linux** (Steam Deck / EmuDeck / RetroDECK): RetroArch, DuckStation, Dolphin, PPSSPP, PCSX2 all supported via EmuDeck/RetroDECK save structure presets.
+
+> Help wanted — if you're using an emulator marked 🔴 or 🟡 and can confirm compatibility, please report your experience!
 
 ## Calling All Testers!
 I am currently searching for testers on **macOS**, **Windows**, and **Linux (Steam Deck)** to help polish the experience. 

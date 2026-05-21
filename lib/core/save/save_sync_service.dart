@@ -144,13 +144,13 @@ class SaveSyncService {
       case 'nintendo-ds':
       case 'ds':
         return _melonds;
-      case 'psx':
-      case 'ps1':
-      case 'playstation':
-        return _duckstation;
       case 'psp':
       case 'playstation-portable':
         return _ppsspp;
+      case 'ps1':
+      case 'playstation':
+      case 'psx':
+        return _duckstation;
       case 'dc':
       case 'dreamcast':
         return _retroarch;
@@ -260,11 +260,35 @@ class SaveSyncService {
         strategy.setManualMapping(mapping);
       }
 
-      final filesMap = await strategy.getSaveFilesWithScreenshots(
+      var filesMap = await strategy.getSaveFilesWithScreenshots(
         game, romPath,
         sessionStart: sessionStart,
         syncMode: syncMode,
       );
+      if (filesMap.isEmpty) return false;
+
+      // If the strategy does not support zipping, filter filesMap to only keep the primary save file 
+      // (typically ending in .srm, .sav, or .gci) to ensure it is uploaded raw/unzipped.
+      if (!strategy.shouldZip) {
+        final filteredMap = <io.File, io.File?>{};
+        for (final entry in filesMap.entries) {
+          final pathLower = entry.key.path.toLowerCase();
+          if (pathLower.endsWith('.srm') || pathLower.endsWith('.sav') || pathLower.endsWith('.gci')) {
+            filteredMap[entry.key] = entry.value;
+            break; // Keep only the first primary save file
+          }
+        }
+        // Fallback if no specific extension matches: keep the first file entry if it's not a directory
+        if (filteredMap.isEmpty) {
+          for (final entry in filesMap.entries) {
+            if (!await io.FileSystemEntity.isDirectory(entry.key.path)) {
+              filteredMap[entry.key] = entry.value;
+              break;
+            }
+          }
+        }
+        filesMap = filteredMap;
+      }
       if (filesMap.isEmpty) return false;
 
       // --- Conflict Detection ---
@@ -302,53 +326,73 @@ class SaveSyncService {
         await io.Directory(tempDir).create(recursive: true);
       }
 
-      // --- Prepare unique bundle ZIP to bypass server-side deduplication ---
-      final bundleZipPath = p.join(tempDir, '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
-      final encoder = ZipFileEncoder();
-      encoder.create(bundleZipPath);
+      io.File? finalUploadFile;
+      io.File? finalScreenshotFile;
+      String uploadFilename;
+      bool isBundle = false;
 
-      // 1. Write fresh sync metadata
-      final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
-      await metaFile.writeAsString(DateTime.now().toIso8601String());
-      await encoder.addFile(metaFile);
+      // Decide whether to bundle (zip) or upload directly
+      // We bundle if there are multiple files, or if the single entry is a directory
+      if (filesMap.length == 1 && !await io.FileSystemEntity.isDirectory(filesMap.keys.first.path)) {
+        final entry = filesMap.entries.first;
+        finalUploadFile = entry.key;
+        finalScreenshotFile = entry.value;
+        uploadFilename = p.basename(finalUploadFile.path);
+        debugPrint('[Sync] Uploading single save file directly: $uploadFilename');
+      } else {
+        isBundle = true;
+        // --- Prepare unique bundle ZIP to bypass server-side deduplication ---
+        final bundleZipPath = p.join(tempDir, '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
+        final encoder = ZipFileEncoder();
+        encoder.create(bundleZipPath);
 
-      // 2. Add all files/folders from the map
-      for (final entry in filesMap.entries) {
-        final file = entry.key;
-        if (await io.FileSystemEntity.isDirectory(file.path)) {
-          await encoder.addDirectory(io.Directory(file.path), includeDirName: true);
-        } else {
-          await encoder.addFile(file, p.basename(file.path));
+        // 1. Write sync metadata (only for bundles to help with multi-file coherence)
+        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
+        await metaFile.writeAsString(DateTime.now().toIso8601String());
+        await encoder.addFile(metaFile);
+
+        // 2. Add all files/folders from the map
+        for (final entry in filesMap.entries) {
+          final file = entry.key;
+          if (await io.FileSystemEntity.isDirectory(file.path)) {
+            await encoder.addDirectory(io.Directory(file.path), includeDirName: true);
+          } else {
+            await encoder.addFile(file, p.basename(file.path));
+          }
         }
+        encoder.close();
+        
+        finalUploadFile = io.File(bundleZipPath);
+        uploadFilename = '$displayStem.zip';
+        finalScreenshotFile = filesMap.values.firstWhere((s) => s != null, orElse: () => null);
+        debugPrint('[Sync] Uploading bundled save: $uploadFilename');
       }
-      encoder.close();
 
-      final uploadFile = io.File(bundleZipPath);
-      final String localHash = await _hashFile(uploadFile);
-      final String uploadFilename = '$displayStem.zip';
+      final String localHash = await _hashFile(finalUploadFile);
       final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
       // Local deduplication check (only for automatic syncs)
       if (!force && storedHash != null && localHash == storedHash) {
         debugPrint('[Sync] Skipping upload for $displayStem: hash matches local cache ($localHash)');
-        if (await uploadFile.exists()) await uploadFile.delete();
+        if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
         return true; 
       }
 
       final ok = await _rommService.uploadSave(
         game.id, 
-        uploadFile, 
-        screenshotFile: filesMap.values.firstWhere((s) => s != null, orElse: () => null),
+        finalUploadFile, 
+        screenshotFile: finalScreenshotFile,
         overrideFilename: uploadFilename,
       );
       
       if (ok) {
         uploaded++;
         await _storeHash(game.id, uploadFilename, localHash);
-        debugPrint('[Sync] Successfully pushed save bundle for $displayStem (forced: $force)');
+        debugPrint('[Sync] Successfully pushed save for $displayStem (forced: $force)');
       }
 
-      if (await uploadFile.exists()) await uploadFile.delete();
+      if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
+      final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
       if (await metaFile.exists()) await metaFile.delete();
 
       if (uploaded > 0) {
@@ -366,6 +410,26 @@ class SaveSyncService {
   /// Returns all available saves for [gameId] from RomM.
   Future<List<Map<String, dynamic>>> getSavesForGame(String gameId) async {
     return _rommService.getSavesList(gameId);
+  }
+
+  /// Checks if [data] begins with ZIP magic bytes (PK\x03\x04).
+  bool _isZipBytes(Uint8List data) =>
+      data.length >= 4 &&
+      data[0] == 0x50 &&
+      data[1] == 0x4B &&
+      data[2] == 0x03 &&
+      data[3] == 0x04;
+
+  /// Ensures the filename matches the actual content format. If [data] is a
+  /// ZIP but [filename] doesn't end with .zip, appends .zip so strategies
+  /// can correctly extract the save inside. This makes manually-uploaded ZIPs
+  /// and any ZIP whose cloud filename lacks the extension work seamlessly.
+  String _adjustFilenameForFormat(Uint8List data, String filename) {
+    if (filename.toLowerCase().endsWith('.zip')) return filename;
+    if (_isZipBytes(data)) {
+      return '${p.basenameWithoutExtension(filename)}.zip';
+    }
+    return filename;
   }
 
   /// Downloads a specific save for [game] from RomM and restores it locally.
@@ -415,8 +479,12 @@ class SaveSyncService {
       final filename = save['file_name'] as String?
           ?? downloadUrl.split('/').last;
 
+      // Sniff actual bytes so that ZIP files (even those manually uploaded or
+      // stored under a non-.zip name) are correctly extracted on restore.
+      final adjustedFilename = _adjustFilenameForFormat(bytes, filename);
+
       final ok = await strategy.restoreSave(
-          game, romPath, bytes, filename);
+          game, romPath, bytes, adjustedFilename);
 
       if (ok) {
         await _setLastPullTime(game.id);

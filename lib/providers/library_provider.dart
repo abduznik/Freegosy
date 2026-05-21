@@ -44,6 +44,7 @@ final columnCountProvider = createPersistentProvider<int>('column_count', 6);
 final cardSpacingProvider = createPersistentProvider<double>('card_spacing', 12.0);
 final showTitleProvider = createPersistentProvider<bool>('show_title', true);
 final activePresetProvider = createPersistentProvider<String>('active_preset', 'windows_best');
+final libraryHeaderTitleModeProvider = createPersistentProvider<String>('library_header_title_mode', 'daily');
 
 // Legacy compatibility - redirects for loaders (no longer needed but kept for minimal breaking changes)
 final cardAspectRatioLoaderProvider = FutureProvider<void>((ref) async {});

@@ -1,4 +1,6 @@
 import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -44,5 +46,19 @@ class Pcsx2Strategy extends EmulatorStrategy {
       }
     }
     return '';
+  }
+
+  @override
+  Future<void> postInstall(String installDir) async {
+    // PCSX2 requires a portable.ini file in the SAME directory as the executable to run in portable mode.
+    // This ensures saves and settings are stored in the emulator directory.
+    final exePath = await _directoryService.findEmulatorExecutable(emulatorId, windowsExecutable);
+    final targetDir = exePath != null ? io.File(exePath).parent.path : installDir;
+    
+    final portableIni = io.File(p.join(targetDir, 'portable.ini'));
+    if (!await portableIni.exists()) {
+      await portableIni.create();
+      debugPrint('[PCSX2] Created portable.ini at $targetDir to enable portable mode.');
+    }
   }
 }

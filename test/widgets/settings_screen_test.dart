@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/file_system_index.dart';
 import 'package:freegosy/providers/romm_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/settings_screen.dart';
@@ -12,6 +13,8 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/input/input_action_bus.dart';
+import 'package:freegosy/core/input/gamepad_service.dart';
 
 import 'settings_screen_test.mocks.dart';
 
@@ -92,6 +95,70 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Emulators'), findsWidgets);
+    });
+
+    testWidgets('custom combo selectors and toggles interact perfectly without crashing', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createSettingsScreen());
+      await tester.pumpAndSettle();
+
+      // Find the Active Theme combo box card
+      final activeThemeButton = find.text('Active Theme');
+      expect(activeThemeButton, findsOneWidget);
+
+      // Tap on it to open the dialog
+      await tester.tap(activeThemeButton);
+      await tester.pumpAndSettle();
+
+      // Check that the dialog is open by looking for 'Select Active Theme'
+      expect(find.text('Select Active Theme'), findsOneWidget);
+
+      // Verify the dialog contains different theme choices
+      expect(find.text('Light Mode'), findsOneWidget);
+      expect(find.text('Rose Gold'), findsOneWidget);
+
+      // Tap on 'Rose Gold' to select it
+      await tester.tap(find.text('Rose Gold'));
+      await tester.pumpAndSettle();
+
+      // Verify the dialog is dismissed
+      expect(find.text('Select Active Theme'), findsNothing);
+
+      // Find the Show game title toggle card and tap it
+      final toggleText = find.text('Show game title');
+      expect(toggleText, findsOneWidget);
+      await tester.tap(toggleText);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('combo selector dialog can be dismissed using GameAction.back', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(createSettingsScreen());
+      await tester.pumpAndSettle();
+
+      // Find the Active Theme combo box card
+      final activeThemeButton = find.text('Active Theme');
+      expect(activeThemeButton, findsOneWidget);
+
+      // Tap on it to open the dialog
+      await tester.tap(activeThemeButton);
+      await tester.pumpAndSettle();
+
+      // Check that the dialog is open by looking for 'Select Active Theme'
+      expect(find.text('Select Active Theme'), findsOneWidget);
+
+      // Trigger GameAction.back via the bus
+      inputActionBus.add(GameAction.back);
+      await tester.pumpAndSettle();
+
+      // Verify the dialog is dismissed
+      expect(find.text('Select Active Theme'), findsNothing);
     });
   });
 }

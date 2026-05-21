@@ -1,5 +1,4 @@
 import 'dart:io' as io;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -17,6 +16,9 @@ import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
 import '../../core/constants/app_constants.dart';
+import '../../providers/theme_provider.dart';
+import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/dialog_back_bridge.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -35,6 +37,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isTestingConnection = false;
   String? _connectionError;
   String? _pairedToken;
+  bool _isEditingServer = false;
 
   @override
   void initState() {
@@ -52,6 +55,381 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _passwordController.dispose();
     _apiKeyController.dispose();
     super.dispose();
+  }
+
+  InputDecoration _buildInputDecoration(BuildContext context, String label) {
+    final theme = Theme.of(context);
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+      filled: true,
+      fillColor: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.colorScheme.primary),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    );
+  }
+
+  Widget _buildCustomDropdown<T>({
+    required BuildContext context,
+    required String label,
+    required T currentValue,
+    required String currentValueLabel,
+    required List<Map<String, dynamic>> items,
+    required Function(T) onChanged,
+  }) {
+    final theme = Theme.of(context);
+    return FocusEffectWrapper(
+      onTap: () async {
+        final selected = await showDialog<T>(
+          context: context,
+          builder: (ctx) => DialogBackBridge(
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: Text('Select $label'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: items.map((item) {
+                  final isSelected = item['value'] == currentValue;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: FocusEffectWrapper(
+                      onTap: () => Navigator.pop(ctx, item['value']),
+                      borderRadius: 16.0,
+                      autofocus: isSelected,
+                      useSafeScale: false,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: isSelected 
+                              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4) 
+                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+                          border: Border.all(
+                            color: isSelected 
+                                ? theme.colorScheme.primary.withValues(alpha: 0.4) 
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected ? Icons.check_circle : Icons.radio_button_off,
+                              color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              item['label'] as String,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              actions: [
+                FocusEffectWrapper(
+                  onTap: () => Navigator.pop(ctx),
+                  borderRadius: 16.0,
+                  useSafeScale: false,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+                    ),
+                    child: Text('Cancel', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (selected != null) {
+          onChanged(selected);
+        }
+      },
+      borderRadius: 16.0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const Spacer(),
+            Text(
+              currentValueLabel,
+              style: TextStyle(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_drop_down, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomToggleRow(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required bool value,
+    required void Function(bool)? onChanged,
+  }) {
+    final theme = Theme.of(context);
+    final isEnabled = onChanged != null;
+    return FocusEffectWrapper(
+      onTap: !isEnabled ? null : () => onChanged(!value),
+      borderRadius: 16.0,
+      child: Opacity(
+        opacity: isEnabled ? 1.0 : 0.5,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7), fontSize: 11)),
+                ],
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: value ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: value ? theme.colorScheme.primary : theme.colorScheme.outline.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                value ? 'ON' : 'OFF',
+                style: TextStyle(
+                  color: value ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+     ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required Widget child,
+    Widget? trailing,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: theme.colorScheme.primary, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              // ignore: use_null_aware_elements
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 20),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool isPrimary = false,
+    bool isDestructive = false,
+  }) {
+    final theme = Theme.of(context);
+    return FocusEffectWrapper(
+      onTap: onTap,
+      borderRadius: 16.0,
+      scaleFactor: 1.03,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: isPrimary
+              ? LinearGradient(
+                  colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isPrimary
+              ? null
+              : (isDestructive
+                  ? Colors.red.withValues(alpha: 0.08)
+                  : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
+          border: Border.all(
+            color: isPrimary
+                ? theme.colorScheme.primary.withValues(alpha: 0.3)
+                : (isDestructive
+                    ? Colors.red.withValues(alpha: 0.2)
+                    : theme.colorScheme.outline.withValues(alpha: 0.3)),
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isPrimary
+                  ? theme.colorScheme.onPrimary
+                  : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isPrimary
+                    ? theme.colorScheme.onPrimary
+                    : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurface),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPathRow(
+    BuildContext context, {
+    required String label,
+    required String currentPath,
+    required Function(String?)? onChanged,
+    VoidCallback? onReset,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant)),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  currentPath,
+                  style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (onReset != null)
+                FocusEffectWrapper(
+                  onTap: onReset,
+                  borderRadius: 12.0,
+                  scaleFactor: 1.1,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.restore, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              if (onReset != null) const SizedBox(width: 8),
+              if (onChanged != null)
+                FocusEffectWrapper(
+                  onTap: () async => onChanged(await FilePicker.platform.getDirectoryPath()),
+                  borderRadius: 12.0,
+                  scaleFactor: 1.05,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Change',
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -72,7 +450,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset('freegosy_logo.png', height: 32, width: 32),
+            Image.asset('freegosy_logo.png', height: 28, width: 28),
             const SizedBox(width: 12),
             const Text('Settings'),
           ],
@@ -97,29 +475,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.all(16.0),
                 children: [
                   _buildRommServerSection(context, ref, rommService, rommConfig),
-                  const SizedBox(height: 24),
-                  buildDisplaySection(context, cardAspectRatio, columnCount, cardSpacing, showTitle, activePreset, ref),
-                  const SizedBox(height: 24),
-                  _buildStorageSection(directoryService),
-                  const SizedBox(height: 24),
-                  _buildRetroArchSettingsSection(context, ref),
-                  const SizedBox(height: 24),
-                  if (defaultTargetPlatform == TargetPlatform.linux) ...[
-                    _buildLinuxSettingsSection(context, ref, directoryService),
-                    const SizedBox(height: 24),
-                  ],
-                  emulatorStatusAsync.when(
-                    data: (states) => buildEmulatorsSection(context, directoryService, true, states, setState, ref),
-                    loading: () => buildEmulatorsSection(context, directoryService, false, {}, setState, ref),
-                    error: (e, s) => Center(child: Text('Error: $e')),
+                  const SizedBox(height: 20),
+                  _buildAppearanceSection(context, ref),
+                  const SizedBox(height: 20),
+                  _buildSectionCard(
+                    context: context,
+                    title: 'Library Display',
+                    icon: Icons.grid_view,
+                    child: buildDisplaySection(context, cardAspectRatio, columnCount, cardSpacing, showTitle, activePreset, ref),
                   ),
-                  const SizedBox(height: 24),
-                  const SettingsCustomEmulatorsSection(),
-                  if (strategyRegistry != null) ...[
-                    const SizedBox(height: 24),
-                    buildConflictsSection(strategyRegistry, setState),
+                  const SizedBox(height: 20),
+                  _buildStorageSection(context, directoryService),
+                  const SizedBox(height: 20),
+                  _buildRetroArchSettingsSection(context, ref),
+                  const SizedBox(height: 20),
+                  if (io.Platform.isLinux) ...[
+                    _buildLinuxSettingsSection(context, ref, directoryService),
+                    const SizedBox(height: 20),
                   ],
-                  const SizedBox(height: 24),
+                  _buildSectionCard(
+                    context: context,
+                    title: 'Emulators',
+                    icon: Icons.sports_esports,
+                    child: emulatorStatusAsync.when(
+                      data: (states) => buildEmulatorsSection(context, directoryService, true, states, setState, ref),
+                      loading: () => buildEmulatorsSection(context, directoryService, false, {}, setState, ref),
+                      error: (e, s) => Center(child: Text('Error: $e')),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildSectionCard(
+                    context: context,
+                    title: 'Custom Emulators',
+                    icon: Icons.settings_input_component,
+                    child: const SettingsCustomEmulatorsSection(),
+                  ),
+                  if (strategyRegistry != null) ...[
+                    const SizedBox(height: 20),
+                    _buildSectionCard(
+                      context: context,
+                      title: 'Emulator Conflicts',
+                      icon: Icons.warning_amber,
+                      child: buildConflictsSection(context, strategyRegistry, setState),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
                   _buildLegalSection(context),
                 ],
               );
@@ -134,100 +534,215 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // --- RomM Server Section (Kept as is) ---
-  Widget _buildRommServerSection(BuildContext context, WidgetRef ref, RommService? rommService, RomMConfig rommConfig) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('RomM Server', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 16),
-      TextField(controller: _baseUrlController, decoration: const InputDecoration(labelText: 'Server URL', border: OutlineInputBorder())),
-      const SizedBox(height: 12),
-      if (_isLegacyAuth) ...[
-        TextField(controller: _usernameController, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder())),
-        const SizedBox(height: 12),
-        TextField(controller: _passwordController, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()), obscureText: true),
-      ] else
-        TextField(controller: _apiKeyController, decoration: const InputDecoration(labelText: 'API Key (RomM 4.8+)', border: OutlineInputBorder()), obscureText: true),
-      const SizedBox(height: 16),
-      Row(children: [
-        const Text('Legacy Authentication'),
-        const Spacer(),
-        Switch(value: _isLegacyAuth, onChanged: (val) => setState(() => _isLegacyAuth = val)),
-      ]),
-      const SizedBox(height: 16),
-      const SizedBox(height: 16),
-      if (_connectionError != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text(_connectionError!, style: const TextStyle(color: Colors.red, fontSize: 13)),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text('Connection successful!', style: TextStyle(color: Colors.green, fontSize: 13)),
-        ),
-      Row(
+  Widget _buildAppearanceSection(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final currentTheme = ref.watch(themeProvider);
+    final headerMode = ref.watch(libraryHeaderTitleModeProvider);
+    return _buildSectionCard(
+      context: context,
+      title: 'Appearance & Customization',
+      icon: Icons.palette,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ElevatedButton.icon(
-            onPressed: () => _showPairingDialog(context),
-            icon: const Icon(Icons.phonelink_setup),
-            label: const Text('Pair New Device'),
+          Text(
+            'Choose the overall visual style and header personalization of Freegosy.',
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 13),
           ),
-          const Spacer(),
+          const SizedBox(height: 16),
+          _buildCustomDropdown<ThemePreset>(
+            context: context,
+            label: 'Active Theme',
+            currentValue: currentTheme,
+            currentValueLabel: currentTheme.displayName,
+            items: ThemePreset.values.map((preset) => {
+              'value': preset,
+              'label': preset.displayName,
+            }).toList(),
+            onChanged: (preset) {
+              ref.read(themeProvider.notifier).setTheme(preset);
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildCustomDropdown<String>(
+            context: context,
+            label: 'Library Header Title',
+            currentValue: headerMode,
+            currentValueLabel: _getHeaderTitleModeLabel(headerMode),
+            items: const [
+              {'value': 'daily', 'label': 'Daily Game Recommendation'},
+              {'value': 'session', 'label': 'Session Game Recommendation'},
+              {'value': 'last_played', 'label': 'Last Played Game'},
+              {'value': 'server_ip', 'label': 'Server URL / IP'},
+              {'value': 'greetings', 'label': 'Fun Retro Greetings'},
+              {'value': 'none', 'label': 'None / Just App Logo'},
+            ],
+            onChanged: (mode) {
+              ref.read(libraryHeaderTitleModeProvider.notifier).update(mode);
+            },
+          ),
         ],
       ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          ElevatedButton(
-            onPressed: _isTestingConnection ? null : () async {
-              final baseUrl = _baseUrlController.text.trim();
-              if (baseUrl.isEmpty) {
-                setState(() => _connectionError = 'Server URL is required');
-                return;
-              }
+    );
+  }
 
-              setState(() {
-                _isTestingConnection = true;
-                _connectionError = null;
-              });
+  String _getHeaderTitleModeLabel(String mode) {
+    switch (mode) {
+      case 'daily':
+        return 'Daily Game Recommendation';
+      case 'session':
+        return 'Session Game Recommendation';
+      case 'last_played':
+        return 'Last Played Game';
+      case 'server_ip':
+        return 'Server URL / IP';
+      case 'greetings':
+        return 'Fun Retro Greetings';
+      case 'none':
+        return 'None / Just App Logo';
+      default:
+        return 'Daily Game Recommendation';
+    }
+  }
 
-              try {
-                // Temporary config for testing
-                final testConfig = RomMConfig(
-                  baseUrl: baseUrl,
-                  username: _usernameController.text.trim(),
-                  password: _passwordController.text,
-                  apiKey: _pairedToken == null ? _apiKeyController.text.trim() : '',
-                  token: _pairedToken,
-                );
-                
-                final testService = RommService(testConfig);
-                await testService.getPlatforms(); // Simple connectivity test
-                
-                if (mounted) {
-                  setState(() {
-                    _isTestingConnection = false;
-                  });
-                }
-              } catch (e) {
-                if (mounted) {
-                  setState(() {
-                    _isTestingConnection = false;
-                    _connectionError = 'Connection failed: ${e.toString().split('\n').first}';
-                  });
-                }
-              }
-            },
-            child: _isTestingConnection 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Test Connection'),
+  Widget _buildRommServerSection(BuildContext context, WidgetRef ref, RommService? rommService, RomMConfig rommConfig) {
+    final theme = Theme.of(context);
+    return _buildSectionCard(
+      context: context,
+      title: 'RomM Server',
+      icon: Icons.dns,
+      trailing: FocusEffectWrapper(
+        borderRadius: 24,
+        scaleFactor: 1.1,
+        useSafeScale: false,
+        onTap: () {
+          setState(() {
+            _isEditingServer = !_isEditingServer;
+          });
+        },
+        child: IconButton(
+          icon: Icon(
+            _isEditingServer ? Icons.lock_open : Icons.lock,
+            color: _isEditingServer ? theme.colorScheme.primary : Colors.grey,
           ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepPurple,
-              foregroundColor: Colors.white,
+          tooltip: _isEditingServer ? 'Lock connection details' : 'Unlock connection details to edit',
+          onPressed: () {
+            setState(() {
+              _isEditingServer = !_isEditingServer;
+            });
+          },
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _baseUrlController,
+            readOnly: !_isEditingServer,
+            obscureText: !_isEditingServer,
+            decoration: _buildInputDecoration(context, 'Server URL'),
+          ),
+          const SizedBox(height: 16),
+          if (_isLegacyAuth) ...[
+            TextField(
+              controller: _usernameController,
+              readOnly: !_isEditingServer,
+              obscureText: !_isEditingServer,
+              decoration: _buildInputDecoration(context, 'Username'),
             ),
-            onPressed: () async {
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              readOnly: !_isEditingServer,
+              obscureText: true,
+              decoration: _buildInputDecoration(context, 'Password'),
+            ),
+          ] else
+            TextField(
+              controller: _apiKeyController,
+              readOnly: !_isEditingServer,
+              obscureText: true,
+              decoration: _buildInputDecoration(context, 'API Key (RomM 4.8+)'),
+            ),
+          const SizedBox(height: 16),
+          _buildCustomToggleRow(
+            context,
+            title: 'Legacy Authentication',
+            subtitle: 'Enable if your RomM server is below v4.8',
+            value: _isLegacyAuth,
+            onChanged: !_isEditingServer ? null : (val) => setState(() => _isLegacyAuth = val),
+          ),
+          const SizedBox(height: 16),
+          if (_connectionError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(_connectionError!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.phonelink_setup,
+                  label: 'Pair Device',
+                  onTap: !_isEditingServer ? null : () => _showPairingDialog(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: _isTestingConnection ? Icons.hourglass_empty : Icons.network_ping,
+                  label: _isTestingConnection ? 'Testing...' : 'Test Connection',
+                  onTap: !_isEditingServer || _isTestingConnection ? null : () async {
+                    final baseUrl = _baseUrlController.text.trim();
+                    if (baseUrl.isEmpty) {
+                      setState(() => _connectionError = 'Server URL is required');
+                      return;
+                    }
+
+                    setState(() {
+                      _isTestingConnection = true;
+                      _connectionError = null;
+                    });
+
+                    try {
+                      final testConfig = RomMConfig(
+                        baseUrl: baseUrl,
+                        username: _usernameController.text.trim(),
+                        password: _passwordController.text,
+                        apiKey: _pairedToken == null ? _apiKeyController.text.trim() : '',
+                        token: _pairedToken,
+                      );
+                      
+                      final testService = RommService(testConfig);
+                      await testService.getPlatforms();
+                      
+                      if (mounted) {
+                        setState(() {
+                          _isTestingConnection = false;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection successful!')));
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        setState(() {
+                          _isTestingConnection = false;
+                          _connectionError = 'Connection failed: ${e.toString().split('\n').first}';
+                        });
+                      }
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildActionButton(
+            context,
+            icon: Icons.save,
+            label: 'Save Configuration',
+            onTap: !_isEditingServer ? null : () async {
               final prefs = ref.read(sharedPreferencesProvider);
               await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
               if (_isLegacyAuth) {
@@ -249,160 +764,178 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _pairedToken = null;
               ref.invalidate(rommConfigProvider);
               ref.invalidate(rommServiceProvider);
-              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
+              if (mounted) {
+                setState(() {
+                  _isEditingServer = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings saved.')));
+              }
             },
-            child: const Text('Save'),
+            isPrimary: true,
           ),
         ],
       ),
-    ]);
+    );
   }
 
-  // --- Storage Section ---
-  Widget _buildStorageSection(DirectoryService directoryService) {
+  Widget _buildStorageSection(BuildContext context, DirectoryService directoryService) {
+    final theme = Theme.of(context);
     final preset = directoryService.linuxSyncPreset;
     
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Storage', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 16),
-      
-      if (io.Platform.isLinux) ...[
-        const Text('Linux App Layout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          key: ValueKey(preset),
-          initialValue: preset,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-          items: const [
-            DropdownMenuItem(value: 'default', child: Text('Manual / Native')),
-            DropdownMenuItem(value: 'emudeck', child: Text('EmuDeck')),
-            DropdownMenuItem(value: 'retrodeck', child: Text('RetroDeck')),
+    return _buildSectionCard(
+      context: context,
+      title: 'Storage',
+      icon: Icons.folder,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (io.Platform.isLinux) ...[
+            _buildCustomDropdown<String>(
+              context: context,
+              label: 'Linux App Layout',
+              currentValue: preset,
+              currentValueLabel: preset == 'default'
+                  ? 'Manual / Native'
+                  : (preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'),
+              items: const [
+                {'value': 'default', 'label': 'Manual / Native'},
+                {'value': 'emudeck', 'label': 'EmuDeck'},
+                {'value': 'retrodeck', 'label': 'RetroDeck'},
+              ],
+              onChanged: (val) async {
+                await directoryService.setLinuxSyncPreset(val);
+                ref.invalidate(directoryServiceProvider);
+              },
+            ),
+            const SizedBox(height: 16),
           ],
-          onChanged: (val) async {
-            if (val != null) {
-              await directoryService.setLinuxSyncPreset(val);
-              ref.invalidate(directoryServiceProvider);
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-      ],
 
-      if (io.Platform.isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
-        _buildPathRow(
-          label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
-          currentPath: directoryService.linuxPresetRootPath ?? 'Not set',
-          onChanged: (p) async { 
-            if (p != null) { 
-              await directoryService.setLinuxPresetRoot(p);
+          if (io.Platform.isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
+            _buildPathRow(
+              context,
+              label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
+              currentPath: directoryService.linuxPresetRootPath ?? 'Not set',
+              onChanged: (p) async { 
+                if (p != null) { 
+                  await directoryService.setLinuxPresetRoot(p);
+                  ref.invalidate(directoryServiceProvider); 
+                } 
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          _buildPathRow(
+            context,
+            label: 'ROMs Directory',
+            currentPath: directoryService.romsRootPath,
+            onChanged: (p) async { 
+              if (p != null) { 
+                await directoryService.setRomsRoot(p); 
+                ref.invalidate(directoryServiceProvider); 
+              } 
+            },
+            onReset: () async { 
+              await directoryService.resetRomsRoot(); 
               ref.invalidate(directoryServiceProvider); 
-            } 
-          },
-        ),
-        const SizedBox(height: 16),
-      ],
-
-      _buildPathRow(
-        label: 'ROMs Directory',
-        currentPath: directoryService.romsRootPath,
-        onChanged: (p) async { 
-          if (p != null) { 
-            await directoryService.setRomsRoot(p); 
-            ref.invalidate(directoryServiceProvider); 
-          } 
-        },
-        onReset: () async { 
-          await directoryService.resetRomsRoot(); 
-          ref.invalidate(directoryServiceProvider); 
-        },
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildPathRow(
+            context,
+            label: 'Emulators Directory',
+            currentPath: directoryService.emulatorsRootPath,
+            onChanged: (p) async { 
+              if (p != null) { 
+                await directoryService.setEmulatorsRoot(p); 
+                ref.invalidate(directoryServiceProvider); 
+              } 
+            },
+            onReset: () async { 
+              await directoryService.resetEmulatorsRoot(); 
+              ref.invalidate(directoryServiceProvider); 
+            },
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.folder_open,
+                  label: 'Open ROMs',
+                  onTap: () => SystemUtils.openDirectory(directoryService.romsRootPath),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.folder_shared,
+                  label: 'Open App Data',
+                  onTap: SystemUtils.openAppDataDirectory,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 16),
+          Text('Troubleshooting', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+          const SizedBox(height: 4),
+          Text('If games are missing from your offline library, try a full scan.', style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 12)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Consumer(builder: (context, ref, _) {
+                  final isScanning = ref.watch(isScanningProvider);
+                  return _buildActionButton(
+                    context,
+                    icon: Icons.sync,
+                    label: isScanning ? 'Scanning...' : 'Force Full Scan',
+                    onTap: isScanning ? null : () async {
+                      await ref.read(downloadedGamesCacheProvider.notifier).startIncrementalSync(force: true);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full ROM scan complete.')));
+                      }
+                    },
+                  );
+                }),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionButton(
+                  context,
+                  icon: Icons.receipt_long,
+                  label: 'View Logs',
+                  onTap: () => _showLogsDialog(context),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      const SizedBox(height: 16),
-      _buildPathRow(
-        label: 'Emulators Directory',
-        currentPath: directoryService.emulatorsRootPath,
-        onChanged: (p) async { 
-          if (p != null) { 
-            await directoryService.setEmulatorsRoot(p); 
-            ref.invalidate(directoryServiceProvider); 
-          } 
-        },
-        onReset: () async { 
-          await directoryService.resetEmulatorsRoot(); 
-          ref.invalidate(directoryServiceProvider); 
-        },
-      ),
-      const SizedBox(height: 16),
-      OutlinedButton.icon(
-        onPressed: () => SystemUtils.openDirectory(directoryService.romsRootPath),
-        icon: const Icon(Icons.folder_open),
-        label: const Text('Open ROMs Directory'),
-      ),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(
-        onPressed: SystemUtils.openAppDataDirectory,
-        icon: const Icon(Icons.folder_open),
-        label: const Text('Open App Data Directory'),
-      ),
-      const SizedBox(height: 16),
-      const Divider(color: Colors.white10),
-      const SizedBox(height: 8),
-      const Text('Troubleshooting', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      const Text('If games are missing from your offline library, try a full scan.', style: TextStyle(color: Colors.white54, fontSize: 13)),
-      const SizedBox(height: 12),
-      Consumer(builder: (context, ref, _) {
-        final isScanning = ref.watch(isScanningProvider);
-        return OutlinedButton.icon(
-          onPressed: isScanning ? null : () async {
-            await ref.read(downloadedGamesCacheProvider.notifier).startIncrementalSync(force: true);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full ROM scan complete.')));
-            }
-          },
-          icon: isScanning 
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.sync),
-          label: Text(isScanning ? 'Scanning...' : 'Force Full ROM Scan'),
-        );
-      }),
-      const SizedBox(height: 12),
-      OutlinedButton.icon(
-        onPressed: () => _showLogsDialog(context),
-        icon: const Icon(Icons.receipt_long),
-        label: const Text('View Console Logs'),
-      ),
-    ]);
+    );
   }
 
   void _showLogsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => const _LogsDialogContent(),
+      builder: (context) => const DialogBackBridge(child: _LogsDialogContent()),
     );
   }
 
-  Widget _buildPathRow({required String label, required String currentPath, required Function(String?)? onChanged, VoidCallback? onReset}) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-      Row(children: [
-        Expanded(child: Text(currentPath, overflow: TextOverflow.ellipsis)),
-        if (onReset != null) IconButton(onPressed: onReset, icon: const Icon(Icons.restore)),
-        if (onChanged != null) ElevatedButton(onPressed: () async => onChanged(await FilePicker.platform.getDirectoryPath()), child: const Text('Change')),
-      ]),
-    ]);
-  }
-
-  // --- Placeholder methods for sections to pass analysis ---
   Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) => const SizedBox();
   Widget _buildLinuxSettingsSection(BuildContext context, WidgetRef ref, DirectoryService directoryService) => const SizedBox();
   Widget _buildLegalSection(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       children: [
-        const Divider(color: Colors.white10),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
         Text(
           'Freegosy v${AppConstants.version}',
-          style: const TextStyle(color: Colors.white54, fontSize: 13),
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 13),
         ),
         const SizedBox(height: 8),
         TextButton(
@@ -415,66 +948,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: Image.asset('freegosy_logo.png', height: 64, width: 64),
             ),
           ),
-          child: const Text('View Licenses'),
+          child: Text('View Licenses', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
       ],
     );
   }
 
   void _showPairingDialog(BuildContext context) {
     final codeController = TextEditingController();
+    final theme = Theme.of(context);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Pair with Web UI'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter the 8-digit code generated in your RomM Web UI settings.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Pairing Code',
-                hintText: 'XXXXXXXX',
-                border: OutlineInputBorder(),
+      builder: (context) => DialogBackBridge(
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Pair with Web UI'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Enter the 8-digit code generated in your RomM Web UI settings.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeController,
+                autofocus: true,
+                decoration: _buildInputDecoration(context, 'Pairing Code').copyWith(
+                  hintText: 'XXXXXXXX',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 24, letterSpacing: 4, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
               ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, letterSpacing: 4, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FocusEffectWrapper(
+              onTap: () async {
+                final code = codeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+                if (code.length < 8) return;
+                
+                try {
+                  final url = _baseUrlController.text.trim();
+                  if (url.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a Server URL first.')));
+                    return;
+                  }
+                  final token = await RommService.exchangePairingCode(url, code);
+                  _apiKeyController.text = token;
+                  setState(() => _isLegacyAuth = false);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Successfully paired! Click Save to apply.')));
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pairing failed: ${e.toString().split('\n').first}')));
+                  }
+                }
+              },
+              borderRadius: 12.0,
+              scaleFactor: 1.05,
+              useSafeScale: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)]),
+                ),
+                child: Text(
+                  'Pair',
+                  style: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final code = codeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-              if (code.length < 8) return;
-              
-              try {
-                final url = _baseUrlController.text.trim();
-                if (url.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a Server URL first.')));
-                  return;
-                }
-                final token = await RommService.exchangePairingCode(url, code);
-                _apiKeyController.text = token;
-                setState(() => _isLegacyAuth = false);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Successfully paired! Click Save to apply.')));
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pairing failed: ${e.toString().split('\n').first}')));
-                }
-              }
-            },
-            child: const Text('Pair'),
-          ),
-        ],
       ),
     );
   }
@@ -498,7 +1046,9 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
         width: double.infinity,
         constraints: const BoxConstraints(maxWidth: 800),
@@ -569,8 +1119,9 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(4),
+                      color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
                     ),
                     child: SelectionArea(
                       child: SingleChildScrollView(
@@ -579,10 +1130,10 @@ class _LogsDialogContentState extends State<_LogsDialogContent> {
                           alignment: Alignment.topLeft,
                           child: Text(
                             fullText,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 12,
-                              color: Colors.white70,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -608,11 +1159,34 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 11)),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      visualDensity: VisualDensity.compact,
+    final theme = Theme.of(context);
+    return FocusEffectWrapper(
+      onTap: onSelected,
+      borderRadius: 12.0,
+      scaleFactor: 1.05,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: selected 
+              ? theme.colorScheme.primary 
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+          border: Border.all(
+            color: selected 
+                ? theme.colorScheme.primary 
+                : theme.colorScheme.outline.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: selected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
     );
   }
 }

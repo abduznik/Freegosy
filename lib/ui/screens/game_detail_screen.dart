@@ -14,6 +14,17 @@ import '../../providers/shared_prefs_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
 import '../widgets/download_progress_indicator.dart';
 import '../widgets/backup_history_sheet.dart';
+import '../widgets/game_detail/game_action_button.dart';
+import '../widgets/game_detail/game_metadata_chip.dart';
+import '../widgets/game_detail/game_details_grid.dart';
+import '../widgets/game_detail/game_notes_section.dart';
+import '../widgets/game_detail/game_personal_section.dart';
+import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/controller_hints_bar.dart';
+import '../../providers/ui_provider.dart';
+import '../../core/input/input_action_bus.dart';
+import '../../core/input/gamepad_service.dart';
+import 'dart:async';
 
 class GameDetailScreen extends ConsumerStatefulWidget {
   final Game game;
@@ -51,7 +62,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   late int _rating;
   late String? _status;
   late int _completion;
-  bool _isSaving = false;
+   bool _isSaving = false;
+  bool _adjustingRating = false;
+  bool _adjustingCompletion = false;
+  bool _justEnteredRating = false;
+  bool _justEnteredCompletion = false;
+  bool _isAddingNote = false;
+  StreamSubscription<GameAction>? _inputSub;
+  final FocusNode _focusNode = FocusNode();
+  late ProviderContainer _container;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _container = ProviderScope.containerOf(context);
+  }
 
   @override
   void initState() {
@@ -60,17 +85,107 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     _isDownloaded = widget.isDownloaded;
     _syncStateWithGame(_currentGame);
     _checkDownloadStatus();
-    // Targeted Lazy Sync: Ensure this game is mapped if it exists on disk
     _lazySync();
-    // Initial refresh to get latest notes and status
     _refreshGame();
+
+    // Action Bus: Listen for Back command regardless of focus state
+    _inputSub = inputActionBus.stream.listen((action) {
+      if (mounted) {
+        if (_adjustingCompletion) {
+          if (_justEnteredCompletion) {
+            _justEnteredCompletion = false;
+            return;
+          }
+          if (action == GameAction.left) {
+            setState(() {
+              _completion = (_completion - 5).clamp(0, 100);
+            });
+          } else if (action == GameAction.right) {
+            setState(() {
+              _completion = (_completion + 5).clamp(0, 100);
+            });
+          } else if (action == GameAction.confirm || action == GameAction.back) {
+            _toggleAdjustingCompletion();
+          }
+          return;
+        }
+
+        if (_adjustingRating) {
+          if (_justEnteredRating) {
+            _justEnteredRating = false;
+            return;
+          }
+          if (action == GameAction.left) {
+            setState(() {
+              _rating = (_rating - 1).clamp(0, 10);
+            });
+          } else if (action == GameAction.right) {
+            setState(() {
+              _rating = (_rating + 1).clamp(0, 10);
+            });
+          } else if (action == GameAction.confirm || action == GameAction.back) {
+            _toggleAdjustingRating();
+          }
+          return;
+        }
+
+        if (action == GameAction.back) {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        }
+      }
+    });
+
+    // Autofocus: Ensure the screen is ready for input on open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  void _toggleAdjustingRating() {
+    setState(() {
+      _adjustingRating = !_adjustingRating;
+      _adjustingCompletion = false;
+      if (_adjustingRating) {
+        _justEnteredRating = true;
+      }
+      ref.read(navigationLockedProvider.notifier).state = _adjustingRating;
+    });
+  }
+
+  void _toggleAdjustingCompletion() {
+    setState(() {
+      _adjustingCompletion = !_adjustingCompletion;
+      _adjustingRating = false;
+      if (_adjustingCompletion) {
+        _justEnteredCompletion = true;
+      }
+      ref.read(navigationLockedProvider.notifier).state = _adjustingCompletion;
+    });
+  }
+
+  @override
+  void dispose() {
+    _inputSub?.cancel();
+    _focusNode.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        _container.read(navigationLockedProvider.notifier).state = false;
+      } catch (_) {
+        // Container already disposed (e.g. during test teardown), safe to ignore!
+      }
+    });
+    super.dispose();
   }
 
   Future<void> _lazySync() async {
     final scanner = ref.read(romScannerServiceProvider);
     if (scanner != null) {
       await scanner.syncSingleGame(_currentGame);
-      // Re-check status after sync to update the "Play" button if found
+      if (!mounted) return;
       _checkDownloadStatus();
     }
   }
@@ -84,112 +199,178 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 
   Future<void> _checkDownloadStatus() async {
+    if (!mounted) return;
     final ds = ref.read(directoryServiceProvider).value;
     if (ds != null) {
       final exists = await ds.isRomDownloaded(_currentGame);
-      if (mounted) {
-        setState(() => _isDownloaded = exists);
-      }
+      if (mounted) setState(() => _isDownloaded = exists);
     }
   }
 
   Future<void> _refreshGame() async {
-    if (widget.rommService == null) return;
+    if (!mounted || widget.rommService == null) return;
     try {
       final updated = await widget.rommService!.getGame(_currentGame.id);
-      if (updated != null && mounted) {
+      if (!mounted) return;
+      if (updated != null) {
         setState(() {
           _currentGame = updated;
           _syncStateWithGame(updated);
         });
         _checkDownloadStatus();
-
-        // Update persistent cache so the list view and offline mode have the latest details
-        final cacheService = ref.read(metadataCacheServiceProvider).value;
-        if (cacheService != null) {
-          await cacheService.saveGames([updated]);
-        }
+        final cacheService = ref.read(metadataCacheServiceProvider).asData?.value;
+        if (cacheService != null) await cacheService.saveGames([updated]);
       }
     } catch (_) {}
   }
 
   Future<void> _addNote() async {
+    if (_isAddingNote) return;
+    _isAddingNote = true;
+    
     final titleController = TextEditingController();
     final contentController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Note'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: 'Title'),
+    bool? result;
+    
+    try {
+      result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Add Note'),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: contentController,
+                  decoration: InputDecoration(
+                    labelText: 'Content',
+                    labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
+                  ),
+                  maxLines: 4,
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: contentController,
-              decoration: const InputDecoration(labelText: 'Content'),
-              maxLines: 3,
+          ),
+          actions: [
+            FocusEffectWrapper(
+              onTap: () => Navigator.pop(context, false),
+              borderRadius: 12.0,
+              scaleFactor: 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
+                ),
+                child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FocusEffectWrapper(
+              onTap: () => Navigator.pop(context, true),
+              borderRadius: 12.0,
+              scaleFactor: 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
+                ),
+                child: Text('Add Note', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+              ),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (result == true && widget.rommService != null) {
-      final title = titleController.text.trim();
-      final content = contentController.text.trim();
-      if (title.isNotEmpty || content.isNotEmpty) {
-        final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
-        if (success) {
-          _refreshGame();
-        } else {
-          if (mounted) {
-            // ignore: use_build_context_synchronously
+      if (result == true && widget.rommService != null) {
+        final title = titleController.text.trim();
+        final content = contentController.text.trim();
+        if (title.isNotEmpty || content.isNotEmpty) {
+          final success = await widget.rommService!.createRomNote(_currentGame.id, title, content);
+          if (success) {
+            if (!mounted) return;
+            _refreshGame();
+          } else if (mounted) {
             ErrorHandler.showException(context, Exception('Failed to create note'), contextLabel: 'Add Note');
           }
         }
       }
+    } finally {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _isAddingNote = false;
+        }
+      });
     }
   }
 
   Future<void> _deleteNote(int noteId) async {
     if (widget.rommService == null) return;
-    
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Note'),
         content: const Text('Are you sure you want to delete this note?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context, false),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            useSafeScale: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
+              ),
+              child: Text('Cancel', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context, true),
+            borderRadius: 12.0,
+            scaleFactor: 1.0,
+            useSafeScale: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.red.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Delete', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ),
           ),
         ],
       ),
     );
-
     if (confirm == true) {
       final success = await widget.rommService!.deleteRomNote(_currentGame.id, noteId);
       if (success) {
+        if (!mounted) return;
         _refreshGame();
-      } else {
-        if (mounted) {
-          // ignore: use_build_context_synchronously
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete note')));
-        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to delete note')));
       }
     }
   }
@@ -198,14 +379,47 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(note.title.isNotEmpty ? note.title : 'Note'),
-        content: SingleChildScrollView(
-          child: Text(note.content),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(note.title.isNotEmpty ? note.title : 'Note', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Text(note.content, style: TextStyle(height: 1.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+          FocusEffectWrapper(
+            onTap: () {
+              Navigator.pop(context);
+              _deleteNote(note.id);
+            },
+            borderRadius: 12.0,
+            useSafeScale: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.red.withValues(alpha: 0.1),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+              ),
+              child: const Text('Delete Note', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () => Navigator.pop(context),
+            borderRadius: 12.0,
+            useSafeScale: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
+              ),
+              child: Text('Close', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
           ),
         ],
       ),
@@ -214,58 +428,28 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
 
   Future<void> _saveProps(BuildContext context) async {
     if (widget.rommService == null) return;
-    
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSaving = true);
-    
     final prefs = ref.read(sharedPreferencesProvider);
     final success = await widget.rommService!.updateRomProps(
-      _currentGame.id,
-      prefs,
-      backlogged: _backlogged,
-      nowPlaying: _nowPlaying,
-      rating: _rating,
-      status: _status,
-      completion: _completion,
+      _currentGame.id, prefs, backlogged: _backlogged, nowPlaying: _nowPlaying,
+      rating: _rating, status: _status, completion: _completion,
     );
-    
     if (mounted) {
       setState(() => _isSaving = false);
       if (success) {
         _refreshGame();
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Properties saved successfully')),
-        );
-      } else {
-        // Safe to use ErrorHandler here if it's a global/static UI helper
-        // but let's be double sure and check mounted again
-        if (mounted) {
-          // ignore: use_build_context_synchronously
-          ErrorHandler.showException(context, Exception('Failed to update properties'), contextLabel: 'Update Status');
-        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Properties saved successfully')));
+      } else if (mounted) {
+        ErrorHandler.showException(context, Exception('Failed to update properties'), contextLabel: 'Update Status');
       }
     }
-  }
-
-  void _showScreenshotFullscreen(BuildContext context, int initialIndex, List<String> imageUrls) {
-    showDialog(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => ScreenshotGalleryDialog(
-        initialIndex: initialIndex,
-        imageUrls: imageUrls,
-      ),
-    );
   }
 
   String _normalizeUrl(String? path) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('http')) return path;
-    final base = widget.rommBaseUrl.endsWith('/')
-        ? widget.rommBaseUrl.substring(0, widget.rommBaseUrl.length - 1)
-        : widget.rommBaseUrl;
-    final normalizedPath = path.startsWith('/') ? path : '/$path';
-    return '$base$normalizedPath';
+    final base = widget.rommBaseUrl.endsWith('/') ? widget.rommBaseUrl.substring(0, widget.rommBaseUrl.length - 1) : widget.rommBaseUrl;
+    return '$base${path.startsWith('/') ? path : '/$path'}';
   }
 
   Future<bool> _showCancelConfirmation(BuildContext context, String gameName) async {
@@ -275,14 +459,8 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         title: const Text('Cancel Download'),
         content: Text('Are you sure you want to cancel downloading $gameName? This will delete the partial file.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancel Download', style: TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Cancel Download', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -294,703 +472,370 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     ref.listen(downloadProvider, (prev, next) {
       final progress = next[_currentGame.id];
       if (progress != null && progress.isComplete) {
-        // Download just finished
         _checkDownloadStatus();
-        // Remove from progress map so we show the action buttons instead of "100% Done"
         ref.read(downloadProvider.notifier).removeDownload(_currentGame.id);
       }
     });
 
     final theme = Theme.of(context);
-    final size = MediaQuery.of(context).size;
-    final headerHeight = size.height * 0.4;
-
-    String? backgroundUrl;
-    if (_currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty) {
-      backgroundUrl = _normalizeUrl(_currentGame.screenshotUrl);
-    } else if (_currentGame.mergedScreenshots.isNotEmpty) {
-      backgroundUrl = _normalizeUrl(_currentGame.mergedScreenshots.first);
-    }
+    final headerHeight = MediaQuery.of(context).size.height * 0.4;
+    String? backgroundUrl = _currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty
+        ? _normalizeUrl(_currentGame.screenshotUrl)
+        : (_currentGame.mergedScreenshots.isNotEmpty ? _normalizeUrl(_currentGame.mergedScreenshots.first) : null);
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SingleChildScrollView(
-        child: Column(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Listener(
+        onPointerHover: (event) {
+          if (event.delta.distance > 0 && ref.read(inputModeProvider) != InputMode.mouse) {
+            ref.read(inputModeProvider.notifier).state = InputMode.mouse;
+          }
+        },
+        child: SingleChildScrollView(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // SECTION 1 - Hero header
-            SizedBox(
-              height: headerHeight,
-              child: Stack(
-                children: [
-                  // Background Image
-                  Positioned.fill(
-                    child: backgroundUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: backgroundUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(color: Colors.grey[900]),
-                            errorWidget: (context, url, error) => Container(color: Colors.grey[900]),
-                          )
-                        : Container(color: Colors.grey[900]),
-                  ),
-                  // Gradient Overlay
-                  Positioned.fill(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black87,
-                            Colors.black,
-                          ],
-                          stops: [0.5, 0.8, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Back Button
-                  Positioned(
-                    top: MediaQuery.of(context).padding.top + 8,
-                    left: 16,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.black54,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ),
-                  ),
-                  // Content (Cover + Title)
-                  Positioned(
-                    bottom: 16,
-                    left: 16,
-                    right: 16,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // Cover Image
-                        Hero(
-                          tag: 'game_cover_${_currentGame.id}',
-                          child: Container(
-                            width: 130,
-                            height: 180,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.5),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: CachedNetworkImage(
-                                imageUrl: _normalizeUrl(_currentGame.pathCoverLarge),
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(color: Colors.grey[800]),
-                                errorWidget: (context, url, error) => const Icon(Icons.image_not_supported),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Title and Platform
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _currentGame.name,
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (_currentGame.platformDisplayName != null)
-                                Text(
-                                  _currentGame.platformDisplayName!,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+            _buildHeroHeader(context, headerHeight, backgroundUrl, theme),
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // SECTION 2 - Action buttons row
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final downloads = ref.watch(downloadProvider);
-                      final progress = downloads[_currentGame.id];
-
-                      return SizedBox(
-                        width: double.infinity,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (!_isDownloaded)
-                              if (progress != null) ...[
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                  child: DownloadProgressIndicator(
-                                    progress: progress,
-                                    compact: true,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    if (!progress.isComplete && progress.error == null)
-                                      _ActionButton(
-                                        icon: progress.isPaused ? Icons.play_arrow : Icons.pause,
-                                        label: progress.isPaused ? 'Resume' : 'Pause',
-                                        onPressed: () {
-                                          if (progress.isPaused) {
-                                            if (progress.game != null && progress.downloadUrl != null) {
-                                              ref.read(downloadProvider.notifier).startDownload(
-                                                progress.game!,
-                                                progress.downloadUrl!,
-                                              );
-                                            }
-                                          } else {
-                                            ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id);
-                                          }
-                                        },
-                                      ),
-                                    _ActionButton(
-                                      icon: Icons.close,
-                                      label: 'Cancel',
-                                      color: Colors.red,
-                                      onPressed: () async {
-                                        if (progress.isComplete || progress.error != null) {
-                                          ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
-                                        } else if (await _showCancelConfirmation(context, progress.gameName)) {
-                                          ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ] else
-                                _ActionButton(
-                                  icon: Icons.download,
-                                  label: 'Download',
-                                  onPressed: () async {
-                                    await widget.onDownload();
-                                    _checkDownloadStatus();
-                                  },
-                                )
-                            else ...[
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  Expanded(
-                                    child: _ActionButton(
-                                      icon: Icons.play_arrow,
-                                      label: 'Play',
-                                      onPressed: () async {
-                                        if (_isDownloaded) {
-                                          await widget.onLaunch();
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _ActionButton(
-                                      icon: Icons.cloud_upload,
-                                      label: 'Push',
-                                      onPressed: () async {
-                                        if (_isDownloaded) {
-                                          await widget.onPushSaves();
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _ActionButton(
-                                      icon: Icons.cloud_download,
-                                      label: 'Pull',
-                                      onPressed: () async {
-                                        if (_isDownloaded) {
-                                          await widget.onPullSaves();
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _ActionButton(
-                                      icon: Icons.folder_open,
-                                      label: 'Open Folder',
-                                      onPressed: () async {
-                                        final ds = ref.read(directoryServiceProvider).value;
-                                        if (ds != null) {
-                                          final path = await ds.getRomDirectory(_currentGame);
-                                          await SystemUtils.openDirectory(path);
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _ActionButton(
-                                      icon: Icons.delete,
-                                      label: 'Delete',
-                                      onPressed: () async {
-                                        await widget.onDelete();
-                                        // Invalidate download provider to clear "100% done" sticky state
-                                        ref.invalidate(downloadProvider);
-                                        _checkDownloadStatus();
-                                      },
-                                      color: Colors.red,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              
-                              const SizedBox(height: 24),
-                              const Divider(color: Colors.white10, height: 32),
-                              const Center(
-                                child: Text(
-                                  'LOCAL SAVE STATES',
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // ── Local Backup button ──────────────────
-                                  _ActionButton(
-                                    icon: Icons.save_alt_outlined,
-                                    label: 'Backup',
-                                    onPressed: () async {
-                                      try {
-                                        final syncService = await ref.read(saveSyncServiceProvider.future);
-                                        final ds = await ref.read(directoryServiceProvider.future);
-                                        if (!context.mounted) return;
-                                        if (syncService == null || ds == null) {
-                                          ErrorHandler.showInfo(context, 'Not Ready', message: 'Services not available');
-                                          return;
-                                        }
-                                        final romPath = await ds.getRomFilePath(_currentGame);
-                                        final backupService = ref.read(backupServiceProvider);
-                                        final result = await backupService.createImmediate(_currentGame, romPath, syncService);
-                                        if (!context.mounted) return;
-                                        if (result != null) {
-                                          final backupRepo = ref.read(backupRepositoryProvider);
-                                          await backupRepo.addEntry(
-                                            _currentGame.id,
-                                            BackupEntry(
-                                              timestamp: DateTime.now(),
-                                              md5Hash: result.md5,
-                                              localZipPath: result.zipPath,
-                                            ),
-                                          );
-                                          if (context.mounted) {
-                                            ErrorHandler.showSuccess(context, 'Backup Created', message: 'Local restore point saved.');
-                                          }
-                                          
-                                          // Trigger the background sync queue immediately to push this new backup
-                                          final rommService = ref.read(rommServiceProvider);
-                                          if (rommService != null && !rommService.isOffline.value) {
-                                            BackgroundSyncQueue.processQueue(rommService, backupRepo);
-                                          }
-                                        } else {
-                                          ErrorHandler.showInfo(context, 'No Saves', message: 'No save files found to back up.');
-                                        }
-                                      } catch (e, st) {
-                                        dev.log('Backup button failed', error: e, stackTrace: st);
-                                        if (context.mounted) {
-                                          ErrorHandler.showException(context, e, contextLabel: 'Local Backup');
-                                        }
-                                      }
-                                    },
-                                  ),
-                                  const SizedBox(width: 48),
-                                  // ── Restore button ───────────────────────
-                                  _ActionButton(
-                                    icon: Icons.history,
-                                    label: 'Restore',
-                                    onPressed: () async {
-                                      try {
-                                        final ds = ref.read(directoryServiceProvider).value;
-                                        final romPath = ds != null
-                                            ? await ds.getRomFilePath(_currentGame)
-                                            : '';
-                                        if (!context.mounted) return;
-                                        await BackupHistorySheet.show(
-                                          context,
-                                          game: _currentGame,
-                                          romPath: romPath,
-                                        );
-                                      } catch (e, st) {
-                                        dev.log('Restore button failed', error: e, stackTrace: st);
-                                        if (context.mounted) {
-                                          ErrorHandler.showException(context, e, contextLabel: 'Local Restore');
-                                        }
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-
+                  _buildActionsRow(),
                   const SizedBox(height: 24),
-
-                  // SECTION 3 - Metadata chips row
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      // Genres (first 2)
-                      ..._currentGame.genres.take(2).map((g) => _MetadataChip(label: g)),
-                      // Player Count
-                      if (_currentGame.playerCount != null && _currentGame.playerCount!.isNotEmpty)
-                        _MetadataChip(
-                          label: _currentGame.playerCount!,
-                          icon: Icons.people_outline,
-                        ),
-                      // Average Rating
-                      if (_currentGame.averageRating != null)
-                        _MetadataChip(
-                          label: '${_currentGame.averageRating!.toStringAsFixed(0)}/100',
-                          icon: Icons.star_outline,
-                        ),
-                      // Release Year
-                      if (_currentGame.firstReleaseDate != null)
-                        _MetadataChip(
-                          label: DateTime.fromMillisecondsSinceEpoch(_currentGame.firstReleaseDate!).year.toString(),
-                          icon: Icons.calendar_today_outlined,
-                        ),
-                    ],
-                  ),
+                  _buildMetadataChips(),
                   const SizedBox(height: 24),
-
-                  // SECTION 4 - Description
-                  Text(
-                    'About',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  _buildSectionTitle(theme, 'About'),
                   const SizedBox(height: 8),
-                  Text(
-                    _currentGame.summary ?? 'No description available',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
-                      height: 1.5,
-                    ),
-                  ),
+                  Text(_currentGame.summary ?? 'No description available', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5)),
                   const SizedBox(height: 24),
-
-                  // SECTION 5 - Details grid
-                  Text(
-                    'Details',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  _buildSectionTitle(theme, 'Details'),
                   const SizedBox(height: 12),
-                  _DetailsGrid(game: _currentGame),
+                  GameDetailsGrid(game: _currentGame),
                   const SizedBox(height: 24),
-
-                  // SECTION 6 - Notes
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Notes',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_comment, color: Colors.blue),
-                        onPressed: _addNote,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (_currentGame.notes.isEmpty)
-                    const Text('No notes added yet.', style: TextStyle(color: Colors.white54, fontSize: 13))
-                  else
-                    ..._currentGame.notes.map((note) => Card(
-                      color: Colors.white10,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        onTap: () => _viewNote(note),
-                        title: Text(
-                          note.title.isNotEmpty ? note.title : 'Note',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          note.content,
-                          style: const TextStyle(color: Colors.white70),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.white38, size: 18),
-                          onPressed: () => _deleteNote(note.id),
-                        ),
-                      ),
-                    )),
+                  GameNotesSection(notes: _currentGame.notes, onAddNote: _addNote, onViewNote: _viewNote),
                   const SizedBox(height: 24),
-
-                  // SECTION 7 - Screenshots
-                  if (_currentGame.mergedScreenshots.isNotEmpty) ...[
-                    Text(
-                      'Screenshots',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 120,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _currentGame.mergedScreenshots.length,
-                        separatorBuilder: (context, index) => const SizedBox(width: 12),
-                        itemBuilder: (context, index) {
-                          final imageUrl = _normalizeUrl(_currentGame.mergedScreenshots[index]);
-                          return GestureDetector(
-                            onTap: () {
-                              final allUrls = _currentGame.mergedScreenshots
-                                  .map((path) => _normalizeUrl(path))
-                                  .toList();
-                              _showScreenshotFullscreen(context, index, allUrls);
-                            },
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                width: 200,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(color: Colors.grey[900]),
-                                errorWidget: (context, url, error) => const Icon(Icons.image_not_supported),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // SECTION 7 - Personal
-                  const SizedBox(height: 8),
-                  const Divider(color: Colors.white12),
-                  const SizedBox(height: 8),
-                  Text('Personal', style: theme.textTheme.titleLarge?.copyWith(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-
-                  // Status dropdown
-                  Row(
-                    children: [
-                      const Text('Status', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                      const Spacer(),
-                      DropdownButton<String>(
-                        value: const [
-                          'never_playing',
-                          'incomplete',
-                          'finished',
-                          'completed_100',
-                          'retired'
-                        ].contains(_status) ? _status : null,
-                        dropdownColor: Colors.grey[900],
-                        style: const TextStyle(color: Colors.white),
-                        hint: const Text('Not set', style: TextStyle(color: Colors.white54)),
-                        underline: const SizedBox(),
-                        items: const [
-                          DropdownMenuItem(value: 'never_playing', child: Text('Never Played')),
-                          DropdownMenuItem(value: 'incomplete', child: Text('Incomplete')),
-                          DropdownMenuItem(value: 'finished', child: Text('Finished')),
-                          DropdownMenuItem(value: 'completed_100', child: Text('100% Completed')),
-                          DropdownMenuItem(value: 'retired', child: Text('Dropped')),
-                        ],
-                        onChanged: (val) => setState(() => _status = val),
-                      ),
-                    ],
+                  _buildScreenshotsSection(theme),
+                  GamePersonalSection(
+                    status: _status,
+                    rating: _rating,
+                    completion: _completion,
+                    backlogged: _backlogged,
+                    nowPlaying: _nowPlaying,
+                    isSaving: _isSaving,
+                    adjustingRating: _adjustingRating,
+                    adjustingCompletion: _adjustingCompletion,
+                    onStatusChanged: (val) => setState(() => _status = val),
+                    onRatingChanged: (val) => setState(() => _rating = val),
+                    onCompletionChanged: (val) => setState(() => _completion = val),
+                    onBacklogChanged: (val) => setState(() => _backlogged = val),
+                    onNowPlayingChanged: (val) => setState(() => _nowPlaying = val),
+                    onToggleAdjustingRating: _toggleAdjustingRating,
+                    onToggleAdjustingCompletion: _toggleAdjustingCompletion,
+                    onSave: () => _saveProps(context),
                   ),
-
-                  // Rating stars
-                  Row(
-                    children: [
-                      const Text('Rating', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                      const Spacer(),
-                      Row(
-                        children: List.generate(10, (i) => GestureDetector(
-                          onTap: () => setState(() => _rating = i + 1),
-                          child: Icon(
-                            i < _rating ? Icons.star : Icons.star_border,
-                            color: Colors.amber,
-                            size: 20,
-                          ),
-                        )),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Completion slider
-                  Row(
-                    children: [
-                      const Text('Completion', style: TextStyle(color: Colors.white54, fontSize: 13)),
-                      const Spacer(),
-                      Text('$_completion%', style: const TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                  Slider(
-                    value: _completion.toDouble(),
-                    min: 0,
-                    max: 100,
-                    divisions: 20,
-                    label: '$_completion%',
-                    onChanged: (val) => setState(() => _completion = val.toInt()),
-                  ),
-
-                  // Toggles row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SwitchListTile(
-                          title: const Text('Backlog', style: TextStyle(fontSize: 13)),
-                          value: _backlogged,
-                          onChanged: (val) => setState(() => _backlogged = val),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      Expanded(
-                        child: SwitchListTile(
-                          title: const Text('Now Playing', style: TextStyle(fontSize: 13)),
-                          value: _nowPlaying,
-                          onChanged: (val) => setState(() => _nowPlaying = val),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Save button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : () => _saveProps(context),
-                      child: _isSaving
-                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Save'),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
           ],
         ),
       ),
+      ),
+      bottomNavigationBar: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (child, animation) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        },
+        child: ref.watch(inputModeProvider) != InputMode.mouse
+            ? ControllerHintsBar(
+                hints: [
+                  ControllerHintItem(
+                    label: _isDownloaded ? 'Play' : 'Download', 
+                    button: 'A'
+                  ),
+                  const ControllerHintItem(label: 'Back', button: 'B'),
+                ],
+              )
+            : const SizedBox.shrink(key: ValueKey('hide_detail_hints')),
+      ),
     );
   }
-}
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final Color? color;
+  Widget _buildHeroHeader(BuildContext context, double height, String? backgroundUrl, ThemeData theme) {
+    return SizedBox(
+      height: height,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: backgroundUrl != null
+                ? CachedNetworkImage(imageUrl: backgroundUrl, fit: BoxFit.cover, placeholder: (_, __) => Container(color: Colors.grey[900]), errorWidget: (_, __, ___) => Container(color: Colors.grey[900]))
+                : Container(color: Colors.grey[900]),
+          ),
+          Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87, Colors.black], stops: [0.5, 0.8, 1.0])))),
+          Positioned(top: MediaQuery.of(context).padding.top + 8, left: 16, child: CircleAvatar(backgroundColor: Colors.black54, child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.of(context).pop()))),
+          Positioned(
+            bottom: 16, left: 16, right: 16,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Hero(
+                  tag: 'game_cover_${_currentGame.id}',
+                  child: Container(
+                    width: 130, height: 180,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))]),
+                    child: ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: _normalizeUrl(_currentGame.pathCoverLarge), fit: BoxFit.cover, placeholder: (_, __) => Container(color: Colors.grey[800]), errorWidget: (_, __, ___) => const Icon(Icons.image_not_supported))),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_currentGame.name, style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      if (_currentGame.platformDisplayName != null) Text(_currentGame.platformDisplayName!, style: theme.textTheme.titleMedium?.copyWith(color: Colors.white60)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton.filledTonal(
-          onPressed: onPressed,
-          icon: Icon(icon, color: color),
-          style: IconButton.styleFrom(
-            padding: const EdgeInsets.all(12),
+  Widget _buildActionsRow() {
+    return Consumer(builder: (context, ref, _) {
+      final downloads = ref.watch(downloadProvider);
+      final progress = downloads[_currentGame.id];
+      if (!_isDownloaded) {
+        if (progress != null) {
+          return Column(children: [
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: DownloadProgressIndicator(progress: progress, compact: true)),
+            const SizedBox(height: 16),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (!progress.isComplete && progress.error == null) ...[
+                GameActionButton(icon: progress.isPaused ? Icons.play_arrow : Icons.pause, label: progress.isPaused ? 'Resume' : 'Pause', onPressed: () {
+                  if (progress.isPaused) { if (progress.game != null && progress.downloadUrl != null) ref.read(downloadProvider.notifier).startDownload(progress.game!, progress.downloadUrl!); }
+                  else { ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id); }
+                }),
+                const SizedBox(width: 16),
+              ],
+              GameActionButton(icon: Icons.close, label: 'Cancel', color: Colors.red, onPressed: () async {
+                if (progress.isComplete || progress.error != null) ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
+                else if (await _showCancelConfirmation(context, progress.gameName)) ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
+              }),
+            ]),
+          ]);
+        }
+        return Center(
+          child: SizedBox(
+            width: 384,
+            child: GameActionButton(
+              focusNode: _focusNode,
+              icon: Icons.download, 
+              label: 'Download Game', 
+              isPrimary: true,
+              onPressed: () async { await widget.onDownload(); _checkDownloadStatus(); }
+            ),
+          ),
+        );
+      }
+      return Center(
+        child: SizedBox(
+          width: 384,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GameActionButton(
+                focusNode: _focusNode,
+                icon: Icons.play_arrow, 
+                label: 'Play Game', 
+                isPrimary: true,
+                onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: GameDetailActionButton(
+                      icon: Icons.cloud_upload_outlined,
+                      label: 'Push Saves',
+                      onTap: () async { if (_isDownloaded) await widget.onPushSaves(); },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GameDetailActionButton(
+                      icon: Icons.cloud_download_outlined,
+                      label: 'Pull Saves',
+                      onTap: () async { if (_isDownloaded) await widget.onPullSaves(); },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: GameDetailActionButton(
+                      icon: Icons.folder_open_outlined,
+                      label: 'Folder',
+                      onTap: () async {
+                        final ds = ref.read(directoryServiceProvider).value;
+                        if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GameDetailActionButton(
+                      icon: Icons.backup_outlined,
+                      label: 'Backups',
+                      onTap: () => _showLocalBackupsMenu(ref),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GameDetailActionButton(
+                      icon: Icons.delete_outline,
+                      label: 'Delete',
+                      iconColor: Colors.redAccent,
+                      textColor: Colors.redAccent,
+                      onTap: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); },
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color ?? Colors.white70),
-        ),
-      ],
-    );
+      );
+    });
   }
-}
 
-class _MetadataChip extends StatelessWidget {
-  final String label;
-  final IconData? icon;
+  Future<void> _handleLocalBackup(WidgetRef ref) async {
+    try {
+      final syncService = await ref.read(saveSyncServiceProvider.future);
+      if (!mounted) return;
+      final ds = await ref.read(directoryServiceProvider.future);
+      if (!mounted || syncService == null || ds == null) return;
+      final backupService = ref.read(backupServiceProvider);
+      final result = await backupService.createImmediate(_currentGame, await ds.getRomFilePath(_currentGame), syncService);
+      if (!mounted) return;
+      if (result != null) {
+        final backupRepo = ref.read(backupRepositoryProvider);
+        await backupRepo.addEntry(_currentGame.id, BackupEntry(timestamp: DateTime.now(), md5Hash: result.md5, localZipPath: result.zipPath));
+        if (!mounted) return;
+        ErrorHandler.showSuccess(context, 'Backup Created', message: 'Local restore point saved.');
+        final rommService = ref.read(rommServiceProvider);
+        if (rommService != null && !rommService.isOffline.value) BackgroundSyncQueue.processQueue(rommService, backupRepo);
+      } else {
+        ErrorHandler.showInfo(context, 'No Saves', message: 'No save files found to back up.');
+      }
+    } catch (e) { if (mounted) ErrorHandler.showException(context, e, contextLabel: 'Local Backup'); }
+  }
 
-  const _MetadataChip({required this.label, this.icon});
+  Future<void> _handleLocalRestore(WidgetRef ref) async {
+    try {
+      final ds = ref.read(directoryServiceProvider).value;
+      if (mounted) await BackupHistorySheet.show(context, game: _currentGame, romPath: ds != null ? await ds.getRomFilePath(_currentGame) : '');
+    } catch (e) { if (mounted) ErrorHandler.showException(context, e, contextLabel: 'Local Restore'); }
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
+  Widget _buildMetadataChips() {
+    return Wrap(spacing: 8, runSpacing: 8, children: [
+      ..._currentGame.genres.take(2).map((g) => GameMetadataChip(label: g)),
+      if (_currentGame.playerCount?.isNotEmpty ?? false) GameMetadataChip(label: _currentGame.playerCount!, icon: Icons.people_outline),
+      if (_currentGame.averageRating != null) GameMetadataChip(label: '${_currentGame.averageRating!.toStringAsFixed(0)}/100', icon: Icons.star_outline),
+      if (_currentGame.firstReleaseDate != null) GameMetadataChip(label: DateTime.fromMillisecondsSinceEpoch(_currentGame.firstReleaseDate!).year.toString(), icon: Icons.calendar_today_outlined),
+    ]);
+  }
+
+  Widget _buildScreenshotsSection(ThemeData theme) {
+    if (_currentGame.mergedScreenshots.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _buildSectionTitle(theme, 'Screenshots'),
+      const SizedBox(height: 12),
+      SizedBox(
+        height: 120,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal, itemCount: _currentGame.mergedScreenshots.length, separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (ctx, index) {
+            final url = _normalizeUrl(_currentGame.mergedScreenshots[index]);
+            return GestureDetector(
+              onTap: () => showDialog(context: context, useRootNavigator: true, builder: (_) => ScreenshotGalleryDialog(initialIndex: index, imageUrls: _currentGame.mergedScreenshots.map(_normalizeUrl).toList())),
+              child: ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: url, width: 200, height: 120, fit: BoxFit.cover, placeholder: (_, __) => Container(color: Colors.grey[900]), errorWidget: (_, __, ___) => const Icon(Icons.image_not_supported))),
+            );
+          },
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14, color: Colors.white70),
-            const SizedBox(width: 6),
+      const SizedBox(height: 24),
+    ]);
+  }
+
+  Widget _buildSectionTitle(ThemeData theme, String title) => Text(title, style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold));
+
+  Future<void> _showLocalBackupsMenu(WidgetRef ref) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.backup_outlined, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Text('Local Saves', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
           ],
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+        ),
+        content: Text(
+          'Choose an action to perform on your local save backups.',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        actions: [
+          FocusEffectWrapper(
+            onTap: () {
+              Navigator.pop(ctx);
+              _handleLocalBackup(ref);
+            },
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
+              ),
+              child: Text('Create Backup', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FocusEffectWrapper(
+            onTap: () {
+              Navigator.pop(ctx);
+              _handleLocalRestore(ref);
+            },
+            borderRadius: 12.0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
+              ),
+              child: Text('Restore Backup', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
           ),
         ],
       ),
@@ -998,48 +843,66 @@ class _MetadataChip extends StatelessWidget {
   }
 }
 
-class _DetailsGrid extends StatelessWidget {
-  final Game game;
+class GameDetailActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? textColor;
+  final Color? iconColor;
 
-  const _DetailsGrid({required this.game});
+  const GameDetailActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.textColor,
+    this.iconColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final details = <String, String>{};
-    if (game.companies.isNotEmpty) details['Developer'] = game.companies.join(', ');
-    if (game.regions.isNotEmpty) details['Regions'] = game.regions.join(', ');
-    if (game.languages.isNotEmpty) details['Languages'] = game.languages.join(', ');
-    if (game.playerCount != null && game.playerCount!.isNotEmpty) details['Players'] = game.playerCount!;
-
-    if (details.isEmpty) return const SizedBox.shrink();
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisExtent: 40,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: details.length,
-      itemBuilder: (context, index) {
-        final entry = details.entries.elementAt(index);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final theme = Theme.of(context);
+    final isDestructive = textColor == Colors.red || textColor == Colors.redAccent;
+    return FocusEffectWrapper(
+      onTap: onTap,
+      borderRadius: 14.0,
+      scaleFactor: 1.05,
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: isDestructive
+              ? Colors.red.withValues(alpha: 0.05)
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDestructive
+                ? Colors.red.withValues(alpha: 0.15)
+                : theme.colorScheme.outline.withValues(alpha: 0.3),
+            width: 1.0,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              entry.key,
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-            ),
-            Text(
-              entry.value,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              overflow: TextOverflow.ellipsis,
+            Icon(icon, size: 16, color: iconColor ?? (isDestructive ? Colors.redAccent : theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: textColor ?? theme.colorScheme.onSurface.withValues(alpha: 0.85),
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
