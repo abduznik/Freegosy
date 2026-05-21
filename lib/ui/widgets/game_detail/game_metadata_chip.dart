@@ -25,9 +25,12 @@ class GameMetadataChip extends StatelessWidget {
             Icon(icon, size: 14, color: Colors.white70),
             const SizedBox(width: 6),
           ],
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ),
         ],
       ),

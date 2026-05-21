@@ -210,7 +210,7 @@ class _BackupTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'MD5: ${entry.md5Hash.substring(0, 8)}…',
+              'MD5: ${entry.md5Hash.length >= 8 ? entry.md5Hash.substring(0, 8) : entry.md5Hash}…',
               style: const TextStyle(color: Colors.white38, fontSize: 11),
             ),
             const SizedBox(width: 8),

@@ -65,72 +65,74 @@ class _ScreenshotGalleryDialogState extends State<ScreenshotGalleryDialog> {
             ),
             
             // Main PageView with Desktop support
-            ScrollConfiguration(
-              behavior: const _DesktopScrollBehavior(),
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: widget.imageUrls.length,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                  // Reset zoom on previous page if needed
-                  for (int i = 0; i < _transformationControllers.length; i++) {
-                    if (i != index && _transformationControllers[i].value != Matrix4.identity()) {
-                      _transformationControllers[i].value = Matrix4.identity();
+            if (widget.imageUrls.isNotEmpty)
+              ScrollConfiguration(
+                behavior: const _DesktopScrollBehavior(),
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.imageUrls.length,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+                    // Reset zoom on previous page if needed
+                    for (int i = 0; i < _transformationControllers.length; i++) {
+                      if (i != index && _transformationControllers[i].value != Matrix4.identity()) {
+                        _transformationControllers[i].value = Matrix4.identity();
+                      }
                     }
-                  }
-                },
-                itemBuilder: (context, index) {
-                  return Center(
-                    child: GestureDetector(
-                      onDoubleTap: () => _handleDoubleTap(index),
-                      child: InteractiveViewer(
-                        transformationController: _transformationControllers[index],
-                        minScale: 1.0,
-                        maxScale: 4.0,
-                        child: CachedNetworkImage(
-                          imageUrl: widget.imageUrls[index],
-                          fit: BoxFit.contain,
-                          placeholder: (context, url) => const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                          errorWidget: (context, url, error) => const Icon(
-                            Icons.image_not_supported,
-                            color: Colors.white,
-                            size: 48,
+                  },
+                  itemBuilder: (context, index) {
+                    return Center(
+                      child: GestureDetector(
+                        onDoubleTap: () => _handleDoubleTap(index),
+                        child: InteractiveViewer(
+                          transformationController: _transformationControllers[index],
+                          minScale: 1.0,
+                          maxScale: 4.0,
+                          child: CachedNetworkImage(
+                            imageUrl: widget.imageUrls[index],
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            errorWidget: (context, url, error) => const Icon(
+                              Icons.image_not_supported,
+                              color: Colors.white,
+                              size: 48,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
             
-            // Indicator (1/N)
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${_currentIndex + 1} / ${widget.imageUrls.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+            // Indicator (1/N) — only show when there are images
+            if (widget.imageUrls.isNotEmpty)
+              Positioned(
+                bottom: 32,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_currentIndex + 1} / ${widget.imageUrls.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
             
             // Close button
             Positioned(
