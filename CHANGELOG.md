@@ -18,6 +18,15 @@
 ### Fixed
 - **Layout Calculations**: Resolved a critical layout intrinsic height crash inside overlay alert dialogs by passing `useSafeScale: false`.
 - **Platform Chip Navigation**: Fixed reactivity issues where selecting a platform chip visual tab updated the filter state but did not trigger an API/SQLite load.
+- **Dolphin Save Sync on Linux**: Fixed save synchronization for Dolphin emulator on Linux platforms.
+- **Single-File Foldered Games Download**: Fixed download logic for single-file games stored in folders.
+- **GameMetadataChip Overflow**: Wrapped label text in `Flexible` + `TextOverflow.ellipsis` to prevent `RenderFlex` overflow on long labels.
+- **BackupHistorySheet Crash**: Guarded `md5Hash.substring(0, 8)` to prevent `RangeError` on short hashes.
+- **ScreenshotGalleryDialog Empty State**: Hidden page indicator when `imageUrls` is empty (was showing "1 / 0").
+- **MultiDiscPicker ListTile Ink**: Wrapped `ListTile` in a `Material` widget to fix ink splash warnings when rendered outside a bottom sheet.
+
+### Changed
+- Updated dependencies for improved stability and compatibility.
 
 ## [0.4.1] - 2026-05-12
 
