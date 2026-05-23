@@ -21,6 +21,15 @@ class DirectoryService {
     'nintendo3ds': '3ds',
     'new-nintendo-3ds': '3ds',
     'new-nintendo-3ds-xl': '3ds',
+    'megadrive': 'genesis',
+    'genesis': 'megadrive',
+    'megacd': 'segacd',
+    'tg16': 'pcengine',
+    'famicom': 'nes',
+    'snesna': 'snes',
+    'wonderswancolor': 'wonderswan',
+    'n64dd': 'n64',
+    'mastersystem': 'sms',
   };
 
   static const Map<String, String> _emudeckFolderAliases = {
@@ -29,6 +38,14 @@ class DirectoryService {
     'nintendo3ds': 'n3ds',
     'new-nintendo-3ds': 'n3ds',
     'new-nintendo-3ds-xl': 'n3ds',
+    'genesis': 'megadrive',
+    'megadrive': 'megadrive',
+    'segacd': 'segacd',
+    'megacd': 'segacd',
+    'pcengine': 'pcengine',
+    'tg16': 'pcengine',
+    'sms': 'mastersystem',
+    'mastersystem': 'mastersystem',
   };
 
   static const String _romsRootPathKey = 'romsRootPath';

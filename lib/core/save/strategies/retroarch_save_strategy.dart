@@ -50,6 +50,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'megadrive': _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'),
     'genesis':   _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
     'md':        _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
+    'sms':       _CoreInfo('genesis_plus_gx_libretro', 'Sega Master System', 'States/Sega Master System'),
+    'mastersystem': _CoreInfo('genesis_plus_gx_libretro', 'Sega Master System', 'States/Sega Master System'),
   };
 
   /// Reads `savefile_directory` from retroarch.cfg if available.

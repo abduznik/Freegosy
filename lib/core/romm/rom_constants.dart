@@ -32,6 +32,8 @@ class RomConstants {
     'wiiu': ['.wua', '.rpx', '.wud', '.wux'],
     'saturn': ['.bin', '.cue', '.iso', '.mdf', '.chd'],
     'segacd': ['.bin', '.cue', '.iso', '.chd'],
+    'sms': ['.sms', '.gg', '.gen', '.zip', '.7z'],
+    'mastersystem': ['.sms', '.gg', '.gen', '.zip', '.7z'],
   };
 
   static bool isRomFile(String platformSlug, String path) {

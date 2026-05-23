@@ -56,7 +56,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       'segacd', 'saturn',
       'dc', 'dreamcast',
       'megadrive', 'genesis', 'md',
-      'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo',
+      'gamegear', 'sms', 'mastersystem', 'atari2600', 'atari7800', 'lynx', 'neogeo',
       'arcade', 'mame', 'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos',
       '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'
     ];
@@ -103,6 +103,8 @@ class RetroArchStrategy extends EmulatorStrategy {
     'dc':          'flycast_libretro',
     'dreamcast':   'flycast_libretro',
     'gamegear':    'genesis_plus_gx_libretro',
+    'sms':         'genesis_plus_gx_libretro',
+    'mastersystem':'genesis_plus_gx_libretro',
     // Atari
     'atari2600':   'stella_libretro',
     'atari7800':   'prosystem_libretro',

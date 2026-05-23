@@ -139,6 +139,8 @@ class SaveSyncService {
       case 'megadrive':
       case 'genesis':
       case 'md':
+      case 'sms':
+      case 'mastersystem':
         return _retroarch;
       case 'nds':
       case 'nintendo-ds':

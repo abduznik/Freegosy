@@ -12,7 +12,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'platform_slugs': [
       'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds', 'psx', 'ps1', 'playstation',
       'psp', 'dc', 'dreamcast', 'segacd', 'saturn', 'megadrive', 'genesis', 'md',
-      'gamegear', 'atari2600', 'atari7800', 'lynx', 'neogeo', 'arcade', 'mame',
+      'gamegear', 'sms', 'mastersystem', 'atari2600', 'atari7800', 'lynx', 'neogeo', 'arcade', 'mame',
       'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos', '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'
     ],
     'supported_platforms': ['windows', 'linux', 'macos'],
