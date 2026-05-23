@@ -120,6 +120,7 @@ flutter:
     - thirdparty/gamecontrollerdb_license.txt
     - thirdparty/7zr.exe
     - thirdparty/7zz
+    - thirdparty/7zz-linux
     - thirdparty/7zip_license.txt
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

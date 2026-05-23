@@ -145,7 +145,7 @@ class DirectoryService {
 
   Future<String?> resolveSevenZipPath() async {
     final tempDir = await getTemporaryDirectory();
-    final String exeName = io.Platform.isWindows ? '7zr.exe' : '7zz';
+    final String exeName = io.Platform.isWindows ? '7zr.exe' : io.Platform.isLinux ? '7zz-linux' : '7zz';
     final exeFile = io.File(p.join(tempDir.path, exeName));
 
     if (!await exeFile.exists()) {
