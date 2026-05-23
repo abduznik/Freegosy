@@ -23,12 +23,12 @@ class RomConstants {
     'dreamcast': ['.chd', '.gdi', '.cdi', '.iso'],
     'megadrive': ['.md', '.bin', '.gen', '.zip', '.7z'],
     'genesis': ['.md', '.bin', '.gen', '.zip', '.7z'],
-    '3ds': ['.3ds', '.cia', '.app'],
-    'n3ds': ['.3ds', '.cia', '.app'],
-    'nintendo-3ds': ['.3ds', '.cia', '.app'],
-    'nintendo3ds': ['.3ds', '.cia', '.app'],
-    'new-nintendo-3ds': ['.3ds', '.cia', '.app'],
-    'new-nintendo-3ds-xl': ['.3ds', '.cia', '.app'],
+    '3ds': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
+    'n3ds': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
+    'nintendo-3ds': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
+    'nintendo3ds': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
+    'new-nintendo-3ds': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
+    'new-nintendo-3ds-xl': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
     'wiiu': ['.wua', '.rpx', '.wud', '.wux'],
   };
 
