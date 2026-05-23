@@ -24,6 +24,11 @@ class RomConstants {
     'megadrive': ['.md', '.bin', '.gen', '.zip', '.7z'],
     'genesis': ['.md', '.bin', '.gen', '.zip', '.7z'],
     '3ds': ['.3ds', '.cia', '.app'],
+    'n3ds': ['.3ds', '.cia', '.app'],
+    'nintendo-3ds': ['.3ds', '.cia', '.app'],
+    'nintendo3ds': ['.3ds', '.cia', '.app'],
+    'new-nintendo-3ds': ['.3ds', '.cia', '.app'],
+    'new-nintendo-3ds-xl': ['.3ds', '.cia', '.app'],
     'wiiu': ['.wua', '.rpx', '.wud', '.wux'],
   };
 

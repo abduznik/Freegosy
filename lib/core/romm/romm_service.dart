@@ -18,7 +18,7 @@ class RommService {
 
   RomMConfig get config => _config;
 
-  static const String _ua = 'Freegosy/0.5.0';
+  static const String _ua = 'Freegosy/0.5.1';
 
   void updateConfig(RomMConfig newConfig) {
     _config = newConfig;

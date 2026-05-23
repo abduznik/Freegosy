@@ -45,7 +45,7 @@ class RomScannerService {
     final storedMTimes = _mappingService.getMTimes();
     for (final dir in platformDirs) {
       final platformSlug = p.basename(dir.path).toLowerCase();
-      final platformId = platformSlugToId[platformSlug];
+      final platformId = platformSlugToId[platformSlug] ?? platformSlugToId[DirectoryService.platformFolderCanonicalMap[platformSlug]];
       if (platformId == null) continue;
 
       final stat = await dir.stat();

@@ -15,6 +15,22 @@ import 'package:freegosy/core/emulator/linux_strategies/emudeck_strategy.dart';
 import 'package:freegosy/core/emulator/linux_strategies/retrodeck_strategy.dart';
 
 class DirectoryService {
+  static const Map<String, String> platformFolderCanonicalMap = {
+    'n3ds': '3ds',
+    'nintendo-3ds': '3ds',
+    'nintendo3ds': '3ds',
+    'new-nintendo-3ds': '3ds',
+    'new-nintendo-3ds-xl': '3ds',
+  };
+
+  static const Map<String, String> _emudeckFolderAliases = {
+    '3ds': 'n3ds',
+    'nintendo-3ds': 'n3ds',
+    'nintendo3ds': 'n3ds',
+    'new-nintendo-3ds': 'n3ds',
+    'new-nintendo-3ds-xl': 'n3ds',
+  };
+
   static const String _romsRootPathKey = 'romsRootPath';
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
   static const String _linuxSyncPresetKey = 'linuxSyncPreset';
@@ -236,9 +252,18 @@ class DirectoryService {
 
   Future<String> getRomsDirectory() async => romsRootPath;
 
+  String _resolveFolderName(String platformSlug) {
+    final lower = platformSlug.toLowerCase();
+    if (linuxSyncPreset == 'emudeck') {
+      return _emudeckFolderAliases[lower] ?? lower;
+    }
+    return lower;
+  }
+
   Future<String> getRomDirectory(Game game) async {
     final platformSlug = game.platformSlug ?? 'unknown';
-    final dirPath = p.join(romsRootPath, platformSlug);
+    final folderName = _resolveFolderName(platformSlug);
+    final dirPath = p.join(romsRootPath, folderName);
     await _ensureDirectoryExists(dirPath);
     return dirPath;
   }
