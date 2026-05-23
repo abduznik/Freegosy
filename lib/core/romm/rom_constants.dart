@@ -30,6 +30,8 @@ class RomConstants {
     'new-nintendo-3ds': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
     'new-nintendo-3ds-xl': ['.3ds', '.cci', '.cxi', '.3dsx', '.elf', '.axf', '.app', '.z3dsx', '.zcci', '.zcxi', '.cia', '.zcia'],
     'wiiu': ['.wua', '.rpx', '.wud', '.wux'],
+    'saturn': ['.bin', '.cue', '.iso', '.mdf', '.chd'],
+    'segacd': ['.bin', '.cue', '.iso', '.chd'],
   };
 
   static bool isRomFile(String platformSlug, String path) {

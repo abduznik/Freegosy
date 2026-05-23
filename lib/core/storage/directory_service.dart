@@ -469,7 +469,8 @@ class DirectoryService {
   static bool isRomFile(String platformSlug, String path) {
     final ext = p.extension(path).toLowerCase();
     if (ext.isEmpty) return false;
-    final validExtensions = RomConstants.platformExtensions[platformSlug.toLowerCase()] ?? [];
-    return validExtensions.any((v) => v.toLowerCase() == ext);
+    final allowed = RomConstants.platformExtensions[platformSlug.toLowerCase()] ?? [];
+    if (allowed.isEmpty) return true;
+    return allowed.any((v) => v.toLowerCase() == ext);
   }
 }
