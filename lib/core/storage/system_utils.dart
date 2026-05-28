@@ -24,23 +24,11 @@ class SystemUtils {
     }
   }
 
-  /// Opens the application's configuration directory.
+  /// Opens the application's data directory (application support).
+  /// Uses [getApplicationSupportDirectory] on all platforms for consistency,
+  /// which on Linux resolves to ~/.local/share/com.freegosy.app (XDG_DATA_HOME).
   static Future<void> openAppDataDirectory() async {
-    String? path;
-    if (Platform.isWindows) {
-      path = Platform.environment['APPDATA'] ?? '';
-      path = '$path\\Freegosy';
-    } else if (Platform.isMacOS) {
-      // Fix: Get app support directly
-      final dir = await getApplicationSupportDirectory();
-      path = dir.path; 
-    } else if (Platform.isLinux) {
-      final home = Platform.environment['HOME'] ?? '';
-      path = '$home/.config/Freegosy';
-    }
-
-    if (path != null && path.isNotEmpty) {
-      await openDirectory(path);
-    }
+    final dir = await getApplicationSupportDirectory();
+    await openDirectory(dir.path);
   }
 }

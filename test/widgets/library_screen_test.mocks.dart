@@ -471,6 +471,14 @@ class MockDirectoryService extends _i1.Mock implements _i12.DirectoryService {
           as String);
 
   @override
+  bool get useFlatEmulatorLayout =>
+      (super.noSuchMethod(
+            Invocation.getter(#useFlatEmulatorLayout),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
   _i4.StorageStatus get status =>
       (super.noSuchMethod(
             Invocation.getter(#status),
@@ -515,6 +523,12 @@ class MockDirectoryService extends _i1.Mock implements _i12.DirectoryService {
   @override
   set linuxPresetRootPath(String? value) => super.noSuchMethod(
     Invocation.setter(#linuxPresetRootPath, value),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  set useFlatEmulatorLayout(bool? value) => super.noSuchMethod(
+    Invocation.setter(#useFlatEmulatorLayout, value),
     returnValueForMissingStub: null,
   );
 
@@ -639,6 +653,36 @@ class MockDirectoryService extends _i1.Mock implements _i12.DirectoryService {
           as String?);
 
   @override
+  _i8.Future<void> setEmulatorFlatpakOverride(
+    String? emulatorId,
+    String? packageId,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#setEmulatorFlatpakOverride, [
+              emulatorId,
+              packageId,
+            ]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  String? getEmulatorFlatpakOverride(String? emulatorId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmulatorFlatpakOverride, [emulatorId]),
+          )
+          as String?);
+
+  @override
+  _i8.Future<String?> getEffectiveFlatpakPackage(String? emulatorId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEffectiveFlatpakPackage, [emulatorId]),
+            returnValue: _i8.Future<String?>.value(),
+          )
+          as _i8.Future<String?>);
+
+  @override
   _i8.Future<void> setRomsRoot(String? path) =>
       (super.noSuchMethod(
             Invocation.method(#setRomsRoot, [path]),
@@ -721,6 +765,15 @@ class MockDirectoryService extends _i1.Mock implements _i12.DirectoryService {
             returnValue: _i8.Future<String?>.value(),
           )
           as _i8.Future<String?>);
+
+  @override
+  _i8.Future<void> setUseFlatEmulatorLayout(bool? value) =>
+      (super.noSuchMethod(
+            Invocation.method(#setUseFlatEmulatorLayout, [value]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
 
   @override
   _i8.Future<String> getEmulatorDirectory(String? emulatorId) =>

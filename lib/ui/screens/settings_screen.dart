@@ -856,6 +856,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ref.invalidate(directoryServiceProvider); 
             },
           ),
+          const SizedBox(height: 12),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Flat Emulator Layout',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+                      const SizedBox(height: 2),
+                      Text('Extract emulators directly into the root without per-emulator subfolders',
+                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 32,
+                  child: Switch.adaptive(
+                    value: directoryService.useFlatEmulatorLayout,
+                    onChanged: (val) async {
+                      await directoryService.setUseFlatEmulatorLayout(val);
+                      ref.invalidate(directoryServiceProvider);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 20),
           Row(
             children: [

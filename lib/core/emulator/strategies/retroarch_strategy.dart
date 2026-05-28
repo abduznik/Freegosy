@@ -1,4 +1,4 @@
-import 'dart:io' as io show Platform, File, Directory;
+import 'dart:io' as io;
 import 'dart:io' show Process;
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
@@ -139,24 +139,67 @@ class RetroArchStrategy extends EmulatorStrategy {
   }
 
 
+  /// Returns true when [exePath] is a Flatpak command string like
+  /// `"flatpak run org.libretro.RetroArch"`.
+  static bool _isFlatpakExePath(String exePath) {
+    return exePath.startsWith('flatpak run ');
+  }
+
+  /// Extracts the Flatpak package ID from an exePath like
+  /// `"flatpak run org.libretro.RetroArch"` → `"org.libretro.RetroArch"`.
+  static String? _flatpakPackageFromExePath(String exePath) {
+    if (!_isFlatpakExePath(exePath)) return null;
+    // "flatpak run org.libretro.RetroArch" -> split -> ["flatpak","run","org.libretro.RetroArch"]
+    final parts = exePath.split(' ');
+    if (parts.length < 3) return null;
+    return parts.sublist(2).join(' ');
+  }
+
+  /// Returns the RetroArch cores directory inside the Flatpak sandbox.
+  /// Flatpak stores config under `~/.var/app/<package>/config/retroarch/cores/`.
+  String? _getFlatpakCoresDir(String exePath) {
+    final pkg = _flatpakPackageFromExePath(exePath);
+    if (pkg == null) return null;
+    final home = io.Platform.environment['HOME'];
+    if (home == null) return null;
+    return p.join(home, '.var', 'app', pkg, 'config', 'retroarch', 'cores');
+  }
+
   String _getEmuRootDir(String exePath) {
     if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
       // Go up from RetroArch.app/Contents/MacOS/RetroArch to Emulators/retroarch/
       return io.File(exePath).parent.parent.parent.parent.path;
     }
+    if (_isFlatpakExePath(exePath)) {
+      // Cannot derive a filesystem root from a Flatpak command string
+      return '';
+    }
     return io.File(exePath).parent.path;
   }
 
   Future<String?> _resolveCorePath(String exePath, String coreName) async {
+    // 1. Check standard emulator directory
     final emuDir = _getEmuRootDir(exePath);
-    final standardPath = p.join(emuDir, 'cores', coreName);
-
-    if (await io.File(standardPath).exists()) {
-      return standardPath;
+    if (emuDir.isNotEmpty) {
+      final standardPath = p.join(emuDir, 'cores', coreName);
+      if (await io.File(standardPath).exists()) {
+        return standardPath;
+      }
     }
 
-    // Try to find in standalone directory
-    // Extract emulatorId from coreName: 'azahar_libretro.dylib' -> 'azahar'
+    // 2. Check Flatpak data directory when RetroArch is run via Flatpak
+    if (_isFlatpakExePath(exePath)) {
+      final flatpakCoresDir = _getFlatpakCoresDir(exePath);
+      if (flatpakCoresDir != null) {
+        final flatpakPath = p.join(flatpakCoresDir, coreName);
+        if (await io.File(flatpakPath).exists()) {
+          return flatpakPath;
+        }
+      }
+    }
+
+    // 3. Try to find core in standalone emulator directory
+    //    Extract emulatorId from coreName: 'azahar_libretro.dylib' -> 'azahar'
     final underscoreIdx = coreName.indexOf('_');
     if (underscoreIdx != -1) {
       final standaloneEmuId = coreName.substring(0, underscoreIdx);
@@ -227,10 +270,19 @@ class RetroArchStrategy extends EmulatorStrategy {
     final corePath = await _resolveCorePath(exePath, coreName);
 
     if (corePath == null) {
-      final emuDir = _getEmuRootDir(exePath);
+      String expectedPath;
+      if (_isFlatpakExePath(exePath)) {
+        final flatpakDir = _getFlatpakCoresDir(exePath);
+        expectedPath = flatpakDir != null
+            ? p.join(flatpakDir, coreName)
+            : '$coreName (Flatpak cores dir not found)';
+      } else {
+        final emuDir = _getEmuRootDir(exePath);
+        expectedPath = p.join(emuDir, 'cores', coreName);
+      }
       throw MissingRetroArchCoreException(
         coreName: coreName,
-        corePath: p.join(emuDir, 'cores', coreName),
+        corePath: expectedPath,
         exePath: exePath,
       );
     }
@@ -267,10 +319,19 @@ class RetroArchStrategy extends EmulatorStrategy {
     final corePath = await _resolveCorePath(exePath, coreName);
 
     if (corePath == null) {
-      final emuDir = _getEmuRootDir(exePath);
+      String expectedPath;
+      if (_isFlatpakExePath(exePath)) {
+        final flatpakDir = _getFlatpakCoresDir(exePath);
+        expectedPath = flatpakDir != null
+            ? p.join(flatpakDir, coreName)
+            : '$coreName (Flatpak cores dir not found)';
+      } else {
+        final emuDir = _getEmuRootDir(exePath);
+        expectedPath = p.join(emuDir, 'cores', coreName);
+      }
       throw MissingRetroArchCoreException(
         coreName: coreName,
-        corePath: p.join(emuDir, 'cores', coreName),
+        corePath: expectedPath,
         exePath: exePath,
       );
     }

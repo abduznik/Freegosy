@@ -9,7 +9,7 @@ class LibrarySnapshotService {
   static const String _collectionsFile = 'collections_snapshot.json';
 
   Future<String> _getFilePath(String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
+    final directory = await getApplicationSupportDirectory();
     return '${directory.path}/$fileName';
   }
 

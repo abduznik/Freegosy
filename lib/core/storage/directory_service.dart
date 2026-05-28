@@ -52,12 +52,14 @@ class DirectoryService {
   static const String _emulatorsRootPathKey = 'emulatorsRootPath';
   static const String _linuxSyncPresetKey = 'linuxSyncPreset';
   static const String _linuxPresetRootKey = 'emudeckRootPath';
+  static const String _useFlatEmulatorLayoutKey = 'useFlatEmulatorLayout';
 
   final SharedPreferences _prefs;
   late String romsRootPath;
   late String emulatorsRootPath;
   String linuxSyncPreset = 'default';
   String? linuxPresetRootPath;
+  bool useFlatEmulatorLayout = false;
   final Map<String, String> _emulatorPathOverrides = {};
   final Map<String, String> _emulatorFlatpakOverrides = {};
   StorageStatus status = const StorageStatus();
@@ -110,6 +112,7 @@ class DirectoryService {
     try {
       linuxSyncPreset = _prefs.getString(_linuxSyncPresetKey) ?? 'default';
       linuxPresetRootPath = _prefs.getString(_linuxPresetRootKey);
+      useFlatEmulatorLayout = _prefs.getBool(_useFlatEmulatorLayoutKey) ?? false;
       
       if (defaultTargetPlatform == TargetPlatform.linux) {
         if ((linuxSyncPreset == 'auto' || linuxSyncPreset == 'default') && linuxPresetRootPath == null) {
@@ -248,19 +251,24 @@ class DirectoryService {
   /// Returns the Flatpak package ID for a built-in emulator, preferring
   /// a user-set override, falling back to auto-detection via the active
   /// Linux environment strategy.
+  ///
+  /// Only returns a package that is actually installed on the system.
+  /// The static known mapping is not used as a fallback to avoid
+  /// false-positive "installed" status (issue #39).
   Future<String?> getEffectiveFlatpakPackage(String emulatorId) async {
     // 1. User override (set via Settings > Emulators > [...] > Set Flatpak Package)
     final override = getEmulatorFlatpakOverride(emulatorId);
     if (override != null && override.isNotEmpty) return override;
 
     // 2. Auto-detect via Linux environment strategy
+    //    This runs `flatpak list --app --columns=application` to check
+    //    which known emulator Flatpaks are actually installed.
     if (io.Platform.isLinux) {
       final detected = await activeLinuxEnvironment.detectFlatpakEmulators();
       if (detected.containsKey(emulatorId)) return detected[emulatorId];
     }
 
-    // 3. Known package mapping
-    return activeLinuxEnvironment.getFlatpakPackageForEmulator(emulatorId);
+    return null;
   }
 
   Future<StorageStatus> _ensureDirectoryExists(String path) async {
@@ -332,10 +340,17 @@ class DirectoryService {
     return RomLookupService.findExistingRomPath(game, romDir, index: index);
   }
 
+  Future<void> setUseFlatEmulatorLayout(bool value) async {
+    useFlatEmulatorLayout = value;
+    await _prefs.setBool(_useFlatEmulatorLayoutKey, value);
+  }
+
   Future<String> getEmulatorDirectory(String emulatorId) async {
     final override = getEmulatorPathOverride(emulatorId);
     if (override != null) return override;
-    final dirPath = p.join(emulatorsRootPath, emulatorId);
+    final dirPath = useFlatEmulatorLayout
+        ? emulatorsRootPath
+        : p.join(emulatorsRootPath, emulatorId);
     await _ensureDirectoryExists(dirPath);
     return dirPath;
   }
@@ -381,6 +396,25 @@ class DirectoryService {
   Future<String> getEmulatorSystemDirectory(String emulatorId, {String? platformSlug}) async => getEmulatorBiosDirectory(emulatorId, platformSlug: platformSlug);
 
   Future<void> deleteEmulator(String emulatorId) async {
+    if (useFlatEmulatorLayout) {
+      // In flat layout, emulators are extracted directly into the root
+      // without a per-emulator subfolder. Search the root for any directory
+      // whose name contains the emulator ID (case-insensitive) and delete it.
+      final root = io.Directory(emulatorsRootPath);
+      if (!await root.exists()) return;
+      try {
+        await for (final entity in root.list()) {
+          if (entity is io.Directory) {
+            final dirName = p.basename(entity.path).toLowerCase();
+            if (dirName.contains(emulatorId.toLowerCase())) {
+              await entity.delete(recursive: true);
+            }
+          }
+        }
+      } catch (_) {}
+      return;
+    }
+
     final dirPath = await getEmulatorDirectory(emulatorId);
     final directory = io.Directory(dirPath);
     if (await directory.exists()) await directory.delete(recursive: true);

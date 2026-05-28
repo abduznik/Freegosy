@@ -41,6 +41,7 @@ void main() {
     when(mockDirectoryService.isEmulatorInstalled(any, any)).thenAnswer((_) async => true);
     when(mockDirectoryService.getEmulatorPathOverride(any)).thenReturn(null);
     when(mockDirectoryService.linuxSyncPreset).thenReturn('default');
+    when(mockDirectoryService.useFlatEmulatorLayout).thenReturn(false);
     when(mockRommService.getPlatforms()).thenAnswer((_) async => []);
     when(mockStrategyRegistry.detectConflicts()).thenReturn(<String, List<EmulatorStrategy>>{});
   });
