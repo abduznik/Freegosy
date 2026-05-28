@@ -168,11 +168,18 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
                           'Platforms: ${emu.platforms.join(", ")}',
                           style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                         ),
-                        Text(
-                          'Path: ${emu.executablePath}',
-                          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        if (emu.isCommandOverride)
+                          Text(
+                            'Command: ${emu.commandOverride}',
+                            style: TextStyle(fontSize: 11, color: Colors.amber.shade300),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        else
+                          Text(
+                            'Path: ${emu.executablePath}',
+                            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                       ],
                     ),
                   ),
@@ -210,6 +217,7 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
     final nameController = TextEditingController();
     final platformsController = TextEditingController();
     final exeController = TextEditingController();
+    final commandController = TextEditingController();
     final savePathController = TextEditingController();
     final patternController = TextEditingController();
     CustomSaveMethod saveMethod = CustomSaveMethod.file;
@@ -273,6 +281,8 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
                           FilePickerResult? result = await FilePicker.platform.pickFiles();
                           if (result != null) {
                             exeController.text = result.files.single.path ?? '';
+                            // Clear command override if user picks a file
+                            commandController.clear();
                           }
                         },
                         borderRadius: 12.0,
@@ -288,6 +298,22 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: commandController,
+                    decoration: _buildInputDecoration(
+                      context,
+                      'Launch Command (optional)',
+                      hintText: 'e.g. flatpak run org.libretro.RetroArch',
+                      helperText: 'Overrides file path above. Use a full command string for Flatpak, AppImage wrappers, or custom launchers. The ROM path is appended automatically.',
+                    ),
+                    onChanged: (value) {
+                      // If user types a command, clear the file path
+                      if (value.trim().isNotEmpty) {
+                        setDialogState(() => exeController.text = '');
+                      }
+                    },
                   ),
                   const SizedBox(height: 24),
                   const Divider(),
@@ -365,7 +391,13 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
             ),
             FocusEffectWrapper(
               onTap: () {
-                if (nameController.text.isEmpty || exeController.text.isEmpty || platformsController.text.isEmpty) {
+                final cmdTrimmed = commandController.text.trim();
+                final exeTrimmed = exeController.text.trim();
+                if (nameController.text.isEmpty || platformsController.text.isEmpty) {
+                  return;
+                }
+                // Require either a file path or a command override
+                if (exeTrimmed.isEmpty && cmdTrimmed.isEmpty) {
                   return;
                 }
                 final platforms = platformsController.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
@@ -374,7 +406,8 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
                   id: const Uuid().v4(),
                   name: nameController.text.trim(),
                   platforms: platforms,
-                  executablePath: exeController.text.trim(),
+                  executablePath: exeTrimmed.isNotEmpty ? exeTrimmed : cmdTrimmed,
+                  commandOverride: cmdTrimmed.isNotEmpty ? cmdTrimmed : null,
                   saveMethod: saveMethod,
                   savePath: savePathController.text.trim(),
                   savePattern: patternController.text.trim().isEmpty ? null : patternController.text.trim(),
@@ -405,4 +438,5 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
     ),
   );
 }
+
 }

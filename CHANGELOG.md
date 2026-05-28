@@ -1,4 +1,12 @@
 # Changelog
+## [0.5.4+1] - 2026-05-28
+### Added
+- Flatpak auto-detection and command override support for Linux emulators
+- Custom emulator dialog now supports command override field for Flatpak
+- NativeLinuxStrategy auto-detects installed Flatpak emulators via `flatpak list`
+- Known Flatpak package mappings for 12 emulators
+
+
 
 ## [0.5.0] - 2026-05-17
 

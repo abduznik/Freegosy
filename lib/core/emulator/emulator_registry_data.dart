@@ -255,3 +255,4 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'supported_platforms': ['windows'],
   },
 ];
+

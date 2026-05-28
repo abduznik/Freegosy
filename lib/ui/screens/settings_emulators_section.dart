@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -331,6 +332,8 @@ Widget buildEmulatorsSection(
                             await SystemUtils.openDirectory(path);
                           } else if (val == 'url_override') {
                             _showUrlOverrideDialog(context, ref, directoryService, emulatorId, type);
+                          } else if (val == 'flatpak_package') {
+                            _showFlatpakOverrideDialog(context, directoryService, emulatorId, emulatorName, setState);
                           } else if (val == 'uninstall') {
                             final confirm = await showDialog<bool>(
                               context: context,
@@ -393,6 +396,17 @@ Widget buildEmulatorsSection(
                               ],
                             ),
                           ),
+                          if (currentPlatform == 'linux')
+                            PopupMenuItem(
+                              value: 'flatpak_package',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.album, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                                  const SizedBox(width: 8),
+                                  const Text('Set Flatpak Package', style: TextStyle(fontSize: 13)),
+                                ],
+                              ),
+                            ),
                           if (isInstalled && canManage)
                             PopupMenuItem(
                               value: 'uninstall',
@@ -692,6 +706,80 @@ void _showUrlOverrideDialog(BuildContext context, WidgetRef ref, DirectoryServic
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text("Confirm"),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showFlatpakOverrideDialog(BuildContext context, DirectoryService directoryService, String emulatorId, String emulatorName, void Function(void Function()) setState) {
+  final controller = TextEditingController();
+  final theme = Theme.of(context);
+
+  // Load existing override
+  final existing = directoryService.getEmulatorFlatpakOverride(emulatorId);
+  if (existing != null) controller.text = existing;
+
+  // Suggest a default package if none set
+  if (existing == null && io.Platform.isLinux) {
+    final suggested = directoryService.activeLinuxEnvironment.getFlatpakPackageForEmulator(emulatorId);
+    if (suggested != null) controller.text = suggested;
+  }
+
+  showDialog(
+    context: context,
+    builder: (ctx) => DialogBackBridge(
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text("Flatpak Package"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Set the Flatpak package ID for $emulatorName (e.g. org.DolphinEmu.dolphin-emu).\nLeave empty to clear and use auto-detection.",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: "Flatpak Package ID",
+                hintText: "e.g. org.libretro.RetroArch",
+                helperText: "The app ID from `flatpak list --app`",
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () async {
+              await directoryService.setEmulatorFlatpakOverride(emulatorId, null);
+              controller.text = '';
+              if (ctx.mounted) Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: const Text("Clear"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              await directoryService.setEmulatorFlatpakOverride(
+                emulatorId,
+                text.isEmpty ? null : text,
+              );
+              if (ctx.mounted) Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: const Text("Save"),
           ),
         ],
       ),

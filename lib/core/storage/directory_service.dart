@@ -59,6 +59,7 @@ class DirectoryService {
   String linuxSyncPreset = 'default';
   String? linuxPresetRootPath;
   final Map<String, String> _emulatorPathOverrides = {};
+  final Map<String, String> _emulatorFlatpakOverrides = {};
   StorageStatus status = const StorageStatus();
   
   LinuxEnvironmentStrategy? _linuxStrategy;
@@ -210,6 +211,11 @@ class DirectoryService {
         final path = _prefs.getString(key);
         if (path != null) _emulatorPathOverrides[emuId] = path;
       }
+      if (key.startsWith('emu_flatpak_')) {
+        final emuId = key.replaceFirst('emu_flatpak_', '');
+        final pkg = _prefs.getString(key);
+        if (pkg != null) _emulatorFlatpakOverrides[emuId] = pkg;
+      }
     }
   }
 
@@ -226,6 +232,36 @@ class DirectoryService {
   }
 
   String? getEmulatorPathOverride(String emulatorId) => _emulatorPathOverrides[emulatorId];
+
+  Future<void> setEmulatorFlatpakOverride(String emulatorId, String? packageId) async {
+    if (packageId == null || packageId.isEmpty) {
+      await _prefs.remove('emu_flatpak_$emulatorId');
+      _emulatorFlatpakOverrides.remove(emulatorId);
+    } else {
+      await _prefs.setString('emu_flatpak_$emulatorId', packageId);
+      _emulatorFlatpakOverrides[emulatorId] = packageId;
+    }
+  }
+
+  String? getEmulatorFlatpakOverride(String emulatorId) => _emulatorFlatpakOverrides[emulatorId];
+
+  /// Returns the Flatpak package ID for a built-in emulator, preferring
+  /// a user-set override, falling back to auto-detection via the active
+  /// Linux environment strategy.
+  Future<String?> getEffectiveFlatpakPackage(String emulatorId) async {
+    // 1. User override (set via Settings > Emulators > [...] > Set Flatpak Package)
+    final override = getEmulatorFlatpakOverride(emulatorId);
+    if (override != null && override.isNotEmpty) return override;
+
+    // 2. Auto-detect via Linux environment strategy
+    if (io.Platform.isLinux) {
+      final detected = await activeLinuxEnvironment.detectFlatpakEmulators();
+      if (detected.containsKey(emulatorId)) return detected[emulatorId];
+    }
+
+    // 3. Known package mapping
+    return activeLinuxEnvironment.getFlatpakPackageForEmulator(emulatorId);
+  }
 
   Future<StorageStatus> _ensureDirectoryExists(String path) async {
     try {
@@ -375,13 +411,21 @@ class DirectoryService {
       if (await withExe.exists()) return withExe.path;
     }
 
-    // 3. Environment-specific logic (e.g., Linux Flatpaks)
+    // 3. Check for user-set Flatpak package override
+    if (io.Platform.isLinux) {
+      final flatpakPkg = await getEffectiveFlatpakPackage(emulatorId);
+      if (flatpakPkg != null) {
+        return 'flatpak run $flatpakPkg';
+      }
+    }
+
+    // 4. Environment-specific logic (e.g., Linux Flatpaks auto-detected)
     if (io.Platform.isLinux) {
       final envPath = await activeLinuxEnvironment.findExecutable(emulatorId, executableName, emulatorsRootPath, linuxPresetRootPath);
       if (envPath != null) return envPath;
     }
 
-    // 4. Handle nested structures (e.g., zip contains a folder like 'RetroArch-Win64/')
+    // 5. Handle nested structures (e.g., zip contains a folder like 'RetroArch-Win64/')
     // Search up to 2 levels deep to find the executable
     try {
       final List<io.FileSystemEntity> entities = await dir.list(recursive: true).toList();
@@ -403,7 +447,7 @@ class DirectoryService {
       debugPrint('[DirectoryService] Error during recursive search: $e');
     }
 
-    // 5. Fallback for specifically nested paths in definitions
+    // 6. Fallback for specifically nested paths in definitions
     if (executableName.contains('/')) {
       final parts = executableName.split('/');
       final firstPart = parts.first;
