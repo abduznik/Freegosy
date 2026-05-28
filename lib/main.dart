@@ -1,7 +1,9 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/save/backup_entry.dart';
@@ -47,7 +49,12 @@ SOFTWARE.
   });
 
   Hive.registerAdapter(BackupEntryAdapter());
-  await Hive.initFlutter();
+  if (Platform.isLinux) {
+    final dir = await getApplicationSupportDirectory();
+    await Hive.initFlutter(dir.path);
+  } else {
+    await Hive.initFlutter();
+  }
   await Hive.openBox<List>('freegosy_backups');
   
   final prefs = await SharedPreferences.getInstance();
