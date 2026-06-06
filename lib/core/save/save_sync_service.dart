@@ -240,27 +240,271 @@ class SaveSyncService {
     );
   }
 
-  /// Uploads all local save files for [game] to RomM.
+  // ---------------------------------------------------------------------------
+  // Public entry points — version-aware routing
+  // ---------------------------------------------------------------------------
+
+  /// Uploads local save files for [game] to RomM.
+  ///
+  /// Routes to [_devicePushSaves] on RomM 4.9+ or [_legacyPushSaves] on older.
   Future<bool> pushSaves(Game game, String romPath,
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
+    final caps = await _rommService.fetchCapabilities();
+    if (caps.hasDeviceSaveSync) {
+      return _devicePushSaves(game, romPath,
+          sessionStart: sessionStart, syncMode: syncMode, force: force);
+    }
+    return _legacyPushSaves(game, romPath,
+        sessionStart: sessionStart, syncMode: syncMode, force: force);
+  }
+
+  /// Downloads and restores a save for [game] from RomM.
+  ///
+  /// Routes to [_devicePullSave] on RomM 4.9+ or [_legacyPullSave] on older.
+  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
+    final caps = await _rommService.fetchCapabilities();
+    if (caps.hasDeviceSaveSync) {
+      return _devicePullSave(game, romPath, saveData: saveData);
+    }
+    return _legacyPullSave(game, romPath, saveData: saveData);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers shared by both paths
+  // ---------------------------------------------------------------------------
+
+  String? _getDeviceId() => _prefs.getString('romm_device_id');
+
+  void _applyStrategyMappings(SaveStrategy strategy, Game game) {
+    if (strategy is EdenSaveStrategy) {
+      strategy.setManualMapping(getMappedFolder(game.id));
+      strategy.setActiveProfileOverride(getActiveProfile());
+    } else if (strategy is RyujinxSaveStrategy) {
+      strategy.setManualMapping(getMappedFolder(game.id));
+      strategy.setActiveProfileOverride(getActiveProfile());
+    } else if (strategy is AzaharSaveStrategy) {
+      strategy.setManualMapping(getMappedFolder(game.id));
+    }
+  }
+
+  /// Filters the files map to a single primary save when the strategy does not
+  /// support ZIP bundles.
+  Map<io.File, io.File?> _filterFilesMap(
+      SaveStrategy strategy, Map<io.File, io.File?> filesMap) {
+    if (strategy.shouldZip) return filesMap;
+    final filtered = <io.File, io.File?>{};
+    for (final entry in filesMap.entries) {
+      final pathLower = entry.key.path.toLowerCase();
+      if (pathLower.endsWith('.srm') ||
+          pathLower.endsWith('.sav') ||
+          pathLower.endsWith('.gci')) {
+        filtered[entry.key] = entry.value;
+        break;
+      }
+    }
+    if (filtered.isEmpty) {
+      for (final entry in filesMap.entries) {
+        if (!io.FileSystemEntity.isDirectorySync(entry.key.path)) {
+          filtered[entry.key] = entry.value;
+          break;
+        }
+      }
+    }
+    return filtered;
+  }
+
+  // ---------------------------------------------------------------------------
+  // RomM 4.9+ device-based sync
+  // ---------------------------------------------------------------------------
+
+  Future<bool> _devicePushSaves(Game game, String romPath,
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
+    try {
+      final strategy = getStrategyForSlug(game.platformSlug);
+      if (strategy == null) return false;
+      _applyStrategyMappings(strategy, game);
+
+      var filesMap = await strategy.getSaveFilesWithScreenshots(
+        game, romPath,
+        sessionStart: sessionStart,
+        syncMode: syncMode,
+      );
+      if (filesMap.isEmpty) return false;
+      filesMap = _filterFilesMap(strategy, filesMap);
+      if (filesMap.isEmpty) return false;
+
+      final displayStem =
+          game.displayName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+      final tempDir = await _directoryService.getEmulatorDirectory('temp');
+      if (!await io.Directory(tempDir).exists()) {
+        await io.Directory(tempDir).create(recursive: true);
+      }
+
+      io.File? finalUploadFile;
+      io.File? finalScreenshotFile;
+      String uploadFilename;
+      bool isBundle = false;
+
+      if (filesMap.length == 1 &&
+          !await io.FileSystemEntity.isDirectory(filesMap.keys.first.path)) {
+        final entry = filesMap.entries.first;
+        finalUploadFile = entry.key;
+        finalScreenshotFile = entry.value;
+        uploadFilename = p.basename(finalUploadFile.path);
+      } else {
+        isBundle = true;
+        final bundleZipPath = p.join(
+            tempDir,
+            '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
+        final encoder = ZipFileEncoder();
+        encoder.create(bundleZipPath);
+        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
+        await metaFile.writeAsString(DateTime.now().toIso8601String());
+        await encoder.addFile(metaFile);
+        for (final entry in filesMap.entries) {
+          final file = entry.key;
+          if (await io.FileSystemEntity.isDirectory(file.path)) {
+            await encoder.addDirectory(io.Directory(file.path),
+                includeDirName: true);
+          } else {
+            await encoder.addFile(file, p.basename(file.path));
+          }
+        }
+        encoder.close();
+        finalUploadFile = io.File(bundleZipPath);
+        uploadFilename = '$displayStem.zip';
+        finalScreenshotFile =
+            filesMap.values.firstWhere((s) => s != null, orElse: () => null);
+      }
+
+      final String localHash = await _hashFile(finalUploadFile);
+      final String? storedHash = _getStoredHash(game.id, uploadFilename);
+
+      if (!force && storedHash != null && localHash == storedHash) {
+        debugPrint(
+            '[SyncService] Skipping upload for $displayStem: hash unchanged ($localHash)');
+        if (isBundle && await finalUploadFile.exists()) {
+          await finalUploadFile.delete();
+        }
+        return true;
+      }
+
+      final deviceId = _getDeviceId();
+      final result = await _rommService.uploadSave(
+        game.id,
+        finalUploadFile,
+        deviceId: deviceId,
+        slot: 'freegosy',
+        autocleanup: true,
+        autocleanupLimit: 5,
+        overwrite: force,
+        screenshotFile: finalScreenshotFile,
+        overrideFilename: uploadFilename,
+      );
+
+      if (!result.ok && result.conflict != null) {
+        final cloudTimeStr = result.conflict!['current_save_time']?.toString();
+        final cloudTime =
+            cloudTimeStr != null ? DateTime.tryParse(cloudTimeStr) : null;
+        DateTime? localTime;
+        for (final file in filesMap.keys) {
+          final mtime = await file.lastModified();
+          if (localTime == null || mtime.isAfter(localTime)) localTime = mtime;
+        }
+        if (isBundle && await finalUploadFile.exists()) {
+          await finalUploadFile.delete();
+        }
+        throw SaveConflictException(
+          game: game,
+          localTime: localTime ?? DateTime.now(),
+          cloudTime: cloudTime ?? DateTime.now(),
+        );
+      }
+
+      if (result.ok) {
+        await _storeHash(game.id, uploadFilename, localHash);
+        debugPrint(
+            '[SyncService] [4.9] Pushed save for $displayStem (force=$force)');
+      }
+
+      if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
+      final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
+      if (await metaFile.exists()) await metaFile.delete();
+      return result.ok;
+    } on SaveConflictException {
+      rethrow;
+    } catch (e) {
+      debugPrint('[SyncService] [4.9] Error in _devicePushSaves: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _devicePullSave(Game game, String romPath,
+      {Map<String, dynamic>? saveData}) async {
+    try {
+      final strategy = getStrategyForSlug(game.platformSlug);
+      if (strategy == null) return false;
+      _applyStrategyMappings(strategy, game);
+
+      final deviceId = _getDeviceId();
+      final Map<String, dynamic>? save =
+          saveData ?? await _rommService.getLatestSave(game.id, deviceId: deviceId);
+      if (save == null) return false;
+
+      // If server says we already have the current version, skip
+      if (saveData == null && deviceId != null) {
+        final syncs = save['device_syncs'] as List<dynamic>?;
+        final mySync = syncs?.firstWhere(
+          (d) => d['device_id'] == deviceId,
+          orElse: () => null,
+        );
+        if (mySync != null && mySync['is_current'] == true) {
+          debugPrint(
+              '[SyncService] [4.9] Already current for ${game.displayName}, skipping pull');
+          return false;
+        }
+      }
+
+      final downloadUrl =
+          save['download_path'] as String? ?? save['url'] as String?;
+      if (downloadUrl == null) return false;
+
+      final bytes = await _rommService.downloadSave(downloadUrl, deviceId: deviceId);
+      if (bytes == null) return false;
+
+      final filename =
+          save['file_name'] as String? ?? downloadUrl.split('/').last;
+      final adjustedFilename = _adjustFilenameForFormat(bytes, filename);
+
+      final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
+      if (!ok) {
+        throw Exception(
+            'Strategy [${strategy.strategyId}] failed to restore save: $filename');
+      }
+      return ok;
+    } on io.FileSystemException catch (e) {
+      throw Exception('Disk Error: ${e.message} (Path: ${e.path})');
+    } on DioException catch (e) {
+      throw Exception('Network Error: ${e.message} (Status: ${e.response?.statusCode})');
+    } catch (e) {
+      if (e.toString().contains('Exception: ')) rethrow;
+      throw Exception('Pull Failed: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Legacy sync (RomM < 4.9) — kept for backward compatibility
+  // ---------------------------------------------------------------------------
+
+  /// Legacy upload path for RomM versions prior to 4.9.
+  /// Uses timestamp-based conflict detection and manual save pruning.
+  Future<bool> _legacyPushSaves(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
 
-      if (strategy is EdenSaveStrategy) {
-        final mapping = getMappedFolder(game.id);
-        strategy.setManualMapping(mapping);
-        final activeProfile = getActiveProfile();
-        strategy.setActiveProfileOverride(activeProfile);
-      } else if (strategy is RyujinxSaveStrategy) {
-        final mapping = getMappedFolder(game.id);
-        strategy.setManualMapping(mapping);
-        final activeProfile = getActiveProfile();
-        strategy.setActiveProfileOverride(activeProfile);
-      } else if (strategy is AzaharSaveStrategy) {
-        final mapping = getMappedFolder(game.id);
-        strategy.setManualMapping(mapping);
-      }
+      _applyStrategyMappings(strategy, game);
 
       var filesMap = await strategy.getSaveFilesWithScreenshots(
         game, romPath,
@@ -269,7 +513,7 @@ class SaveSyncService {
       );
       if (filesMap.isEmpty) return false;
 
-      // If the strategy does not support zipping, filter filesMap to only keep the primary save file 
+      // If the strategy does not support zipping, filter filesMap to only keep the primary save file
       // (typically ending in .srm, .sav, or .gci) to ensure it is uploaded raw/unzipped.
       if (!strategy.shouldZip) {
         final filteredMap = <io.File, io.File?>{};
@@ -380,17 +624,17 @@ class SaveSyncService {
         return true; 
       }
 
-      final ok = await _rommService.uploadSave(
-        game.id, 
-        finalUploadFile, 
+      final result = await _rommService.uploadSave(
+        game.id,
+        finalUploadFile,
         screenshotFile: finalScreenshotFile,
         overrideFilename: uploadFilename,
       );
-      
-      if (ok) {
+
+      if (result.ok) {
         uploaded++;
         await _storeHash(game.id, uploadFilename, localHash);
-        debugPrint('[Sync] Successfully pushed save for $displayStem (forced: $force)');
+        debugPrint('[SyncService] [legacy] Pushed save for $displayStem (force=$force)');
       }
 
       if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
@@ -404,7 +648,7 @@ class SaveSyncService {
     } on SaveConflictException {
       rethrow;
     } catch (e) {
-      debugPrint('[Sync] Error in pushSaves: $e');
+      debugPrint('[SyncService] [legacy] Error in _legacyPushSaves: $e');
       return false;
     }
   }
@@ -434,26 +678,14 @@ class SaveSyncService {
     return filename;
   }
 
-  /// Downloads a specific save for [game] from RomM and restores it locally.
-  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
+  /// Legacy pull path for RomM versions prior to 4.9.
+  /// Uses stored last-pull timestamps for freshness checks.
+  Future<bool> _legacyPullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
 
-      if (strategy is EdenSaveStrategy) {
-        final mapping = getMappedFolder(game.id);
-        strategy.setManualMapping(mapping);
-        final activeProfile = getActiveProfile();
-        strategy.setActiveProfileOverride(activeProfile);
-      } else if (strategy is RyujinxSaveStrategy) {
-        final mapping = getMappedFolder(game.id);
-        strategy.setManualMapping(mapping);
-        final activeProfile = getActiveProfile();
-        strategy.setActiveProfileOverride(activeProfile);
-      } else if (strategy is AzaharSaveStrategy) {
-        final mapping = getMappedFolder(game.id);
-        strategy.setManualMapping(mapping);
-      }
+      _applyStrategyMappings(strategy, game);
 
       final Map<String, dynamic>? save = saveData ?? await _rommService.getLatestSave(game.id);
       if (save == null) return false;

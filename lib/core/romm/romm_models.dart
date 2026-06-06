@@ -344,20 +344,100 @@ class SaveFile {
   final String id;
   final String romId;
   final String url;
+  final String? slot;
+  final List<DeviceSync> deviceSyncs;
 
   SaveFile({
     required this.id,
     required this.romId,
     required this.url,
+    this.slot,
+    this.deviceSyncs = const [],
   });
 
   factory SaveFile.fromJson(Map<String, dynamic> json) {
+    final syncs = (json['device_syncs'] as List<dynamic>?)
+            ?.map((e) => DeviceSync.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [];
     return SaveFile(
       id: json['id']?.toString() ?? '',
       romId: (json['rom_id'] ?? json['game_id'])?.toString() ?? '',
-      url: (json['url'] ?? json['download_path'])?.toString() ?? '',
+      url: (json['download_path'] ?? json['url'])?.toString() ?? '',
+      slot: json['slot']?.toString(),
+      deviceSyncs: syncs,
     );
   }
+}
+
+/// Per-device sync status embedded in a save response when `device_id` is passed.
+/// Available in RomM 4.9+.
+class DeviceSync {
+  final String deviceId;
+  final String? deviceName;
+  final DateTime? lastSyncedAt;
+  final bool isUntracked;
+
+  /// Server-computed: true = this device already has the current save version.
+  final bool isCurrent;
+
+  DeviceSync({
+    required this.deviceId,
+    this.deviceName,
+    this.lastSyncedAt,
+    this.isUntracked = false,
+    this.isCurrent = false,
+  });
+
+  factory DeviceSync.fromJson(Map<String, dynamic> json) {
+    return DeviceSync(
+      deviceId: json['device_id']?.toString() ?? '',
+      deviceName: json['device_name']?.toString(),
+      lastSyncedAt: json['last_synced_at'] != null
+          ? DateTime.tryParse(json['last_synced_at'].toString())
+          : null,
+      isUntracked: json['is_untracked'] as bool? ?? false,
+      isCurrent: json['is_current'] as bool? ?? false,
+    );
+  }
+}
+
+/// Feature flags derived from a single heartbeat call.
+/// Constructed once on connect and cached in [RommService].
+class RommCapabilities {
+  /// Full version string, e.g. "4.9.0-beta.1".
+  final String version;
+
+  final int major;
+  final int minor;
+
+  /// RomM 4.9+ device-based save sync (PR #2917).
+  bool get hasDeviceSaveSync => major > 4 || (major == 4 && minor >= 9);
+
+  /// RomM 4.9+ play session tracking (PR #3155).
+  bool get hasPlaySessionTracking => hasDeviceSaveSync;
+
+  /// RomM 4.9+ save summary endpoint.
+  bool get hasSaveSummary => hasDeviceSaveSync;
+
+  RommCapabilities({required this.version})
+      : major = _parsePart(version, 0),
+        minor = _parsePart(version, 1);
+
+  /// Unknown/offline — all flags false, falls back to legacy paths.
+  RommCapabilities.unknown()
+      : version = '0.0.0',
+        major = 0,
+        minor = 0;
+
+  static int _parsePart(String v, int index) {
+    final parts = v.split(RegExp(r'[.\-]'));
+    if (index >= parts.length) return 0;
+    return int.tryParse(parts[index]) ?? 0;
+  }
+
+  @override
+  String toString() => 'RommCapabilities(v$version, deviceSync=$hasDeviceSaveSync)';
 }
 
 class RomMConfig {

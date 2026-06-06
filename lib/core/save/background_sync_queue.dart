@@ -111,13 +111,13 @@ class BackgroundSyncQueue {
         final displayStem = game?.displayName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_') ?? 'freegosy_${item.romId}';
         final uploadFilename = '$displayStem.zip';
 
-        final success = await rommService.uploadSave(
+        final result = await rommService.uploadSave(
           item.romId,
           zipFile,
           overrideFilename: uploadFilename,
         );
 
-        if (success) {
+        if (result.ok) {
           await backupRepo.markAsSynced(item.romId, item.entry);
           syncedCount++;
           debugPrint('[BackgroundSyncQueue] Upload successful. Throttling for 5 seconds...');

@@ -37,7 +37,8 @@ void main() {
         .thenAnswer((_) async => sysTemp);
     
     final prefs = await SharedPreferences.getInstance();
-    when(mockRommService.getLatestSave(any)).thenAnswer((_) async => null);
+    when(mockRommService.getLatestSave(any, deviceId: anyNamed('deviceId'))).thenAnswer((_) async => null);
+    when(mockRommService.fetchCapabilities()).thenAnswer((_) async => RommCapabilities.unknown());
     service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry, prefs);
 
     // Prevent RetroArch strategy from reading real retroarch.cfg during tests
@@ -113,20 +114,24 @@ void main() {
       String? uploadedFilename;
 
       when(mockRommService.uploadSave(
-        any, 
-        any, 
-        slot: anyNamed('slot'), 
-        screenshotFile: anyNamed('screenshotFile'), 
-        overrideFilename: anyNamed('overrideFilename')
+        any,
+        any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
       )).thenAnswer((inv) async {
         uploadedFile = inv.positionalArguments[1] as File;
         uploadedFilename = inv.namedArguments[#overrideFilename] as String?;
-        return true;
+        return (ok: true, conflict: null);
       });
       when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
       final ok = await service.pushSaves(game, romPath);
-      
+
       expect(ok, isTrue);
       expect(uploadedFile, isNotNull);
       expect(uploadedFilename, 'game.sav');
@@ -168,18 +173,22 @@ void main() {
       List<int>? uploadedBytes;
 
       when(mockRommService.uploadSave(
-        any, 
-        any, 
-        slot: anyNamed('slot'), 
-        screenshotFile: anyNamed('screenshotFile'), 
-        overrideFilename: anyNamed('overrideFilename')
+        any,
+        any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
       )).thenAnswer((inv) async {
         uploadedFile = inv.positionalArguments[1] as File;
         uploadedFilename = inv.namedArguments[#overrideFilename] as String?;
         if (uploadedFile != null && uploadedFile!.existsSync()) {
           uploadedBytes = await uploadedFile!.readAsBytes();
         }
-        return true;
+        return (ok: true, conflict: null);
       });
       when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 

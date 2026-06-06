@@ -800,10 +800,14 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
           as String);
 
   @override
-  _i8.Future<bool> uploadSave(
-    String? gameId,
-    _i9.File? saveFile, {
+  _i8.Future<({bool ok, Map<String, dynamic>? conflict})> uploadSave(
+    String gameId,
+    _i9.File saveFile, {
     String? slot,
+    String? deviceId,
+    bool autocleanup = false,
+    int autocleanupLimit = 5,
+    bool overwrite = false,
     _i9.File? screenshotFile,
     String? overrideFilename,
   }) =>
@@ -813,13 +817,19 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
               [gameId, saveFile],
               {
                 #slot: slot,
+                #deviceId: deviceId,
+                #autocleanup: autocleanup,
+                #autocleanupLimit: autocleanupLimit,
+                #overwrite: overwrite,
                 #screenshotFile: screenshotFile,
                 #overrideFilename: overrideFilename,
               },
             ),
-            returnValue: _i8.Future<bool>.value(false),
+            returnValue: _i8.Future<({bool ok, Map<String, dynamic>? conflict})>.value(
+              (ok: false, conflict: null),
+            ),
           )
-          as _i8.Future<bool>);
+          as _i8.Future<({bool ok, Map<String, dynamic>? conflict})>);
 
   @override
   _i8.Future<bool> deleteSaves(List<int>? saveIds) =>
@@ -843,9 +853,13 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
           as _i8.Future<void>);
 
   @override
-  _i8.Future<List<Map<String, dynamic>>> getSavesList(String? gameId) =>
+  _i8.Future<List<Map<String, dynamic>>> getSavesList(
+    String gameId, {
+    String? deviceId,
+    String? slot,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getSavesList, [gameId]),
+            Invocation.method(#getSavesList, [gameId], {#deviceId: deviceId, #slot: slot}),
             returnValue: _i8.Future<List<Map<String, dynamic>>>.value(
               <Map<String, dynamic>>[],
             ),
@@ -853,20 +867,24 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
           as _i8.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i8.Future<Map<String, dynamic>?> getLatestSave(String? gameId) =>
+  _i8.Future<Map<String, dynamic>?> getLatestSave(
+    String gameId, {
+    String? deviceId,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getLatestSave, [gameId]),
+            Invocation.method(#getLatestSave, [gameId], {#deviceId: deviceId}),
             returnValue: _i8.Future<Map<String, dynamic>?>.value(),
           )
           as _i8.Future<Map<String, dynamic>?>);
 
   @override
   _i8.Future<_i12.Uint8List?> downloadSave(
-    String? saveUrl, {
+    String saveUrl, {
     _i11.SharedPreferences? prefs,
+    String? deviceId,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#downloadSave, [saveUrl], {#prefs: prefs}),
+            Invocation.method(#downloadSave, [saveUrl], {#prefs: prefs, #deviceId: deviceId}),
             returnValue: _i8.Future<_i12.Uint8List?>.value(),
           )
           as _i8.Future<_i12.Uint8List?>);

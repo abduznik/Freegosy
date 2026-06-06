@@ -18,7 +18,7 @@ class RommService {
 
   RomMConfig get config => _config;
 
-  static const String _ua = 'Freegosy/0.5.1';
+  static const String _ua = 'Freegosy/0.5.7';
 
   void updateConfig(RomMConfig newConfig) {
     _config = newConfig;
@@ -225,7 +225,78 @@ class RommService {
     }
   }
 
-  // --- API Methods ---
+  // ---------------------------------------------------------------------------
+  // Capabilities / version detection
+  // ---------------------------------------------------------------------------
+
+  /// Fetches [RommCapabilities] from /api/heartbeat once and caches the result.
+  RommCapabilities _capabilities = RommCapabilities.unknown();
+  bool _capabilitiesFetched = false;
+
+  RommCapabilities get capabilities => _capabilities;
+
+  Future<RommCapabilities> fetchCapabilities() async {
+    if (_capabilitiesFetched) return _capabilities;
+    try {
+      final response = await _dio.get('/api/heartbeat', options: Options(
+        headers: {'Authorization': _authOptions.headers?['Authorization']},
+        sendTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      if (response.statusCode == 200) {
+        final version = (response.data?['SYSTEM']?['VERSION'] as String?) ?? '0.0.0';
+        _capabilities = RommCapabilities(version: version);
+        debugPrint('[RomM] Detected version: $version → $_capabilities');
+      }
+    } catch (e) {
+      debugPrint('[RomM] fetchCapabilities failed, defaulting to legacy: $e');
+    }
+    _capabilitiesFetched = true;
+    return _capabilities;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Device registration (RomM 4.9+)
+  // ---------------------------------------------------------------------------
+
+  /// Registers this Freegosy install as a device and returns the persistent UUID.
+  /// [allowExisting] = true recovers an existing registration on re-install.
+  Future<String?> registerDevice({
+    required String name,
+    required String platform,
+    String clientVersion = '0.5.7',
+    bool allowExisting = true,
+  }) async {
+    try {
+      final body = {
+        'name': name,
+        'platform': platform,
+        'client': 'freegosy',
+        'client_version': clientVersion,
+      };
+      final response = await _dio.post(
+        '/api/devices',
+        queryParameters: allowExisting ? {'allow_existing': 'true'} : null,
+        data: body,
+        options: _authOptions.copyWith(contentType: 'application/json'),
+      );
+      if (response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300) {
+        final deviceId = response.data['device_id']?.toString() ??
+            response.data['id']?.toString();
+        debugPrint('[RomM] Registered device: $deviceId');
+        return deviceId;
+      }
+    } catch (e) {
+      debugPrint('[RomM] registerDevice error: $e');
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // API Methods
+  // ---------------------------------------------------------------------------
 
   Future<Game?> getGame(String id) async {
     try {
@@ -419,32 +490,83 @@ class RommService {
     return 'Basic ${base64Encode(utf8.encode('${_config.username}:${_config.password}'))}';
   }
 
-  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot, io.File? screenshotFile, String? overrideFilename}) async {
+  /// Uploads a save file to RomM.
+  ///
+  /// When [deviceId] is provided (RomM 4.9+), the server tracks sync state and
+  /// returns 409 on conflict. [slot] groups saves into named categories.
+  /// [autocleanup] + [autocleanupLimit] let the server prune old slot saves.
+  /// [overwrite] bypasses server-side conflict detection (force-push).
+  ///
+  /// Returns `null` on a 409 conflict so callers can inspect the raw response;
+  /// returns `true` on success; returns `false` on other errors.
+  Future<({bool ok, Map<String, dynamic>? conflict})> uploadSave(
+    String gameId,
+    io.File saveFile, {
+    String? slot,
+    String? deviceId,
+    bool autocleanup = false,
+    int autocleanupLimit = 5,
+    bool overwrite = false,
+    io.File? screenshotFile,
+    String? overrideFilename,
+  }) async {
     try {
-      final now = DateTime.now(); final ts = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
-      final effectiveSlot = slot ?? 'freegosy-srm_$ts';
+      final now = DateTime.now();
+      final ts =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
+          '_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
       final uploadFilename = overrideFilename ?? saveFile.uri.pathSegments.last;
-      
+
+      final queryParams = <String, dynamic>{
+        'rom_id': gameId,
+        'emulator': 'freegosy',
+      };
+      // 4.9+ params — only include when provided to stay backward-compatible
+      if (deviceId != null) {
+        queryParams['device_id'] = deviceId;
+        if (autocleanup) {
+          queryParams['autocleanup'] = 'true';
+          queryParams['autocleanup_limit'] = autocleanupLimit.toString();
+        }
+        if (overwrite) queryParams['overwrite'] = 'true';
+      }
+      // Slot: use the caller-supplied slot or fall back to legacy timestamp slot
+      queryParams['slot'] = slot ?? 'freegosy-srm_$ts';
+
       final formDataMap = <String, dynamic>{
-        'saveFile': await MultipartFile.fromFile(saveFile.path, filename: uploadFilename)
+        'saveFile': await MultipartFile.fromFile(saveFile.path, filename: uploadFilename),
       };
       if (screenshotFile != null && await screenshotFile.exists()) {
-        formDataMap['screenshotFile'] = await MultipartFile.fromFile(screenshotFile.path, filename: screenshotFile.uri.pathSegments.last);
+        formDataMap['screenshotFile'] = await MultipartFile.fromFile(
+            screenshotFile.path, filename: screenshotFile.uri.pathSegments.last);
       }
-      
+
       final response = await _dio.post(
-        '/api/saves', 
-        queryParameters: {'rom_id': gameId, 'emulator': 'freegosy', 'slot': effectiveSlot}, 
-        data: FormData.fromMap(formDataMap), 
+        '/api/saves',
+        queryParameters: queryParams,
+        data: FormData.fromMap(formDataMap),
         options: _authOptions.copyWith(
           sendTimeout: const Duration(minutes: 5),
           receiveTimeout: const Duration(minutes: 5),
+          validateStatus: (s) => s != null && s < 500,
         ),
       );
-      return response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-    } catch (e) { 
+
+      if (response.statusCode == 409) {
+        final detail = response.data is Map
+            ? (response.data['detail'] as Map<String, dynamic>?)
+            : null;
+        debugPrint('[RomM] uploadSave 409 conflict: $detail');
+        return (ok: false, conflict: detail);
+      }
+
+      final ok = response.statusCode != null &&
+          response.statusCode! >= 200 &&
+          response.statusCode! < 300;
+      return (ok: ok, conflict: null);
+    } catch (e) {
       debugPrint('[RomM] uploadSave error: $e');
-      return false; 
+      return (ok: false, conflict: null);
     }
   }
 
@@ -484,34 +606,74 @@ class RommService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getSavesList(String gameId) async {
+  /// Lists saves for a game, sorted newest-first.
+  ///
+  /// Pass [deviceId] (RomM 4.9+) to receive `device_syncs[]` with `is_current`
+  /// on each save. Pass [slot] to filter to a specific slot.
+  Future<List<Map<String, dynamic>>> getSavesList(
+    String gameId, {
+    String? deviceId,
+    String? slot,
+  }) async {
     try {
-      final response = await _dio.get('/api/saves', queryParameters: {'rom_id': gameId}, options: _authOptions);
+      final params = <String, dynamic>{'rom_id': gameId};
+      if (deviceId != null) params['device_id'] = deviceId;
+      if (slot != null) params['slot'] = slot;
+
+      final response =
+          await _dio.get('/api/saves', queryParameters: params, options: _authOptions);
       if (response.statusCode != 200) return [];
-      final List<dynamic> items = (response.data is Map && response.data.containsKey('items')) ? response.data['items'] : (response.data is List ? response.data : []);
-      final sorted = List<Map<String, dynamic>>.from(items.whereType<Map<String, dynamic>>());
+      final List<dynamic> items =
+          (response.data is Map && response.data.containsKey('items'))
+              ? response.data['items']
+              : (response.data is List ? response.data : []);
+      final sorted =
+          List<Map<String, dynamic>>.from(items.whereType<Map<String, dynamic>>());
       sorted.sort((a, b) {
-        final ta = DateTime.tryParse(a['created_at']?.toString() ?? a['updated_at']?.toString() ?? '') ?? DateTime(0);
-        final tb = DateTime.tryParse(b['created_at']?.toString() ?? b['updated_at']?.toString() ?? '') ?? DateTime(0);
+        final ta = DateTime.tryParse(
+                a['created_at']?.toString() ?? a['updated_at']?.toString() ?? '') ??
+            DateTime(0);
+        final tb = DateTime.tryParse(
+                b['created_at']?.toString() ?? b['updated_at']?.toString() ?? '') ??
+            DateTime(0);
         return tb.compareTo(ta);
       });
       return sorted;
-    } catch (_) { return []; }
+    } catch (_) {
+      return [];
+    }
   }
 
-  Future<Map<String, dynamic>?> getLatestSave(String gameId) async {
-    final items = await getSavesList(gameId);
+  Future<Map<String, dynamic>?> getLatestSave(String gameId, {String? deviceId}) async {
+    final items = await getSavesList(gameId, deviceId: deviceId);
     return items.isEmpty ? null : items.first;
   }
 
-  Future<Uint8List?> downloadSave(String saveUrl, {SharedPreferences? prefs}) async {
+  /// Downloads save file bytes.
+  ///
+  /// Pass [deviceId] (RomM 4.9+) to trigger optimistic sync-record update on
+  /// the server side (saves a separate /downloaded call).
+  Future<Uint8List?> downloadSave(
+    String saveUrl, {
+    SharedPreferences? prefs,
+    String? deviceId,
+  }) async {
     try {
       if (prefs != null) {
         await _ensureBearerToken(prefs);
       }
-      final url = saveUrl.startsWith('http') ? saveUrl : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
-      final response = await _dio.get<List<int>>(url, options: _authOptions.copyWith(responseType: ResponseType.bytes));
-      return (response.statusCode == 200 && response.data != null) ? Uint8List.fromList(response.data!) : null;
+      var url =
+          saveUrl.startsWith('http') ? saveUrl : '${_normalizeBaseUrl(_config.baseUrl)}$saveUrl';
+      // 4.9+: append device_id for optimistic sync record update
+      if (deviceId != null) {
+        final separator = url.contains('?') ? '&' : '?';
+        url = '$url${separator}device_id=${Uri.encodeComponent(deviceId)}&optimistic=true';
+      }
+      final response = await _dio.get<List<int>>(
+          url, options: _authOptions.copyWith(responseType: ResponseType.bytes));
+      return (response.statusCode == 200 && response.data != null)
+          ? Uint8List.fromList(response.data!)
+          : null;
     } catch (e) {
       debugPrint('[RomM] downloadSave error: $e');
       return null;

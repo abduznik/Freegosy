@@ -148,6 +148,49 @@ final saveSyncServiceProvider = FutureProvider<SaveSyncService?>((ref) async {
   return service;
 });
 
+// ---------------------------------------------------------------------------
+// Version capabilities — fetched once after service is ready
+// ---------------------------------------------------------------------------
+
+/// Fetches [RommCapabilities] from /api/heartbeat once per service instance.
+final rommCapabilitiesProvider = FutureProvider<RommCapabilities>((ref) async {
+  final service = ref.watch(rommServiceProvider);
+  if (service == null) return RommCapabilities.unknown();
+  return service.fetchCapabilities();
+});
+
+/// Ensures a device ID is registered with the RomM server (4.9+) and cached
+/// in SharedPreferences under 'romm_device_id'. No-ops gracefully on older servers.
+final deviceIdProvider = FutureProvider<String?>((ref) async {
+  final caps = await ref.watch(rommCapabilitiesProvider.future);
+  if (!caps.hasDeviceSaveSync) return null;
+
+  final prefs = ref.watch(sharedPreferencesProvider);
+  final existing = prefs.getString('romm_device_id');
+  if (existing != null && existing.isNotEmpty) return existing;
+
+  final service = ref.read(rommServiceProvider);
+  if (service == null) return null;
+
+  String platform = 'unknown';
+  if (defaultTargetPlatform == TargetPlatform.windows) platform = 'windows';
+  if (defaultTargetPlatform == TargetPlatform.linux) platform = 'linux';
+  if (defaultTargetPlatform == TargetPlatform.macOS) platform = 'macos';
+  if (defaultTargetPlatform == TargetPlatform.android) platform = 'android';
+
+  final deviceId = await service.registerDevice(
+    name: 'Freegosy on $platform',
+    platform: platform,
+    allowExisting: true,
+  );
+
+  if (deviceId != null) {
+    await prefs.setString('romm_device_id', deviceId);
+    debugPrint('[RomM] Device registered and stored: $deviceId');
+  }
+  return deviceId;
+});
+
 // Simplified RommService provider
 final rommServiceProvider = Provider<RommService?>((ref) {
   final rommConfigAsync = ref.watch(rommConfigProvider);

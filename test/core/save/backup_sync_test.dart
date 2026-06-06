@@ -20,9 +20,19 @@ class MockRommService extends Mock implements RommService {
   int uploadCount = 0;
 
   @override
-  Future<bool> uploadSave(String gameId, io.File saveFile, {String? slot, io.File? screenshotFile, String? overrideFilename}) async {
+  Future<({bool ok, Map<String, dynamic>? conflict})> uploadSave(
+    String gameId,
+    io.File saveFile, {
+    String? slot,
+    String? deviceId,
+    bool autocleanup = false,
+    int autocleanupLimit = 5,
+    bool overwrite = false,
+    io.File? screenshotFile,
+    String? overrideFilename,
+  }) async {
     uploadCount++;
-    return true; // Always succeed
+    return (ok: true, conflict: null);
   }
 }
 

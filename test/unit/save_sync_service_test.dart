@@ -37,7 +37,10 @@ void main() {
         .thenAnswer((_) async => sysTemp);
     
     final prefs = await SharedPreferences.getInstance();
-    when(mockRommService.getLatestSave(any)).thenAnswer((_) async => null);
+    when(mockRommService.getLatestSave(any, deviceId: anyNamed('deviceId'))).thenAnswer((_) async => null);
+    // Default to legacy mode so existing tests are unaffected
+    when(mockRommService.fetchCapabilities())
+        .thenAnswer((_) async => RommCapabilities.unknown());
     service = SaveSyncService(mockRommService, mockDirectoryService, mockStrategyRegistry, prefs);
   });
 
@@ -58,23 +61,31 @@ void main() {
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
       when(mockRommService.uploadSave(
-        any, 
-        any, 
-        slot: anyNamed('slot'), 
-        screenshotFile: anyNamed('screenshotFile'), 
-        overrideFilename: anyNamed('overrideFilename')
-      )).thenAnswer((_) async => true);
+        any,
+        any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
+      )).thenAnswer((_) async => (ok: true, conflict: null));
       when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
       final ok = await service.pushSaves(game, romPath);
       
       expect(ok, isTrue, reason: 'Should have found and uploaded game.sav');
       verify(mockRommService.uploadSave(
-        'game1', 
-        any, 
-        slot: anyNamed('slot'), 
-        screenshotFile: anyNamed('screenshotFile'), 
-        overrideFilename: anyNamed('overrideFilename')
+        'game1',
+        any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
       )).called(1);
       
       await tempDir.delete(recursive: true);
@@ -89,34 +100,129 @@ void main() {
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
       when(mockRommService.uploadSave(
-        any, 
-        any, 
-        slot: anyNamed('slot'), 
-        screenshotFile: anyNamed('screenshotFile'), 
-        overrideFilename: anyNamed('overrideFilename')
-      )).thenAnswer((_) async => true);
+        any,
+        any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
+      )).thenAnswer((_) async => (ok: true, conflict: null));
       when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
       await service.pushSaves(game, romPath);
       verify(mockRommService.uploadSave(
-        'game1', 
-        any, 
-        slot: anyNamed('slot'), 
-        screenshotFile: anyNamed('screenshotFile'), 
-        overrideFilename: anyNamed('overrideFilename')
+        'game1',
+        any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
       )).called(1);
 
       // Second time should skip
       clearInteractions(mockRommService);
       // We must re-stub because clearInteractions might affect stubs depending on implementation, 
       // though usually it only clears call history. But to be safe:
-      when(mockRommService.getLatestSave(any)).thenAnswer((_) async => null);
+      when(mockRommService.getLatestSave(any, deviceId: anyNamed('deviceId'))).thenAnswer((_) async => null);
 
       final ok = await service.pushSaves(game, romPath);
       expect(ok, isTrue, reason: 'Should return true (success) even if skipping due to matching hash');
       verifyNever(mockRommService.uploadSave(any, any));
 
       await tempDir.delete(recursive: true);
+    });
+
+    group('routing (legacy vs device)', () {
+      test('pushSaves() uses legacy path when capabilities are unknown', () async {
+        // fetchCapabilities already returns unknown() in setUp
+        final tempDir = await Directory.systemTemp.createTemp('routing_legacy');
+        final romPath = '${tempDir.path}/game.gba';
+        await File('${tempDir.path}/game.sav').writeAsString('data');
+
+        final game = Game(id: 'g1', name: 'game', platformSlug: 'gba', fileSize: 0);
+
+        when(mockRommService.uploadSave(
+          any, any,
+          slot: anyNamed('slot'),
+          deviceId: anyNamed('deviceId'),
+          autocleanup: anyNamed('autocleanup'),
+          autocleanupLimit: anyNamed('autocleanupLimit'),
+          overwrite: anyNamed('overwrite'),
+          screenshotFile: anyNamed('screenshotFile'),
+          overrideFilename: anyNamed('overrideFilename'),
+        )).thenAnswer((_) async => (ok: true, conflict: null));
+        when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount')))
+            .thenAnswer((_) async {});
+
+        await service.pushSaves(game, romPath);
+
+        // Legacy path: deviceId must be null
+        final captured = verify(mockRommService.uploadSave(
+          any, any,
+          slot: anyNamed('slot'),
+          deviceId: captureAnyNamed('deviceId'),
+          autocleanup: anyNamed('autocleanup'),
+          autocleanupLimit: anyNamed('autocleanupLimit'),
+          overwrite: anyNamed('overwrite'),
+          screenshotFile: anyNamed('screenshotFile'),
+          overrideFilename: anyNamed('overrideFilename'),
+        )).captured;
+        expect(captured.first, isNull, reason: 'Legacy path must not pass deviceId');
+
+        await tempDir.delete(recursive: true);
+      });
+
+      test('pushSaves() uses device path when capabilities are 4.9', () async {
+        // Override to 4.9
+        when(mockRommService.fetchCapabilities())
+            .thenAnswer((_) async => RommCapabilities(version: '4.9.0'));
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('romm_device_id', 'test-device-uuid');
+
+        final tempDir = await Directory.systemTemp.createTemp('routing_device');
+        final romPath = '${tempDir.path}/game.gba';
+        await File('${tempDir.path}/game.sav').writeAsString('data');
+
+        final game = Game(id: 'g2', name: 'game', platformSlug: 'gba', fileSize: 0);
+
+        when(mockRommService.getLatestSave('g2', deviceId: anyNamed('deviceId')))
+            .thenAnswer((_) async => null);
+        when(mockRommService.uploadSave(
+          any, any,
+          slot: anyNamed('slot'),
+          deviceId: anyNamed('deviceId'),
+          autocleanup: anyNamed('autocleanup'),
+          autocleanupLimit: anyNamed('autocleanupLimit'),
+          overwrite: anyNamed('overwrite'),
+          screenshotFile: anyNamed('screenshotFile'),
+          overrideFilename: anyNamed('overrideFilename'),
+        )).thenAnswer((_) async => (ok: true, conflict: null));
+
+        await service.pushSaves(game, romPath);
+
+        // Device path: deviceId must be non-null
+        final captured = verify(mockRommService.uploadSave(
+          any, any,
+          slot: anyNamed('slot'),
+          deviceId: captureAnyNamed('deviceId'),
+          autocleanup: anyNamed('autocleanup'),
+          autocleanupLimit: anyNamed('autocleanupLimit'),
+          overwrite: anyNamed('overwrite'),
+          screenshotFile: anyNamed('screenshotFile'),
+          overrideFilename: anyNamed('overrideFilename'),
+        )).captured;
+        expect(captured.first, 'test-device-uuid',
+            reason: 'Device path must pass stored deviceId');
+
+        await tempDir.delete(recursive: true);
+      });
     });
 
     test('pushSaves() throws SaveConflictException when remote is newer than last pull', () async {
@@ -134,7 +240,7 @@ void main() {
       
       // Mock remote to be NEWER than last pull (30 mins ago)
       final remoteTime = DateTime.now().subtract(const Duration(minutes: 30));
-      when(mockRommService.getLatestSave('game1')).thenAnswer((_) async => {
+      when(mockRommService.getLatestSave('game1', deviceId: anyNamed('deviceId'))).thenAnswer((_) async => {
         'updated_at': remoteTime.toIso8601String(),
         'screenshot_url': 'http://remote-screenshot.png',
       });
