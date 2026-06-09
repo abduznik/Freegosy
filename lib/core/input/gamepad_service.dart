@@ -38,10 +38,14 @@ class GamepadService {
   Timer? _scanTimer;
   final Map<String, String> _controllerNames = {};
   final Map<String, AxisState> _axisStates = {};
+  final _rawEventController = StreamController<GamepadEvent>.broadcast();
 
   GameAction? _heldDirection;
   Timer? _holdDelayTimer;
   Timer? _holdRepeatTimer;
+
+  /// Raw event stream for controller button sniffing (used by setup dialogs).
+  Stream<GamepadEvent> get rawEvents => _rawEventController.stream;
 
   GamepadService(this._ref);
 
@@ -153,6 +157,9 @@ class GamepadService {
   }
 
   void _handleGamepadEvent(GamepadEvent event) {
+    // Broadcast raw event for sniffing/configuration dialogs
+    _rawEventController.add(event);
+
     // 1. Switch to Gamepad input mode if significant event occurs
     if (_ref.read(inputModeProvider) != InputMode.gamepad) {
       if (event.value.abs() > 0.5) {
@@ -315,5 +322,6 @@ class GamepadService {
     _subscription?.cancel();
     _scanTimer?.cancel();
     _cancelHoldTimers();
+    _rawEventController.close();
   }
 }

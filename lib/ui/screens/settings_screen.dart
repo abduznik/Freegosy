@@ -15,6 +15,7 @@ import '../../core/storage/logger_service.dart';
 import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
+import 'settings_controller_section.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/theme_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
@@ -284,7 +285,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (trailing != null) trailing,
             ],
           ),
-          const SizedBox(height: 20),
           child,
         ],
       ),
@@ -475,23 +475,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.all(16.0),
                 children: [
                   _buildRommServerSection(context, ref, rommService, rommConfig),
-                  const SizedBox(height: 20),
                   _buildAppearanceSection(context, ref),
-                  const SizedBox(height: 20),
                   _buildSectionCard(
                     context: context,
                     title: 'Library Display',
                     icon: Icons.grid_view,
                     child: buildDisplaySection(context, cardAspectRatio, columnCount, cardSpacing, showTitle, activePreset, ref),
                   ),
-                  const SizedBox(height: 20),
                   _buildStorageSection(context, directoryService),
-                  const SizedBox(height: 20),
                   _buildRetroArchSettingsSection(context, ref),
-                  const SizedBox(height: 20),
                   if (io.Platform.isLinux) ...[
                     _buildLinuxSettingsSection(context, ref, directoryService),
-                    const SizedBox(height: 20),
                   ],
                   _buildSectionCard(
                     context: context,
@@ -503,15 +497,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       error: (e, s) => Center(child: Text('Error: $e')),
                     ),
                   ),
-                  const SizedBox(height: 20),
                   _buildSectionCard(
                     context: context,
                     title: 'Custom Emulators',
                     icon: Icons.settings_input_component,
                     child: const SettingsCustomEmulatorsSection(),
-                  ),
+                   ),
+                   const SizedBox(height: 20),
+                    _buildSectionCard(
+                      context: context,
+                      title: 'Controller Setup',
+                      icon: Icons.gamepad,
+                      child: const SettingsControllerSection(),
+                    ),
                   if (strategyRegistry != null) ...[
-                    const SizedBox(height: 20),
                     _buildSectionCard(
                       context: context,
                       title: 'Emulator Conflicts',
@@ -519,7 +518,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       child: buildConflictsSection(context, strategyRegistry, setState),
                     ),
                   ],
-                  const SizedBox(height: 20),
                   _buildLegalSection(context),
                 ],
               );
@@ -892,7 +890,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
