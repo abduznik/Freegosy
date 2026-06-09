@@ -62,6 +62,34 @@ const Map<String, Map<String, GameAction>> kControllerMappings = {
     'zl.rectangle.roundedtop': GameAction.l2,
     'zr.rectangle.roundedtop': GameAction.r2,
   },
+
+  // Steam Deck
+  'Steam Deck': {
+    'a': GameAction.confirm,
+    'b': GameAction.back,
+    'x': GameAction.detail,
+    'y': GameAction.favorite,
+    'leftshoulder': GameAction.l1,
+    'rightshoulder': GameAction.r1,
+    'lefttrigger': GameAction.l2,
+    'righttrigger': GameAction.r2,
+    'leftstick': GameAction.horizontalAxis,
+    'rightstick': GameAction.verticalAxis,
+  },
+
+  // Generic Controller
+  'Generic Controller': {
+    'button_0': GameAction.confirm,
+    'button_1': GameAction.back,
+    'button_2': GameAction.detail,
+    'button_3': GameAction.favorite,
+    'leftshoulder': GameAction.l1,
+    'rightshoulder': GameAction.r1,
+    'lefttrigger': GameAction.l2,
+    'righttrigger': GameAction.r2,
+    'leftstick': GameAction.horizontalAxis,
+    'rightstick': GameAction.verticalAxis,
+  },
 };
 
 /// Fallback for unknown controllers - covers most XInput-style layouts
@@ -74,7 +102,7 @@ const Map<String, GameAction> kDefaultMapping = {
   'b': GameAction.back,
   'x': GameAction.detail,
   'y': GameAction.favorite,
-  
+
   // Mac/Switch Fallbacks
   'a.circle': GameAction.confirm,
   'b.circle': GameAction.back,

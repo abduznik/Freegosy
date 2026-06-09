@@ -6,6 +6,7 @@ import '../../providers/ui_provider.dart';
 import 'known_controllers.dart';
 import 'sdl_parser.dart';
 import 'input_action_bus.dart';
+import 'custom_controller_mappings.dart';
 
 enum GameAction { 
   up, down, left, right, 
@@ -47,6 +48,9 @@ class GamepadService {
   void initialize() async {
     debugPrint('🎮 GamepadService: Starting direct action listener...');
     
+    // Load custom mappings
+    await loadCustomMappings();
+    
     // Load the SDL Database
     await SDLMappingParser.loadDatabase();
     
@@ -71,21 +75,71 @@ class GamepadService {
     }
   }
 
-  Map<String, GameAction> _getMappingFor(String controllerId) {
-    final name = _controllerNames[controllerId] ?? '';
-    
-    // 1. Try SDL Database first (Universal)
-    final sdlMapping = SDLMappingParser.getMapping(name);
-    if (sdlMapping != null) return sdlMapping;
+  /// Returns a list of detected controllers with their names and IDs.
+  List<Map<String, String>> getDetectedControllers() {
+    return _controllerNames.entries.map((entry) => {
+      'id': entry.key,
+      'name': entry.value,
+    }).toList();
+  }
 
-    // 2. Try our hardcoded known_controllers
+  /// Returns the current mapping for a specific controller.
+  Map<String, GameAction>? getCurrentMapping(String controllerId) {
+    final name = _controllerNames[controllerId] ?? '';
+    if (name.isEmpty) return null;
+    
+    // Check custom mappings first
+    for (final entry in customControllerMappings.entries) {
+      if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
+    }
+
+    // Check hardcoded mappings
     for (final entry in kControllerMappings.entries) {
       if (name.toLowerCase().contains(entry.key.toLowerCase())) {
         return entry.value;
       }
     }
 
-    // 3. Fallback
+    // Return default mapping
+    return kDefaultMapping;
+  }
+
+  /// Updates the custom mapping for a specific controller.
+  Future<void> updateCustomMapping(String controllerId, Map<String, GameAction> mapping) async {
+    final name = _controllerNames[controllerId] ?? '';
+    if (name.isEmpty) return;
+    
+    // Update the custom mappings
+    customControllerMappings[name] = mapping;
+    
+    // Save to persistent storage
+    await saveCustomMappings();
+  }
+
+  Map<String, GameAction> _getMappingFor(String controllerId) {
+    final name = _controllerNames[controllerId] ?? '';
+    
+    // 1. Try custom mappings first
+    for (final entry in customControllerMappings.entries) {
+      if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
+    }
+
+    // 2. Try SDL Database (Universal)
+    final sdlMapping = SDLMappingParser.getMapping(name);
+    if (sdlMapping != null) return sdlMapping;
+
+    // 3. Try our hardcoded known_controllers
+    for (final entry in kControllerMappings.entries) {
+      if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
+    }
+
+    // 4. Fallback
     return kDefaultMapping;
   }
 
