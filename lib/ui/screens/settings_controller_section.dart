@@ -148,8 +148,10 @@ class _SettingsControllerSectionState
     bool isPrimary = false,
   }) {
     final theme = Theme.of(context);
-    return GestureDetector(
+    return FocusEffectWrapper(
       onTap: onTap,
+      borderRadius: 12.0,
+      useSafeScale: false,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
         decoration: BoxDecoration(
