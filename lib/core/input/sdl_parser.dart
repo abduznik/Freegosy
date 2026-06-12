@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'gamepad_service.dart';
+import 'gamepad_utils.dart';
 
 class SDLMappingParser {
   static final Map<String, Map<String, GameAction>> _cache = {};
@@ -57,14 +58,14 @@ class SDLMappingParser {
     }
 
     // 3. Fuzzy: score by how many meaningful tokens overlap
-    final inputTokens = _tokenize(lower);
+    final inputTokens = GamepadUtils.tokenize(lower);
     if (inputTokens.isEmpty) return null;
 
     String? bestKey;
     int bestScore = 0;
 
     for (final entry in _cache.entries) {
-      final dbTokens = _tokenize(entry.key);
+      final dbTokens = GamepadUtils.tokenize(entry.key);
       final shared = inputTokens.intersection(dbTokens).length;
       // Require at least 2 shared tokens, or all input tokens matched
       if (shared >= 2 || (shared >= 1 && shared == inputTokens.length)) {
@@ -77,18 +78,6 @@ class SDLMappingParser {
 
     if (bestKey != null) return _cache[bestKey];
     return null;
-  }
-
-  /// Splits a controller name into meaningful lowercase tokens, stripping
-  /// noise words (usb, hid, gamepad, controller, joystick, wireless, device).
-  static Set<String> _tokenize(String name) {
-    const noise = {'usb', 'hid', 'gamepad', 'controller', 'joystick', 'wireless', 'device', 'for', 'the', 'by'};
-    return name
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-        .split(RegExp(r'\s+'))
-        .where((t) => t.length > 1 && !noise.contains(t))
-        .toSet();
   }
 
   static GameAction? _mapSDLKeyToAction(String sdlKey) {

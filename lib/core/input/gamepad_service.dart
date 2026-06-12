@@ -7,6 +7,7 @@ import 'known_controllers.dart';
 import 'sdl_parser.dart';
 import 'input_action_bus.dart';
 import 'custom_controller_mappings.dart';
+import 'gamepad_utils.dart';
 
 enum GameAction { 
   up, down, left, right, 
@@ -118,19 +119,11 @@ class GamepadService {
     }
 
     // Fuzzy token fallback for built-in list
-    const noise = {'usb', 'hid', 'gamepad', 'controller', 'joystick', 'wireless', 'device', 'for', 'the', 'by'};
-    Set<String> tokenize(String s) => s
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-        .split(RegExp(r'\s+'))
-        .where((t) => t.length > 1 && !noise.contains(t))
-        .toSet();
-
-    final inputTokens = tokenize(name);
+    final inputTokens = GamepadUtils.tokenize(name);
     String? bestBuiltinKey;
     int bestBuiltinScore = 0;
     for (final entry in kControllerMappings.entries) {
-      final dbTokens = tokenize(entry.key);
+      final dbTokens = GamepadUtils.tokenize(entry.key);
       final shared = inputTokens.intersection(dbTokens).length;
       if (shared >= 2 || (shared >= 1 && shared == inputTokens.length)) {
         if (shared > bestBuiltinScore) {
@@ -150,25 +143,7 @@ class GamepadService {
   /// for this controller (POV hat → d-pad, dwZPos → L2/R2, etc.) and should
   /// therefore be excluded from the manual sniff wizard.
   Set<GameAction> getBackendHandledActions(String controllerId) {
-    final handled = <GameAction>{};
-    // We detect POV/Z-axis by sniffing the last known events isn't practical,
-    // so we use the controller name + a probe: check if any event keys seen
-    // so far are backend-decoded axis keys.
-    // The simplest reliable approach: check what raw keys have arrived for this
-    // controller and flag accordingly.
-    final seenKeys = _seenRawKeys[controllerId] ?? {};
-
-    // POV hat covers all four d-pad directions
-    if (seenKeys.any((k) => k == 'dwpov' || k.startsWith('pov'))) {
-      handled.addAll([GameAction.up, GameAction.down, GameAction.left, GameAction.right]);
-    }
-
-    // dwXPos/dwYPos → analog stick axes (not in manual map list, but guard anyway)
-    if (seenKeys.any((k) => k == 'dwxpos' || k == 'dwypos')) {
-      handled.addAll([GameAction.horizontalAxis, GameAction.verticalAxis]);
-    }
-
-    return handled;
+    return GamepadUtils.backendHandledActions(_seenRawKeys[controllerId] ?? {});
   }
 
   /// Returns the current mapping for a specific controller.
@@ -255,24 +230,7 @@ class GamepadService {
     return null;
   }
 
-  /// Decodes a DirectInput POV hat value (in hundredths of a degree) to
-  /// discrete direction actions. Returns empty list when centered.
-  List<GameAction> _decodePOV(double rawValue) {
-    final intVal = rawValue.toInt();
-    // -1 or 65535 means centered/released
-    if (intVal < 0 || intVal == 65535) return [];
-    // Degrees 0–36000 (hundredths), map to 8 directions
-    final deg = intVal / 100.0;
-    if (deg >= 337.5 || deg < 22.5) return [GameAction.up];
-    if (deg < 67.5) return [GameAction.up, GameAction.right];
-    if (deg < 112.5) return [GameAction.right];
-    if (deg < 157.5) return [GameAction.down, GameAction.right];
-    if (deg < 202.5) return [GameAction.down];
-    if (deg < 247.5) return [GameAction.down, GameAction.left];
-    if (deg < 292.5) return [GameAction.left];
-    if (deg < 337.5) return [GameAction.up, GameAction.left];
-    return [];
-  }
+  List<GameAction> _decodePOV(double rawValue) => GamepadUtils.decodePOV(rawValue);
 
   // Tracks which POV directions are currently active to detect release
   final Set<GameAction> _activePovDirections = {};
