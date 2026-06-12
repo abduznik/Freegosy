@@ -6,6 +6,7 @@ import '../../core/input/gamepad_service.dart';
 import '../../core/input/known_controllers.dart';
 import '../../core/input/custom_controller_mappings.dart';
 import '../widgets/dialog_back_bridge.dart';
+import '../widgets/focus_effect_wrapper.dart';
 
 const _mappableActions = [
   GameAction.confirm,
@@ -249,6 +250,7 @@ class _SettingsControllerSectionState
                       final status = _mappingStatus(id);
                       final mapped = _isMapped(id);
 
+                      final isFirst = index == 0;
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(12),
@@ -333,6 +335,7 @@ class _SettingsControllerSectionState
                                     theme,
                                     icon: Icons.edit,
                                     label: 'Edit Mapping',
+                                    autofocus: isFirst,
                                     onTap: () {
                                       Navigator.pop(ctx);
                                       _startSniffing(context, id, name);
@@ -344,6 +347,7 @@ class _SettingsControllerSectionState
                                     icon: Icons.build,
                                     label: 'Configure',
                                     isPrimary: true,
+                                    autofocus: isFirst,
                                     onTap: () {
                                       Navigator.pop(ctx);
                                       _startSniffing(context, id, name);
@@ -391,9 +395,13 @@ class _SettingsControllerSectionState
     required String label,
     required VoidCallback? onTap,
     bool isPrimary = false,
+    bool autofocus = false,
   }) {
-    return GestureDetector(
+    return FocusEffectWrapper(
       onTap: onTap,
+      borderRadius: 10.0,
+      autofocus: autofocus,
+      useSafeScale: false,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
@@ -548,6 +556,7 @@ class _SettingsControllerSectionState
                 icon: Icons.save,
                 label: 'Apply Mapping',
                 isPrimary: true,
+                autofocus: true,
                 onTap: () {
                   service.updateCustomMapping(controllerId, result.mapping);
                   Navigator.pop(ctx);
@@ -788,6 +797,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
               icon: Icons.save,
               label: 'Save Mapping',
               isPrimary: true,
+              autofocus: true,
               onTap: () {
                 widget.onComplete(_sniffedMapping);
                 Navigator.pop(context);
@@ -975,6 +985,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
             theme,
             icon: Icons.skip_next,
             label: 'Skip',
+            autofocus: true,
             onTap: _skip,
           ),
         ],
@@ -988,9 +999,13 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
     required String label,
     required VoidCallback? onTap,
     bool isPrimary = false,
+    bool autofocus = false,
   }) {
-    return GestureDetector(
+    return FocusEffectWrapper(
       onTap: onTap,
+      borderRadius: 10.0,
+      autofocus: autofocus,
+      useSafeScale: false,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
