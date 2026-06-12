@@ -45,13 +45,50 @@ class SDLMappingParser {
 
   static Map<String, GameAction>? getMapping(String name) {
     final lower = name.toLowerCase();
-    // Try exact match or partial match
+
+    // 1. Exact match
+    if (_cache.containsKey(lower)) return _cache[lower];
+
+    // 2. Substring match (controller name contains db entry, or db entry contains controller name)
     for (final entry in _cache.entries) {
-      if (lower.contains(entry.key)) {
+      if (lower.contains(entry.key) || entry.key.contains(lower)) {
         return entry.value;
       }
     }
+
+    // 3. Fuzzy: score by how many meaningful tokens overlap
+    final inputTokens = _tokenize(lower);
+    if (inputTokens.isEmpty) return null;
+
+    String? bestKey;
+    int bestScore = 0;
+
+    for (final entry in _cache.entries) {
+      final dbTokens = _tokenize(entry.key);
+      final shared = inputTokens.intersection(dbTokens).length;
+      // Require at least 2 shared tokens, or all input tokens matched
+      if (shared >= 2 || (shared >= 1 && shared == inputTokens.length)) {
+        if (shared > bestScore) {
+          bestScore = shared;
+          bestKey = entry.key;
+        }
+      }
+    }
+
+    if (bestKey != null) return _cache[bestKey];
     return null;
+  }
+
+  /// Splits a controller name into meaningful lowercase tokens, stripping
+  /// noise words (usb, hid, gamepad, controller, joystick, wireless, device).
+  static Set<String> _tokenize(String name) {
+    const noise = {'usb', 'hid', 'gamepad', 'controller', 'joystick', 'wireless', 'device', 'for', 'the', 'by'};
+    return name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length > 1 && !noise.contains(t))
+        .toSet();
   }
 
   static GameAction? _mapSDLKeyToAction(String sdlKey) {

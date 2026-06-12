@@ -18,8 +18,6 @@ const _mappableActions = [
   GameAction.right,
   GameAction.l1,
   GameAction.r1,
-  GameAction.l2,
-  GameAction.r2,
   GameAction.start,
   GameAction.select,
 ];
@@ -35,8 +33,6 @@ const _actionLabels = {
   GameAction.right: 'D-Pad Right',
   GameAction.l1: 'L1 / Left Bumper',
   GameAction.r1: 'R1 / Right Bumper',
-  GameAction.l2: 'L2 / Left Trigger',
-  GameAction.r2: 'R2 / Right Trigger',
   GameAction.start: 'Start / Menu',
   GameAction.select: 'Select / View',
 };
@@ -322,6 +318,16 @@ class _SettingsControllerSectionState
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                _buildDialogButton(
+                                  theme,
+                                  icon: Icons.auto_fix_high,
+                                  label: 'Auto-Map',
+                                  onTap: () {
+                                    Navigator.pop(ctx);
+                                    _tryAutoMap(context, id, name);
+                                  },
+                                ),
+                                const SizedBox(width: 8),
                                 if (mapped)
                                   _buildDialogButton(
                                     theme,
@@ -432,214 +438,585 @@ class _SettingsControllerSectionState
     );
   }
 
-  void _startSniffing(BuildContext context, String controllerId, String name) {
+  void _tryAutoMap(BuildContext context, String controllerId, String name) {
     final service = ref.read(gamepadServiceProvider);
-    final sniffedMapping = <String, GameAction>{};
+    final result = service.tryAutoMap(controllerId);
+    final theme = Theme.of(context);
 
-    int currentActionIndex = 0;
-
-    StreamSubscription<GamepadEvent>? rawSubscription;
-
-    void showSniffDialog() {
-      final isComplete = currentActionIndex >= _mappableActions.length;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) {
-          final theme = Theme.of(context);
-          return StatefulBuilder(
-            builder: (ctx, setDialogState) {
-              if (isComplete) {
-                return DialogBackBridge(
-                  child: AlertDialog(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24)),
-                    title: const Text('Mapping Complete'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
+    showDialog(
+      context: context,
+      builder: (ctx) => DialogBackBridge(
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              Icon(Icons.auto_fix_high, color: theme.colorScheme.primary),
+              const SizedBox(width: 10),
+              const Text('Auto-Map'),
+            ],
+          ),
+          content: result == null
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.search_off, size: 48, color: Colors.orange),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No automatic mapping found for:\n"$name"',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Try using "Configure" to set up buttons manually.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        const Icon(Icons.check_circle,
-                            size: 48, color: Colors.green),
-                        const SizedBox(height: 12),
-                        Text(
-                            '${sniffedMapping.length} button${sniffedMapping.length == 1 ? '' : 's'} mapped for $name.'),
+                        const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Found via ${result.source == 'sdl' ? 'SDL database' : result.source == 'builtin' ? 'built-in list' : 'custom mappings'}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ],
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          rawSubscription?.cancel();
-                          Navigator.pop(ctx);
-                        },
-                        child: const Text('Cancel'),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                       ),
-                      _buildDialogButton(
-                        theme,
-                        icon: Icons.save,
-                        label: 'Save Mapping',
-                        isPrimary: true,
-                        onTap: () {
-                          rawSubscription?.cancel();
-                          service.updateCustomMapping(
-                              controllerId, sniffedMapping);
-                          Navigator.pop(ctx);
-                          setState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              final currentAction = _mappableActions[currentActionIndex];
-              final actionLabel = _actionLabels[currentAction] ?? currentAction.name;
-
-              return DialogBackBridge(
-                child: AlertDialog(
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                  title: Text('Mapping: $name'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(
-                            colors: [
-                              theme.colorScheme.primary.withValues(alpha: 0.15),
-                              theme.colorScheme.secondary
-                                  .withValues(alpha: 0.05),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: result.mapping.entries.map((e) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${_actionLabels[e.value] ?? e.value.name}: ',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(4),
+                                  color: theme.colorScheme.surfaceContainerHighest,
+                                ),
+                                child: Text(
+                                  e.key,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 10,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
-                          border: Border.all(
-                            color: theme.colorScheme.primary
-                                .withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(Icons.touch_app,
-                                size: 32,
-                                color: theme.colorScheme.primary),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Press the button for:',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.7),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              actionLabel,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
+                        )).toList(),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Mapped so far (${sniffedMapping.length}/${_mappableActions.length}):',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      if (sniffedMapping.isEmpty)
-                        Text(
-                          'No buttons mapped yet.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.5),
-                          ),
-                        )
-                      else
-                        ...sniffedMapping.entries.map((e) => Padding(
-                              padding: const EdgeInsets.only(bottom: 3),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    '${_actionLabels[e.value] ?? e.value.name}: ',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      borderRadius:
-                                          BorderRadius.circular(4),
-                                      color: theme
-                                          .colorScheme.surfaceContainerHighest,
-                                    ),
-                                    child: Text(
-                                      e.key,
-                                      style: TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 10,
-                                        color: theme
-                                            .colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        rawSubscription?.cancel();
-                        Navigator.pop(ctx);
-                      },
-                      child: const Text('Cancel Mapping'),
                     ),
-                    _buildDialogButton(
-                      theme,
-                      icon: Icons.skip_next,
-                      label: 'Skip',
-                      onTap: () {
-                        if (mounted) {
-                          setDialogState(() {
-                            currentActionIndex++;
-                          });
-                          Navigator.pop(ctx);
-                          showSniffDialog();
-                        }
-                      },
+                    const SizedBox(height: 8),
+                    Text(
+                      '${result.mapping.length} button${result.mapping.length == 1 ? '' : 's'} will be saved as a custom mapping.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
                     ),
                   ],
                 ),
-              );
-            },
-          );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            if (result != null)
+              _buildDialogButton(
+                theme,
+                icon: Icons.save,
+                label: 'Apply Mapping',
+                isPrimary: true,
+                onTap: () {
+                  service.updateCustomMapping(controllerId, result.mapping);
+                  Navigator.pop(ctx);
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Auto-mapping applied for $name!')),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _startSniffing(BuildContext context, String controllerId, String name) {
+    final service = ref.read(gamepadServiceProvider);
+    final backendHandled = service.getBackendHandledActions(controllerId);
+
+    // Only ask the user to map actions the backend can't handle automatically
+    final manualActions = _mappableActions
+        .where((a) => !backendHandled.contains(a))
+        .toList();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _ButtonSniffDialog(
+        service: service,
+        controllerId: controllerId,
+        controllerName: name,
+        manualActions: manualActions,
+        skippedActions: backendHandled,
+        onComplete: (mapping) {
+          service.updateCustomMapping(controllerId, mapping);
+          if (mounted) setState(() {});
         },
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Self-contained sniff dialog with charge-bar visualizer
+// ---------------------------------------------------------------------------
+
+class _ButtonSniffDialog extends StatefulWidget {
+  final GamepadService service;
+  final String controllerId;
+  final String controllerName;
+  final List<GameAction> manualActions;
+  final Set<GameAction> skippedActions;
+  final void Function(Map<String, GameAction> mapping) onComplete;
+
+  const _ButtonSniffDialog({
+    required this.service,
+    required this.controllerId,
+    required this.controllerName,
+    required this.manualActions,
+    required this.skippedActions,
+    required this.onComplete,
+  });
+
+  @override
+  State<_ButtonSniffDialog> createState() => _ButtonSniffDialogState();
+}
+
+class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
+    with SingleTickerProviderStateMixin {
+  static const _chargeDuration = Duration(milliseconds: 600);
+
+  final Map<String, GameAction> _sniffedMapping = {};
+  int _currentActionIndex = 0;
+  bool _complete = false;
+
+  late AnimationController _chargeController;
+  StreamSubscription<GamepadEvent>? _rawSubscription;
+
+  // Latch: after a button registers we record BOTH the key and the value polarity
+  // (+1 / -1). For digital buttons "released" means value < 0.5 on the same key.
+  // For axes (POV/triggers) the value never goes to 0 — it just changes sign or
+  // goes back toward center. We clear the latch as soon as abs(value) < 0.3,
+  // OR if the value flips polarity (e.g. left-trigger vs right-trigger share one axis).
+  String? _latchedKey;
+  int _latchedPolarity = 0; // +1 or -1
+  String? _pendingKey;
+  int _pendingPolarity = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargeController = AnimationController(vsync: this, duration: _chargeDuration);
+    _chargeController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _registerCurrent();
+      }
+    });
+    _rawSubscription = widget.service.rawEvents.listen(_onRawEvent);
+  }
+
+  @override
+  void dispose() {
+    _chargeController.dispose();
+    _rawSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _onRawEvent(GamepadEvent event) {
+    if (event.gamepadId != widget.controllerId) return;
+    if (_complete) return;
+
+    final v = event.value;
+    final abs = v.abs();
+    final polarity = v >= 0 ? 1 : -1;
+    final isPressed = abs >= 0.5;
+    final isReleased = abs < 0.3;
+
+    // --- Latch release check ---
+    // Clear latch when: value drops near center, OR polarity flips (axis shared
+    // by two directions, e.g. dwZPos for L2/R2, or POV returning to center).
+    if (_latchedKey == event.key) {
+      if (isReleased || polarity != _latchedPolarity) {
+        setState(() {
+          _latchedKey = null;
+          _latchedPolarity = 0;
+        });
+      } else {
+        // Still held in same direction — stay latched, ignore
+        return;
+      }
+    }
+
+    if (isPressed) {
+      final sameKeySamePolarity =
+          _pendingKey == event.key && _pendingPolarity == polarity;
+
+      if (!sameKeySamePolarity) {
+        // New key or flipped polarity — restart charge
+        _chargeController.stop();
+        _chargeController.reset();
+        setState(() {
+          _pendingKey = event.key;
+          _pendingPolarity = polarity;
+        });
+        _chargeController.forward();
+      }
+      // else: same key same direction, already charging — do nothing
+    } else if (isReleased) {
+      if (_pendingKey == event.key) {
+        // Released before bar filled — cancel charge
+        _chargeController.stop();
+        _chargeController.reset();
+        setState(() {
+          _pendingKey = null;
+          _pendingPolarity = 0;
+        });
+      }
+    }
+  }
+
+  void _registerCurrent() {
+    if (_pendingKey == null) return;
+    final key = _pendingKey!;
+    final polarity = _pendingPolarity;
+    final action = widget.manualActions[_currentActionIndex];
+    setState(() {
+      _sniffedMapping[key] = action;
+      _currentActionIndex++;
+      _latchedKey = key;
+      _latchedPolarity = polarity;
+      _pendingKey = null;
+      _pendingPolarity = 0;
+      if (_currentActionIndex >= widget.manualActions.length) _complete = true;
+    });
+    _chargeController.reset();
+  }
+
+  void _skip() {
+    _chargeController.stop();
+    _chargeController.reset();
+    setState(() {
+      _pendingKey = null;
+      _pendingPolarity = 0;
+      _latchedKey = null;
+      _latchedPolarity = 0;
+      _currentActionIndex++;
+      if (_currentActionIndex >= widget.manualActions.length) _complete = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (_complete) {
+      return DialogBackBridge(
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Mapping Complete'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle, size: 48, color: Colors.green),
+              const SizedBox(height: 12),
+              Text('${_sniffedMapping.length} button${_sniffedMapping.length == 1 ? '' : 's'} manually mapped for ${widget.controllerName}.'),
+              if (widget.skippedActions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.green.withValues(alpha: 0.08),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_fix_high, size: 14, color: Colors.green),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${widget.skippedActions.map((a) => _actionLabels[a] ?? a.name).join(', ')} handled automatically by your controller.',
+                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.green),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            _sniffButton(
+              theme,
+              icon: Icons.save,
+              label: 'Save Mapping',
+              isPrimary: true,
+              onTap: () {
+                widget.onComplete(_sniffedMapping);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
       );
     }
 
-    showSniffDialog();
+    final currentAction = widget.manualActions[_currentActionIndex];
+    final actionLabel = _actionLabels[currentAction] ?? currentAction.name;
+    final progress = _currentActionIndex / widget.manualActions.length;
 
-    rawSubscription = service.rawEvents.listen((event) {
-      if (event.gamepadId != controllerId) return;
-      if (event.value.abs() < 0.5) return;
+    return DialogBackBridge(
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Mapping: ${widget.controllerName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Overall progress
+            Row(
+              children: [
+                Text(
+                  'Step ${_currentActionIndex + 1} of ${widget.manualActions.length}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${(_sniffedMapping.length)} mapped',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 4,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary.withValues(alpha: 0.4)),
+              ),
+            ),
+            const SizedBox(height: 16),
 
-      if (mounted) {
-        final currentAction = _mappableActions[currentActionIndex];
-        sniffedMapping[event.key] = currentAction;
-        currentActionIndex++;
+            // Prompt box
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    theme.colorScheme.primary.withValues(alpha: 0.12),
+                    theme.colorScheme.secondary.withValues(alpha: 0.04),
+                  ],
+                ),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    _pendingKey != null ? Icons.radio_button_checked : Icons.touch_app,
+                    size: 28,
+                    color: _pendingKey != null ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _pendingKey != null ? 'Hold it...' : 'Press & hold the button for:',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    actionLabel,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
 
-        // Close current dialog, reopen with next action
-        Navigator.of(context).popUntil((route) => route.isFirst);
-        showSniffDialog();
-      }
-    });
+                  // Charge bar
+                  AnimatedBuilder(
+                    animation: _chargeController,
+                    builder: (_, __) {
+                      final v = _chargeController.value;
+                      final isCharging = v > 0;
+                      return Column(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: LinearProgressIndicator(
+                              value: v,
+                              minHeight: 14,
+                              backgroundColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                              valueColor: AlwaysStoppedAnimation(
+                                isCharging
+                                    ? Color.lerp(theme.colorScheme.primary, Colors.green, v)!
+                                    : theme.colorScheme.surfaceContainerHighest,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            isCharging
+                                ? v >= 1.0 ? 'Registered!' : 'Charging...'
+                                : 'Waiting for input',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: isCharging
+                                  ? Color.lerp(theme.colorScheme.primary, Colors.green, v)
+                                  : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // Already-mapped list
+            if (_sniffedMapping.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Mapped so far:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              ..._sniffedMapping.entries.map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${_actionLabels[e.value] ?? e.value.name}: ',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            color: theme.colorScheme.surfaceContainerHighest,
+                          ),
+                          child: Text(
+                            e.key,
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 10,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _rawSubscription?.cancel();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          _sniffButton(
+            theme,
+            icon: Icons.skip_next,
+            label: 'Skip',
+            onTap: _skip,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sniffButton(
+    ThemeData theme, {
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool isPrimary = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: isPrimary
+              ? LinearGradient(colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)])
+              : null,
+          color: isPrimary ? null : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: isPrimary ? theme.colorScheme.onPrimary : theme.colorScheme.primary),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isPrimary ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

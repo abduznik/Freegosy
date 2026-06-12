@@ -12,7 +12,7 @@ enum GameAction {
   up, down, left, right, 
   confirm, back, detail, favorite,
   verticalAxis, horizontalAxis,
-  l1, r1, l2, r2, start, select
+  l1, r1, start, select
 }
 
 class NormalizedInput {
@@ -39,6 +39,8 @@ class GamepadService {
   final Map<String, String> _controllerNames = {};
   final Map<String, AxisState> _axisStates = {};
   final _rawEventController = StreamController<GamepadEvent>.broadcast();
+  // Tracks every raw key seen per controller — used to detect backend-handled axes
+  final Map<String, Set<String>> _seenRawKeys = {};
 
   GameAction? _heldDirection;
   Timer? _holdDelayTimer;
@@ -85,6 +87,88 @@ class GamepadService {
       'id': entry.key,
       'name': entry.value,
     }).toList();
+  }
+
+  /// Tries to automatically find a mapping for a controller.
+  /// Returns a record: (source, mapping) where source is 'custom', 'builtin', 'sdl', or null if not found.
+  ({String source, Map<String, GameAction> mapping})? tryAutoMap(String controllerId) {
+    final name = _controllerNames[controllerId] ?? '';
+    if (name.isEmpty) return null;
+
+    // 1. Custom mappings
+    for (final entry in customControllerMappings.entries) {
+      if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        return (source: 'custom', mapping: Map<String, GameAction>.from(entry.value));
+      }
+    }
+
+    // 2. SDL Database
+    final sdlMapping = SDLMappingParser.getMapping(name);
+    if (sdlMapping != null && sdlMapping.isNotEmpty) {
+      return (source: 'sdl', mapping: Map<String, GameAction>.from(sdlMapping));
+    }
+
+    // 3. Built-in known_controllers — exact/substring first, then fuzzy token match
+    final nameLower = name.toLowerCase();
+    for (final entry in kControllerMappings.entries) {
+      if (nameLower.contains(entry.key.toLowerCase()) ||
+          entry.key.toLowerCase().contains(nameLower)) {
+        return (source: 'builtin', mapping: Map<String, GameAction>.from(entry.value));
+      }
+    }
+
+    // Fuzzy token fallback for built-in list
+    const noise = {'usb', 'hid', 'gamepad', 'controller', 'joystick', 'wireless', 'device', 'for', 'the', 'by'};
+    Set<String> tokenize(String s) => s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length > 1 && !noise.contains(t))
+        .toSet();
+
+    final inputTokens = tokenize(name);
+    String? bestBuiltinKey;
+    int bestBuiltinScore = 0;
+    for (final entry in kControllerMappings.entries) {
+      final dbTokens = tokenize(entry.key);
+      final shared = inputTokens.intersection(dbTokens).length;
+      if (shared >= 2 || (shared >= 1 && shared == inputTokens.length)) {
+        if (shared > bestBuiltinScore) {
+          bestBuiltinScore = shared;
+          bestBuiltinKey = entry.key;
+        }
+      }
+    }
+    if (bestBuiltinKey != null) {
+      return (source: 'builtin', mapping: Map<String, GameAction>.from(kControllerMappings[bestBuiltinKey]!));
+    }
+
+    return null;
+  }
+
+  /// Returns which GameActions are already handled automatically by the backend
+  /// for this controller (POV hat → d-pad, dwZPos → L2/R2, etc.) and should
+  /// therefore be excluded from the manual sniff wizard.
+  Set<GameAction> getBackendHandledActions(String controllerId) {
+    final handled = <GameAction>{};
+    // We detect POV/Z-axis by sniffing the last known events isn't practical,
+    // so we use the controller name + a probe: check if any event keys seen
+    // so far are backend-decoded axis keys.
+    // The simplest reliable approach: check what raw keys have arrived for this
+    // controller and flag accordingly.
+    final seenKeys = _seenRawKeys[controllerId] ?? {};
+
+    // POV hat covers all four d-pad directions
+    if (seenKeys.any((k) => k == 'dwpov' || k.startsWith('pov'))) {
+      handled.addAll([GameAction.up, GameAction.down, GameAction.left, GameAction.right]);
+    }
+
+    // dwXPos/dwYPos → analog stick axes (not in manual map list, but guard anyway)
+    if (seenKeys.any((k) => k == 'dwxpos' || k == 'dwypos')) {
+      handled.addAll([GameAction.horizontalAxis, GameAction.verticalAxis]);
+    }
+
+    return handled;
   }
 
   /// Returns the current mapping for a specific controller.
@@ -153,12 +237,74 @@ class GamepadService {
     if (action != null) {
       return NormalizedInput(action: action, value: event.value);
     }
+
+    // DirectInput legacy axis fallback: dwXPos/dwYPos → analog stick axes
+    final key = event.key.toLowerCase();
+    if (key == 'dwxpos' || key == 'dwypos' ||
+        key == 'dwrpos' || key == 'dwupos' || key == 'dwvpos') {
+      // Normalize raw DirectInput axis (0–65535) to -1.0..1.0
+      // Raw center is ~32767; treat as signed
+      final normalized = (event.value - 32767.0) / 32767.0;
+      final isX = key == 'dwxpos';
+      return NormalizedInput(
+        action: isX ? GameAction.horizontalAxis : GameAction.verticalAxis,
+        value: normalized,
+      );
+    }
+
     return null;
   }
+
+  /// Decodes a DirectInput POV hat value (in hundredths of a degree) to
+  /// discrete direction actions. Returns empty list when centered.
+  List<GameAction> _decodePOV(double rawValue) {
+    final intVal = rawValue.toInt();
+    // -1 or 65535 means centered/released
+    if (intVal < 0 || intVal == 65535) return [];
+    // Degrees 0–36000 (hundredths), map to 8 directions
+    final deg = intVal / 100.0;
+    if (deg >= 337.5 || deg < 22.5) return [GameAction.up];
+    if (deg < 67.5) return [GameAction.up, GameAction.right];
+    if (deg < 112.5) return [GameAction.right];
+    if (deg < 157.5) return [GameAction.down, GameAction.right];
+    if (deg < 202.5) return [GameAction.down];
+    if (deg < 247.5) return [GameAction.down, GameAction.left];
+    if (deg < 292.5) return [GameAction.left];
+    if (deg < 337.5) return [GameAction.up, GameAction.left];
+    return [];
+  }
+
+  // Tracks which POV directions are currently active to detect release
+  final Set<GameAction> _activePovDirections = {};
 
   void _handleGamepadEvent(GamepadEvent event) {
     // Broadcast raw event for sniffing/configuration dialogs
     _rawEventController.add(event);
+
+    // Track all raw keys seen per controller for backend-detection
+    _seenRawKeys.putIfAbsent(event.gamepadId, () => {}).add(event.key.toLowerCase());
+
+    // Handle DirectInput POV hat (D-pad reported as angle in hundredths of degrees)
+    final keyLower = event.key.toLowerCase();
+    if (keyLower == 'dwpov' || keyLower.startsWith('pov')) {
+      if (_ref.read(inputModeProvider) != InputMode.gamepad) {
+        _ref.read(inputModeProvider.notifier).state = InputMode.gamepad;
+      }
+      final newDirections = _decodePOV(event.value).toSet();
+      // Release directions no longer active
+      for (final dir in _activePovDirections.difference(newDirections)) {
+        _deactivateDirection(dir);
+      }
+      // Press newly active directions
+      for (final dir in newDirections.difference(_activePovDirections)) {
+        _triggerAction(dir, 1.0);
+        _activateDirection(dir);
+      }
+      _activePovDirections
+        ..clear()
+        ..addAll(newDirections);
+      return;
+    }
 
     // 1. Switch to Gamepad input mode if significant event occurs
     if (_ref.read(inputModeProvider) != InputMode.gamepad) {
@@ -169,7 +315,7 @@ class GamepadService {
     }
 
     final normalized = _normalize(event);
-    
+
     // --- SMART LOGGING ---
     if (normalized == null && event.value.abs() > 0.5) {
       debugPrint('🎮 UNMAPPED HID [${event.gamepadId}]: ${event.key} = ${event.value}');
@@ -182,7 +328,7 @@ class GamepadService {
       final axisKey = '${event.gamepadId}_${event.key}';
       final state = _axisStates.putIfAbsent(axisKey, () => AxisState());
 
-      // Invert vertical D-pad axis because D-pad UP is positive on macOS, 
+      // Invert vertical D-pad axis because D-pad UP is positive on macOS,
       // but analog stick UP is negative. This unifies their behavior.
       final bool isInverted = event.key.contains('dpad') && normalized.action == GameAction.verticalAxis;
       final double adjustedValue = isInverted ? -event.value : event.value;

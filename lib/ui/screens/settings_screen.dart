@@ -475,6 +475,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.all(16.0),
                 children: [
                   _buildRommServerSection(context, ref, rommService, rommConfig),
+                  _buildSectionCard(
+                    context: context,
+                    title: 'Controller Setup',
+                    icon: Icons.gamepad,
+                    child: const SettingsControllerSection(),
+                  ),
                   _buildAppearanceSection(context, ref),
                   _buildSectionCard(
                     context: context,
@@ -504,13 +510,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     child: const SettingsCustomEmulatorsSection(),
                    ),
                    const SizedBox(height: 20),
-                    _buildSectionCard(
-                      context: context,
-                      title: 'Controller Setup',
-                      icon: Icons.gamepad,
-                      child: const SettingsControllerSection(),
-                    ),
-                  if (strategyRegistry != null) ...[
+                   if (strategyRegistry != null) ...[
                     _buildSectionCard(
                       context: context,
                       title: 'Emulator Conflicts',

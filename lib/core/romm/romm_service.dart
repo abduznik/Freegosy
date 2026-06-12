@@ -18,7 +18,7 @@ class RommService {
 
   RomMConfig get config => _config;
 
-  static const String _ua = 'Freegosy/0.5.7';
+  static const String _ua = 'Freegosy/0.5.8';
 
   void updateConfig(RomMConfig newConfig) {
     _config = newConfig;
@@ -264,7 +264,7 @@ class RommService {
   Future<String?> registerDevice({
     required String name,
     required String platform,
-    String clientVersion = '0.5.7',
+    String clientVersion = '0.5.8',
     bool allowExisting = true,
   }) async {
     try {
