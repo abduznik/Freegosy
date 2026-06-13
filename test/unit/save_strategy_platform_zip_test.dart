@@ -67,10 +67,14 @@ void main() {
       expect(strategy!.shouldZip, isFalse);
     });
 
-    test('dolphin GC/Wii core should return false for shouldZip', () {
+    test('dolphin GC/Wii core should return true for shouldZip', () {
+      // Dolphin needs shouldZip=true: Wii saves are directories that must be
+      // bundled into a ZIP. GC .gci files go through the single-file path in
+      // SaveSyncService (filesMap.length == 1, non-directory) and are uploaded
+      // raw regardless of this flag.
       final strategy = service.getStrategyForSlug('gc');
       expect(strategy, isNotNull);
-      expect(strategy!.shouldZip, isFalse);
+      expect(strategy!.shouldZip, isTrue);
     });
 
     test('windows native core should return true for shouldZip', () {
