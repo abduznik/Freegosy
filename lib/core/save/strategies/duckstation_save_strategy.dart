@@ -67,17 +67,22 @@ class DuckstationSaveStrategy extends SaveStrategy {
 
     final memcardsDir = Directory(p.join(baseDir, 'memcards'));
     if (await memcardsDir.exists()) {
+      // Keep only the newest matching .mcd to avoid uploading multiple per-game saves.
+      File? bestMcd;
+      DateTime? bestMcdMtime;
       await for (final entity in memcardsDir.list()) {
-        if (entity is File &&
-            p.basename(entity.path).toLowerCase().contains(stem.toLowerCase()) &&
-            entity.path.toLowerCase().endsWith('.mcd')) {
-          if (sessionStart != null) {
-            final stat = await entity.stat();
-            if (stat.modified.isBefore(sessionStart)) continue;
-          }
-          result.add(entity);
+        if (entity is! File) continue;
+        if (!entity.path.toLowerCase().endsWith('.mcd')) continue;
+        if (!p.basename(entity.path).toLowerCase().contains(stem.toLowerCase())) continue;
+        final stat = await entity.stat();
+        if (sessionStart != null &&
+            stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
+        if (bestMcd == null || stat.modified.isAfter(bestMcdMtime!)) {
+          bestMcd = entity;
+          bestMcdMtime = stat.modified;
         }
       }
+      if (bestMcd != null) result.add(bestMcd!);
     }
 
     final statesDir = Directory(p.join(baseDir, 'savestates'));
@@ -86,7 +91,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
         if (entity is File && p.basename(entity.path).toLowerCase().contains(stem.toLowerCase())) {
           if (sessionStart != null) {
             final stat = await entity.stat();
-            if (stat.modified.isBefore(sessionStart)) continue;
+            if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
           }
           result.add(entity);
         }

@@ -305,7 +305,7 @@ class RyujinxSaveStrategy extends SaveStrategy {
     if (files.isEmpty) return [];
 
     if (sessionStart != null) {
-      final hasChanges = files.any((f) => f.statSync().modified.isAfter(sessionStart));
+      final hasChanges = files.any((f) => f.statSync().modified.isAfter(sessionStart.subtract(const Duration(seconds: 2))));
       if (!hasChanges) return [];
     }
 

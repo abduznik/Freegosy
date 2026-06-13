@@ -159,7 +159,7 @@ class EdenSaveStrategy extends SaveStrategy {
       return !name.startsWith('.') && !name.endsWith('.bak');
     }).toList();
     if (files.isEmpty && syncMode == 'push') throw Exception('No save files found.');
-    if (sessionStart != null && !files.any((f) => f.statSync().modified.isAfter(sessionStart))) return [];
+    if (sessionStart != null && !files.any((f) => f.statSync().modified.isAfter(sessionStart.subtract(const Duration(seconds: 2))))) return [];
     return [io.File(saveDir)];
   }
 

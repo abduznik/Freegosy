@@ -289,11 +289,21 @@ class SaveSyncService {
 
   /// Filters the files map to a single primary save when the strategy does not
   /// support ZIP bundles.
+  ///
+  /// Directories are always passed through — they represent whole save folders
+  /// (e.g. Dolphin Wii title dirs, PPSSPP SAVEDATA) that the bundling path in
+  /// _devicePushSaves / _legacyPushSaves already handles correctly by zipping
+  /// them. Dropping them here was the root cause of Wii saves never uploading.
   Map<io.File, io.File?> _filterFilesMap(
       SaveStrategy strategy, Map<io.File, io.File?> filesMap) {
     if (strategy.shouldZip) return filesMap;
     final filtered = <io.File, io.File?>{};
     for (final entry in filesMap.entries) {
+      // Always pass directories through — callers zip them.
+      if (io.FileSystemEntity.isDirectorySync(entry.key.path)) {
+        filtered[entry.key] = entry.value;
+        return filtered;
+      }
       final pathLower = entry.key.path.toLowerCase();
       if (pathLower.endsWith('.srm') ||
           pathLower.endsWith('.sav') ||
@@ -303,11 +313,10 @@ class SaveSyncService {
       }
     }
     if (filtered.isEmpty) {
+      // Last resort: take the first file entry.
       for (final entry in filesMap.entries) {
-        if (!io.FileSystemEntity.isDirectorySync(entry.key.path)) {
-          filtered[entry.key] = entry.value;
-          break;
-        }
+        filtered[entry.key] = entry.value;
+        break;
       }
     }
     return filtered;

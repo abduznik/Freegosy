@@ -21,8 +21,12 @@ class DolphinSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'dolphin';
 
+  /// Wii saves are directories (title/00010000/<hexId>/) that must be zipped.
+  /// GameCube saves are individual .gci files — no zip needed.
+  /// We return true so the service always bundles correctly; the restore path
+  /// already handles both raw .gci and ZIP extraction.
   @override
-  bool get shouldZip => false;
+  bool get shouldZip => true;
 
   String _getEmuExe() {
     if (io.Platform.isWindows) return 'Dolphin.exe';
@@ -206,45 +210,70 @@ class DolphinSaveStrategy extends SaveStrategy {
           result.add(io.File(rootSaveDir));
         }
       } else {
-        // GameCube fuzzy matching
+        // GameCube save matching
         final dir = io.Directory(rootSaveDir);
         if (await dir.exists()) {
           final gameId = (await _extractGameId(romPath))?.toUpperCase();
           final normalizedTarget = _normalizeGameName(game.displayName);
 
+          // Dolphin timestamps backups with [YYYY-MM-DD_HH-MM-SS] in the filename.
+          // These are internal backups — never sync them.
+          final backupPattern = RegExp(r'\[\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\]');
+
+          io.File? bestGci;
+          DateTime? bestGciMtime;
+
           await for (final entity in dir.list(recursive: true)) {
             if (entity is! io.File) continue;
             final filename = p.basename(entity.path).toUpperCase();
 
-            // 1. Match .gci files by ID or name
+            // 1. Match .gci files
             if (filename.endsWith('.GCI')) {
+              // Skip Dolphin's own timestamped backup copies
+              if (backupPattern.hasMatch(filename)) continue;
+
               bool match = false;
               if (gameId != null && filename.contains(gameId)) {
+                // Strict game ID match — highest confidence
                 match = true;
-              } else {
+              } else if (gameId == null) {
+                // No ID available — fall back to name match
                 final normalizedGci = _normalizeGameName(filename);
-                if (normalizedGci.contains(normalizedTarget) || normalizedTarget.contains(normalizedGci)) {
+                if (normalizedGci.contains(normalizedTarget) ||
+                    normalizedTarget.contains(normalizedGci)) {
                   match = true;
                 }
               }
 
               if (match) {
-                if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
-                  result.add(entity);
+                final mtime = (await entity.stat()).modified;
+                if (sessionStart == null ||
+                    mtime.isAfter(
+                        sessionStart.subtract(const Duration(seconds: 2)))) {
+                  // Keep only the newest matching .gci
+                  if (bestGci == null || mtime.isAfter(bestGciMtime!)) {
+                    bestGci = entity;
+                    bestGciMtime = mtime;
+                  }
                 }
               }
-            } 
-            
+            }
+
             // 2. Match Memory Card files (.raw, .mcp) - only if they match region
-            else if (filename.startsWith('MEMORYCARDA') && (filename.endsWith('.RAW') || filename.endsWith('.MCP'))) {
+            else if (filename.startsWith('MEMORYCARDA') &&
+                (filename.endsWith('.RAW') || filename.endsWith('.MCP'))) {
               final region = _detectRegion(romPath);
               if (filename.contains(region)) {
-                if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+                if (sessionStart == null ||
+                    (await entity.stat()).modified.isAfter(
+                        sessionStart.subtract(const Duration(seconds: 2)))) {
                   result.add(entity);
                 }
               }
             }
           }
+
+          if (bestGci != null) result.add(bestGci!);
         }
       }
     }
@@ -265,7 +294,7 @@ class DolphinSaveStrategy extends SaveStrategy {
           // or [Filename].s00
           if (filename.endsWith('.SAV') || filename.contains(RegExp(r'\.S\d{2}$'))) {
             if ((gameId != null && filename.startsWith(gameId)) || filename.startsWith(romStem)) {
-              if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+              if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart.subtract(const Duration(seconds: 2)))) {
                 result.add(entity);
               }
             }

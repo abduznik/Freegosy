@@ -163,6 +163,11 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         } catch (e) { dev.log('Pre-launch backup failed', error: e); }
       }
 
+      // Record session start time just before handing off to the emulator.
+      // This is used to filter saves (only upload files modified during the
+      // session) and to report playtime to RomM 4.9+.
+      final sessionStart = DateTime.now();
+
       Process? process = await strategy.launchWithHandle(game, romPath);
       if (!context.mounted) return;
       if (process == null) await strategy.launch(game, romPath);
@@ -170,11 +175,19 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         unawaited(Future.delayed(Duration.zero, () async {
           try {
             await process.exitCode;
+            final sessionEnd = DateTime.now();
+
             if (!context.mounted) return;
             ErrorHandler.showInfo(context, 'Syncing', message: 'Auto-syncing saves...');
             if (syncService != null) {
               final syncMode = ref.read(retroarchSyncModeProvider);
-              final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode);
+              // Pass sessionStart so strategies only upload files modified
+              // during this session (not stale saves from previous runs).
+              final ok = await syncService.pushSaves(
+                game, romPath,
+                sessionStart: sessionStart,
+                syncMode: syncMode,
+              );
               try {
                 final backupService = ref.read(backupServiceProvider);
                 final postBackup = await backupService.createImmediate(game, romPath, syncService);
@@ -185,6 +198,22 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
                   if (await f.exists()) await f.delete();
                 }
               } catch (e) { dev.log('Post-exit backup failed', error: e); }
+
+              // Report play session to RomM 4.9+ (best-effort, non-blocking).
+              try {
+                final rommService = ref.read(rommServiceProvider);
+                final caps = await rommService?.fetchCapabilities();
+                final deviceId = ref.read(sharedPreferencesProvider).getString('romm_device_id');
+                if (rommService != null && (caps?.hasPlaySessionTracking ?? false) && deviceId != null) {
+                  await rommService.recordPlaySession(
+                    romId: game.id,
+                    deviceId: deviceId,
+                    startTime: sessionStart,
+                    endTime: sessionEnd,
+                  );
+                }
+              } catch (e) { dev.log('Play session record failed (non-fatal)', error: e); }
+
               if (context.mounted) {
                 if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
                 else ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');

@@ -88,7 +88,7 @@ class AzaharSaveStrategy extends SaveStrategy {
     // If sessionStart filter is set, check if any file was modified after it
     if (sessionStart != null) {
       final files = dir.listSync(recursive: true).whereType<io.File>();
-      final hasChanges = files.any((f) => f.statSync().modified.isAfter(sessionStart));
+      final hasChanges = files.any((f) => f.statSync().modified.isAfter(sessionStart.subtract(const Duration(seconds: 2))));
       if (!hasChanges) {
         debugPrint('[Azahar] No files modified since session start');
         return [];

@@ -1,4 +1,24 @@
 # Changelog
+
+## [0.5.9] - 2026-06-13
+
+### Added
+- **RomM 4.9 device sync**: Saves are now tagged to your device (`device_id`) when uploading to RomM 4.9+, preventing cross-device conflicts. Falls back to legacy mode on older RomM versions automatically.
+- **Play session tracking**: Game sessions are automatically recorded to RomM 4.9+ (`POST /api/play-sessions`) with start time, end time, and duration.
+- **PCSX2 per-game folder saves**: PCSX2 Qt (1.7+) stores saves in `saves/{Serial}/` folders. Freegosy now extracts the PS2 serial from the ROM filename or ISO `SYSTEM.CNF` and syncs that folder. Legacy `Mcd001/Mcd002.ps2` memcards remain as a fallback for older setups.
+- **Controller polarity-encoded axis mapping**: Analog sticks and hat switches are now stored as `key+` / `key-` pairs, matching the convention used by Dolphin, RetroArch, and other emulators. Fixes D-pad directions mapping to the same value and analog axes flooding the filter popup.
+- **SDL GameControllerDB hat switch parsing**: Auto-map now correctly parses hat switch entries (`h0.1`, `h0.2`, `h0.4`, `h0.8`) from SDL mapping strings.
+- **Reset controller mapping**: New Reset button in the controller setup dialog lets you clear a broken or unwanted custom profile.
+
+### Fixed
+- **Dolphin GameCube saves — multiple uploads**: `getSaveFiles()` was returning every `.gci` in the Card A folder, including Dolphin's own timestamped backup copies and saves from unrelated games (loose name match). Now uses strict game ID matching and picks only the newest matching `.gci`.
+- **Dolphin Wii saves silently dropped**: `_filterFilesMap` was discarding directory-type entries; Wii save directories now pass through correctly.
+- **DuckStation — multiple `.mcd` uploads**: Now keeps only the newest matching memcard file instead of all matches.
+- **PPSSPP — multiple SAVEDATA folders**: Word-token matching could return saves from multiple games sharing a common word. Now scores matches and picks the single best-scoring folder.
+- **Cemu — always uploading**: `getSaveFiles()` had no `sessionStart` check, causing the entire `00050000` save directory to upload on every sync regardless of changes.
+- **Session-start boundary race**: Save files written at the exact moment of session start could be excluded. All strategies now apply a 2-second grace window so files modified up to 2 seconds before `sessionStart` are included.
+- **Empty controller mapping saved**: Completing the sniff wizard without mapping any buttons would save a blank profile that permanently shadowed the built-in mapping. The Save button is now disabled when the mapping is empty, and a warning is shown.
+
 ## [0.5.4+1] - 2026-05-28
 ### Added
 - Flatpak auto-detection and command override support for Linux emulators

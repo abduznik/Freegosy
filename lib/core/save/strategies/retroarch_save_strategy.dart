@@ -297,7 +297,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
       if (!existsAsFile && !existsAsDir) continue;
       if (sessionStart != null && existsAsFile) {
         final stat = await f.stat();
-        if (stat.modified.isBefore(sessionStart)) continue;
+        if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
       }
 
       // Check for screenshots if it's a state file

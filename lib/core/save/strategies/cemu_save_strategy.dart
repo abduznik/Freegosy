@@ -47,7 +47,17 @@ class CemuSaveStrategy extends SaveStrategy {
     final saveRoot = await _getSaveRoot(platformSlug: game.platformSlug);
     final saveBase = io.Directory(p.join(saveRoot, '00050000'));
     if (!await saveBase.exists()) return [];
-    return [io.File(saveBase.path)]; // Return the directory as a single item
+
+    // If a session start is given, only upload if something changed this session.
+    if (sessionStart != null) {
+      final files = saveBase.listSync(recursive: true).whereType<io.File>();
+      final hasChanges = files.any((f) =>
+          f.statSync().modified.isAfter(
+              sessionStart.subtract(const Duration(seconds: 2))));
+      if (!hasChanges) return [];
+    }
+
+    return [io.File(saveBase.path)];
   }
 
   @override

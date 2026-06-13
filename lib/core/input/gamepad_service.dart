@@ -9,8 +9,8 @@ import 'input_action_bus.dart';
 import 'custom_controller_mappings.dart';
 import 'gamepad_utils.dart';
 
-enum GameAction { 
-  up, down, left, right, 
+enum GameAction {
+  up, down, left, right,
   confirm, back, detail, favorite,
   verticalAxis, horizontalAxis,
   l1, r1, start, select
@@ -54,13 +54,13 @@ class GamepadService {
 
   void initialize() async {
     debugPrint('🎮 GamepadService: Starting direct action listener...');
-    
+
     // Load custom mappings
     await loadCustomMappings();
-    
+
     // Load the SDL Database
     await SDLMappingParser.loadDatabase();
-    
+
     _scan();
     _scanTimer = Timer.periodic(const Duration(seconds: 3), (_) => _scan());
 
@@ -150,7 +150,7 @@ class GamepadService {
   Map<String, GameAction>? getCurrentMapping(String controllerId) {
     final name = _controllerNames[controllerId] ?? '';
     if (name.isEmpty) return null;
-    
+
     // Check custom mappings first
     for (final entry in customControllerMappings.entries) {
       if (name.toLowerCase().contains(entry.key.toLowerCase())) {
@@ -173,17 +173,34 @@ class GamepadService {
   Future<void> updateCustomMapping(String controllerId, Map<String, GameAction> mapping) async {
     final name = _controllerNames[controllerId] ?? '';
     if (name.isEmpty) return;
-    
+
     // Update the custom mappings
     customControllerMappings[name] = mapping;
-    
+
     // Save to persistent storage
+    await saveCustomMappings();
+  }
+
+  /// Removes the custom mapping for a controller, falling back to SDL/built-in.
+  Future<void> clearCustomMapping(String controllerId) async {
+    final name = _controllerNames[controllerId] ?? '';
+    if (name.isEmpty) return;
+
+    // Find and remove by substring match (same logic as lookup)
+    final keysToRemove = customControllerMappings.keys
+        .where((k) => name.toLowerCase().contains(k.toLowerCase()) ||
+                      k.toLowerCase().contains(name.toLowerCase()))
+        .toList();
+    for (final k in keysToRemove) {
+      customControllerMappings.remove(k);
+    }
+
     await saveCustomMappings();
   }
 
   Map<String, GameAction> _getMappingFor(String controllerId) {
     final name = _controllerNames[controllerId] ?? '';
-    
+
     // 1. Try custom mappings first
     for (final entry in customControllerMappings.entries) {
       if (name.toLowerCase().contains(entry.key.toLowerCase())) {
@@ -208,9 +225,24 @@ class GamepadService {
 
   NormalizedInput? _normalize(GamepadEvent event) {
     final mapping = _getMappingFor(event.gamepadId);
-    final action = mapping[event.key];
-    if (action != null) {
-      return NormalizedInput(action: action, value: event.value);
+
+    // First try a plain key lookup (digital buttons, named keys like dpad_up).
+    final directAction = mapping[event.key];
+    if (directAction != null) {
+      return NormalizedInput(action: directAction, value: event.value);
+    }
+
+    // Then try polarity-encoded keys ("key+" / "key-") for axis / hat-switch
+    // directions captured by the sniff wizard.
+    //   value > 0  → look up "key+"
+    //   value < 0  → look up "key-"
+    //   value == 0 → axis centered, no action (will be cleared by axis state machine)
+    if (event.value != 0) {
+      final polarityKey = GamepadUtils.encodeKey(event.key, event.value >= 0 ? 1 : -1);
+      final polarAction = mapping[polarityKey];
+      if (polarAction != null) {
+        return NormalizedInput(action: polarAction, value: event.value);
+      }
     }
 
     // DirectInput legacy axis fallback: dwXPos/dwYPos → analog stick axes
@@ -244,7 +276,7 @@ class GamepadService {
 
     // Handle DirectInput POV hat (D-pad reported as angle in hundredths of degrees)
     final keyLower = event.key.toLowerCase();
-    if (keyLower == 'dwpov' || keyLower.startsWith('pov')) {
+    if (keyLower == 'dwpov' || keyLower.startsWith('pov') || keyLower.startsWith('hat')) {
       if (_ref.read(inputModeProvider) != InputMode.gamepad) {
         _ref.read(inputModeProvider.notifier).state = InputMode.gamepad;
       }
@@ -331,7 +363,7 @@ class GamepadService {
         }
       }
     } else {
-      // 3. Handle Digital Buttons
+      // 3. Handle Digital Buttons (including polarity-decoded hat/axis actions)
       if (event.value.abs() > 0.5) {
         _triggerAction(normalized.action, event.value);
         if (_isDirectionAction(normalized.action)) {
@@ -354,10 +386,10 @@ class GamepadService {
 
   void _activateDirection(GameAction action) {
     if (_heldDirection == action) return;
-    
+
     _cancelHoldTimers();
     _heldDirection = action;
-    
+
     // Start delay timer for 500ms (half a second)
     _holdDelayTimer = Timer(const Duration(milliseconds: 500), () {
       // After 500ms delay, start repeating every 120ms

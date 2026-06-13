@@ -18,7 +18,7 @@ class RommService {
 
   RomMConfig get config => _config;
 
-  static const String _ua = 'Freegosy/0.5.8';
+  static const String _ua = 'Freegosy/0.5.9';
 
   void updateConfig(RomMConfig newConfig) {
     _config = newConfig;
@@ -264,7 +264,7 @@ class RommService {
   Future<String?> registerDevice({
     required String name,
     required String platform,
-    String clientVersion = '0.5.8',
+    String clientVersion = '0.5.9',
     bool allowExisting = true,
   }) async {
     try {
@@ -677,6 +677,48 @@ class RommService {
     } catch (e) {
       debugPrint('[RomM] downloadSave error: $e');
       return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Play session tracking (RomM 4.9+)
+  // ---------------------------------------------------------------------------
+
+  /// Records a completed play session with the server.
+  ///
+  /// Called after the emulator process exits on 4.9+ servers only.
+  /// Silently no-ops on errors — play time tracking is best-effort.
+  ///
+  /// [romId]      — the game's RomM ID
+  /// [deviceId]   — this device's registered UUID
+  /// [startTime]  — when the emulator was launched
+  /// [endTime]    — when the emulator process exited
+  Future<void> recordPlaySession({
+    required String romId,
+    required String deviceId,
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    try {
+      final durationMs = endTime.difference(startTime).inMilliseconds;
+      if (durationMs <= 0) return;
+
+      await _dio.post(
+        '/api/play-sessions',
+        data: [
+          {
+            'rom_id': romId,
+            'device_id': deviceId,
+            'start_time': startTime.toUtc().toIso8601String(),
+            'end_time': endTime.toUtc().toIso8601String(),
+            'duration_ms': durationMs,
+          }
+        ],
+        options: _authOptions.copyWith(contentType: 'application/json'),
+      );
+      debugPrint('[RomM] Recorded play session for rom $romId: ${durationMs}ms');
+    } catch (e) {
+      debugPrint('[RomM] recordPlaySession error (non-fatal): $e');
     }
   }
 

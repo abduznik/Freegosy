@@ -73,7 +73,7 @@ class WindowsSaveStrategy extends SaveStrategy {
       if (entity is! File) continue;
       if (sessionStart != null) {
         final stat = await entity.stat();
-        if (stat.modified.isBefore(sessionStart)) continue;
+        if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
       }
       hasFiles = true;
       break;

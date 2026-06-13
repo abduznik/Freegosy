@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gamepads/gamepads.dart';
 import '../../core/input/gamepad_service.dart';
+import '../../core/input/gamepad_utils.dart';
 import '../../core/input/known_controllers.dart';
 import '../../core/input/custom_controller_mappings.dart';
 import '../widgets/dialog_back_bridge.dart';
@@ -322,6 +323,19 @@ class _SettingsControllerSectionState
                             Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                // Reset button — only shown when a custom mapping exists
+                                if (_hasCustomMapping(id)) ...[
+                                  _buildDialogButton(
+                                    theme,
+                                    icon: Icons.restore,
+                                    label: 'Reset',
+                                    onTap: () {
+                                      Navigator.pop(ctx);
+                                      _resetMapping(context, id, name);
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
                                 _buildDialogButton(
                                   theme,
                                   icon: Icons.auto_fix_high,
@@ -574,6 +588,46 @@ class _SettingsControllerSectionState
     );
   }
 
+  bool _hasCustomMapping(String controllerId) {
+    final name =
+        _controllers.firstWhere((c) => c['id'] == controllerId, orElse: () => {})['name'] ?? '';
+    return customControllerMappings.keys.any(
+        (k) => name.toLowerCase().contains(k.toLowerCase()) ||
+                k.toLowerCase().contains(name.toLowerCase()));
+  }
+
+  void _resetMapping(BuildContext context, String controllerId, String name) {
+    final service = ref.read(gamepadServiceProvider);
+    showDialog(
+      context: context,
+      builder: (ctx) => DialogBackBridge(
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Reset Controller Mapping'),
+          content: Text(
+            'Remove the custom mapping for "$name"?\n\n'
+            'The controller will fall back to the built-in or SDL database mapping.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () async {
+                await service.clearCustomMapping(controllerId);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) setState(() {});
+              },
+              child: const Text('Reset'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _startSniffing(BuildContext context, String controllerId, String name) {
     final service = ref.read(gamepadServiceProvider);
     final backendHandled = service.getBackendHandledActions(controllerId);
@@ -721,13 +775,30 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
 
   void _registerCurrent() {
     if (_pendingKey == null) return;
-    final key = _pendingKey!;
+    final rawKey = _pendingKey!;
     final polarity = _pendingPolarity;
     final action = widget.manualActions[_currentActionIndex];
+
+    // Encode polarity into the storage key for any input that isn't a clean
+    // digital button (i.e. anything that came in with a non-1 absolute value,
+    // or where we tracked a negative polarity).  This is the Dolphin / RetroArch
+    // convention: "Axis 0+" / "Axis 0-" so a single physical axis can map two
+    // separate directions without one overwriting the other.
+    //
+    // Digital buttons always arrive with value ±1.0 and polarity +1, but we
+    // only skip the suffix when the raw key looks like a plain named button
+    // (letters/underscores only).  Numeric keys (e.g. "6", "7" from Linux
+    // /dev/input/js* hat switches) always get the suffix so Up and Down on
+    // the same hat axis are stored as distinct entries.
+    final bool isNamedButton = RegExp(r'^[a-zA-Z_][a-zA-Z0-9_ ./-]*$').hasMatch(rawKey);
+    final String storageKey = (isNamedButton && polarity >= 0)
+        ? rawKey
+        : GamepadUtils.encodeKey(rawKey, polarity);
+
     setState(() {
-      _sniffedMapping[key] = action;
+      _sniffedMapping[storageKey] = action;
       _currentActionIndex++;
-      _latchedKey = key;
+      _latchedKey = rawKey;
       _latchedPolarity = polarity;
       _pendingKey = null;
       _pendingPolarity = 0;
@@ -761,9 +832,34 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.check_circle, size: 48, color: Colors.green),
+              Icon(
+                _sniffedMapping.isEmpty ? Icons.warning_amber_rounded : Icons.check_circle,
+                size: 48,
+                color: _sniffedMapping.isEmpty ? Colors.orange : Colors.green,
+              ),
               const SizedBox(height: 12),
-              Text('${_sniffedMapping.length} button${_sniffedMapping.length == 1 ? '' : 's'} manually mapped for ${widget.controllerName}.'),
+              Text(
+                _sniffedMapping.isEmpty
+                    ? 'No buttons were mapped for ${widget.controllerName}.'
+                    : '${_sniffedMapping.length} button${_sniffedMapping.length == 1 ? '' : 's'} manually mapped for ${widget.controllerName}.',
+              ),
+              if (_sniffedMapping.isEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+                  ),
+                  child: Text(
+                    'Saving an empty mapping would disable your controller. '
+                    'Use "Cancel" to discard, or go back and map at least one button.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
               if (widget.skippedActions.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -800,10 +896,12 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
               label: 'Save Mapping',
               isPrimary: true,
               autofocus: true,
-              onTap: () {
-                widget.onComplete(_sniffedMapping);
-                Navigator.pop(context);
-              },
+              onTap: _sniffedMapping.isEmpty
+                  ? null
+                  : () {
+                      widget.onComplete(_sniffedMapping);
+                      Navigator.pop(context);
+                    },
             ),
           ],
         ),

@@ -23,32 +23,43 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## Current Features (v0.5.8)
+## Current Features (v0.5.9)
 
 - **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** and **RetroDECK** integration).
 - **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
-- **RomM Integration**: 
+- **RomM Integration**:
     - Browse and filter your entire library with server-side pagination.
     - Instant "Downloaded" games filter with background deep collection scanning.
     - Download ROMs directly via HTTP with real-time progress tracking.
     - Personal game properties support (rating, status, completion).
-- **Advanced Emulator Management**: 
+    - **New**: Full RomM 4.9 support — per-device save sync, play session tracking.
+- **Advanced Emulator Management**:
     - Download, update, and uninstall emulators directly from Settings.
     - Automatic extraction of `.zip`, `.7z`, `.dmg`, `.tar.gz`, `.tar.xz`, and `.AppImage`.
     - Smart binary detection and canonical naming across all platforms.
     - Dynamic architecture selection for RPCS3 on macOS (ARM64 vs x64).
-    - **New**: Linux Environment Strategies (Default, EmuDeck, RetroDECK) with automatic path detection.
+    - Linux Environment Strategies (Default, EmuDeck, RetroDECK) with automatic path detection.
 - **BIOS Management**: Fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
-- **Save Sync**: 
+- **Save Sync**:
     - Bidirectional local-to-cloud save synchronization with RomM.
     - Local Backup History (create instant restore points before experimenting).
-    - **New**: Serial Background Sync Queue (offline backups silently push to RomM automatically when you reconnect).
+    - Serial Background Sync Queue (offline backups silently push to RomM automatically when you reconnect).
     - Optimized for EmuDeck's platform-specific save structure.
+    - **New**: Per-device save isolation on RomM 4.9+ (saves tagged to your device, no cross-device conflicts).
+    - **New**: Play session tracking — game sessions automatically recorded to RomM 4.9+.
+    - **New**: PCSX2 per-game folder saves (`saves/{Serial}/`) supported alongside legacy memcards.
+    - **New**: Dolphin GameCube saves now correctly upload a single `.gci` (no more backup dumps or unrelated games).
+    - **New**: All strategies respect a 2-second session-start grace window to prevent missing saves written at launch.
 - **Refined UI/UX**:
     - **Visual-First Grid**: Interactive game cards with detailed metadata.
     - **Recently Played**: Quick access to your latest games.
     - **Screenshot Gallery**: Interactive, zoomable screenshot viewer.
     - **Multi-Disc Support**: Integrated picker for multi-file games.
+- **Controller Support**:
+    - **New**: Polarity-encoded axis keys (`left_x+` / `left_x-`) for full analog stick and hat switch mapping.
+    - **New**: SDL GameControllerDB hat switch format (`h0.1`, `h0.2`, etc.) fully parsed for auto-mapping.
+    - **New**: Reset controller mapping button to clear a broken custom profile.
+    - **New**: Save button disabled when sniff wizard produces an empty mapping.
 
 ## Platform / Emulator Status
 
@@ -59,7 +70,7 @@ No pressure at all — the app is and will always be free.
 | **PPSSPP** | 🟢 Full | PSP save data directory fully synced. |
 | **Ryujinx** | 🟢 Full | Switch save directory fully synced (configurable Title ID mapping). |
 | **Eden** | 🟢 Full | Switch save directory fully synced (configurable Title ID + profile). |
-| **PCSX2** | 🟢 Full | PS2 `.mcd` format fully synced (folder saves not supported). |
+| **PCSX2** | 🟢 Full | PS2 per-game folder saves (`saves/{Serial}/`) and legacy `.mcd` memcards both synced. |
 | **mGBA** | 🟢 Full | GBA/GBC/GB `.sav`/`.srm` fully synced (standalone, outside RetroArch). |
 | **MelonDS** | 🟡 Partial | NDS save files synced (limited testing). |
 | **Dolphin** | 🟡 Partial | GC/Wii save files synced. |

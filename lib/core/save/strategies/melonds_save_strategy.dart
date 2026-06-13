@@ -75,7 +75,7 @@ class MelonDsSaveStrategy extends SaveStrategy {
       if ((fname == '$romStem.sav' || fname == '$fallbackStem.sav' || fname == '$romStem.srm' || fname == '$fallbackStem.srm')) {
         if (sessionStart != null) {
           final stat = await entity.stat();
-          if (stat.modified.isBefore(sessionStart)) continue;
+          if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
         }
         foundFiles.add(entity);
         break;
@@ -91,7 +91,7 @@ class MelonDsSaveStrategy extends SaveStrategy {
         if (stemWords.any((word) => fname.contains(word))) {
           if (sessionStart != null) {
             final stat = await entity.stat();
-            if (stat.modified.isBefore(sessionStart)) continue;
+            if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
           }
           foundFiles.add(entity);
           break;

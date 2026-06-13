@@ -140,14 +140,33 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
 
       final gameWords = game.name.toLowerCase().replaceAll(RegExp(r"[^a-z0-9\s]"), '').split(' ').where((w) => w.length >= 2).toList();
-      final matchingFolders = foldersWithTitles.where((entry) => gameWords.any((word) => (entry['title'] as String).toLowerCase().contains(word))).toList();
 
+      // Score each folder by how many game name words appear in its PARAM.SFO title,
+      // then pick only the single best-scoring folder to avoid uploading saves from
+      // unrelated games that share a common word (e.g. "Grand", "Battle", "War").
       List<io.Directory> foldersToBundle = [];
-      if (matchingFolders.isNotEmpty) {
-        foldersToBundle.addAll(matchingFolders.map((e) => e['dir'] as io.Directory));
-      } else if (foldersWithTitles.isNotEmpty) {
-        foldersWithTitles.sort((a, b) => (b['modified'] as DateTime).compareTo(a['modified'] as DateTime));
-        foldersToBundle.add(foldersWithTitles.first['dir'] as io.Directory);
+      if (foldersWithTitles.isNotEmpty) {
+        int bestScore = 0;
+        io.Directory? bestDir;
+        DateTime? bestMtime;
+        for (final entry in foldersWithTitles) {
+          final title = (entry['title'] as String).toLowerCase();
+          final score = gameWords.where((w) => title.contains(w)).length;
+          if (score > bestScore ||
+              (score == bestScore && bestScore > 0 &&
+               (entry['modified'] as DateTime).isAfter(bestMtime!))) {
+            bestScore = score;
+            bestDir = entry['dir'] as io.Directory;
+            bestMtime = entry['modified'] as DateTime;
+          }
+        }
+        if (bestScore > 0 && bestDir != null) {
+          foldersToBundle.add(bestDir!);
+        } else {
+          // No title match — fall back to most recently modified folder
+          foldersWithTitles.sort((a, b) => (b['modified'] as DateTime).compareTo(a['modified'] as DateTime));
+          foldersToBundle.add(foldersWithTitles.first['dir'] as io.Directory);
+        }
       }
 
       for (final dir in foldersToBundle) {
@@ -162,7 +181,7 @@ class PpssppSaveStrategy extends SaveStrategy {
         if (entity is! io.File) continue;
         final fname = p.basename(entity.path).toLowerCase();
         if (fname == '$stemLower.ppst') {
-          if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart)) {
+          if (sessionStart == null || (await entity.stat()).modified.isAfter(sessionStart.subtract(const Duration(seconds: 2)))) {
             result.add(entity);
           }
           break;

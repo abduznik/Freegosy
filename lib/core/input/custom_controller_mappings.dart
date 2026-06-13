@@ -39,3 +39,17 @@ Future<void> saveCustomMappings() async {
     await prefs.setString(_kPrefsKey, jsonEncode(outer));
   } catch (_) {}
 }
+
+/// Removes any custom mapping whose stored name matches [controllerName]
+/// (using the same substring logic as the lookup). After this call the
+/// controller falls back to SDL / built-in mappings.
+Future<void> clearMappingForName(String controllerName) async {
+  final lower = controllerName.toLowerCase();
+  final keysToRemove = customControllerMappings.keys
+      .where((k) => lower.contains(k.toLowerCase()) || k.toLowerCase().contains(lower))
+      .toList();
+  for (final k in keysToRemove) {
+    customControllerMappings.remove(k);
+  }
+  await saveCustomMappings();
+}
