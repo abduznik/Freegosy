@@ -21,7 +21,7 @@ class DolphinSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'dolphin';
 
-  /// Wii saves are directories (title/00010000/<hexId>/) that must be zipped.
+  /// Wii saves are directories (title/00010000/`hexId`/) that must be zipped.
   /// GameCube saves are individual .gci files — no zip needed.
   /// We return true so the service always bundles correctly; the restore path
   /// already handles both raw .gci and ZIP extraction.
@@ -273,7 +273,7 @@ class DolphinSaveStrategy extends SaveStrategy {
             }
           }
 
-          if (bestGci != null) result.add(bestGci!);
+          if (bestGci != null) result.add(bestGci);
         }
       }
     }

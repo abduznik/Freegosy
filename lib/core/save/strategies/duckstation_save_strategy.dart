@@ -82,7 +82,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
           bestMcdMtime = stat.modified;
         }
       }
-      if (bestMcd != null) result.add(bestMcd!);
+      if (bestMcd != null) result.add(bestMcd);
     }
 
     final statesDir = Directory(p.join(baseDir, 'savestates'));

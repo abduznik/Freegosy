@@ -161,7 +161,7 @@ class PpssppSaveStrategy extends SaveStrategy {
           }
         }
         if (bestScore > 0 && bestDir != null) {
-          foldersToBundle.add(bestDir!);
+          foldersToBundle.add(bestDir);
         } else {
           // No title match — fall back to most recently modified folder
           foldersWithTitles.sort((a, b) => (b['modified'] as DateTime).compareTo(a['modified'] as DateTime));
