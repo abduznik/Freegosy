@@ -314,7 +314,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves uploaded');
-        else ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
+        else ErrorHandler.showInfo(context, 'No Saves Found', message: 'No save files found for ${game.name}. Have you played the game first?');
       }
     } catch (e) { if (context.mounted) await _handleSyncError(context, e, game, romPath, syncService, syncMode, push: true); }
   }

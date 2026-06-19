@@ -31,7 +31,7 @@ class MelonDsSaveStrategy extends SaveStrategy {
 
     final romDir = io.File(romPath).parent.path;
 
-    // 1. ROM-adjacent (standalone melonDS)
+    // 1. ROM-adjacent (standalone melonDS default on Windows/macOS)
     if (await io.Directory(romDir).exists()) {
       final stem = p.basenameWithoutExtension(romPath).toLowerCase();
       final dir = io.Directory(romDir);
@@ -43,11 +43,23 @@ class MelonDsSaveStrategy extends SaveStrategy {
       }
     }
 
-    // 2. Fallback: RetroArch melonDS/DeSmuME core save directory
+    // 2. %APPDATA%\melonDS on Windows (when user configures a dedicated save folder)
+    if (io.Platform.isWindows) {
+      final appData = io.Platform.environment['APPDATA'] ?? '';
+      if (appData.isNotEmpty) {
+        // melonDS uses 'melonDS' (capital D S) as its appdata folder name
+        for (final folderName in ['melonDS', 'melonds']) {
+          final melonDir = io.Directory(p.join(appData, folderName));
+          if (await melonDir.exists()) return melonDir.path;
+        }
+      }
+    }
+
+    // 3. Fallback: RetroArch melonDS/DeSmuME core save directory
     _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'NDS');
     if (_cachedRetroarchDir != null) return _cachedRetroarchDir;
 
-    // 3. Absolute fallback
+    // 4. Absolute fallback
     return romDir;
   }
 
