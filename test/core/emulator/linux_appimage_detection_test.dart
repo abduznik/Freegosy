@@ -32,23 +32,17 @@ void main() {
       final appImageFile = io.File(p.join(applicationsDir.path, 'Cemu.AppImage'));
       await appImageFile.create(recursive: true);
 
-      // Mock HOME environment variable
-      final oldHome = io.Platform.environment['HOME'];
-      try {
-        // We can't directly mock Platform.environment, so we test the path logic
-        final emulatorsRoot = p.join(tempHome.path, 'emulators');
-        final result = await strategy.findExecutable(
-          'cemu',
-          'Cemu.AppImage',
-          emulatorsRoot,
-          null,
-        );
+      // We can't mock Platform.environment['HOME'], so we verify via the path logic
+      final emulatorsRoot = p.join(tempHome.path, 'emulators');
+      final result = await strategy.findExecutable(
+        'cemu',
+        'Cemu.AppImage',
+        emulatorsRoot,
+        null,
+      );
 
-        // Result should be null since we can't mock HOME, but the logic is tested
-        expect(result, isNull); // Expected due to HOME env constraint in test
-      } finally {
-        // Restore environment
-      }
+      // Result should be null since we can't mock HOME, but the logic is tested
+      expect(result, isNull); // Expected due to HOME env constraint in test
     });
 
     test('finds AppImage in ~/AppImages with exact name match', () async {

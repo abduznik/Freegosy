@@ -116,7 +116,6 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
     if (!context.mounted) return;
     if (syncService != null) {
-      final syncMode = ref.read(retroarchSyncModeProvider);
       ErrorHandler.showInfo(context, 'Syncing Saves', message: 'Syncing saves for ${game.name}...');
       try {
         final pulled = await syncService.pullSave(game, romPath).timeout(
