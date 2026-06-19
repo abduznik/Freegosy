@@ -33,7 +33,7 @@ class AxisState {
   bool isPositiveActive = false;
 }
 
-class GamepadService {
+class GamepadService extends WidgetsBindingObserver {
   final Ref _ref;
   StreamSubscription<GamepadEvent>? _subscription;
   Timer? _scanTimer;
@@ -46,6 +46,8 @@ class GamepadService {
   GameAction? _heldDirection;
   Timer? _holdDelayTimer;
   Timer? _holdRepeatTimer;
+
+  bool _appHasFocus = true;
 
   /// Raw event stream for controller button sniffing (used by setup dialogs).
   Stream<GamepadEvent> get rawEvents => _rawEventController.stream;
@@ -61,6 +63,8 @@ class GamepadService {
     // Load the SDL Database
     await SDLMappingParser.loadDatabase();
 
+    WidgetsBinding.instance.addObserver(this);
+
     _scan();
     _scanTimer = Timer.periodic(const Duration(seconds: 3), (_) => _scan());
 
@@ -70,6 +74,12 @@ class GamepadService {
       },
       onError: (err) => debugPrint('🎮 Gamepad Stream Error: $err'),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appHasFocus = state == AppLifecycleState.resumed;
+    debugPrint('🎮 GamepadService: App focus changed to $_appHasFocus');
   }
 
   void _scan() async {
@@ -268,8 +278,11 @@ class GamepadService {
   final Set<GameAction> _activePovDirections = {};
 
   void _handleGamepadEvent(GamepadEvent event) {
-    // Broadcast raw event for sniffing/configuration dialogs
+    // Broadcast raw event for sniffing/configuration dialogs (always allow, for setup dialogs)
     _rawEventController.add(event);
+
+    // If app is not focused, skip input processing but allow raw event broadcasting
+    if (!_appHasFocus) return;
 
     // Track all raw keys seen per controller for backend-detection
     _seenRawKeys.putIfAbsent(event.gamepadId, () => {}).add(event.key.toLowerCase());
@@ -459,5 +472,6 @@ class GamepadService {
     _scanTimer?.cancel();
     _cancelHoldTimers();
     _rawEventController.close();
+    WidgetsBinding.instance.removeObserver(this);
   }
 }

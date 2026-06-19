@@ -39,7 +39,34 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
     final direct = io.File(p.join(emulatorsRoot, executableName));
     if (await direct.exists()) return direct.path;
 
-    // 2. Check if a Flatpak is installed for this emulator
+    // 2. Check ~/Applications and ~/AppImages (EmuDeck/Gear Lever AppImage locations)
+    final home = io.Platform.environment['HOME'] ?? '';
+    final searchDirs = [
+      io.Directory(p.join(home, 'Applications')),
+      io.Directory(p.join(home, 'AppImages')),
+    ];
+    for (final dir in searchDirs) {
+      if (!await dir.exists()) continue;
+
+      // Exact name match
+      final candidate = io.File(p.join(dir.path, executableName));
+      if (await candidate.exists()) return candidate.path;
+
+      // Case-insensitive fallback for AppImage files
+      try {
+        final entries = await dir.list().toList();
+        for (final entry in entries) {
+          if (entry is io.File &&
+              p.basename(entry.path).toLowerCase() == executableName.toLowerCase()) {
+            return entry.path;
+          }
+        }
+      } catch (_) {
+        // Silently ignore permission errors or other listing issues
+      }
+    }
+
+    // 3. Check if a Flatpak is installed for this emulator
     final flatpakPkg = await _flatpakPackageFor(emulatorId);
     if (flatpakPkg != null) {
       // Return the Flatpak command string — the launch method will handle it
