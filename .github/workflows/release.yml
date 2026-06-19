@@ -102,9 +102,19 @@ jobs:
         run: flutter pub get
       - name: Build Windows Installer
         run: dart run inno_bundle:build --release
-      - name: Create Zip (Windows)
+      - name: Stage Windows Artifacts
         shell: pwsh
         run: |
+          # Find and copy installer to flat staging dir
+          $installer = Get-ChildItem -Path build/windows/x64/installer/Release -Filter "*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            dir build/windows -Recurse
+            throw "Could not find installer .exe"
+          }
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          Copy-Item $installer.FullName -Destination staging/
+
+          # Find freegosy.exe and zip the release bundle
           $exe = Get-ChildItem -Path build/windows -Filter "freegosy.exe" -Recurse | Where-Object { $_.FullName -like "*release*" } | Select-Object -First 1
           if (-not $exe) {
             dir build/windows -Recurse
@@ -112,14 +122,12 @@ jobs:
           }
           $buildPath = $exe.DirectoryName
           Write-Host "Zipping from: $buildPath"
-          Compress-Archive -Path "$buildPath/*" -DestinationPath freegosy-windows-x64.zip
+          Compress-Archive -Path "$buildPath/*" -DestinationPath staging/freegosy-windows-x64.zip
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: |
-            build/windows/x64/installer/Release/*.exe
-            freegosy-windows-x64.zip
+          path: staging/
 
   build_macos:
     name: Build macOS DMG
