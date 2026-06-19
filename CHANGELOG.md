@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.10] - 2026-06-19
+
+### Fixed
+- **Controller input leaks to background apps**: Freegosy was processing gamepad input even when another app (e.g. a game) was in focus. Controller navigation now only activates when Freegosy's window is the focused app.
+- **MelonDS launch regression**: melonDS was silently failing to start after the v0.5.9 launch refactor — it requires its working directory set to the exe folder to find `melonDS.ini` and firmware files. Restored per-platform launch overrides.
+- **MelonDS hangs before launching**: The pre-launch sync was performing a push + pull sequentially (up to 5-minute timeout each). Now only pulls before launch with a 30-second hard timeout. Push happens after the game exits as intended.
+- **Linux AppImages not detected (issue #43)**: Emulators installed as AppImages via EmuDeck (`~/Applications/`) or Gear Lever (`~/AppImages/`) are now detected automatically. Fixes Eden, PCSX2, DuckStation, Cemu not showing as installed.
+- **Push button shows "Up to Date" when no saves found**: Manual push was reporting success even when Freegosy couldn't locate any save files. Now shows a clear "No Saves Found" message with guidance.
+- **MelonDS save detection on Windows**: Added `%APPDATA%\melonDS` and `%APPDATA%\melonds` to the Windows save search path for users who configured a dedicated melonDS save folder.
+
 ## [0.5.9] - 2026-06-13
 
 ### Added
