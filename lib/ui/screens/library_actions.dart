@@ -117,17 +117,12 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     if (!context.mounted) return;
     if (syncService != null) {
       final syncMode = ref.read(retroarchSyncModeProvider);
-      ErrorHandler.showInfo(context, 'Syncing Saves', message: 'Pushing saves for ${game.name}...');
+      ErrorHandler.showInfo(context, 'Syncing Saves', message: 'Syncing saves for ${game.name}...');
       try {
-        await syncService.pushSaves(game, romPath, syncMode: syncMode);
-      } catch (e) {
-        if (context.mounted) await _handleSyncError(context, e, game, romPath, syncService, syncMode, push: true);
-      }
-
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      try {
-        final pulled = await syncService.pullSave(game, romPath);
+        final pulled = await syncService.pullSave(game, romPath).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => false,
+        );
         if (context.mounted && pulled) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Cloud save restored');
       } catch (e) {
         if (context.mounted) {
@@ -135,6 +130,8 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           if (playAnyway != true) return;
         }
       }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
     }
 
     // Platform-specific checks (e.g. 3DS keys)
