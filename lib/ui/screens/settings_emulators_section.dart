@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:io' as io;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../core/platform/platform_info.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/storage/system_utils.dart';
 import '../../core/emulator/emulator_registry_data.dart';
@@ -117,9 +116,9 @@ Widget buildEmulatorsSection(
   WidgetRef ref,
 ) {
   final theme = Theme.of(context);
-  final currentPlatform = defaultTargetPlatform == TargetPlatform.windows 
+  final currentPlatform = PlatformInfo.current.isWindows 
       ? 'windows' 
-      : (defaultTargetPlatform == TargetPlatform.macOS ? 'macos' : 'linux');
+      : (PlatformInfo.current.isMacOS ? 'macos' : 'linux');
 
   final supportedEmulators = kEmulatorDefinitions.where((def) {
     final supported = def['supported_platforms'] as List<String>? ?? [];
@@ -233,7 +232,7 @@ Widget buildEmulatorsSection(
                     ],
                   ),
                 ),
-                if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) ...[
+                if (emulatorId == 'rpcs3' && PlatformInfo.current.isMacOS) ...[
                   const Text('Arch: ', style: TextStyle(fontSize: 11, color: Colors.grey)),
                   Consumer(
                     builder: (context, ref, child) {
@@ -445,7 +444,7 @@ Future<void> _startDownload(
   String? buildType;
 
   if (urlOverride == null) {
-    if (emulatorId == 'rpcs3' && defaultTargetPlatform == TargetPlatform.macOS) {
+    if (emulatorId == 'rpcs3' && PlatformInfo.current.isMacOS) {
       architecture = ref.read(rpcs3ArchitectureProvider);
     }
 
@@ -722,7 +721,7 @@ void _showFlatpakOverrideDialog(BuildContext context, DirectoryService directory
   if (existing != null) controller.text = existing;
 
   // Suggest a default package if none set
-  if (existing == null && io.Platform.isLinux) {
+  if (existing == null && PlatformInfo.current.isLinux) {
     final suggested = directoryService.activeLinuxEnvironment.getFlatpakPackageForEmulator(emulatorId);
     if (suggested != null) controller.text = suggested;
   }
