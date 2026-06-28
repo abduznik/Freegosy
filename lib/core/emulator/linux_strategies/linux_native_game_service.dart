@@ -1,12 +1,17 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 
 class LinuxNativeGameService {
+  final PlatformInfo _platform;
+
+  LinuxNativeGameService({PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
   /// Maps a Windows-style path to its equivalent Proton prefix path.
   /// [steamId] is the Steam AppID or shortcut ID used for the compatdata folder.
   /// [windowsPath] is the path as it would appear on Windows (e.g., "C:\\Users\\user\\AppData\\Roaming\\Game").
   String? resolveProtonPath(String steamId, String windowsPath) {
-    final home = Platform.environment['HOME'] ?? '';
+    final home = _platform.environment['HOME'] ?? '';
     final prefixBase = p.join(home, '.steam', 'steam', 'steamapps', 'compatdata', steamId, 'pfx', 'drive_c');
     
     // Normalize windows path
@@ -31,7 +36,7 @@ class LinuxNativeGameService {
 
   /// Tries to find common save locations for a game within its Proton prefix.
   Future<List<String>> findCommonSaveLocations(String steamId) async {
-    final home = Platform.environment['HOME'] ?? '';
+    final home = _platform.environment['HOME'] ?? '';
     final prefixBase = p.join(home, '.steam', 'steam', 'steamapps', 'compatdata', steamId, 'pfx', 'drive_c', 'users', 'steamuser');
     
     final locations = [
