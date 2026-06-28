@@ -54,3 +54,6 @@ Documents/
 # GitHub App credentials
 gha-creds-*.json
 
+# Temporary working files
+tmp/
+
