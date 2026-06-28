@@ -27,6 +27,9 @@ class MelonDsSaveStrategy extends SaveStrategy {
     if (io.Platform.isLinux) {
       final emuDir = await _directoryService.getEmulatorAppSupportDirectory('melonds');
       if (await io.Directory(emuDir).exists()) return emuDir;
+      // Also check the RetroArch save dir on Linux
+      _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'NDS');
+      if (_cachedRetroarchDir != null && await io.Directory(_cachedRetroarchDir!).exists()) return _cachedRetroarchDir;
     }
 
     final romDir = io.File(romPath).parent.path;
@@ -53,13 +56,28 @@ class MelonDsSaveStrategy extends SaveStrategy {
           if (await melonDir.exists()) return melonDir.path;
         }
       }
+      // Also check USERPROFILE\Documents\melonDS
+      final userProfile = io.Platform.environment['USERPROFILE'] ?? '';
+      if (userProfile.isNotEmpty) {
+        final docsDir = io.Directory(p.join(userProfile, 'Documents', 'melonDS'));
+        if (await docsDir.exists()) return docsDir.path;
+      }
     }
 
-    // 3. Fallback: RetroArch melonDS/DeSmuME core save directory
+    // 3. macOS: ~/Library/Application Support/melonDS
+    if (io.Platform.isMacOS) {
+      final home = io.Platform.environment['HOME'] ?? '';
+      if (home.isNotEmpty) {
+        final macDir = io.Directory(p.join(home, 'Library', 'Application Support', 'melonDS'));
+        if (await macDir.exists()) return macDir.path;
+      }
+    }
+
+    // 4. Fallback: RetroArch melonDS/DeSmuME core save directory
     _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'NDS');
     if (_cachedRetroarchDir != null) return _cachedRetroarchDir;
 
-    // 4. Absolute fallback
+    // 5. Absolute fallback
     return romDir;
   }
 
