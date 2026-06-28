@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.5.10] - 2026-06-28
+
+### Added
+- **PlatformInfo abstraction**: Introduced injectable platform detection (`PlatformInfo`) replacing all 177+ direct `dart:io` `Platform.is*` checks across the entire codebase. Tests can now simulate any OS via `PlatformInfo('windows')`, `PlatformInfo('macos')`, `PlatformInfo('linux')`.
+- **platformInfoProvider**: Riverpod provider exposing `PlatformInfo.current` for UI-layer platform access.
+- **HTTP security warning**: Onboarding screen warns when a public IP is used over HTTP. Localhost and LAN addresses (`192.168.x.x`, `10.x.x.x`) are exempt.
+- **19 new controller mappings**: DualShock 3, 8BitDo SN30 Pro, 8BitDo Lite, 8BitDo Zero 2, 8BitDo Ultimate C, Razer Kishi, Razer Wolverine, SteelSeries Nimbus, SteelSeries Stratus, Backbone One, GameSir G7, GameSir T4, Hori Fighting Commander, Hori Split Pad, Nacon Revolution, PDP, Scuf, ASUS ROG Raikiri, Flydigi, GuliKit, Amazon Luna, MSI Force GC.
+- **107 new unit tests** across 14 test files covering ROM lookup, download cache, URL construction, SDL parser, extraction service, library snapshots, PCSX2 serial extraction, strategy registry, AppImage detection, gamepad debouncing, melonDS save paths, download extension preservation, directory service, ROM constants, and cross-platform simulation.
+- **Cross-platform simulation tests**: 20 tests verifying critical logic works identically on simulated Windows, macOS, and Linux.
+
+### Fixed
+- **Single-file-foldered ROM downloads missing extension (issue #44)**: Games stored in RomM as `/platform/gamename/gamename.chd` were downloaded without the `.chd` extension, preventing emulators from opening them.
+- **AppImage emulators not detected on Linux (issue #43)**: Expanded search paths to `~/.local/bin` and `~/bin`. Added fuzzy matching that strips architecture suffixes (`x86_64`, `amd64`, `linux`, `gtk`) and `.appimage` extensions. Added melonds/dolphin/duckstation/mgba to EmuDeck folder map.
+- **Controller ghost/stuck inputs (issue #41)**: Added 80ms debounce on digital button presses to prevent rapid-fire ghost inputs on Steam Deck and third-party controllers.
+- **melonDS save directory detection (issue #42)**: Added `%USERPROFILE%\Documents\melonDS` for Windows, `~/Library/Application Support/melonDS` for macOS, and RetroArch fallback on Linux.
+- **pubspec.yaml description**: Updated from boilerplate "A new Flutter project." to actual project description.
+
+### Changed
+- **Full PlatformInfo migration**: All 177+ `dart:io` `Platform.isWindows/isMacOS/isLinux` and `Platform.environment` checks replaced with injectable `PlatformInfo` across 43 production files. `defaultTargetPlatform` checks in providers and UI also migrated.
+- Added `plugin_platform_interface` and `path_provider_platform_interface` to dev_dependencies for test mocking.
+
 ## [0.5.10] - 2026-06-19
 
 ### Fixed
