@@ -82,6 +82,10 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
         'citra': 'citra',
         'xenia': 'xenia',
         'shadps4': 'shadps4',
+        'melonds': 'melonds',
+        'dolphin': 'dolphin',
+        'duckstation': 'duckstation',
+        'mgba': 'mgba',
       };
 
       final folderName = emudeckFolderMap[emulatorName.toLowerCase()] ?? emulatorName;
