@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../platform/platform_info.dart';
 import '../storage/secure_storage_service.dart';
 import 'romm_models.dart';
 
@@ -15,6 +16,7 @@ class RommService {
   Options _authOptions;
   final ValueNotifier<bool> isOffline = ValueNotifier(false);
   Timer? _heartbeatTimer;
+  final PlatformInfo _platform;
 
   RomMConfig get config => _config;
 
@@ -29,7 +31,7 @@ class RommService {
   static String _normalizeBaseUrl(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
-  RommService(this._config, {Dio? dio})
+  RommService(this._config, {Dio? dio, PlatformInfo? platform})
       : _dio = dio ?? Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(_config.baseUrl),
           connectTimeout: const Duration(seconds: 5),
@@ -39,13 +41,14 @@ class RommService {
             'Accept': 'application/json',
           },
         )),
-        _authOptions = _computeAuthOptions(_config) {
+        _authOptions = _computeAuthOptions(_config),
+        _platform = platform ?? PlatformInfo.current {
     
     if (dio != null) {
       _dio.options.baseUrl = _normalizeBaseUrl(_config.baseUrl);
     }
     
-    if (kDebugMode || io.Platform.isLinux || io.Platform.isMacOS) {
+    if (kDebugMode || _platform.isLinux || _platform.isMacOS) {
       _dio.interceptors.add(InterceptorsWrapper(
         onRequest: (options, handler) {
           if (!options.path.contains('/api/heartbeat') && !options.path.contains('/api/roms')) {
