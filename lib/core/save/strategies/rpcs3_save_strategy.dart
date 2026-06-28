@@ -4,6 +4,7 @@ import 'dart:io' as io;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -20,11 +21,13 @@ class SaveFolderConflictException implements Exception {
 /// Saves: {emulatorDir}\dev_hdd0\home\00000001\savedata\{titleId}\
 class Rpcs3SaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
 
   String? _activeFolderOverride;
   void setActiveFolderOverride(String? path) => _activeFolderOverride = path;
 
-  Rpcs3SaveStrategy(this._directoryService);
+  Rpcs3SaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'rpcs3';
@@ -84,8 +87,8 @@ class Rpcs3SaveStrategy extends SaveStrategy {
   }
 
   String _getEmuExe() {
-    if (io.Platform.isWindows) return 'rpcs3.exe';
-    if (io.Platform.isMacOS) return 'RPCS3.app/Contents/MacOS/RPCS3';
+    if (_platform.isWindows) return 'rpcs3.exe';
+    if (_platform.isMacOS) return 'RPCS3.app/Contents/MacOS/RPCS3';
     return 'rpcs3';
   }
 
@@ -95,7 +98,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
         'rpcs3', _getEmuExe());
     if (exePath != null) {
       String exeDir = File(exePath).parent.path;
-      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
         exeDir = io.File(exePath).parent.parent.parent.parent.path;
       }
       final portableSaves = p.join(exeDir, 'dev_hdd0', 'home', '00000001', 'savedata');
@@ -108,7 +111,7 @@ class Rpcs3SaveStrategy extends SaveStrategy {
     final baseDir = await _directoryService.getEmulatorAppSupportDirectory('rpcs3', platformSlug: platformSlug);
     
     String resolvedPath;
-    if (io.Platform.isLinux && p.basename(baseDir) == 'saves') {
+    if (_platform.isLinux && p.basename(baseDir) == 'saves') {
       // EmuDeck mapping already points to the saves (savedata) symlink
       resolvedPath = baseDir;
     } else {

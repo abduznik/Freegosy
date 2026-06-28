@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../../storage/rom_lookup_service.dart';
@@ -17,9 +18,11 @@ class ProfileConflictException implements Exception {
 /// Save strategy for Eden (Switch) emulator.
 class EdenSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
   final Future<void> Function(String gameId, String titleId)? onMappingResolved;
 
-  EdenSaveStrategy(this._directoryService, {this.onMappingResolved});
+  EdenSaveStrategy(this._directoryService, {this.onMappingResolved, PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'switch';
@@ -125,10 +128,10 @@ class EdenSaveStrategy extends SaveStrategy {
 
   Future<String> _getEdenSaveBase({String? platformSlug}) async {
     final String resolvedPath;
-    if (io.Platform.isMacOS || io.Platform.isLinux) {
+    if (_platform.isMacOS || _platform.isLinux) {
       resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('eden', platformSlug: platformSlug);
-    } else if (io.Platform.isWindows) {
-      resolvedPath = p.join(io.Platform.environment['APPDATA'] ?? '', 'eden');
+    } else if (_platform.isWindows) {
+      resolvedPath = p.join(_platform.environment['APPDATA'] ?? '', 'eden');
     } else {
       throw UnsupportedError('Platform not supported');
     }

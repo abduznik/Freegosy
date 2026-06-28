@@ -3,6 +3,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -15,9 +16,12 @@ import '../save_strategy.dart';
 /// directory if automatic resolution is not possible.
 class AzaharSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  // ignore: unused_field
+  final PlatformInfo _platform;
   final Future<void> Function(String gameId, String mapping)? onMappingResolved;
 
-  AzaharSaveStrategy(this._directoryService, {this.onMappingResolved});
+  AzaharSaveStrategy(this._directoryService, {this.onMappingResolved, PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => '3ds';

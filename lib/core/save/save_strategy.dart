@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 
+import '../platform/platform_info.dart';
 import '../storage/directory_service.dart';
 import '../romm/romm_models.dart';
 
@@ -81,24 +82,25 @@ abstract class SaveStrategy {
   /// Returns the full path to the core-specific subfolder (e.g.
   /// `/Users/xyz/Documents/RetroArch/saves/mGBA`), or `null` if the config
   /// is not found or the core folder does not exist.
-  static Future<String?> retroarchCoreSaveDir(DirectoryService directoryService, String coreSaveFolder) async {
+  static Future<String?> retroarchCoreSaveDir(DirectoryService directoryService, String coreSaveFolder, {PlatformInfo? platform}) async {
+    final p_ = platform ?? PlatformInfo.current;
     final List<String> configCandidates = [];
 
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    if (p_.isMacOS) {
+      final home = p_.environment['HOME'] ?? '';
       configCandidates.add(p.join(home, 'Library', 'Application Support', 'RetroArch', 'config', 'retroarch.cfg'));
       configCandidates.add(p.join(home, '.config', 'retroarch', 'retroarch.cfg'));
-    } else if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    } else if (p_.isLinux) {
+      final home = p_.environment['HOME'] ?? '';
       configCandidates.add(p.join(home, '.config', 'retroarch', 'retroarch.cfg'));
-    } else if (io.Platform.isWindows) {
-      final appData = io.Platform.environment['APPDATA'] ?? '';
+    } else if (p_.isWindows) {
+      final appData = p_.environment['APPDATA'] ?? '';
       configCandidates.add(p.join(appData, 'RetroArch', 'retroarch.cfg'));
     }
 
-    final exePath = await directoryService.findEmulatorExecutable('retroarch', _retroarchExe());
+    final exePath = await directoryService.findEmulatorExecutable('retroarch', _retroarchExe(platform: p_));
     if (exePath != null) {
-      String exeDir = io.Platform.isMacOS
+      String exeDir = p_.isMacOS
           ? p.join(io.File(exePath).parent.parent.parent.parent.path)
           : io.File(exePath).parent.path;
       if (await io.FileSystemEntity.isDirectory(exePath)) exeDir = exePath;
@@ -115,7 +117,7 @@ abstract class SaveStrategy {
           if (match != null) {
             var dir = match.group(1)!;
             if (dir.startsWith('~')) {
-              final home = io.Platform.environment['HOME'];
+              final home = p_.environment['HOME'];
               if (home != null) dir = dir.replaceFirst('~', home);
             }
             if (await io.Directory(dir).exists()) {
@@ -131,9 +133,10 @@ abstract class SaveStrategy {
     return null;
   }
 
-  static String _retroarchExe() {
-    if (io.Platform.isWindows) return 'RetroArch.exe';
-    if (io.Platform.isMacOS) return 'RetroArch.app/Contents/MacOS/RetroArch';
+  static String _retroarchExe({PlatformInfo? platform}) {
+    final p_ = platform ?? PlatformInfo.current;
+    if (p_.isWindows) return 'RetroArch.exe';
+    if (p_.isMacOS) return 'RetroArch.app/Contents/MacOS/RetroArch';
     return 'retroarch';
   }
 }

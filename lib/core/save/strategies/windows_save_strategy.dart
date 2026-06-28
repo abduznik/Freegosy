@@ -3,6 +3,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../windows/pcgamingwiki_service.dart';
 import '../save_strategy.dart';
@@ -11,11 +12,15 @@ import 'package:dio/dio.dart';
 class WindowsSaveStrategy extends SaveStrategy {
   final PcGamingWikiService _wikiService;
   final SharedPreferences _prefs;
+  // ignore: unused_field
+  final PlatformInfo _platform;
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
 
-  WindowsSaveStrategy(this._prefs) : _wikiService = PcGamingWikiService(Dio());
+  WindowsSaveStrategy(this._prefs, {PlatformInfo? platform})
+      : _wikiService = PcGamingWikiService(Dio()),
+        _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'windows';

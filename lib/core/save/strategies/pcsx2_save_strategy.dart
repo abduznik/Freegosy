@@ -3,6 +3,7 @@ import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -12,8 +13,10 @@ import '../save_strategy.dart';
 /// States:   {systemDir}/sstates/{stem}.*.
 class Pcsx2SaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
 
-  Pcsx2SaveStrategy(this._directoryService);
+  Pcsx2SaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'pcsx2';
@@ -88,8 +91,8 @@ class Pcsx2SaveStrategy extends SaveStrategy {
   }
 
   String _getEmuExe() {
-    if (io.Platform.isWindows) return 'pcsx2-qt.exe';
-    if (io.Platform.isMacOS) return 'PCSX2.app/Contents/MacOS/PCSX2';
+    if (_platform.isWindows) return 'pcsx2-qt.exe';
+    if (_platform.isMacOS) return 'PCSX2.app/Contents/MacOS/PCSX2';
     return 'pcsx2-qt';
   }
 
@@ -98,7 +101,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     final exePath = await _directoryService.findEmulatorExecutable('pcsx2', _getEmuExe());
     if (exePath != null) {
       String exeDir = io.File(exePath).parent.path;
-      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
         exeDir = io.File(exePath).parent.parent.parent.parent.path;
       } else if (await io.FileSystemEntity.isDirectory(exePath)) {
         exeDir = exePath;
@@ -110,7 +113,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     }
 
     // 2. Linux integration (EmuDeck / RetroDECK)
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('pcsx2');
       final bool isEmuDeck = _directoryService.linuxSyncPreset == 'emudeck' || 
                              baseDir.contains('Emulation/saves');
@@ -128,7 +131,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
         return baseDir;
       }
       
-      final home = io.Platform.environment['HOME'] ?? '';
+      final home = _platform.environment['HOME'] ?? '';
       final linuxPath = p.join(home, '.config', 'PCSX2');
       if (await io.Directory(p.join(linuxPath, 'memcards')).exists()) {
         return linuxPath;
@@ -136,8 +139,8 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     }
 
     // 3. macOS: ~/Library/Application Support/PCSX2
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    if (_platform.isMacOS) {
+      final home = _platform.environment['HOME'] ?? '';
       final macPath = p.join(home, 'Library', 'Application Support', 'PCSX2');
       if (await io.Directory(p.join(macPath, 'memcards')).exists()) {
         return macPath;

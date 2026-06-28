@@ -3,6 +3,7 @@ import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -10,15 +11,17 @@ import '../save_strategy.dart';
 /// Save strategy for DuckStation (PlayStation 1).
 class DuckstationSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
 
-  DuckstationSaveStrategy(this._directoryService);
+  DuckstationSaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'duckstation';
 
   String _getEmuExe() {
-    if (io.Platform.isWindows) return 'duckstation-qt-x64-ReleaseLTCG.exe';
-    if (io.Platform.isMacOS) return 'DuckStation.app/Contents/MacOS/DuckStation';
+    if (_platform.isWindows) return 'duckstation-qt-x64-ReleaseLTCG.exe';
+    if (_platform.isMacOS) return 'DuckStation.app/Contents/MacOS/DuckStation';
     return 'duckstation-qt';
   }
 
@@ -28,7 +31,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
         'duckstation', _getEmuExe());
     if (exePath != null) {
       String emulatorDir = File(exePath).parent.path;
-      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
         emulatorDir = io.File(exePath).parent.parent.parent.parent.path;
       }
       if (await File(p.join(emulatorDir, 'portable.txt')).exists()) {
@@ -38,8 +41,8 @@ class DuckstationSaveStrategy extends SaveStrategy {
 
     // 2. Dynamic path resolution for macOS/Windows/Linux
     final String resolvedPath;
-    if (io.Platform.isWindows) {
-      final localAppData = io.Platform.environment['LOCALAPPDATA'] ?? '';
+    if (_platform.isWindows) {
+      final localAppData = _platform.environment['LOCALAPPDATA'] ?? '';
       resolvedPath = p.join(localAppData, 'DuckStation');
     } else {
       resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('DuckStation', platformSlug: platformSlug);

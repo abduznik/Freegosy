@@ -2,15 +2,18 @@ import 'dart:io' as io;
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../save_strategy.dart';
 import 'eden_save_strategy.dart'; // Reuse exceptions and some logic
 
 /// Save strategy for Ryujinx (Switch) emulator.
 class RyujinxSaveStrategy extends SaveStrategy {
+  final PlatformInfo _platform;
   final Future<void> Function(String gameId, String titleId)? onMappingResolved;
 
-  RyujinxSaveStrategy({this.onMappingResolved});
+  RyujinxSaveStrategy({this.onMappingResolved, PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'switch_ryujinx';
@@ -222,14 +225,14 @@ class RyujinxSaveStrategy extends SaveStrategy {
 
   Future<String> _getRyujinxSaveBase({String? platformSlug}) async {
     final String resolvedPath;
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    if (_platform.isMacOS) {
+      final home = _platform.environment['HOME'] ?? '';
       resolvedPath = p.join(home, 'Library', 'Application Support', 'Ryujinx');
-    } else if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    } else if (_platform.isLinux) {
+      final home = _platform.environment['HOME'] ?? '';
       resolvedPath = p.join(home, '.config', 'Ryujinx');
-    } else if (io.Platform.isWindows) {
-      final appData = io.Platform.environment['APPDATA'] ?? '';
+    } else if (_platform.isWindows) {
+      final appData = _platform.environment['APPDATA'] ?? '';
       resolvedPath = p.join(appData, 'Ryujinx');
     } else {
       throw UnsupportedError('Platform not supported for Ryujinx save path resolution');

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
 
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -15,8 +16,10 @@ import '../save_strategy.dart';
 class DolphinSaveStrategy extends SaveStrategy {
   // ignore: unused_field
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
 
-  DolphinSaveStrategy(this._directoryService);
+  DolphinSaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'dolphin';
@@ -29,8 +32,8 @@ class DolphinSaveStrategy extends SaveStrategy {
   bool get shouldZip => true;
 
   String _getEmuExe() {
-    if (io.Platform.isWindows) return 'Dolphin.exe';
-    if (io.Platform.isMacOS) return 'Dolphin.app/Contents/MacOS/Dolphin';
+    if (_platform.isWindows) return 'Dolphin.exe';
+    if (_platform.isMacOS) return 'Dolphin.app/Contents/MacOS/Dolphin';
     return 'Dolphin';
   }
 
@@ -41,7 +44,7 @@ class DolphinSaveStrategy extends SaveStrategy {
         'dolphin', _getEmuExe());
     if (exePath != null) {
       String exeDir = io.File(exePath).parent.path;
-      if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
         exeDir = io.File(exePath).parent.parent.parent.parent.path;
       } else if (await io.FileSystemEntity.isDirectory(exePath)) {
         exeDir = exePath;
@@ -53,8 +56,8 @@ class DolphinSaveStrategy extends SaveStrategy {
     }
 
     // 2. On Linux, if running via Flatpak, which is the default installation method of Dolphin
-    if (io.Platform.isLinux){
-      final home = io.Platform.environment['HOME'] ?? '';
+    if (_platform.isLinux){
+      final home = _platform.environment['HOME'] ?? '';
       final flatpakPath = "$home/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu";
       if (await io.Directory(flatpakPath).exists()) {
         return flatpakPath;
@@ -151,7 +154,7 @@ class DolphinSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final userDir = await _getUserDir(platformSlug: game.platformSlug);
-    final bool isIntegratedEnv = io.Platform.isLinux && 
+    final bool isIntegratedEnv = _platform.isLinux && 
                                 (_directoryService.linuxSyncPreset == 'emudeck' || 
                                  _directoryService.linuxSyncPreset == 'retrodeck');
 

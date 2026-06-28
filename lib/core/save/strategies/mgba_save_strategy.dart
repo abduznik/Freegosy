@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -12,9 +13,11 @@ import '../save_strategy.dart';
 /// RetroArch with the mGBA core.
 class MgbaSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
   String? _cachedRetroarchDir;
 
-  MgbaSaveStrategy(this._directoryService);
+  MgbaSaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'mgba';
@@ -24,7 +27,7 @@ class MgbaSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       final emuDir = await _directoryService.getEmulatorAppSupportDirectory('mgba');
       if (await io.Directory(emuDir).exists()) return emuDir;
     }
@@ -43,7 +46,7 @@ class MgbaSaveStrategy extends SaveStrategy {
     }
 
     // 2. Fallback: RetroArch mGBA core save directory
-    _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'mGBA');
+    _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'mGBA', platform: _platform);
     if (_cachedRetroarchDir != null) return _cachedRetroarchDir;
 
     // 3. Absolute fallback: ROM directory

@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -11,21 +12,23 @@ import '../save_strategy.dart';
 /// Save strategy for PPSSPP (PSP).
 class PpssppSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
 
-  PpssppSaveStrategy(this._directoryService);
+  PpssppSaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'ppsspp';
 
   String _getEmuExe() {
-    if (io.Platform.isWindows) return 'PPSSPPWindows64.exe';
-    if (io.Platform.isMacOS) return 'PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL';
+    if (_platform.isWindows) return 'PPSSPPWindows64.exe';
+    if (_platform.isMacOS) return 'PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL';
     return 'PPSSPPSDL';
   }
 
   Future<String> _getPspDir({String? platformSlug}) async {
     // 1. Check portable mode first (Windows)
-    if (io.Platform.isWindows) {
+    if (_platform.isWindows) {
       final exePath = await _directoryService.findEmulatorExecutable(
           'ppsspp', _getEmuExe());
       if (exePath != null) {
@@ -37,7 +40,7 @@ class PpssppSaveStrategy extends SaveStrategy {
       }
 
       // 1b. Check Documents/PPSSPP/PSP (Windows default)
-      final userProfile = io.Platform.environment['USERPROFILE'] ?? '';
+      final userProfile = _platform.environment['USERPROFILE'] ?? '';
       if (userProfile.isNotEmpty) {
         final docsPsp = p.join(userProfile, 'Documents', 'PPSSPP', 'PSP');
         if (await io.Directory(docsPsp).exists()) {

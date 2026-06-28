@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -13,6 +14,7 @@ import 'package:path/path.dart' as p; // Import path package
 /// Core name mapping is derived from the platform slug.
 class RetroArchSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  final PlatformInfo _platform;
   String _ndsCore = 'melonds'; // Default NDS core
   String? _cachedSaveRoot; // Cached from retroarch.cfg
 
@@ -20,7 +22,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @visibleForTesting
   bool skipConfigRead = false;
 
-  RetroArchSaveStrategy(this._directoryService);
+  RetroArchSaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   void setNdsCore(String core) {
     _ndsCore = core;
@@ -61,22 +64,22 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     final List<String> candidates = [];
 
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    if (_platform.isMacOS) {
+      final home = _platform.environment['HOME'] ?? '';
       candidates.add(p.join(home, 'Library', 'Application Support', 'RetroArch', 'config', 'retroarch.cfg'));
       candidates.add(p.join(home, '.config', 'retroarch', 'retroarch.cfg'));
-    } else if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    } else if (_platform.isLinux) {
+      final home = _platform.environment['HOME'] ?? '';
       candidates.add(p.join(home, '.config', 'retroarch', 'retroarch.cfg'));
-    } else if (io.Platform.isWindows) {
-      final appData = io.Platform.environment['APPDATA'] ?? '';
+    } else if (_platform.isWindows) {
+      final appData = _platform.environment['APPDATA'] ?? '';
       candidates.add(p.join(appData, 'RetroArch', 'retroarch.cfg'));
     }
 
     // Also check next to the bundled exe
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
     if (exePath != null) {
-      String exeDir = io.Platform.isMacOS
+      String exeDir = _platform.isMacOS
           ? p.join(io.File(exePath).parent.parent.parent.parent.path)
           : io.File(exePath).parent.path;
       if (await io.FileSystemEntity.isDirectory(exePath)) exeDir = exePath;
@@ -93,7 +96,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
           if (match != null) {
             var dir = match.group(1)!;
             if (dir.startsWith('~')) {
-              final home = io.Platform.environment['HOME'];
+              final home = _platform.environment['HOME'];
               if (home != null) dir = dir.replaceFirst('~', home);
             }
             if (await io.Directory(dir).exists()) {
@@ -112,7 +115,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
     final cfg = await _readConfigSaveRoot();
     if (cfg != null) return cfg;
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
-    String exeDir = io.Platform.isMacOS
+    String exeDir = _platform.isMacOS
         ? p.join(io.File(exePath!).parent.parent.parent.parent.path)
         : io.File(exePath!).parent.path;
     if (await io.FileSystemEntity.isDirectory(exePath)) exeDir = exePath;
@@ -120,8 +123,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
   }
 
   String _getRetroArchExe() {
-    if (io.Platform.isWindows) return 'RetroArch.exe';
-    if (io.Platform.isMacOS) return 'RetroArch.app/Contents/MacOS/RetroArch';
+    if (_platform.isWindows) return 'RetroArch.exe';
+    if (_platform.isMacOS) return 'RetroArch.app/Contents/MacOS/RetroArch';
     return 'retroarch';
   }
 
@@ -139,7 +142,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     if (coreInfo == null) return null;
 
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
 
       if (_directoryService.linuxSyncPreset == 'emudeck' || baseDir.contains('Emulation/saves')) {
@@ -181,7 +184,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
     String? rootSaveDir;
     String? statesRoot;
 
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       rootSaveDir = await getSaveDir(game, romPath);
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
 
@@ -338,7 +341,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
           final isFileState = file.name.contains('.state');
           String? fileTargetDir;
-          if (io.Platform.isLinux) {
+          if (_platform.isLinux) {
             final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
             if (_directoryService.linuxSyncPreset == 'emudeck') {
               if (isFileState) {
@@ -380,7 +383,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
       String? targetDir;
       final isState = filename.contains('.state');
 
-      if (io.Platform.isLinux) {
+      if (_platform.isLinux) {
         final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
 
         if (_directoryService.linuxSyncPreset == 'emudeck') {

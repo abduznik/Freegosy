@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -9,8 +10,11 @@ import '../save_strategy.dart';
 /// Save strategy for Cemu (Wii U).
 class CemuSaveStrategy extends SaveStrategy {
   final DirectoryService _directoryService;
+  // ignore: unused_field
+  final PlatformInfo _platform;
 
-  CemuSaveStrategy(this._directoryService);
+  CemuSaveStrategy(this._directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get strategyId => 'cemu';
