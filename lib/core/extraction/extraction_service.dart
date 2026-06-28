@@ -3,6 +3,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../storage/directory_service.dart';
+import '../platform/platform_info.dart';
 
 Future<void> _extractZipIsolate(List<dynamic> args) async {
   final bytes = args[0] as Uint8List;
@@ -13,8 +14,10 @@ Future<void> _extractZipIsolate(List<dynamic> args) async {
 
 class ExtractionService {
   final DirectoryService directoryService;
+  final PlatformInfo _platform;
 
-  ExtractionService(this.directoryService);
+  ExtractionService(this.directoryService, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   Future<void> extract(String archivePath, String destDir) async {
     final pathLower = archivePath.toLowerCase();
@@ -29,7 +32,7 @@ class ExtractionService {
         await _handleZip(archivePath, destDir);
       } else if (pathLower.endsWith('.7z')) {
         await _handleSevenZip(archivePath, destDir);
-      } else if (pathLower.endsWith('.exe') && !Platform.isLinux) {
+      } else if (pathLower.endsWith('.exe') && !_platform.isLinux) {
         await _handleExe(archivePath, destDir);
       } else if (pathLower.endsWith('.appimage') || pathLower.endsWith('.flatpak')) {
         await _handleAppImage(archivePath, destDir);
@@ -43,7 +46,7 @@ class ExtractionService {
   }
 
   Future<void> _handleAppImage(String archivePath, String destDir) async {
-    if (!Platform.isLinux) {
+    if (!_platform.isLinux) {
       throw Exception('AppImage is only supported on Linux');
     }
     // For AppImage, we don't necessarily extract it, but we move it to the destDir
@@ -57,19 +60,18 @@ class ExtractionService {
   }
 
   Future<void> _handleTar(String archivePath, String destDir) async {
-    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+    if (_platform.isMacOS || _platform.isLinux || _platform.isWindows) {
       try {
-        // 'tar -xf' handles gzip, xz, etc. automatically on modern systems
         final result = await Process.run(
           'tar',
           ['-xf', archivePath, '-C', destDir],
-          runInShell: Platform.isWindows,
+          runInShell: _platform.isWindows,
         );
         if (result.exitCode != 0) {
           throw Exception('tar failed: ${result.stderr}');
         }
 
-        if (Platform.isMacOS) {
+        if (_platform.isMacOS) {
           await _postExtractSanitize(destDir);
         }
       } catch (e) {
@@ -82,7 +84,7 @@ class ExtractionService {
   }
 
   Future<void> _handleDmg(String archivePath, String destDir) async {
-    if (!Platform.isMacOS) {
+    if (!_platform.isMacOS) {
       throw Exception('DMG extraction is only supported on macOS');
     }
 
@@ -136,7 +138,7 @@ class ExtractionService {
   }
 
   Future<void> _handleZip(String archivePath, String destDir) async {
-    if (Platform.isMacOS || Platform.isLinux) {
+    if (_platform.isMacOS || _platform.isLinux) {
       final result = await Process.run(
         'unzip',
         ['-o', archivePath, '-d', destDir],
@@ -146,10 +148,10 @@ class ExtractionService {
         throw Exception('unzip failed: ${result.stderr}');
       }
       
-      if (Platform.isMacOS) {
+      if (_platform.isMacOS) {
         await _postExtractSanitize(destDir);
       }
-    } else if (Platform.isWindows) {
+    } else if (_platform.isWindows) {
       try {
         // Modern Windows 10/11 has tar built-in which handles ZIPs perfectly.
         final result = await Process.run(
@@ -187,7 +189,7 @@ class ExtractionService {
       throw Exception('7z extraction failed: ${result.stderr}');
     }
 
-    if (Platform.isMacOS) {
+    if (_platform.isMacOS) {
       await _postExtractSanitize(destDir);
     }
   }
@@ -224,7 +226,7 @@ class ExtractionService {
   }
 
   Future<void> _postExtractSanitize(String destDir) async {
-    if (!Platform.isMacOS) return;
+    if (!_platform.isMacOS) return;
 
     // Find all .app bundles (case-insensitive)
     final findResult = await Process.run(
@@ -262,7 +264,7 @@ class ExtractionService {
   }
 
   Future<void> _sanitizeAppBundle(String appPath) async {
-    if (!Platform.isMacOS) return;
+    if (!_platform.isMacOS) return;
     
     try {
       // Ensure it's executable
