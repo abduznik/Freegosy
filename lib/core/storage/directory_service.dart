@@ -13,6 +13,7 @@ import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strate
 import 'package:freegosy/core/emulator/linux_strategies/native_linux_strategy.dart';
 import 'package:freegosy/core/emulator/linux_strategies/emudeck_strategy.dart';
 import 'package:freegosy/core/emulator/linux_strategies/retrodeck_strategy.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 
 class DirectoryService {
   static const Map<String, String> platformFolderCanonicalMap = {
@@ -55,6 +56,7 @@ class DirectoryService {
   static const String _useFlatEmulatorLayoutKey = 'useFlatEmulatorLayout';
 
   final SharedPreferences _prefs;
+  final PlatformInfo _platform;
   late String romsRootPath;
   late String emulatorsRootPath;
   String linuxSyncPreset = 'default';
@@ -66,16 +68,17 @@ class DirectoryService {
   
   LinuxEnvironmentStrategy? _linuxStrategy;
 
-  DirectoryService(this._prefs);
+  DirectoryService(this._prefs, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   bool get isSteamDeck {
-    if (!io.Platform.isLinux) return false;
-    final home = io.Platform.environment['HOME'] ?? '';
+    if (!_platform.isLinux) return false;
+    final home = _platform.environment['HOME'] ?? '';
     return home == '/home/deck' || io.Directory('/home/deck').existsSync();
   }
 
   Future<String?> detectEmuDeckRoot() async {
-    final home = io.Platform.environment['HOME'] ?? '/home/deck';
+    final home = _platform.environment['HOME'] ?? '/home/deck';
     final mediaDir = io.Directory('/run/media');
     if (await mediaDir.exists()) {
       try {
@@ -114,8 +117,7 @@ class DirectoryService {
       linuxPresetRootPath = _prefs.getString(_linuxPresetRootKey);
       useFlatEmulatorLayout = _prefs.getBool(_useFlatEmulatorLayoutKey) ?? false;
       
-      if (defaultTargetPlatform == TargetPlatform.linux) {
-        if ((linuxSyncPreset == 'auto' || linuxSyncPreset == 'default') && linuxPresetRootPath == null) {
+      if (_platform.isLinux && (linuxSyncPreset == 'auto' || linuxSyncPreset == 'default') && linuxPresetRootPath == null) {
           final detectedRoot = await detectEmuDeckRoot();
           if (detectedRoot != null) {
             linuxPresetRootPath = detectedRoot;
@@ -123,21 +125,20 @@ class DirectoryService {
             await _prefs.setString(_linuxSyncPresetKey, 'emudeck');
             await _prefs.setString(_linuxPresetRootKey, linuxPresetRootPath!);
           } else {
-            final home = io.Platform.environment['HOME'] ?? '';
+            final home = _platform.environment['HOME'] ?? '';
             final retrodeckConfig = p.join(home, '.var', 'app', 'net.retrodeck.retrodeck');
             if (await io.Directory(retrodeckConfig).exists()) {
               linuxSyncPreset = 'retrodeck';
               await _prefs.setString(_linuxSyncPresetKey, 'retrodeck');
             }
           }
-        }
       }
 
       _linuxStrategy = null;
       final String defaultBase = await getDefaultBase();
-      final home = io.Platform.environment['HOME'] ?? '';
+      final home = _platform.environment['HOME'] ?? '';
 
-      if (defaultTargetPlatform == TargetPlatform.linux) {
+      if (_platform.isLinux) {
         final customRoms = _prefs.getString(_romsRootPathKey);
         final customEmus = _prefs.getString(_emulatorsRootPathKey);
         romsRootPath = activeLinuxEnvironment.getRomsRoot(home, customRoms, linuxPresetRootPath);
@@ -166,7 +167,7 @@ class DirectoryService {
 
   Future<String?> resolveSevenZipPath() async {
     final tempDir = await getTemporaryDirectory();
-    final String exeName = io.Platform.isWindows ? '7zr.exe' : io.Platform.isLinux ? '7zz-linux' : '7zz';
+    final String exeName = _platform.isWindows ? '7zr.exe' : _platform.isLinux ? '7zz-linux' : '7zz';
     final exeFile = io.File(p.join(tempDir.path, exeName));
 
     if (!await exeFile.exists()) {
@@ -174,7 +175,7 @@ class DirectoryService {
         final data = await rootBundle.load('thirdparty/$exeName');
         final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
         await exeFile.writeAsBytes(bytes);
-        if (!io.Platform.isWindows) {
+        if (!_platform.isWindows) {
           await Process.run('chmod', ['+x', exeFile.path]);
         }
       } catch (e) {
@@ -263,7 +264,7 @@ class DirectoryService {
     // 2. Auto-detect via Linux environment strategy
     //    This runs `flatpak list --app --columns=application` to check
     //    which known emulator Flatpaks are actually installed.
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       final detected = await activeLinuxEnvironment.detectFlatpakEmulators();
       if (detected.containsKey(emulatorId)) return detected[emulatorId];
     }
@@ -356,22 +357,22 @@ class DirectoryService {
   }
 
   Future<String> getEmulatorAppSupportDirectory(String emulatorName, {String? platformSlug}) async {
-    if (io.Platform.isMacOS) {
+    if (_platform.isMacOS) {
       final appSupport = await getApplicationSupportDirectory();
       return p.join(appSupport.parent.parent.path, 'Application Support', emulatorName);
-    } else if (io.Platform.isWindows) {
-      final appData = io.Platform.environment['APPDATA'] ?? '';
+    } else if (_platform.isWindows) {
+      final appData = _platform.environment['APPDATA'] ?? '';
       return p.join(appData, emulatorName);
-    } else if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    } else if (_platform.isLinux) {
+      final home = _platform.environment['HOME'] ?? '';
       return activeLinuxEnvironment.getEmulatorAppSupportDirectory(home, emulatorName, linuxPresetRootPath, platformSlug: platformSlug);
     }
     throw UnsupportedError('Platform not supported');
   }
 
   Future<String> getEmulatorBiosDirectory(String emulatorId, {String? platformSlug}) async {
-    if (io.Platform.isLinux) {
-      final home = io.Platform.environment['HOME'] ?? '';
+    if (_platform.isLinux) {
+      final home = _platform.environment['HOME'] ?? '';
       return activeLinuxEnvironment.getBiosPath(home, linuxPresetRootPath);
     }
     
@@ -379,7 +380,7 @@ class DirectoryService {
     
     // RetroArch on Windows specifically looks for bios in its 'system' directory, 
     // which is usually next to the executable, but often inside a subfolder like 'RetroArch-Win64'
-    if (emulatorId == 'retroarch' && io.Platform.isWindows) {
+    if (emulatorId == 'retroarch' && _platform.isWindows) {
       final exePath = await findEmulatorExecutable('retroarch', 'RetroArch.exe');
       if (exePath != null) {
         final systemDir = p.join(io.File(exePath).parent.path, 'system');
@@ -440,13 +441,13 @@ class DirectoryService {
     if (await direct.exists()) return direct.path;
 
     // 2. Try with .exe extension on Windows
-    if (io.Platform.isWindows && !executableName.toLowerCase().endsWith('.exe')) {
+    if (_platform.isWindows && !executableName.toLowerCase().endsWith('.exe')) {
       final withExe = File(p.join(emulatorDir, '$executableName.exe'));
       if (await withExe.exists()) return withExe.path;
     }
 
     // 3. Check for user-set Flatpak package override
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       final flatpakPkg = await getEffectiveFlatpakPackage(emulatorId);
       if (flatpakPkg != null) {
         return 'flatpak run $flatpakPkg';
@@ -454,7 +455,7 @@ class DirectoryService {
     }
 
     // 4. Environment-specific logic (e.g., Linux Flatpaks auto-detected)
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       final envPath = await activeLinuxEnvironment.findExecutable(emulatorId, executableName, emulatorsRootPath, linuxPresetRootPath);
       if (envPath != null) return envPath;
     }
@@ -467,10 +468,10 @@ class DirectoryService {
         if (entity is io.File) {
           final fileName = p.basename(entity.path);
           if (fileName.toLowerCase() == executableName.toLowerCase() || 
-              (io.Platform.isWindows && fileName.toLowerCase() == '${executableName.toLowerCase()}.exe')) {
+              (_platform.isWindows && fileName.toLowerCase() == '${executableName.toLowerCase()}.exe')) {
             // Check depth
             final relative = p.relative(entity.path, from: emulatorDir);
-            final depth = relative.split(io.Platform.pathSeparator).length;
+            final depth = relative.split(_platform.pathSeparator).length;
             if (depth <= 3) { // Root/Subfolder/Executable.exe or Root/Executable.exe
               return entity.path;
             }
@@ -499,15 +500,15 @@ class DirectoryService {
   }
 
   Future<void> launchGame(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       await activeLinuxEnvironment.launch(game, romPath, emulatorId, exePath, args: args);
       return;
     }
 
     final exeDir = io.File(exePath).parent.path;
-    if (io.Platform.isWindows) {
+    if (_platform.isWindows) {
       await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
-    } else if (io.Platform.isMacOS) {
+    } else if (_platform.isMacOS) {
       // For macOS, we might need 'open -a' or direct execution
       if (exePath.contains('.app')) {
         final appPath = exePath.substring(0, exePath.indexOf('.app') + 4);
@@ -519,14 +520,14 @@ class DirectoryService {
   }
 
   Future<io.Process?> launchGameWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       return await activeLinuxEnvironment.launchWithHandle(game, romPath, emulatorId, exePath, args: args);
     }
 
     final exeDir = io.File(exePath).parent.path;
-    if (io.Platform.isWindows) {
+    if (_platform.isWindows) {
       return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
-    } else if (io.Platform.isMacOS) {
+    } else if (_platform.isMacOS) {
       if (exePath.contains('.app')) {
         // We can't easily get a handle with 'open', so we try direct execution if possible
         return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
@@ -538,15 +539,15 @@ class DirectoryService {
   }
 
   Future<void> launchStandalone(String emulatorId, String exePath, {List<String> args = const []}) async {
-    if (io.Platform.isLinux) {
+    if (_platform.isLinux) {
       await activeLinuxEnvironment.launchStandalone(emulatorId, exePath, args: args);
       return;
     }
 
     final exeDir = io.File(exePath).parent.path;
-    if (io.Platform.isWindows) {
+    if (_platform.isWindows) {
       await io.Process.start(exePath, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
-    } else if (io.Platform.isMacOS) {
+    } else if (_platform.isMacOS) {
       if (exePath.contains('.app')) {
         final appPath = exePath.substring(0, exePath.indexOf('.app') + 4);
         await io.Process.run('open', ['-a', appPath, '--args', ...args]);
