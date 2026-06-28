@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/error/error_handler.dart';
+import '../../core/platform/platform_info.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
@@ -99,7 +100,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         
         final segments = selectedFilePath!.split(RegExp(r'[/\\]'));
         final sanitizedSegments = segments.map((s) => s.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim()).toList();
-        romPath = sanitizedSegments.join(io.Platform.isWindows ? '\\' : '/');
+        romPath = sanitizedSegments.join(PlatformInfo.current.isWindows ? '\\' : '/');
         
         if (!context.mounted) return;
         if (!romPath.startsWith('/') && !romPath.contains(':\\')) {
