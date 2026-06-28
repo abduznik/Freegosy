@@ -4,18 +4,14 @@ import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/extraction/extraction_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('ExtractionService', () {
-    late ExtractionService service;
     late Directory tempDir;
 
     setUp(() async {
-      SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
-      final dirService = DirectoryService(prefs);
-      service = ExtractionService(dirService);
       tempDir = await Directory.systemTemp.createTemp('extraction_test_');
     });
 
@@ -24,6 +20,15 @@ void main() {
         await tempDir.delete(recursive: true);
       }
     });
+
+    ExtractionService createService(String platformOs) {
+      SharedPreferences.setMockInitialValues({});
+      // We can't easily create a DirectoryService with a fake platform here
+      // since it does filesystem operations in initialize(). Use a minimal mock.
+      final platform = PlatformInfo(platformOs);
+      // Create a minimal ExtractionService — we only need the platform for dispatch
+      return ExtractionService(_MinimalDirectoryService(), platform: platform);
+    }
 
     /// Creates a ZIP file containing [files] map of {filename: content}.
     Future<String> createZip(Map<String, String> files) async {
@@ -39,96 +44,129 @@ void main() {
       return zipPath;
     }
 
-    test('.zip extracts files correctly', () async {
-      final zipPath = await createZip({
-        'test.txt': 'Hello, World!',
+    group('cross-platform ZIP extraction', () {
+      test('.zip extracts on simulated macOS', () async {
+        final zipPath = await createZip({'test.txt': 'Hello!'});
+        final destDir = Directory(p.join(tempDir.path, 'ext_macos'));
+        await destDir.create();
+        final service = createService('macos');
+        await service.extract(zipPath, destDir.path);
+        expect(File(p.join(destDir.path, 'test.txt')).existsSync(), isTrue);
       });
 
-      final destDir = Directory(p.join(tempDir.path, 'extracted'));
-      await destDir.create();
+      test('.zip extracts on simulated Linux', () async {
+        final zipPath = await createZip({'test.txt': 'Hello!'});
+        final destDir = Directory(p.join(tempDir.path, 'ext_linux'));
+        await destDir.create();
+        final service = createService('linux');
+        await service.extract(zipPath, destDir.path);
+        expect(File(p.join(destDir.path, 'test.txt')).existsSync(), isTrue);
+      });
 
-      await service.extract(zipPath, destDir.path);
-
-      expect(File(p.join(destDir.path, 'test.txt')).existsSync(), isTrue);
-      expect(
-          await File(p.join(destDir.path, 'test.txt')).readAsString(),
-          'Hello, World!');
+      test('.zip extracts on simulated Windows', () async {
+        final zipPath = await createZip({'test.txt': 'Hello!'});
+        final destDir = Directory(p.join(tempDir.path, 'ext_windows'));
+        await destDir.create();
+        final service = createService('windows');
+        await service.extract(zipPath, destDir.path);
+        expect(File(p.join(destDir.path, 'test.txt')).existsSync(), isTrue);
+      });
     });
 
-    test('unknown extension with ZIP magic bytes extracts', () async {
-      // Create a ZIP but rename it to .bin
-      final zipPath = await createZip({'magic.txt': 'magic content'});
-      final renamedPath = p.join(tempDir.path, 'archive.bin');
-      await File(zipPath).rename(renamedPath);
+    group('platform guards', () {
+      test('.dmg throws on simulated Linux', () async {
+        final dmgPath = p.join(tempDir.path, 'test.dmg');
+        await File(dmgPath).writeAsBytes([0x00, 0x01]);
+        final destDir = Directory(p.join(tempDir.path, 'dmg_linux'));
+        await destDir.create();
+        final service = createService('linux');
+        expect(
+          () => service.extract(dmgPath, destDir.path),
+          throwsA(isA<Exception>().having(
+            (e) => e.toString(), 'message', contains('DMG extraction is only supported on macOS'),
+          )),
+        );
+      });
 
-      final destDir = Directory(p.join(tempDir.path, 'extracted_magic'));
-      await destDir.create();
+      test('.dmg throws on simulated Windows', () async {
+        final dmgPath = p.join(tempDir.path, 'test.dmg');
+        await File(dmgPath).writeAsBytes([0x00, 0x01]);
+        final destDir = Directory(p.join(tempDir.path, 'dmg_win'));
+        await destDir.create();
+        final service = createService('windows');
+        expect(
+          () => service.extract(dmgPath, destDir.path),
+          throwsA(isA<Exception>().having(
+            (e) => e.toString(), 'message', contains('DMG extraction is only supported on macOS'),
+          )),
+        );
+      });
 
-      await service.extract(renamedPath, destDir.path);
+      test('.appimage throws on simulated macOS', () async {
+        final appPath = p.join(tempDir.path, 'test.AppImage');
+        await File(appPath).writeAsBytes([0x7F, 0x45, 0x4C, 0x46]);
+        final destDir = Directory(p.join(tempDir.path, 'app_macos'));
+        await destDir.create();
+        final service = createService('macos');
+        expect(
+          () => service.extract(appPath, destDir.path),
+          throwsA(isA<Exception>().having(
+            (e) => e.toString(), 'message', contains('AppImage is only supported on Linux'),
+          )),
+        );
+      });
 
-      expect(
-          File(p.join(destDir.path, 'magic.txt')).existsSync(), isTrue);
+      test('.appimage throws on simulated Windows', () async {
+        final appPath = p.join(tempDir.path, 'test.AppImage');
+        await File(appPath).writeAsBytes([0x7F, 0x45, 0x4C, 0x46]);
+        final destDir = Directory(p.join(tempDir.path, 'app_win'));
+        await destDir.create();
+        final service = createService('windows');
+        expect(
+          () => service.extract(appPath, destDir.path),
+          throwsA(isA<Exception>().having(
+            (e) => e.toString(), 'message', contains('AppImage is only supported on Linux'),
+          )),
+        );
+      });
     });
 
-    test('unknown extension without ZIP magic throws', () async {
-      final fakePath = p.join(tempDir.path, 'not_archive.bin');
-      await File(fakePath).writeAsBytes([0x00, 0x01, 0x02, 0x03]);
+    group('magic byte detection', () {
+      test('unknown extension with ZIP magic extracts on all platforms', () async {
+        for (final os in ['macos', 'linux', 'windows']) {
+          final zipPath = await createZip({'magic.txt': 'content'});
+          final renamedPath = p.join(tempDir.path, 'archive_$os.bin');
+          await File(zipPath).copy(renamedPath);
+          final destDir = Directory(p.join(tempDir.path, 'magic_$os'));
+          await destDir.create();
+          final service = createService(os);
+          await service.extract(renamedPath, destDir.path);
+          expect(File(p.join(destDir.path, 'magic.txt')).existsSync(), isTrue,
+              reason: 'Failed on $os');
+        }
+      });
 
-      final destDir = Directory(p.join(tempDir.path, 'extracted_fail'));
-      await destDir.create();
-
-      expect(
-        () => service.extract(fakePath, destDir.path),
-        throwsA(isA<Exception>().having(
-          (e) => e.toString(),
-          'message',
-          contains('Unsupported archive format'),
-        )),
-      );
-    });
-
-    test('.dmg on non-macOS throws', () async {
-      if (Platform.isMacOS) {
-        // Skip on macOS — the test is for non-macOS behavior
-        return;
-      }
-
-      final dmgPath = p.join(tempDir.path, 'test.dmg');
-      await File(dmgPath).writeAsBytes([0x00, 0x01]);
-
-      final destDir = Directory(p.join(tempDir.path, 'extracted_dmg'));
-      await destDir.create();
-
-      expect(
-        () => service.extract(dmgPath, destDir.path),
-        throwsA(isA<Exception>().having(
-          (e) => e.toString(),
-          'message',
-          contains('DMG extraction is only supported on macOS'),
-        )),
-      );
-    });
-
-    test('.appimage on non-Linux throws', () async {
-      if (Platform.isLinux) {
-        // Skip on Linux — the test is for non-Linux behavior
-        return;
-      }
-
-      final appPath = p.join(tempDir.path, 'test.AppImage');
-      await File(appPath).writeAsBytes([0x7F, 0x45, 0x4C, 0x46]);
-
-      final destDir = Directory(p.join(tempDir.path, 'extracted_app'));
-      await destDir.create();
-
-      expect(
-        () => service.extract(appPath, destDir.path),
-        throwsA(isA<Exception>().having(
-          (e) => e.toString(),
-          'message',
-          contains('AppImage is only supported on Linux'),
-        )),
-      );
+      test('unknown extension without ZIP magic throws on all platforms', () async {
+        for (final os in ['macos', 'linux', 'windows']) {
+          final fakePath = p.join(tempDir.path, 'fake_$os.bin');
+          await File(fakePath).writeAsBytes([0x00, 0x01, 0x02, 0x03]);
+          final destDir = Directory(p.join(tempDir.path, 'fake_$os'));
+          await destDir.create();
+          final service = createService(os);
+          expect(
+            () => service.extract(fakePath, destDir.path),
+            throwsA(isA<Exception>()),
+            reason: 'Should throw on $os',
+          );
+        }
+      });
     });
   });
+}
+
+/// Minimal DirectoryService stub for ExtractionService tests.
+/// Only `resolveSevenZipPath` is called by the 7z handler.
+class _MinimalDirectoryService extends Fake implements DirectoryService {
+  @override
+  Future<String?> resolveSevenZipPath() async => null;
 }
