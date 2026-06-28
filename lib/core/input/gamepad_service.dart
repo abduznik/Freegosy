@@ -47,6 +47,10 @@ class GamepadService extends WidgetsBindingObserver {
   Timer? _holdDelayTimer;
   Timer? _holdRepeatTimer;
 
+  // Debounce for digital buttons to prevent rapid-fire ghost presses
+  final Map<GameAction, DateTime> _lastDigitalPress = {};
+  static const _digitalDebounce = Duration(milliseconds: 80);
+
   bool _appHasFocus = true;
 
   /// Raw event stream for controller button sniffing (used by setup dialogs).
@@ -378,6 +382,14 @@ class GamepadService extends WidgetsBindingObserver {
     } else {
       // 3. Handle Digital Buttons (including polarity-decoded hat/axis actions)
       if (event.value.abs() > 0.5) {
+        // Debounce: ignore repeated presses within the debounce window
+        final now = DateTime.now();
+        final lastPress = _lastDigitalPress[normalized.action];
+        if (lastPress != null && now.difference(lastPress) < _digitalDebounce) {
+          return; // Ghost press — skip
+        }
+        _lastDigitalPress[normalized.action] = now;
+
         _triggerAction(normalized.action, event.value);
         if (_isDirectionAction(normalized.action)) {
           _activateDirection(normalized.action);
