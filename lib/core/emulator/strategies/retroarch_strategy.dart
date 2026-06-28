@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive_io.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
@@ -28,13 +29,13 @@ class RetroArchStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
   String _ndsCore = 'melonds'; // Default NDS core
 
-  RetroArchStrategy(this._directoryService);
+  RetroArchStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
 
   void setNdsCore(String core) {
-    if (io.Platform.isMacOS && core == 'desmume') {
+    if (platform.isMacOS && core == 'desmume') {
       debugPrint('[RetroArch] DeSmuME core is not supported on macOS ARM, defaulting to melonDS.');
       _ndsCore = 'melonds';
       return;
@@ -134,7 +135,7 @@ class RetroArchStrategy extends EmulatorStrategy {
 
     if (baseName.isEmpty) return null;
 
-    final ext = io.Platform.isWindows ? 'dll' : (io.Platform.isMacOS ? 'dylib' : 'so');
+    final ext = platform.isWindows ? 'dll' : (platform.isMacOS ? 'dylib' : 'so');
     return '$baseName.$ext';
   }
 
@@ -160,13 +161,13 @@ class RetroArchStrategy extends EmulatorStrategy {
   String? _getFlatpakCoresDir(String exePath) {
     final pkg = _flatpakPackageFromExePath(exePath);
     if (pkg == null) return null;
-    final home = io.Platform.environment['HOME'];
+    final home = platform.environment['HOME'];
     if (home == null) return null;
     return p.join(home, '.var', 'app', pkg, 'config', 'retroarch', 'cores');
   }
 
   String _getEmuRootDir(String exePath) {
-    if (io.Platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+    if (platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
       // Go up from RetroArch.app/Contents/MacOS/RetroArch to Emulators/retroarch/
       return io.File(exePath).parent.parent.parent.parent.path;
     }
@@ -344,15 +345,15 @@ class RetroArchStrategy extends EmulatorStrategy {
     String ext;
     
     debugPrint('[RetroArch] Downloading core: $coreName to $coresDir');
-    debugPrint('[RetroArch] Platform: ${io.Platform.operatingSystem}');
+    debugPrint('[RetroArch] Platform: ${platform.os}');
 
     // Strip any existing extension from coreName to ensure we append the correct one for the URL
     final coreBaseName = p.basenameWithoutExtension(coreName);
 
-    if (io.Platform.isWindows) {
+    if (platform.isWindows) {
       ext = 'dll';
       url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreBaseName.dll.zip';
-    } else if (io.Platform.isMacOS) {
+    } else if (platform.isMacOS) {
       ext = 'dylib';
       // Detect if we are on Apple Silicon or Intel
       bool isArm = io.Platform.version.contains('arm64');

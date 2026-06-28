@@ -1,18 +1,19 @@
 import 'dart:io' as io;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
 class DolphinStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  DolphinStrategy(this._directoryService);
+  DolphinStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
 
   @override
-  List<String> get launchArgs => io.Platform.isLinux ? <String>[] : ['-b', '-e'];
+  List<String> get launchArgs => platform.isLinux ? <String>[] : ['-b', '-e'];
 
   @override
   String get name => 'Dolphin';

@@ -1,11 +1,15 @@
 import 'dart:io' as io;
 import 'package:path/path.dart' as p;
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'linux_environment_strategy.dart';
 
 class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   // Cache for Flatpak detection — avoids running `flatpak list` repeatedly.
   Map<String, String>? _flatpakCache;
+  final PlatformInfo _platform;
+
+  NativeLinuxStrategy({PlatformInfo? platform}) : _platform = platform ?? PlatformInfo.current;
 
   @override
   String get name => 'Default';
@@ -40,7 +44,7 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
     if (await direct.exists()) return direct.path;
 
     // 2. Check common AppImage locations (EmuDeck, Gear Lever, manual installs)
-    final home = io.Platform.environment['HOME'] ?? '';
+    final home = _platform.environment['HOME'] ?? '';
     final searchDirs = [
       io.Directory(p.join(home, 'Applications')),
       io.Directory(p.join(home, 'AppImages')),

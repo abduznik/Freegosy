@@ -1,10 +1,17 @@
 import 'dart:io';
-import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
 abstract class EmulatorStrategy {
+  final PlatformInfo _platform;
+
+  EmulatorStrategy({PlatformInfo? platform}) : _platform = platform ?? PlatformInfo.current;
+
+  @protected
+  PlatformInfo get platform => _platform;
   String get name;
   String get emulatorId;
   List<String> get supportedSlugs;
@@ -20,9 +27,9 @@ abstract class EmulatorStrategy {
   List<String> get launchArgs => [];
 
   String getExecutableForPlatform() {
-    if (io.Platform.isWindows) return windowsExecutable;
-    if (io.Platform.isLinux) return linuxExecutable;
-    if (io.Platform.isMacOS) return macosExecutable;
+    if (_platform.isWindows) return windowsExecutable;
+    if (_platform.isLinux) return linuxExecutable;
+    if (_platform.isMacOS) return macosExecutable;
     return windowsExecutable;
   }
 

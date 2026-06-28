@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/retroarch_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/dolphin_strategy.dart';
@@ -27,24 +27,26 @@ import 'package:freegosy/core/emulator/strategies/custom_emulator_strategy.dart'
 class StrategyRegistry {
   final DirectoryService _directoryService;
   final SharedPreferences _prefs;
+  final PlatformInfo _platform;
   late final List<EmulatorStrategy> _strategies;
   final List<CustomEmulatorConfig> _customEmulatorConfigs;
   final Map<String, String> _slugPreferences = {};
 
-  StrategyRegistry(this._directoryService, this._prefs, {List<CustomEmulatorConfig> customEmulators = const []}) 
-    : _customEmulatorConfigs = customEmulators {
+  StrategyRegistry(this._directoryService, this._prefs, {List<CustomEmulatorConfig> customEmulators = const [], PlatformInfo? platform}) 
+    : _customEmulatorConfigs = customEmulators,
+      _platform = platform ?? PlatformInfo.current {
     final List<EmulatorStrategy> allPossibleStrategies = [
-      RetroArchStrategy(_directoryService),
-      DolphinStrategy(_directoryService),
-      EdenStrategy(_directoryService),
-      RyujinxStrategy(_directoryService),
+      RetroArchStrategy(_directoryService, platform: _platform),
+      DolphinStrategy(_directoryService, platform: _platform),
+      EdenStrategy(_directoryService, platform: _platform),
+      RyujinxStrategy(_directoryService, platform: _platform),
       Rpcs3Strategy(_directoryService),
-      Pcsx2Strategy(_directoryService),
+      Pcsx2Strategy(_directoryService, platform: _platform),
       AzaharStrategy(_directoryService),
       CemuStrategy(_directoryService),
-      DuckstationStrategy(_directoryService),
+      DuckstationStrategy(_directoryService, platform: _platform),
       FlycastStrategy(_directoryService),
-      MelonDSStrategy(_directoryService),
+      MelonDSStrategy(_directoryService, platform: _platform),
       PPSSPPStrategy(_directoryService),
       MGBAStrategy(_directoryService),
       MAMEStrategy(_directoryService),
@@ -58,9 +60,9 @@ class StrategyRegistry {
       final definition = getDefinition(strategy.emulatorId);
       if (definition == null) return true; // Default to including if no definition found
       final supported = List<String>.from(definition['supported_platforms'] ?? []);
-      if (Platform.isWindows && supported.contains('windows')) return true;
-      if (Platform.isLinux && supported.contains('linux')) return true;
-      if (Platform.isMacOS && supported.contains('macos')) return true;
+      if (_platform.isWindows && supported.contains('windows')) return true;
+      if (_platform.isLinux && supported.contains('linux')) return true;
+      if (_platform.isMacOS && supported.contains('macos')) return true;
       return false;
     }).toList();
     

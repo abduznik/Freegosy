@@ -2,13 +2,14 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
 class Pcsx2Strategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  Pcsx2Strategy(this._directoryService);
+  Pcsx2Strategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -39,8 +40,8 @@ class Pcsx2Strategy extends EmulatorStrategy {
 
   @override
   String resolveSavePath(Game game) {
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'];
+    if (platform.isMacOS) {
+      final home = platform.environment['HOME'];
       if (home != null) {
         return '$home/Library/Application Support/PCSX2/';
       }

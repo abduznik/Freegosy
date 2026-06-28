@@ -3,13 +3,14 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
 class MelonDSStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  MelonDSStrategy(this._directoryService);
+  MelonDSStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -39,7 +40,7 @@ class MelonDSStrategy extends EmulatorStrategy {
   Future<void> launch(Game game, String romPath) async {
     // On Linux the active linux strategy (EmuDeck/RetroDeck/Native) handles
     // emu-launch.sh detection and correct launch — delegate to base class.
-    if (io.Platform.isLinux) {
+    if (platform.isLinux) {
       return super.launch(game, romPath);
     }
     final exePath = await findExecutable();
@@ -54,7 +55,7 @@ class MelonDSStrategy extends EmulatorStrategy {
 
   @override
   Future<Process?> launchWithHandle(Game game, String romPath) async {
-    if (io.Platform.isLinux) {
+    if (platform.isLinux) {
       return super.launchWithHandle(game, romPath);
     }
     final exePath = await findExecutable();
@@ -71,14 +72,14 @@ class MelonDSStrategy extends EmulatorStrategy {
 
   @override
   Future<void> launchStandalone() async {
-    if (io.Platform.isLinux) {
+    if (platform.isLinux) {
       return super.launchStandalone();
     }
 
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isMacOS) {
+    if (platform.isMacOS) {
       final parts = exePath.split('/');
       final appIdx = parts.indexWhere((part) => part.endsWith('.app'));
       if (appIdx != -1) {

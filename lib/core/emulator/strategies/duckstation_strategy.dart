@@ -1,6 +1,7 @@
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:path/path.dart' as p;
@@ -8,7 +9,7 @@ import 'package:path/path.dart' as p;
 class DuckstationStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  DuckstationStrategy(this._directoryService);
+  DuckstationStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -39,8 +40,8 @@ class DuckstationStrategy extends EmulatorStrategy {
 
   @override
   String resolveSavePath(Game game) {
-    if (io.Platform.isMacOS) {
-      final home = io.Platform.environment['HOME'];
+    if (platform.isMacOS) {
+      final home = platform.environment['HOME'];
       if (home != null) {
         return '$home/Library/Application Support/DuckStation/';
       }
@@ -50,7 +51,7 @@ class DuckstationStrategy extends EmulatorStrategy {
 
   @override
   Future<void> postInstall(String installDir) async {
-    if (io.Platform.isWindows) {
+    if (platform.isWindows) {
       // DuckStation requires a portable.txt file in the SAME directory as the executable to run in portable mode.
       final exePath = await _directoryService.findEmulatorExecutable(emulatorId, windowsExecutable);
       final targetDir = exePath != null ? io.File(exePath).parent.path : installDir;

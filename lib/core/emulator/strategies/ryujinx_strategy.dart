@@ -1,6 +1,7 @@
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import '../emulator_strategy.dart';
@@ -8,7 +9,7 @@ import '../emulator_strategy.dart';
 class RyujinxStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  RyujinxStrategy(this._directoryService);
+  RyujinxStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -42,7 +43,7 @@ class RyujinxStrategy extends EmulatorStrategy {
     if (!await dir.exists()) return null;
 
     // 2. Linux specific discovery
-    if (io.Platform.isLinux) {
+    if (platform.isLinux) {
       await for (final entity in dir.list()) {
         if (entity is io.File) {
           final path = entity.path.toLowerCase();
@@ -54,7 +55,7 @@ class RyujinxStrategy extends EmulatorStrategy {
     }
 
     // 3. macOS specific discovery (.app bundle)
-    if (io.Platform.isMacOS) {
+    if (platform.isMacOS) {
       await for (final entity in dir.list(recursive: true)) {
         if (entity is io.Directory && p.basename(entity.path) == 'Ryujinx.app') {
           final binary = io.File(p.join(entity.path, 'Contents', 'MacOS', 'Ryujinx'));
@@ -64,7 +65,7 @@ class RyujinxStrategy extends EmulatorStrategy {
     }
 
     // 4. Windows Recursive Discovery (Required for publish/ folder)
-    if (io.Platform.isWindows) {
+    if (platform.isWindows) {
       await for (final entity in dir.list(recursive: true)) {
         if (entity is io.File) {
           if (p.basename(entity.path).toLowerCase() == 'ryujinx.exe') {
@@ -84,7 +85,7 @@ class RyujinxStrategy extends EmulatorStrategy {
 
     debugPrint('[Ryujinx] Strategy Received romPath: $romPath');
 
-    if (io.Platform.isWindows) {
+    if (platform.isWindows) {
       debugPrint('[Ryujinx] Delegating to DirectoryService for Windows launch');
       await _directoryService.launchGame(game, romPath, emulatorId, exePath);
       return;
@@ -93,9 +94,9 @@ class RyujinxStrategy extends EmulatorStrategy {
     final absRomPath = io.File(romPath).absolute.path;
 
     // Auto-fix permissions on macOS/Linux
-    if (io.Platform.isMacOS || io.Platform.isLinux) {
+    if (platform.isMacOS || platform.isLinux) {
       await io.Process.run('chmod', ['+x', exePath]);
-      if (io.Platform.isMacOS) {
+      if (platform.isMacOS) {
         await _ensureEntitlements(exePath);
         final exeDir = io.File(exePath).parent.path;
         await io.Process.start(
@@ -118,7 +119,7 @@ class RyujinxStrategy extends EmulatorStrategy {
 
     debugPrint('[Ryujinx] Strategy Received romPath (with handle): $romPath');
 
-    if (io.Platform.isWindows) {
+    if (platform.isWindows) {
       debugPrint('[Ryujinx] Delegating to DirectoryService for Windows handle launch');
       return await _directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath);
     }
@@ -126,12 +127,12 @@ class RyujinxStrategy extends EmulatorStrategy {
     final absRomPath = io.File(romPath).absolute.path;
 
     // macOS/Linux permission handling
-    if (io.Platform.isMacOS || io.Platform.isLinux) {
+    if (platform.isMacOS || platform.isLinux) {
       await io.Process.run('chmod', ['+x', exePath]);
-      if (io.Platform.isMacOS) await _ensureEntitlements(exePath);
+      if (platform.isMacOS) await _ensureEntitlements(exePath);
     }
 
-    if (io.Platform.isMacOS) {
+    if (platform.isMacOS) {
       final exeDir = io.File(exePath).parent.path;
       final process = await io.Process.start(
         exePath,
@@ -153,8 +154,7 @@ class RyujinxStrategy extends EmulatorStrategy {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
 
-    if (io.Platform.isWindows) {
-      final exeDir = io.File(exePath).parent.path;
+    if (platform.isWindows) {      final exeDir = io.File(exePath).parent.path;
       debugPrint('[Ryujinx] Launching Windows Standalone (No ROM)');
       debugPrint('[Ryujinx] Executable: $exePath');
       debugPrint('[Ryujinx] Working Directory: $exeDir');
@@ -183,7 +183,7 @@ class RyujinxStrategy extends EmulatorStrategy {
   }
 
   Future<void> _ensureEntitlements(String exePath) async {
-    if (!io.Platform.isMacOS) return;
+    if (!platform.isMacOS) return;
     final appPath = exePath.split('/Contents/MacOS/').first;
     final checkResult = await io.Process.run('codesign', ['-dv', '--entitlements', '-', appPath]);
     if (checkResult.stderr.toString().contains('com.apple.security.hypervisor') || 

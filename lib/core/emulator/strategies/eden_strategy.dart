@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import '../emulator_strategy.dart';
@@ -6,7 +7,7 @@ import '../emulator_strategy.dart';
 class EdenStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
 
-  EdenStrategy(this._directoryService);
+  EdenStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -35,7 +36,7 @@ class EdenStrategy extends EmulatorStrategy {
     if (defaultExe != null) return defaultExe;
 
     // If default 'eden' not found, search for AppImage on Linux
-    if (io.Platform.isLinux) {
+    if (platform.isLinux) {
       final emuDir = await _directoryService.getEmulatorDirectory(emulatorId);
       final dir = io.Directory(emuDir);
       if (await dir.exists()) {

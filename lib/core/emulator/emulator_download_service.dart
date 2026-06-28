@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../downloader/download_service.dart';
+import '../platform/platform_info.dart';
 import '../storage/directory_service.dart';
 import '../extraction/extraction_service.dart';
 import 'emulator_registry_data.dart';
@@ -16,9 +17,11 @@ class EmulatorDownloadService {
   final ExtractionService _extractionService;
   final DirectoryService _directoryService;
   final StrategyRegistry _strategyRegistry;
+  final PlatformInfo _platform;
   late final ReleaseService _releaseService;
 
-  EmulatorDownloadService(this._dio, this._directoryService, this._extractionService, this._strategyRegistry) {
+  EmulatorDownloadService(this._dio, this._directoryService, this._extractionService, this._strategyRegistry, {PlatformInfo? platform})
+    : _platform = platform ?? PlatformInfo.current {
     _releaseService = ReleaseService(_dio);
   }
 
@@ -32,10 +35,10 @@ class EmulatorDownloadService {
     String excludedKey;
     
     if (type == 'gitea') {
-      requiredKey = Platform.isWindows ? 'gitea_asset_required_windows' : 'gitea_asset_required_linux';
+      requiredKey = _platform.isWindows ? 'gitea_asset_required_windows' : 'gitea_asset_required_linux';
       excludedKey = 'gitea_asset_excluded';
     } else {
-      requiredKey = Platform.isWindows ? 'github_asset_required_windows' : 'github_asset_required_linux';
+      requiredKey = _platform.isWindows ? 'github_asset_required_windows' : 'github_asset_required_linux';
       excludedKey = 'github_asset_excluded';
     }
     
@@ -144,9 +147,9 @@ class EmulatorDownloadService {
         List<String> required = [];
         List<String> excluded = List<String>.from(definition['${buildType}_asset_excluded'] ?? []);
 
-        if (Platform.isWindows) {
+        if (_platform.isWindows) {
           required = List<String>.from(definition['${buildType}_asset_required_windows'] ?? []);
-        } else if (Platform.isMacOS) {
+        } else if (_platform.isMacOS) {
           required = List<String>.from(definition['${buildType}_asset_required_macos'] ?? []);
         } else {
           if (_directoryService.isSteamDeck) {
@@ -181,23 +184,23 @@ class EmulatorDownloadService {
 
       
       String repo = definition['github_repo'] as String;
-      if (Platform.isWindows && definition.containsKey('github_repo_windows')) {
+      if (_platform.isWindows && definition.containsKey('github_repo_windows')) {
         repo = definition['github_repo_windows'] as String;
-      } else if (Platform.isMacOS && definition.containsKey('github_repo_macos')) {
+      } else if (_platform.isMacOS && definition.containsKey('github_repo_macos')) {
         repo = definition['github_repo_macos'] as String;
-      } else if (Platform.isLinux && definition.containsKey('github_repo_linux')) {
+      } else if (_platform.isLinux && definition.containsKey('github_repo_linux')) {
         repo = definition['github_repo_linux'] as String;
       }
 
       String requiredKey = 'github_asset_required';
       String excludedKey = 'github_asset_excluded';
-      if (Platform.isWindows) {
+      if (_platform.isWindows) {
         if (definition.containsKey('github_asset_required_windows')) requiredKey = 'github_asset_required_windows';
         if (definition.containsKey('github_asset_excluded_windows')) excludedKey = 'github_asset_excluded_windows';
-      } else if (Platform.isMacOS) {
+      } else if (_platform.isMacOS) {
         if (definition.containsKey('github_asset_required_macos')) requiredKey = 'github_asset_required_macos';
         if (definition.containsKey('github_asset_excluded_macos')) excludedKey = 'github_asset_excluded_macos';
-      } else if (Platform.isLinux) {
+      } else if (_platform.isLinux) {
         if (definition.containsKey('github_asset_required_linux')) requiredKey = 'github_asset_required_linux';
         if (definition.containsKey('github_asset_excluded_linux')) excludedKey = 'github_asset_excluded_linux';
       }
@@ -222,7 +225,7 @@ class EmulatorDownloadService {
     } else if (downloadUrl == null && type == 'dolphin') {
 
 
-      final requiredKey = Platform.isWindows ? 'asset_required_windows' : (Platform.isMacOS ? 'asset_required_macos' : 'asset_required_linux');
+      final requiredKey = _platform.isWindows ? 'asset_required_windows' : (_platform.isMacOS ? 'asset_required_macos' : 'asset_required_linux');
       final required = List<String>.from(definition[requiredKey] ?? []);
 
       final assets = await _releaseService.getLatestReleaseAssets(
@@ -244,13 +247,13 @@ class EmulatorDownloadService {
 
       String requiredKey = 'gitea_asset_required';
       String excludedKey = 'gitea_asset_excluded';
-      if (Platform.isWindows) {
+      if (_platform.isWindows) {
         if (definition.containsKey('gitea_asset_required_windows')) requiredKey = 'gitea_asset_required_windows';
         if (definition.containsKey('gitea_asset_excluded_windows')) excludedKey = 'gitea_asset_excluded_windows';
-      } else if (Platform.isMacOS) {
+      } else if (_platform.isMacOS) {
         if (definition.containsKey('gitea_asset_required_macos')) requiredKey = 'gitea_asset_required_macos';
         if (definition.containsKey('gitea_asset_excluded_macos')) excludedKey = 'gitea_asset_excluded_macos';
-      } else if (Platform.isLinux) {
+      } else if (_platform.isLinux) {
         if (definition.containsKey('gitea_asset_required_linux')) requiredKey = 'gitea_asset_required_linux';
         if (definition.containsKey('gitea_asset_excluded_linux')) excludedKey = 'gitea_asset_excluded_linux';
       }
@@ -274,9 +277,9 @@ class EmulatorDownloadService {
       }
       downloadUrl = assets.first['url'];
     } else if (downloadUrl == null && type == 'direct') {
-      if (Platform.isWindows) {
+      if (_platform.isWindows) {
         downloadUrl = definition['windows_url'] as String?;
-      } else if (Platform.isMacOS) {
+      } else if (_platform.isMacOS) {
         downloadUrl = definition['macos_url'] as String?;
       } else {
         downloadUrl = definition['linux_url'] as String?;
@@ -344,15 +347,15 @@ class EmulatorDownloadService {
         ));
         await _extractionService.extract(tempFilePath, emulatorDir);
 
-        final exeName = Platform.isWindows ? definition['windows_executable'] : (Platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);
+        final exeName = _platform.isWindows ? definition['windows_executable'] : (_platform.isMacOS ? definition['macos_executable'] : definition['linux_executable']);
         if (exeName != null) {
           final exePath = await _directoryService.findEmulatorExecutable(emulatorId, exeName as String);
           if (exePath != null) {
-            if (Platform.isLinux || Platform.isMacOS) {
+            if (_platform.isLinux || _platform.isMacOS) {
               await Process.run('chmod', ['+x', exePath]);
             }
             
-            if (Platform.isMacOS) {
+            if (_platform.isMacOS) {
               await Process.run('xattr', ['-cr', emulatorDir]);
               if (emulatorId == 'ryujinx') {
                 await _reSignRyujinx(exePath);
