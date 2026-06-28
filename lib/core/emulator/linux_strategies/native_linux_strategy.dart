@@ -39,11 +39,13 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
     final direct = io.File(p.join(emulatorsRoot, executableName));
     if (await direct.exists()) return direct.path;
 
-    // 2. Check ~/Applications and ~/AppImages (EmuDeck/Gear Lever AppImage locations)
+    // 2. Check common AppImage locations (EmuDeck, Gear Lever, manual installs)
     final home = io.Platform.environment['HOME'] ?? '';
     final searchDirs = [
       io.Directory(p.join(home, 'Applications')),
       io.Directory(p.join(home, 'AppImages')),
+      io.Directory(p.join(home, '.local', 'bin')),
+      io.Directory(p.join(home, 'bin')),
     ];
     for (final dir in searchDirs) {
       if (!await dir.exists()) continue;
@@ -52,14 +54,29 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
       final candidate = io.File(p.join(dir.path, executableName));
       if (await candidate.exists()) return candidate.path;
 
-      // Case-insensitive fallback for AppImage files
+      // Case-insensitive fallback for AppImage files and other executables
       try {
         final entries = await dir.list().toList();
         for (final entry in entries) {
-          if (entry is io.File &&
-              p.basename(entry.path).toLowerCase() == executableName.toLowerCase()) {
+          if (entry is! io.File) continue;
+          final baseName = p.basename(entry.path);
+          final baseNameLower = baseName.toLowerCase();
+          final targetLower = executableName.toLowerCase();
+
+          // Exact match (case-insensitive)
+          if (baseNameLower == targetLower) return entry.path;
+
+          // Match AppImage files: e.g. "PCSX2.AppImage" matches "pcsx2"
+          if (baseNameLower.endsWith('.appimage') &&
+              baseNameLower == '$targetLower.appimage') {
             return entry.path;
           }
+
+          // Fuzzy match: strip common suffixes and compare
+          final stripped = baseNameLower
+              .replaceAll(RegExp(r'[-_]?(x86_64|amd64|linux|gtk).*'), '')
+              .replaceAll(RegExp(r'\.(appimage|AppImage)$'), '');
+          if (stripped == targetLower) return entry.path;
         }
       } catch (_) {
         // Silently ignore permission errors or other listing issues
