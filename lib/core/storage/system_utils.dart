@@ -1,8 +1,15 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import '../platform/platform_info.dart';
 
 class SystemUtils {
+  static PlatformInfo _platform = PlatformInfo.current;
+
+  static void configure({PlatformInfo? platform}) {
+    _platform = platform ?? PlatformInfo.current;
+  }
+
   /// Opens a file or directory in the system's file manager.
   static Future<void> openDirectory(String path) async {
     final dir = Directory(path);
@@ -12,11 +19,11 @@ class SystemUtils {
     }
 
     try {
-      if (Platform.isWindows) {
+      if (_platform.isWindows) {
         await Process.run('explorer', [path]);
-      } else if (Platform.isMacOS) {
+      } else if (_platform.isMacOS) {
         await Process.run('open', [path]);
-      } else if (Platform.isLinux) {
+      } else if (_platform.isLinux) {
         await Process.run('xdg-open', [path]);
       }
     } catch (e) {
