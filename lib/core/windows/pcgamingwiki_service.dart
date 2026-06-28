@@ -1,10 +1,13 @@
-import 'package:dio/dio.dart';
 import 'dart:io';
+import 'package:dio/dio.dart';
+import '../platform/platform_info.dart';
 
 class PcGamingWikiService {
   final Dio _dio;
+  final PlatformInfo _platform;
 
-  PcGamingWikiService(this._dio);
+  PcGamingWikiService(this._dio, {PlatformInfo? platform})
+      : _platform = platform ?? PlatformInfo.current;
 
   static const String _apiUrl = 'https://www.pcgamingwiki.com/w/api.php';
 
@@ -158,11 +161,11 @@ class PcGamingWikiService {
   }
 
   String? _expandWikiPath(String path, String gameTitle, String gameDir) {
-    final appData = Platform.environment['APPDATA'] ?? '';
-    final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
-    final userProfile = Platform.environment['USERPROFILE'] ?? '';
-    final programData = Platform.environment['PROGRAMDATA'] ?? '';
-    final public = Platform.environment['PUBLIC'] ?? '';
+    final appData = _platform.environment['APPDATA'] ?? '';
+    final localAppData = _platform.environment['LOCALAPPDATA'] ?? '';
+    final userProfile = _platform.environment['USERPROFILE'] ?? '';
+    final programData = _platform.environment['PROGRAMDATA'] ?? '';
+    final public = _platform.environment['PUBLIC'] ?? '';
 
     final subs = <String, String>{
       '{{p|appdata}}': appData,
