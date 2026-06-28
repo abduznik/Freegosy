@@ -8,6 +8,7 @@ import '../core/emulator/emulator_download_service.dart';
 import '../core/extraction/extraction_service.dart';
 import '../core/romm/romm_models.dart';
 import '../core/constants/app_constants.dart';
+import '../core/platform/platform_info.dart';
 import 'romm_provider.dart';
 import 'shared_prefs_provider.dart';
 
@@ -27,7 +28,8 @@ final downloadServiceProvider = FutureProvider<DownloadService?>((ref) async {
     },
   ));
 
-  if (kDebugMode || io.Platform.isLinux || io.Platform.isMacOS) {
+  final platform = PlatformInfo.current;
+  if (kDebugMode || platform.isLinux || platform.isMacOS) {
     dio.interceptors.add(LogInterceptor(
       requestHeader: true,
       requestBody: false,
@@ -58,7 +60,8 @@ final emulatorDownloadServiceProvider =
     },
   ));
 
-  if (kDebugMode || io.Platform.isLinux || io.Platform.isMacOS) {
+  final platform2 = PlatformInfo.current;
+  if (kDebugMode || platform2.isLinux || platform2.isMacOS) {
     dio.interceptors.add(LogInterceptor(
       requestHeader: true,
       requestBody: false,
