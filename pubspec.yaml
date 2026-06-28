@@ -1,5 +1,5 @@
 name: freegosy
-description: "A new Flutter project."
+description: "Cross-platform Flutter frontend for RomM — browse, download, and launch your ROM collection with cloud save sync."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
