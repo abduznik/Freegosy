@@ -1,10 +1,11 @@
-import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/platform/platform_info.dart';
+import '../../providers/platform_info_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
 import '../../core/romm/romm_service.dart';
@@ -38,6 +39,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? _presetRoot;
   String _linuxPreset = 'default';
   bool _isStorageInitialized = false;
+
+  bool _isLocalAddress(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return true;
+    final host = uri.host;
+    return host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '::1' ||
+        host.startsWith('192.168.') ||
+        host.startsWith('10.') ||
+        RegExp(r'^172\.(1[6-9]|2[0-9]|3[01])\.').hasMatch(host) ||
+        host.endsWith('.local');
+  }
 
   @override
   void initState() {
@@ -154,7 +168,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
     await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
     
-    if (io.Platform.isLinux && _linuxPreset != 'default' && _presetRoot != null) {
+    final platform = ref.read(platformInfoProvider);
+    if (platform.isLinux && _linuxPreset != 'default' && _presetRoot != null) {
       await prefs.setString('linuxSyncPreset', _linuxPreset);
       if (_linuxPreset == 'emudeck') {
         await prefs.setString('emudeckRootPath', _presetRoot!);
@@ -164,7 +179,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       // Clear custom paths so DirectoryService uses the preset/root logic
       await prefs.remove('romsRootPath');
       await prefs.remove('emulatorsRootPath');
-    } else if (io.Platform.isLinux) {
+    } else if (platform.isLinux) {
       await prefs.setString('linuxSyncPreset', 'default');
       if (_romsRoot != null) await prefs.setString('romsRootPath', _romsRoot!);
       if (_emusRoot != null) await prefs.setString('emulatorsRootPath', _emusRoot!);
@@ -314,7 +329,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 tooltip: 'Paste from clipboard',
               ),
             ),
+            onChanged: (_) => setState(() {}),
           ),
+          if (_baseUrlController.text.startsWith('http://') &&
+              !_isLocalAddress(_baseUrlController.text))
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade300),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Public IP over HTTP — credentials are sent unencrypted. Consider https:// for remote servers.',
+                      style: TextStyle(color: Colors.orange.shade300, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 32),
           Row(
             children: [
@@ -448,7 +481,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           const SizedBox(height: 40),
           
-          if (io.Platform.isLinux) ...[
+          if (ref.read(platformInfoProvider).isLinux) ...[
             const Text('Platform Preset', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             _buildPresetOption(
@@ -474,7 +507,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             const SizedBox(height: 32),
           ],
 
-          if (io.Platform.isLinux && _linuxPreset != 'default') ...[
+          if (ref.read(platformInfoProvider).isLinux && _linuxPreset != 'default') ...[
             _buildPathSelector(
               label: '${_linuxPreset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
               currentPath: _presetRoot ?? 'Select root directory...',
