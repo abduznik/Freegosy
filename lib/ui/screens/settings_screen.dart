@@ -1,10 +1,11 @@
-import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../core/platform/platform_info.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/storage/system_utils.dart';
+import '../../providers/platform_info_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
@@ -490,7 +491,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   _buildStorageSection(context, directoryService),
                   _buildRetroArchSettingsSection(context, ref),
-                  if (io.Platform.isLinux) ...[
+                  if (ref.read(platformInfoProvider).isLinux) ...[
                     _buildLinuxSettingsSection(context, ref, directoryService),
                   ],
                   _buildSectionCard(
@@ -787,7 +788,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (io.Platform.isLinux) ...[
+          if (ref.read(platformInfoProvider).isLinux) ...[
             _buildCustomDropdown<String>(
               context: context,
               label: 'Linux App Layout',
@@ -808,7 +809,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SizedBox(height: 16),
           ],
 
-          if (io.Platform.isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
+          if (ref.read(platformInfoProvider).isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
             _buildPathRow(
               context,
               label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
