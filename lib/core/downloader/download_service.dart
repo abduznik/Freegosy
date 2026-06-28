@@ -83,8 +83,24 @@ class DownloadService {
 
     String finalPath = await directoryService.getRomFilePath(game);
     if (isSingleFileFoldered) {
-      final fileName = game.files[0]["file_name"];
-      finalPath = '$finalPath/$fileName';
+      final fileName = game.files[0]["file_name"]?.toString();
+      if (fileName != null && fileName.isNotEmpty) {
+        finalPath = '$finalPath/$fileName';
+      }
+    }
+
+    // Ensure the final path has a file extension.
+    // For single-file-foldered games where fsExtension was empty, the
+    // path from getRomFilePath() may lack an extension (e.g. "Gamename"
+    // instead of "Gamename.chd").  Pull the extension from the files
+    // metadata when the path has none.
+    final currentExt = p.extension(finalPath).toLowerCase();
+    if (currentExt.isEmpty && isSingleFileFoldered && game.files.isNotEmpty) {
+      final metaFileName = game.files[0]["file_name"]?.toString() ?? '';
+      final metaExt = p.extension(metaFileName).toLowerCase();
+      if (metaExt.isNotEmpty) {
+        finalPath = '$finalPath$metaExt';
+      }
     }
     final partPath = '$finalPath.part';
     final partFile = File(partPath);
