@@ -15,6 +15,7 @@ import 'package:freegosy/core/romm/library_snapshot_service.dart';
 import 'package:freegosy/core/storage/metadata_cache_service.dart';
 import 'package:freegosy/core/storage/rom_mapping_service.dart';
 import 'package:freegosy/core/storage/download_cache_service.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/providers/custom_emulators_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/core/emulator/firmware_service.dart';
@@ -28,9 +29,10 @@ final emulatorStatusProvider = FutureProvider<Map<String, bool>>((ref) async {
   for (final def in kEmulatorDefinitions) {
     final id = def['id'] as String;
     final String exe;
-    if (defaultTargetPlatform == TargetPlatform.macOS) {
+    final platform = PlatformInfo.current;
+    if (platform.isMacOS) {
       exe = (def['macos_executable'] as String?) ?? (def['windows_executable'] as String? ?? '');
-    } else if (defaultTargetPlatform == TargetPlatform.linux) {
+    } else if (platform.isLinux) {
       exe = (def['linux_executable'] as String?) ?? '';
     } else {
       exe = (def['windows_executable'] as String?) ?? '';
@@ -173,10 +175,10 @@ final deviceIdProvider = FutureProvider<String?>((ref) async {
   if (service == null) return null;
 
   String platform = 'unknown';
-  if (defaultTargetPlatform == TargetPlatform.windows) platform = 'windows';
-  if (defaultTargetPlatform == TargetPlatform.linux) platform = 'linux';
-  if (defaultTargetPlatform == TargetPlatform.macOS) platform = 'macos';
-  if (defaultTargetPlatform == TargetPlatform.android) platform = 'android';
+  final os = PlatformInfo.current;
+  if (os.isWindows) platform = 'windows';
+  if (os.isLinux) platform = 'linux';
+  if (os.isMacOS) platform = 'macos';
 
   final deviceId = await service.registerDevice(
     name: 'Freegosy on $platform',
