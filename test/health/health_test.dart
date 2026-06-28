@@ -4,8 +4,8 @@ import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io' as io;
 
 void main() {
   setUp(() {
@@ -29,8 +29,9 @@ void main() {
 
     test('StrategyRegistry registers all strategies and detects conflicts', () async {
       final prefs = await SharedPreferences.getInstance();
-      final ds = DirectoryService(prefs);
-      final registry = StrategyRegistry(ds, prefs);
+      final platform = PlatformInfo.current;
+      final ds = DirectoryService(prefs, platform: platform);
+      final registry = StrategyRegistry(ds, prefs, platform: platform);
       
       final allSlugs = <String, String>{}; // slug -> emulatorId
       final overlapErrors = <String>[];
@@ -46,16 +47,16 @@ void main() {
         bool expectedSupported = false;
         if (def != null) {
           final supported = List<String>.from(def['supported_platforms'] ?? []);
-          if (io.Platform.isWindows && supported.contains('windows')) expectedSupported = true;
-          if (io.Platform.isLinux && supported.contains('linux')) expectedSupported = true;
-          if (io.Platform.isMacOS && supported.contains('macos')) expectedSupported = true;
+          if (platform.isWindows && supported.contains('windows')) expectedSupported = true;
+          if (platform.isLinux && supported.contains('linux')) expectedSupported = true;
+          if (platform.isMacOS && supported.contains('macos')) expectedSupported = true;
         } else {
           expectedSupported = true;
         }
 
         final strategy = registry.getStrategyById(id);
         if (expectedSupported) {
-          expect(strategy, isNotNull, reason: 'Strategy $id should be registered on ${io.Platform.operatingSystem}');
+          expect(strategy, isNotNull, reason: 'Strategy $id should be registered on ${platform.os}');
           if (strategy != null) {
             for (final slug in strategy.supportedSlugs) {
               if (id != 'retroarch') {
@@ -67,7 +68,7 @@ void main() {
             }
           }
         } else {
-          expect(strategy, isNull, reason: 'Strategy $id should NOT be registered on ${io.Platform.operatingSystem}');
+          expect(strategy, isNull, reason: 'Strategy $id should NOT be registered on ${platform.os}');
         }
       }
       
