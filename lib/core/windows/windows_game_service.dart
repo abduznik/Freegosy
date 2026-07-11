@@ -25,7 +25,7 @@ class WindowsGameService {
           final relPath = entity.path.substring(gameDir.length).toLowerCase();
           if (relPath.contains('__macosx') || relPath.contains('_commonredist')) continue;
           final name = basename.toLowerCase();
-          if (_shouldSkipExe(name)) continue;
+          if (shouldSkipExe(name)) continue;
           exeFiles.add(entity);
         }
       }
@@ -85,7 +85,8 @@ class WindowsGameService {
         .toSet();
   }
 
-  bool _shouldSkipExe(String name) {
+  /// Checks if an exe name should be skipped (redistributables, uninstallers, etc.)
+  static bool shouldSkipExe(String name) {
     const skipList = [
       'uninstall', 'uninst', 'setup', 'install', 'redist',
       'vc_redist', 'vcredist', 'directx', 'dxsetup',

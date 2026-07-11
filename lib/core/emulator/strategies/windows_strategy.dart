@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -7,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class WindowsStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
-  final WindowsGameService _windowsGameService;
   final SharedPreferences _prefs;
 
   // Manual exe overrides per game id
@@ -15,8 +15,7 @@ class WindowsStrategy extends EmulatorStrategy {
   // Launch arguments per game id
   final Map<String, List<String>> _launchArgsOverrides = {};
 
-  WindowsStrategy(this._directoryService, this._prefs)
-      : _windowsGameService = WindowsGameService();
+  WindowsStrategy(this._directoryService, this._prefs);
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -77,22 +76,7 @@ class WindowsStrategy extends EmulatorStrategy {
   @override
   Future<void> launch(Game game, String romPath) async {
     // romPath for Windows games is the extracted game folder
-    String? exePath = _exeOverrides[game.id];
-
-    // If stored override no longer exists on disk, discard and auto-detect
-    if (exePath != null && exePath.isNotEmpty && !await File(exePath).exists()) {
-      exePath = null;
-    }
-
-    if (exePath == null || exePath.isEmpty) {
-      // Auto-detect exe in the game folder
-      final isDir = await Directory(romPath).exists();
-      final searchDir = isDir ? romPath : File(romPath).parent.path;
-      exePath = await _windowsGameService.findExecutable(
-        searchDir,
-        hint: game.name,
-      );
-    }
+    String? exePath = _resolveExePath(game, romPath);
 
     if (exePath == null) {
       throw Exception(
@@ -119,6 +103,124 @@ class WindowsStrategy extends EmulatorStrategy {
         'This is likely due to missing DirectX, Visual C++ redistributables, or other dependencies.',
       );
     }
+  }
+
+  /// Resolves the executable path for a Windows game.
+  /// Checks user override first, then auto-detects from the game folder.
+  String? _resolveExePath(Game game, String romPath) {
+    // Check user-set override
+    String? exePath = _exeOverrides[game.id];
+    if (exePath != null && exePath.isNotEmpty && File(exePath).existsSync()) {
+      return exePath;
+    }
+
+    // Auto-detect exe in the game folder
+    final isDir = Directory(romPath).existsSync();
+    final searchDir = isDir ? romPath : File(romPath).parent.path;
+    // Use synchronous check for the executable
+    return _findExeSync(searchDir, game.name);
+  }
+
+  /// Synchronous exe finder for use in launchWithHandle.
+  String? _findExeSync(String gameDir, String? hint) {
+    final dir = Directory(gameDir);
+    if (!dir.existsSync()) return null;
+
+    final exeFiles = <File>[];
+    for (final entity in dir.listSync(recursive: true)) {
+      if (entity is File) {
+        final ext = entity.path.toLowerCase();
+        if (WindowsGameService.launchableExtensions.any((e) => ext.endsWith(e))) {
+          final basename = p.basename(entity.path);
+          if (basename.startsWith('._')) continue;
+          final relPath = entity.path.substring(gameDir.length).toLowerCase();
+          if (relPath.contains('__macosx') || relPath.contains('_commonredist')) continue;
+          final name = basename.toLowerCase();
+          if (WindowsGameService.shouldSkipExe(name)) continue;
+          exeFiles.add(entity);
+        }
+      }
+    }
+
+    if (exeFiles.isEmpty) return null;
+
+    // Hint match
+    if (hint != null) {
+      final hintTokens = _tokenize(hint);
+      int bestScore = 0;
+      File? bestMatch;
+      for (final exe in exeFiles) {
+        final exeTokens = _tokenize(p.basenameWithoutExtension(exe.path));
+        int score = 0;
+        for (final token in hintTokens) {
+          if (exeTokens.any((t) => t.contains(token) || token.contains(t))) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = exe;
+        }
+      }
+      if (bestMatch != null && bestScore > 0) return bestMatch.path;
+    }
+
+    // Largest exe fallback
+    final exes = exeFiles.where((f) => f.path.toLowerCase().endsWith('.exe')).toList();
+    final candidates = exes.isNotEmpty ? exes : exeFiles;
+    File? largest;
+    int largestSize = 0;
+    for (final exe in candidates) {
+      final size = exe.lengthSync();
+      if (size > largestSize) {
+        largestSize = size;
+        largest = exe;
+      }
+    }
+    return largest?.path;
+  }
+
+  static Set<String> _tokenize(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'\[[^\]]*\]'), '')
+        .replaceAll(RegExp(r'\([^)]*\)'), '')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length > 2)
+        .toSet();
+  }
+
+  @override
+  Future<Process?> launchWithHandle(Game game, String romPath) async {
+    String? exePath = _resolveExePath(game, romPath);
+
+    if (exePath == null) {
+      throw Exception(
+        'No executable found for ${game.name}. '
+        'Please set the exe path manually.',
+      );
+    }
+
+    final args = getLaunchArgs(game.id);
+    final process = await Process.start(
+      exePath,
+      args,
+      workingDirectory: File(exePath).parent.path,
+    );
+
+    // Wait up to 5 seconds — if process exits that fast it crashed
+    final exitCode = await process.exitCode
+        .timeout(const Duration(seconds: 5))
+        .catchError((_) => -99999);
+
+    if (exitCode != -99999 && exitCode != 0) {
+      throw Exception(
+        '${game.name} crashed immediately (exit code $exitCode). '
+        'This is likely due to missing DirectX, Visual C++ redistributables, or other dependencies.',
+      );
+    }
+
+    return process;
   }
 
   @override
