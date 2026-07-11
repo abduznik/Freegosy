@@ -65,13 +65,23 @@ class WindowsSaveStrategy extends SaveStrategy {
           debugPrint('[WindowsSave]   path: ${loc['path']}');
         }
         final resolved = locations.first['path'];
-        // Verify the path exists on disk
-        if (resolved != null && await Directory(resolved).exists()) {
-          debugPrint('[WindowsSave] Save directory exists on disk: $resolved');
-        } else {
-          debugPrint('[WindowsSave] Save directory does NOT exist yet: $resolved');
+        if (resolved != null) {
+          final dir = Directory(resolved);
+          if (await dir.exists()) {
+            debugPrint('[WindowsSave] Save directory exists on disk: $resolved');
+            return resolved;
+          } else {
+            debugPrint('[WindowsSave] Save directory does NOT exist: $resolved');
+            // Try to create it
+            try {
+              await dir.create(recursive: true);
+              debugPrint('[WindowsSave] Created save directory: $resolved');
+              return resolved;
+            } catch (e) {
+              debugPrint('[WindowsSave] Failed to create save directory: $e');
+            }
+          }
         }
-        return resolved;
       } else {
         debugPrint('[WindowsSave] PCGamingWiki returned no save locations for ${game.name}');
       }
@@ -79,6 +89,16 @@ class WindowsSaveStrategy extends SaveStrategy {
       debugPrint('[WindowsSave] PCGamingWiki lookup failed for ${game.name}: $e');
     }
 
+    // Fallback: check for Save folder next to the game executable
+    final isDir = await Directory(romPath).exists();
+    final gameDir = isDir ? romPath : File(romPath).parent.path;
+    final saveDir = Directory(p.join(gameDir, 'Save'));
+    if (await saveDir.exists()) {
+      debugPrint('[WindowsSave] Found Save folder next to game: ${saveDir.path}');
+      return saveDir.path;
+    }
+
+    debugPrint('[WindowsSave] No save directory found for ${game.name}');
     return null;
   }
 

@@ -198,7 +198,9 @@ class PcGamingWikiService {
       '{{p|userprofile}}': userProfile,
       '{{p|programdata}}': programData,
       '{{p|public}}': public,
-      '{{p|game}}': gameDir.isNotEmpty ? '$gameDir/$gameTitle' : '',
+      // Use gameDir directly — it's already the game's install folder.
+      // Don't append gameTitle as it may contain invalid chars (e.g., colons).
+      '{{p|game}}': gameDir,
     };
 
     String expanded = path;
@@ -223,6 +225,32 @@ class PcGamingWikiService {
       expanded = File(expanded).parent.path;
     }
 
+    // Strip invalid Windows characters from path segments (colons, etc.)
+    expanded = _sanitizeWindowsPath(expanded);
+
+    // Normalize trailing slashes
+    expanded = expanded.replaceAll(RegExp(r'[/\\]+$'), '');
+
     return expanded.replaceAll('/', '\\');
+  }
+
+  /// Strips characters that are invalid in Windows file paths.
+  /// Keeps drive letter colons (e.g., C:\) but removes others.
+  static String _sanitizeWindowsPath(String path) {
+    // Split into segments, sanitize each one
+    final parts = path.split(RegExp(r'[/\\]'));
+    final sanitized = <String>[];
+    for (int i = 0; i < parts.length; i++) {
+      String part = parts[i];
+      // Keep drive letter colons (e.g., "C:")
+      if (i == 0 && RegExp(r'^[A-Za-z]:$').hasMatch(part)) {
+        sanitized.add(part);
+        continue;
+      }
+      // Strip invalid Windows filename characters
+      part = part.replaceAll(RegExp(r'[<>:"|?*]'), '_');
+      sanitized.add(part);
+    }
+    return sanitized.join('\\');
   }
 }
