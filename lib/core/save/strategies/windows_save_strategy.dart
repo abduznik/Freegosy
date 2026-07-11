@@ -54,51 +54,100 @@ class WindowsSaveStrategy extends SaveStrategy {
       return manual;
     }
 
+    // Determine the game directory
+    final isDir = await Directory(romPath).exists();
+    final gameDir = isDir ? romPath : File(romPath).parent.path;
+
     // Try PCGamingWiki
     try {
       debugPrint('[WindowsSave] Querying PCGamingWiki for ${game.name}...');
-      final locations = await _wikiService.getSaveLocations(game.name, gameDir: romPath);
+      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir);
       if (locations.isNotEmpty) {
-        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s) for ${game.name}:');
+        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s):');
         for (final loc in locations) {
-          debugPrint('[WindowsSave]   raw: ${loc['raw']}');
-          debugPrint('[WindowsSave]   path: ${loc['path']}');
+          debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
         }
         final resolved = locations.first['path'];
         if (resolved != null) {
           final dir = Directory(resolved);
           if (await dir.exists()) {
-            debugPrint('[WindowsSave] Save directory exists on disk: $resolved');
-            return resolved;
+            // Check if this directory actually has save files
+            if (await _hasSaveFiles(dir)) {
+              debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
+              return resolved;
+            }
+            debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');
           } else {
-            debugPrint('[WindowsSave] Save directory does NOT exist: $resolved');
             // Try to create it
             try {
               await dir.create(recursive: true);
-              debugPrint('[WindowsSave] Created save directory: $resolved');
-              return resolved;
+              debugPrint('[WindowsSave] Created PCGamingWiki dir: $resolved');
             } catch (e) {
-              debugPrint('[WindowsSave] Failed to create save directory: $e');
+              debugPrint('[WindowsSave] Failed to create dir: $e');
             }
           }
         }
-      } else {
-        debugPrint('[WindowsSave] PCGamingWiki returned no save locations for ${game.name}');
       }
     } catch (e) {
-      debugPrint('[WindowsSave] PCGamingWiki lookup failed for ${game.name}: $e');
+      debugPrint('[WindowsSave] PCGamingWiki lookup failed: $e');
     }
 
-    // Fallback: check for Save folder next to the game executable
-    final isDir = await Directory(romPath).exists();
-    final gameDir = isDir ? romPath : File(romPath).parent.path;
-    final saveDir = Directory(p.join(gameDir, 'Save'));
-    if (await saveDir.exists()) {
-      debugPrint('[WindowsSave] Found Save folder next to game: ${saveDir.path}');
-      return saveDir.path;
+    // Search recursively for a Save folder that actually contains files
+    final found = await _findSaveFolderRecursive(gameDir);
+    if (found != null) {
+      debugPrint('[WindowsSave] Found Save folder with files: $found');
+      return found;
     }
 
     debugPrint('[WindowsSave] No save directory found for ${game.name}');
+    return null;
+  }
+
+  /// Checks if a directory contains any save-like files (non-empty).
+  Future<bool> _hasSaveFiles(Directory dir) async {
+    try {
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is File) {
+          final name = entity.path.toLowerCase();
+          // Skip metadata files
+          if (name.endsWith('.txt') || name.endsWith('.ini') || name.endsWith('.cfg')) continue;
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Recursively searches for a folder named "Save" or "Saves" that contains files.
+  /// Limits search to 4 levels deep to avoid scanning the entire drive.
+  Future<String?> _findSaveFolderRecursive(String rootDir, {int maxDepth = 4}) async {
+    return _searchDir(Directory(rootDir), 0, maxDepth);
+  }
+
+  Future<String?> _searchDir(Directory dir, int depth, int maxDepth) async {
+    if (depth > maxDepth) return null;
+    try {
+      await for (final entity in dir.list()) {
+        if (entity is Directory) {
+          final name = p.basename(entity.path).toLowerCase();
+          if (name == 'save' || name == 'saves') {
+            if (await _hasSaveFiles(entity)) {
+              return entity.path;
+            }
+          }
+        }
+      }
+      // If no Save folder at this level, search deeper
+      await for (final entity in dir.list()) {
+        if (entity is Directory) {
+          final name = p.basename(entity.path).toLowerCase();
+          // Skip non-game folders
+          if (name == '__macosx' || name == '_commonredist') continue;
+          final found = await _searchDir(entity, depth + 1, maxDepth);
+          if (found != null) return found;
+        }
+      }
+    } catch (_) {}
     return null;
   }
 
