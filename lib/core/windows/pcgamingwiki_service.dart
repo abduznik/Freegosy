@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../platform/platform_info.dart';
 
 class PcGamingWikiService {
@@ -14,6 +15,7 @@ class PcGamingWikiService {
   /// Finds the PCGamingWiki page title for [gameTitle].
   Future<String?> findPageTitle(String gameTitle) async {
     try {
+      debugPrint('[PcGamingWiki] Searching for page: $gameTitle');
       // Try exact match first
       final exactResponse = await _dio.get(_apiUrl, queryParameters: {
         'action': 'query',
@@ -24,11 +26,16 @@ class PcGamingWikiService {
       if (exactResponse.statusCode == 200) {
         final pages = exactResponse.data['query']['pages'] as Map;
         for (final pageId in pages.keys) {
-          if (pageId != '-1') return pages[pageId]['title'] as String;
+          if (pageId != '-1') {
+            final title = pages[pageId]['title'] as String;
+            debugPrint('[PcGamingWiki] Found exact match: $title');
+            return title;
+          }
         }
       }
 
       // Fall back to search
+      debugPrint('[PcGamingWiki] No exact match, trying search...');
       final searchResponse = await _dio.get(_apiUrl, queryParameters: {
         'action': 'query',
         'list': 'search',
@@ -38,17 +45,23 @@ class PcGamingWikiService {
 
       if (searchResponse.statusCode == 200) {
         final results = searchResponse.data['query']['search'] as List;
-        if (results.isNotEmpty) return results.first['title'] as String;
+        if (results.isNotEmpty) {
+          final title = results.first['title'] as String;
+          debugPrint('[PcGamingWiki] Search found: $title');
+          return title;
+        }
       }
     } catch (e) {
-      //
+      debugPrint('[PcGamingWiki] Page lookup failed: $e');
     }
+    debugPrint('[PcGamingWiki] No page found for: $gameTitle');
     return null;
   }
 
   /// Fetches the wikitext for [pageTitle].
   Future<String?> getWikitext(String pageTitle) async {
     try {
+      debugPrint('[PcGamingWiki] Fetching wikitext for: $pageTitle');
       final response = await _dio.get(_apiUrl, queryParameters: {
         'action': 'parse',
         'page': pageTitle,
@@ -56,10 +69,12 @@ class PcGamingWikiService {
         'format': 'json',
       });
       if (response.statusCode == 200) {
-        return response.data['parse']['wikitext']['*'] as String?;
+        final wikitext = response.data['parse']['wikitext']['*'] as String?;
+        debugPrint('[PcGamingWiki] Got wikitext (${wikitext?.length ?? 0} chars)');
+        return wikitext;
       }
     } catch (e) {
-      //
+      debugPrint('[PcGamingWiki] Wikitext fetch failed: $e');
     }
     return null;
   }
@@ -67,14 +82,24 @@ class PcGamingWikiService {
   /// Returns expanded save locations for [gameTitle].
   Future<List<Map<String, String>>> getSaveLocations(String gameTitle, {String gameDir = ''}) async {
     try {
+      debugPrint('[PcGamingWiki] Getting save locations for: $gameTitle (gameDir: $gameDir)');
       final pageTitle = await findPageTitle(gameTitle);
-      if (pageTitle == null) return [];
+      if (pageTitle == null) {
+        debugPrint('[PcGamingWiki] No wiki page found, cannot resolve save locations');
+        return [];
+      }
 
       final wikitext = await getWikitext(pageTitle);
-      if (wikitext == null) return [];
+      if (wikitext == null) {
+        debugPrint('[PcGamingWiki] No wikitext available for $pageTitle');
+        return [];
+      }
 
-      return _parseSaveLocations(wikitext, gameTitle, gameDir);
+      final locations = _parseSaveLocations(wikitext, gameTitle, gameDir);
+      debugPrint('[PcGamingWiki] Parsed ${locations.length} save location(s) for $gameTitle');
+      return locations;
     } catch (e) {
+      debugPrint('[PcGamingWiki] getSaveLocations failed: $e');
       return [];
     }
   }

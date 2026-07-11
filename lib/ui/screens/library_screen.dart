@@ -165,6 +165,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           onPushSaves: () => handlePushSaves(context, ref, game),
           onPullSaves: () => handlePullSaves(context, ref, game),
           onDelete: () => handleDeleteRom(context, ref, game),
+          onConfigure: () => handleWindowsConfig(context, ref, game),
         ),
       ),
     );

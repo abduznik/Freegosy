@@ -49,16 +49,34 @@ class WindowsSaveStrategy extends SaveStrategy {
   Future<String?> getSaveDir(Game game, String romPath) async {
     // Manual override takes priority
     final manual = _manualOverrides[game.id];
-    if (manual != null && manual.isNotEmpty) return manual;
+    if (manual != null && manual.isNotEmpty) {
+      debugPrint('[WindowsSave] Using manual override for ${game.name}: $manual');
+      return manual;
+    }
 
     // Try PCGamingWiki
     try {
-      final locations = await _wikiService.getSaveLocations(game.name);
+      debugPrint('[WindowsSave] Querying PCGamingWiki for ${game.name}...');
+      final locations = await _wikiService.getSaveLocations(game.name, gameDir: romPath);
       if (locations.isNotEmpty) {
-        return locations.first['path'];
+        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s) for ${game.name}:');
+        for (final loc in locations) {
+          debugPrint('[WindowsSave]   raw: ${loc['raw']}');
+          debugPrint('[WindowsSave]   path: ${loc['path']}');
+        }
+        final resolved = locations.first['path'];
+        // Verify the path exists on disk
+        if (resolved != null && await Directory(resolved).exists()) {
+          debugPrint('[WindowsSave] Save directory exists on disk: $resolved');
+        } else {
+          debugPrint('[WindowsSave] Save directory does NOT exist yet: $resolved');
+        }
+        return resolved;
+      } else {
+        debugPrint('[WindowsSave] PCGamingWiki returned no save locations for ${game.name}');
       }
     } catch (e) {
-      //
+      debugPrint('[WindowsSave] PCGamingWiki lookup failed for ${game.name}: $e');
     }
 
     return null;

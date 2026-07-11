@@ -35,6 +35,7 @@ class GameDetailScreen extends ConsumerStatefulWidget {
   final dynamic onPushSaves;
   final dynamic onPullSaves;
   final dynamic onDelete;
+  final dynamic onConfigure;
   final RommService? rommService;
 
   const GameDetailScreen({
@@ -47,6 +48,7 @@ class GameDetailScreen extends ConsumerStatefulWidget {
     required this.onPushSaves,
     required this.onPullSaves,
     required this.onDelete,
+    this.onConfigure,
     this.rommService,
   });
 
@@ -697,6 +699,16 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       },
                     ),
                   ),
+                  if (['windows', 'pc', 'win'].contains(_currentGame.platformSlug?.toLowerCase())) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GameDetailActionButton(
+                        icon: Icons.settings_outlined,
+                        label: 'Configure',
+                        onTap: () async { if (widget.onConfigure != null) await widget.onConfigure(); },
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 12),
                   Expanded(
                     child: GameDetailActionButton(
