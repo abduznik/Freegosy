@@ -156,7 +156,7 @@ class MockRommService extends _i1.Mock implements _i6.RommService {
   _i8.Future<String?> registerDevice({
     required String? name,
     required String? platform,
-    String? clientVersion = '0.5.9',
+    String? clientVersion = '0.5.10',
     bool? allowExisting = true,
   }) =>
       (super.noSuchMethod(
