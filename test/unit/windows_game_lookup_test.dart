@@ -93,13 +93,37 @@ void main() {
       expect(result!.toLowerCase(), contains('hacknet'));
     });
 
-    test('WindowsGameService.findExecutable finds Hacknet.exe', () async {
-      // Import WindowsGameService
+    test('WindowsGameService.findExecutable finds FGUY.exe in nested folder', () async {
+      // Simulate Family Guy folder structure:
+      // gameDir/
+      //   __MACOSX/          <- macOS metadata (should be skipped)
+      //   InnerFolder/
+      //     _CommonRedist/   <- redistributables (should be skipped)
+      //       vcredist.exe   <- 14MB (larger than FGUY.exe)
+      //     GameFolder/
+      //       FGUY.exe       <- 7.8MB (the actual game)
+      //       ._FGUY.exe     <- macOS resource fork (should be skipped)
+      final nestedDir = Directory(p.join(gameDir.path, 'InnerFolder'));
+      await nestedDir.create();
+      final gameSubDir = Directory(p.join(nestedDir.path, 'GameFolder'));
+      await gameSubDir.create();
+      final commonRedist = Directory(p.join(nestedDir.path, '_CommonRedist'));
+      await commonRedist.create();
+
+      // Create redistributable (larger than game exe, should be skipped)
+      await File(p.join(commonRedist.path, 'vcredist_x64.exe')).writeAsString('x' * 15000000);
+      // Create macOS resource fork (should be skipped)
+      await File(p.join(gameSubDir.path, '._FGUY.exe')).writeAsString('resource fork');
+      // Create actual game exe
+      await File(p.join(gameSubDir.path, 'FGUY.exe')).writeAsString('x' * 8000000);
+
       final service = _WindowsGameServiceForTest();
-      final result = await service.findExecutable(gameDir.path, hint: 'Hacknet');
+      final result = await service.findExecutable(gameDir.path, hint: 'Family Guy Back to the Multiverse');
 
       expect(result, isNotNull);
-      expect(result, endsWith('Hacknet.exe'));
+      expect(result, endsWith('FGUY.exe'));
+      expect(result, isNot(contains('vcredist')));
+      expect(result, isNot(contains('._')));
     });
   });
 }
@@ -117,8 +141,14 @@ class _WindowsGameServiceForTest {
       if (entity is File) {
         final ext = entity.path.toLowerCase();
         if (launchableExtensions.any((e) => ext.endsWith(e))) {
-          final name = p.basename(entity.path).toLowerCase();
-          if (name.contains('uninstall') || name.contains('setup')) continue;
+          final basename = p.basename(entity.path);
+          if (basename.startsWith('._')) continue;
+          final relPath = entity.path.substring(gameDir.length).toLowerCase();
+          if (relPath.contains('__macosx') || relPath.contains('_commonredist')) continue;
+          final name = basename.toLowerCase();
+          if (name.contains('uninstall') || name.contains('setup') ||
+              name.contains('redist') || name.contains('vcredist') ||
+              name.contains('dotnet')) continue;
           exeFiles.add(entity);
         }
       }
@@ -126,16 +156,25 @@ class _WindowsGameServiceForTest {
 
     if (exeFiles.isEmpty) return null;
 
+    // Try hint match first (token-based fuzzy match)
     if (hint != null) {
-      final hintLower = hint.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final hintTokens = _tokenize(hint);
+      int bestScore = 0;
+      File? bestMatch;
+
       for (final exe in exeFiles) {
-        final exeName = p.basenameWithoutExtension(exe.path)
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z0-9]'), '');
-        if (exeName.contains(hintLower) || hintLower.contains(exeName)) {
-          return exe.path;
+        final exeTokens = _tokenize(p.basenameWithoutExtension(exe.path));
+        int score = 0;
+        for (final token in hintTokens) {
+          if (exeTokens.any((t) => t.contains(token) || token.contains(t))) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = exe;
         }
       }
+
+      if (bestMatch != null && bestScore > 0) return bestMatch.path;
     }
 
     // Fall back to largest exe
@@ -149,5 +188,17 @@ class _WindowsGameServiceForTest {
       }
     }
     return largest?.path;
+  }
+
+  static Set<String> _tokenize(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'\[[^\]]*\]'), '')
+        .replaceAll(RegExp(r'\([^)]*\)'), '')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length > 2)
+        .toSet();
   }
 }

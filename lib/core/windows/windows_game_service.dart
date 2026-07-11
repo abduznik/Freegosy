@@ -8,6 +8,7 @@ class WindowsGameService {
   /// Finds the main executable in [gameDir].
   /// First tries to match [hint] (game name), then falls back to largest .exe.
   /// Searches for .exe, .bat, and .cmd files.
+  /// Skips macOS metadata (__MACOSX) and redistributable (_CommonRedist) folders.
   Future<String?> findExecutable(String gameDir, {String? hint}) async {
     final dir = Directory(gameDir);
     if (!await dir.exists()) return null;
@@ -17,7 +18,13 @@ class WindowsGameService {
       if (entity is File) {
         final ext = entity.path.toLowerCase();
         if (launchableExtensions.any((e) => ext.endsWith(e))) {
-          final name = p.basename(entity.path).toLowerCase();
+          // Skip macOS resource forks (._filename)
+          final basename = p.basename(entity.path);
+          if (basename.startsWith('._')) continue;
+          // Skip files inside __MACOSX or _CommonRedist folders
+          final relPath = entity.path.substring(gameDir.length).toLowerCase();
+          if (relPath.contains('__macosx') || relPath.contains('_commonredist')) continue;
+          final name = basename.toLowerCase();
           if (_shouldSkipExe(name)) continue;
           exeFiles.add(entity);
         }
@@ -28,15 +35,23 @@ class WindowsGameService {
 
     // Try hint match first (game name similarity)
     if (hint != null) {
-      final hintLower = hint.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final hintTokens = _tokenize(hint);
+      int bestScore = 0;
+      File? bestMatch;
+
       for (final exe in exeFiles) {
-        final exeName = p.basenameWithoutExtension(exe.path)
-            .toLowerCase()
-            .replaceAll(RegExp(r'[^a-z0-9]'), '');
-        if (exeName.contains(hintLower) || hintLower.contains(exeName)) {
-          return exe.path;
+        final exeTokens = _tokenize(p.basenameWithoutExtension(exe.path));
+        int score = 0;
+        for (final token in hintTokens) {
+          if (exeTokens.any((t) => t.contains(token) || token.contains(t))) score++;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = exe;
         }
       }
+
+      if (bestMatch != null && bestScore > 0) return bestMatch.path;
     }
 
     // Fall back to largest exe (preferring .exe over .bat/.cmd)
@@ -54,6 +69,20 @@ class WindowsGameService {
     }
 
     return largest?.path;
+  }
+
+  /// Tokenizes a name for fuzzy matching.
+  /// "Family Guy: Back to the Multiverse" → {"family", "guy", "back", "multiverse"}
+  static Set<String> _tokenize(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'\[[^\]]*\]'), '')
+        .replaceAll(RegExp(r'\([^)]*\)'), '')
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length > 2)
+        .toSet();
   }
 
   bool _shouldSkipExe(String name) {
