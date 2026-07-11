@@ -431,7 +431,35 @@ class DirectoryService {
     }
   }
 
+  /// Finds the emulator executable by [emulatorId] and [executableName].
+  ///
+  /// Resolution order:
+  /// 1. User-set path override (from settings UI, stored as `emu_path_{id}`)
+  /// 2. Direct path in emulator directory
+  /// 3. Flatpak package override (Linux)
+  /// 4. Linux environment-specific detection (EmuDeck, RetroDECK, native)
+  /// 5. Recursive search up to 3 levels deep
+  /// 6. Nested path fallback for slash-containing names
+  ///
+  /// The path override (step 1) is critical for Linux where binary names
+  /// vary across distros (e.g., `dolphin-emu` vs `dolphin` on Debian).
+  /// Users can set the exact binary path in Settings > Emulators.
   Future<String?> findEmulatorExecutable(String emulatorId, String executableName) async {
+    // Check user-set path override first (set via Settings > Emulators > path override)
+    final override = _emulatorPathOverrides[emulatorId];
+    if (override != null) {
+      if (await File(override).exists()) return override;
+      // If override is a directory, look for the executable inside it
+      if (await Directory(override).exists()) {
+        final candidate = File(p.join(override, executableName));
+        if (await candidate.exists()) return candidate.path;
+        if (_platform.isWindows && !executableName.toLowerCase().endsWith('.exe')) {
+          final withExe = File(p.join(override, '$executableName.exe'));
+          if (await withExe.exists()) return withExe.path;
+        }
+      }
+    }
+
     final emulatorDir = await getEmulatorDirectory(emulatorId);
     final dir = Directory(emulatorDir);
     if (!await dir.exists()) return null;
@@ -525,17 +553,27 @@ class DirectoryService {
     }
 
     final exeDir = io.File(exePath).parent.path;
+    io.Process? process;
     if (_platform.isWindows) {
-      return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
+      process = await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
     } else if (_platform.isMacOS) {
       if (exePath.contains('.app')) {
-        // We can't easily get a handle with 'open', so we try direct execution if possible
-        return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
+        process = await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
       } else {
-        return await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
+        process = await io.Process.start(exePath, [...args, romPath], mode: io.ProcessStartMode.normal, workingDirectory: exeDir);
       }
     }
-    return null;
+    // CRITICAL: Drain stdout/stderr to prevent pipe buffer deadlock.
+    // ProcessStartMode.normal creates pipes for stdout/stderr. If the parent
+    // never reads them, the buffer fills up and the child process blocks.
+    // This causes emulators (melonDS, DuckStation, RetroArch, etc.) to freeze
+    // on launch. The drain() calls consume the output asynchronously.
+    // Originally fixed in commit 3a0a4f7, regressed in 97f53a0, restored here.
+    // Do NOT remove these drain() calls or change to ProcessStartMode.normal
+    // without draining.
+    process?.stdout.drain();
+    process?.stderr.drain();
+    return process;
   }
 
   Future<void> launchStandalone(String emulatorId, String exePath, {List<String> args = const []}) async {

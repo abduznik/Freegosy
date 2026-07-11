@@ -65,6 +65,13 @@ class MelonDSStrategy extends EmulatorStrategy {
     final process = await Process.start(exePath, [normalizedRomPath],
         workingDirectory: File(exePath).parent.path,
         mode: ProcessStartMode.normal);
+    // CRITICAL: Drain stdout/stderr to prevent pipe buffer deadlock.
+    // Without this, the emulator blocks when its output buffer fills up
+    // because the parent process never reads the pipes.
+    // This was originally fixed in commit 3a0a4f7, regressed in 97f53a0,
+    // and restored here. Do NOT remove these drain() calls.
+    process.stdout.drain();
+    process.stderr.drain();
     await process.exitCode;
     await postLaunch(game, romPath);
     return process;
