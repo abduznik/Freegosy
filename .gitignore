@@ -56,4 +56,11 @@ gha-creds-*.json
 
 # Temporary working files
 tmp/
+*.bak
+
+# Claude CLI settings
+.claude/
+
+# Mock server storage
+test/_mock_romm_storage/
 
