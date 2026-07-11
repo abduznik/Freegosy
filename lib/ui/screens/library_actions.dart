@@ -116,22 +116,14 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
 
     if (!context.mounted) return;
+    // Pull save in background — don't block the launch.
+    // Previously, the save pull was a blocking await (10-15s of HTTP requests
+    // before the emulator started). Now it's fire-and-forget: the save is
+    // usually already on disk from the last session, and the pull cooldown
+    // (60s) prevents redundant network requests on rapid re-launches.
+    // The actual save sync happens post-exit in the unawaited block below.
     if (syncService != null) {
-      ErrorHandler.showInfo(context, 'Syncing Saves', message: 'Syncing saves for ${game.name}...');
-      try {
-        final pulled = await syncService.pullSave(game, romPath).timeout(
-          const Duration(seconds: 30),
-          onTimeout: () => false,
-        );
-        if (context.mounted && pulled) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Cloud save restored');
-      } catch (e) {
-        if (context.mounted) {
-          final playAnyway = await _handleSyncError(context, e, game, romPath, syncService, 'both', push: false);
-          if (playAnyway != true) return;
-        }
-      }
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
+      unawaited(syncService.pullSave(game, romPath).catchError((_) => false));
     }
 
     // Platform-specific checks (e.g. 3DS keys)
@@ -151,18 +143,6 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       if (!context.mounted) return;
       ErrorHandler.showInfo(context, 'Launching', message: 'Launching ${game.name}...');
 
-      BackupResult? preBackup;
-      if (syncService != null) {
-        try {
-          final backupService = ref.read(backupServiceProvider);
-          preBackup = await backupService.createImmediate(game, romPath, syncService);
-          if (preBackup != null) await ref.read(backupRepositoryProvider).addEntry(game.id, BackupEntry(timestamp: DateTime.now(), md5Hash: preBackup.md5, localZipPath: preBackup.zipPath));
-        } catch (e) { dev.log('Pre-launch backup failed', error: e); }
-      }
-
-      // Record session start time just before handing off to the emulator.
-      // This is used to filter saves (only upload files modified during the
-      // session) and to report playtime to RomM 4.9+.
       final sessionStart = DateTime.now();
 
       Process? process = await strategy.launchWithHandle(game, romPath);
@@ -175,11 +155,8 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             final sessionEnd = DateTime.now();
 
             if (!context.mounted) return;
-            ErrorHandler.showInfo(context, 'Syncing', message: 'Auto-syncing saves...');
             if (syncService != null) {
               final syncMode = ref.read(retroarchSyncModeProvider);
-              // Pass sessionStart so strategies only upload files modified
-              // during this session (not stale saves from previous runs).
               final ok = await syncService.pushSaves(
                 game, romPath,
                 sessionStart: sessionStart,
@@ -188,11 +165,8 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
               try {
                 final backupService = ref.read(backupServiceProvider);
                 final postBackup = await backupService.createImmediate(game, romPath, syncService);
-                if (postBackup != null && postBackup.md5 != preBackup?.md5) {
+                if (postBackup != null) {
                   await ref.read(backupRepositoryProvider).addEntry(game.id, BackupEntry(timestamp: DateTime.now(), md5Hash: postBackup.md5, localZipPath: postBackup.zipPath));
-                } else if (postBackup != null) {
-                  final f = io.File(postBackup.zipPath);
-                  if (await f.exists()) await f.delete();
                 }
               } catch (e) { dev.log('Post-exit backup failed', error: e); }
 
