@@ -258,10 +258,29 @@ class SaveSyncService {
         sessionStart: sessionStart, syncMode: syncMode, force: force);
   }
 
+  /// In-memory cache of the last pull-check timestamp per game.
+  /// Prevents hitting RomM on every rapid re-launch. Without this,
+  /// each game launch makes 2 HTTP requests (list saves + download)
+  /// which adds 5-15s of latency. The cooldown means re-launching the
+  /// same game within 60s skips the network check entirely.
+  final Map<String, DateTime> _lastPullCheck = {};
+  static const _pullCheckCooldown = Duration(seconds: 60);
+
   /// Downloads and restores a save for [game] from RomM.
   ///
   /// Routes to [_devicePullSave] on RomM 4.9+ or [_legacyPullSave] on older.
+  /// Skips network requests if the last check was within [_pullCheckCooldown].
+  /// This is called before emulator launch — the save is usually already on
+  /// disk from the last session, so the pull is non-blocking (fire-and-forget).
   Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
+    final now = DateTime.now();
+    final lastCheck = _lastPullCheck[game.id];
+    if (saveData == null && lastCheck != null && now.difference(lastCheck) < _pullCheckCooldown) {
+      debugPrint('[SyncService] Skipping pull for ${game.displayName}: checked ${now.difference(lastCheck).inSeconds}s ago');
+      return false;
+    }
+    _lastPullCheck[game.id] = now;
+
     final caps = await _rommService.fetchCapabilities();
     if (caps.hasDeviceSaveSync) {
       return _devicePullSave(game, romPath, saveData: saveData);
@@ -483,7 +502,7 @@ class SaveSyncService {
 
       final filename =
           save['file_name'] as String? ?? downloadUrl.split('/').last;
-      final adjustedFilename = _adjustFilenameForFormat(bytes, filename);
+      final adjustedFilename = _adjustFilenameForFormat(bytes, _normalizeFilename(filename));
 
       final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
       if (!ok) {
@@ -627,17 +646,29 @@ class SaveSyncService {
       final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
       // Local deduplication check (only for automatic syncs)
+      // When force=true (manual "Push" button), this check is bypassed.
+      // Previously, the lack of force=true on manual push meant saves
+      // with unchanged content were never re-uploaded. Now the "Push"
+      // button passes force=true which sets overwrite=true on the server.
       if (!force && storedHash != null && localHash == storedHash) {
         debugPrint('[Sync] Skipping upload for $displayStem: hash matches local cache ($localHash)');
         if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
         return true; 
       }
 
+      // Upload with autocleanup and overwrite.
+      // autocleanup=true: RomM prunes old saves in the same slot (keeps 5).
+      // overwrite=force: Manual "Push" updates the existing record in place.
+      // This replaces the old approach of client-side pruneOldSaves() which
+      // made extra API calls. Server-side autocleanup is more efficient.
       final result = await _rommService.uploadSave(
         game.id,
         finalUploadFile,
         screenshotFile: finalScreenshotFile,
         overrideFilename: uploadFilename,
+        autocleanup: true,
+        autocleanupLimit: 5,
+        overwrite: force,
       );
 
       if (result.ok) {
@@ -650,9 +681,6 @@ class SaveSyncService {
       final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
       if (await metaFile.exists()) await metaFile.delete();
 
-      if (uploaded > 0) {
-        await _rommService.pruneOldSaves(game.id);
-      }
       return uploaded > 0;
     } on SaveConflictException {
       rethrow;
@@ -685,6 +713,29 @@ class SaveSyncService {
       return '${p.basenameWithoutExtension(filename)}.zip';
     }
     return filename;
+  }
+
+  /// Matches pure timestamp filenames like "2026-07-11_08-45-38"
+  static final _timestampPattern = RegExp(r'^\d{4}-\d{2}-\d{2}[_-]\d{2}[_-]\d{2}[_-]\d{2}$');
+  /// Matches RomM timestamp tags appended to filenames like "Game Name [2026-07-11_15-36-41]"
+  static final _rommTimestampTag = RegExp(r'\s*\[\d{4}-\d{2}-\d{2}[ _]\d{2}-\d{2}-\d{2}(-\d+)?\]$');
+
+  /// Strips any timestamp artifacts from [filename].
+  ///
+  /// RomM adds timestamp tags to filenames: "Game [2026-07-11_15-36-41].zip"
+  /// These must be stripped before writing to disk so emulators can find
+  /// the save file by matching the ROM name. Without this, emulators like
+  /// melonDS and RetroArch fail to recognize the save (issues #42, #28).
+  ///
+  /// Also handles pure timestamp filenames (legacy artifacts) by replacing
+  /// them with "save{ext}".
+  String _normalizeFilename(String filename) {
+    var base = p.basenameWithoutExtension(filename);
+    final ext = p.extension(filename);
+    if (_timestampPattern.hasMatch(base)) return 'save$ext';
+    base = base.replaceAll(_rommTimestampTag, '');
+    if (base.isEmpty) return 'save$ext';
+    return '$base$ext';
   }
 
   /// Legacy pull path for RomM versions prior to 4.9.
@@ -724,7 +775,7 @@ class SaveSyncService {
 
       // Sniff actual bytes so that ZIP files (even those manually uploaded or
       // stored under a non-.zip name) are correctly extracted on restore.
-      final adjustedFilename = _adjustFilenameForFormat(bytes, filename);
+      final adjustedFilename = _adjustFilenameForFormat(bytes, _normalizeFilename(filename));
 
       final ok = await strategy.restoreSave(
           game, romPath, bytes, adjustedFilename);

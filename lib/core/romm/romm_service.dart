@@ -514,27 +514,26 @@ class RommService {
     String? overrideFilename,
   }) async {
     try {
-      final now = DateTime.now();
-      final ts =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}'
-          '_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}';
       final uploadFilename = overrideFilename ?? saveFile.uri.pathSegments.last;
 
+      // Slot naming: always use 'freegosy' for consistency.
+      // Previously used timestamped slots like 'freegosy-srm_2026-07-11_08-45-38'
+      // which created duplicate records on RomM and caused the filename to be
+      // corrupted with timestamps. RomM's autocleanup handles version pruning.
+      // Do NOT add timestamps to the slot — it breaks save sync (issues #42, #28).
       final queryParams = <String, dynamic>{
         'rom_id': gameId,
         'emulator': 'freegosy',
+        'slot': slot ?? 'freegosy',
       };
-      // 4.9+ params — only include when provided to stay backward-compatible
-      if (deviceId != null) {
-        queryParams['device_id'] = deviceId;
-        if (autocleanup) {
-          queryParams['autocleanup'] = 'true';
-          queryParams['autocleanup_limit'] = autocleanupLimit.toString();
-        }
-        if (overwrite) queryParams['overwrite'] = 'true';
+      // Autocleanup and overwrite are now available for ALL paths (not just 4.9+).
+      // This ensures legacy RomM instances also get proper save management.
+      if (deviceId != null) queryParams['device_id'] = deviceId;
+      if (autocleanup) {
+        queryParams['autocleanup'] = 'true';
+        queryParams['autocleanup_limit'] = autocleanupLimit.toString();
       }
-      // Slot: use the caller-supplied slot or fall back to legacy timestamp slot
-      queryParams['slot'] = slot ?? 'freegosy-srm_$ts';
+      if (overwrite) queryParams['overwrite'] = 'true';
 
       final formDataMap = <String, dynamic>{
         'saveFile': await MultipartFile.fromFile(saveFile.path, filename: uploadFilename),
