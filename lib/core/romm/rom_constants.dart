@@ -37,12 +37,12 @@ class RomConstants {
     'neogeo': ['.zip', '.chd', '.7z'],
     'sms': ['.sms', '.gg', '.gen', '.zip', '.7z'],
     'mastersystem': ['.sms', '.gg', '.gen', '.zip', '.7z'],
-    // Windows games are folder-based — no specific ROM extension.
-    // The folder path is returned by findMainRomInFolder, and
-    // WindowsStrategy.findExecutable() locates the .exe inside.
-    'windows': [],
-    'pc': [],
-    'win': [],
+    // Windows games are folder-based — the game folder is returned by
+    // findMainRomInFolder, and WindowsStrategy.findExecutable() locates
+    // the .exe inside. Extensions are used as a fallback filter only.
+    'windows': ['.exe', '.bat', '.cmd'],
+    'pc': ['.exe', '.bat', '.cmd'],
+    'win': ['.exe', '.bat', '.cmd'],
   };
 
   static bool isRomFile(String platformSlug, String path) {

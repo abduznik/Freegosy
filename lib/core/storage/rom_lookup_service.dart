@@ -153,20 +153,20 @@ class RomLookupService {
   }
 
   /// Finds the largest ROM-like file in a folder.
-  /// For folder-based platforms (Windows, PS3, Switch) with no specific ROM
-  /// extensions, returns the folder path directly — the emulator strategy
-  /// handles finding the executable inside.
+  /// For folder-based platforms (Windows, PS3, Switch), returns the folder path
+  /// directly — the emulator strategy handles finding the executable inside.
+  /// For other platforms, finds the largest file matching the platform's extensions.
   static Future<String?> findMainRomInFolder(Game game, String folderPath) async {
     final platform = game.platformSlug?.toLowerCase() ?? '';
     final isFolderBased = ['windows', 'pc', 'win', 'ps3', 'switch', 'nintendo-switch'].contains(platform);
     
-    final extensions = RomConstants.platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
-    
-    // Folder-based platforms with no specific ROM extensions: return folder directly.
-    // The emulator strategy (e.g., WindowsStrategy) finds the executable inside.
-    if (isFolderBased && extensions.isEmpty) {
+    // Folder-based platforms: return folder directly. The emulator strategy
+    // (e.g., WindowsStrategy, EdenStrategy) finds the executable inside.
+    if (isFolderBased) {
       return p.absolute(folderPath);
     }
+    
+    final extensions = RomConstants.platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
     
     io.File? largestFile;
     int largestSize = 0;
@@ -189,8 +189,6 @@ class RomLookupService {
     if (largestFile != null) {
       return p.absolute(largestFile.path);
     }
-    
-    if (isFolderBased) return p.absolute(folderPath);
     
     return null;
   }

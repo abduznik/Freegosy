@@ -39,12 +39,37 @@ class FileSanityService {
         await _mappingService.removeMapping(path);
         _cacheService.removeFile(io.File(path).path); // Best effort removal from cache
         removedCount++;
+        continue;
+      }
+
+      // Migration: clear Windows game mappings that point to individual files
+      // instead of folders. Before the folder-based lookup fix, the ROM scanner
+      // picked random large files (.xnb, .dll) as the "ROM" for Windows games.
+      // Now Windows games should map to their game folder, not a file inside.
+      if (_isWindowsGameMapping(path)) {
+        debugPrint('[Sanity] Clearing stale Windows game mapping (file instead of folder): $path');
+        await _mappingService.removeMapping(path);
+        removedCount++;
       }
     }
 
     if (removedCount > 0) {
       debugPrint('[Sanity] Pruned $removedCount stale entries.');
     }
+  }
+
+  /// Returns true if [path] looks like a Windows game ROM mapping that points
+  /// to an individual file inside a game folder (not the folder itself).
+  /// Windows games are folder-based — the ROM path should be a directory.
+  static bool _isWindowsGameMapping(String path) {
+    final lower = path.toLowerCase();
+    // Check if the path is inside a Windows ROM directory
+    final isWinPath = lower.contains('\\win\\') || lower.contains('/win/') ||
+        lower.contains('\\windows\\') || lower.contains('/windows/') ||
+        lower.contains('\\pc\\') || lower.contains('/pc/');
+    if (!isWinPath) return false;
+    // If it's a file (not a directory), it's a stale mapping
+    return io.File(path).existsSync() && !io.Directory(path).existsSync();
   }
 }
 

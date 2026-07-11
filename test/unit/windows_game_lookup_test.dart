@@ -34,10 +34,12 @@ void main() {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
     });
 
-    test('Windows platform extensions are empty (folder-based)', () {
-      expect(RomConstants.platformExtensions['windows'], isEmpty);
-      expect(RomConstants.platformExtensions['pc'], isEmpty);
-      expect(RomConstants.platformExtensions['win'], isEmpty);
+    test('Windows platform extensions include .exe/.bat/.cmd', () {
+      expect(RomConstants.platformExtensions['windows'], contains('.exe'));
+      expect(RomConstants.platformExtensions['windows'], contains('.bat'));
+      expect(RomConstants.platformExtensions['windows'], contains('.cmd'));
+      expect(RomConstants.platformExtensions['pc'], contains('.exe'));
+      expect(RomConstants.platformExtensions['win'], contains('.exe'));
     });
 
     test('findMainRomInFolder returns folder path for Windows games', () async {
@@ -55,7 +57,7 @@ void main() {
       expect(result, gameDir.path);
     });
 
-    test('findMainRomInFolder does NOT return random .xnb file for Windows', () async {
+    test('findMainRomInFolder does NOT return random .dll/.xnb file for Windows', () async {
       final game = Game(
         id: '117',
         name: 'Hacknet',
@@ -66,8 +68,10 @@ void main() {
       final result = await RomLookupService.findMainRomInFolder(game, gameDir.path);
 
       expect(result, isNotNull);
+      // Should be the folder, not EndingSpeech.xnb
       expect(result, isNot(contains('.xnb')));
       expect(result, isNot(contains('EndingSpeech')));
+      expect(result, isNot(contains('.dll')));
     });
 
     test('findExistingRomPath finds Hacknet folder', () async {
