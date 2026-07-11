@@ -12,6 +12,8 @@ class WindowsStrategy extends EmulatorStrategy {
 
   // Manual exe overrides per game id
   final Map<String, String> _exeOverrides = {};
+  // Launch arguments per game id
+  final Map<String, List<String>> _launchArgsOverrides = {};
 
   WindowsStrategy(this._directoryService, this._prefs)
       : _windowsGameService = WindowsGameService();
@@ -38,6 +40,7 @@ class WindowsStrategy extends EmulatorStrategy {
   bool get supportsSaveSync => true;
 
   static const String _prefsPrefix = 'win_exe_';
+  static const String _argsPrefix = 'win_args_';
 
   void loadPersistedOverrides() {
     final keys = _prefs.getKeys().where((k) => k.startsWith(_prefsPrefix));
@@ -45,6 +48,14 @@ class WindowsStrategy extends EmulatorStrategy {
       final gameId = key.substring(_prefsPrefix.length);
       final path = _prefs.getString(key);
       if (path != null && path.isNotEmpty) _exeOverrides[gameId] = path;
+    }
+    final argsKeys = _prefs.getKeys().where((k) => k.startsWith(_argsPrefix));
+    for (final key in argsKeys) {
+      final gameId = key.substring(_argsPrefix.length);
+      final argsStr = _prefs.getString(key);
+      if (argsStr != null && argsStr.isNotEmpty) {
+        _launchArgsOverrides[gameId] = argsStr.split('\n');
+      }
     }
   }
 
@@ -54,6 +65,14 @@ class WindowsStrategy extends EmulatorStrategy {
   }
 
   String? getExeOverride(String gameId) => _exeOverrides[gameId];
+
+  Future<void> setLaunchArgs(String gameId, List<String> args) async {
+    _launchArgsOverrides[gameId] = args;
+    await _prefs.setString('$_argsPrefix$gameId', args.join('\n'));
+  }
+
+  List<String> getLaunchArgs(String gameId) =>
+      _launchArgsOverrides[gameId] ?? [];
 
   @override
   Future<void> launch(Game game, String romPath) async {
@@ -82,9 +101,10 @@ class WindowsStrategy extends EmulatorStrategy {
       );
     }
 
+    final args = getLaunchArgs(game.id);
     final process = await Process.start(
       exePath,
-      [],
+      args,
       workingDirectory: File(exePath).parent.path,
     );
 

@@ -215,10 +215,14 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final windowsStrategy = registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (!context.mounted) return;
-    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id)));
+    final currentArgs = windowsStrategy?.getLaunchArgs(game.id).join(' ') ?? '';
+    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id), currentLaunchArgs: currentArgs));
     if (result == null) return;
     if (result['exe']?.isNotEmpty ?? false) await windowsStrategy?.setExeOverride(game.id, result['exe']!);
     if (result['save']?.isNotEmpty ?? false) await syncService?.windowsSaveStrategy.setManualOverride(game.id, result['save']!);
+    final argsStr = result['args'] ?? '';
+    final argsList = argsStr.isNotEmpty ? argsStr.split(RegExp(r'\s+')) : <String>[];
+    await windowsStrategy?.setLaunchArgs(game.id, argsList);
     if (context.mounted) await handleLaunch(context, ref, game);
   }
 
