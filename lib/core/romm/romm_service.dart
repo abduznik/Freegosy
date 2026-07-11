@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../constants/app_constants.dart';
 import '../platform/platform_info.dart';
 import '../storage/secure_storage_service.dart';
 import 'romm_models.dart';
@@ -20,7 +21,7 @@ class RommService {
 
   RomMConfig get config => _config;
 
-  static const String _ua = 'Freegosy/0.5.10';
+  static String get _ua => 'Freegosy/${AppConstants.version}';
 
   void updateConfig(RomMConfig newConfig) {
     _config = newConfig;
@@ -267,7 +268,7 @@ class RommService {
   Future<String?> registerDevice({
     required String name,
     required String platform,
-    String clientVersion = '0.5.10',
+    String? clientVersion,
     bool allowExisting = true,
   }) async {
     try {
@@ -275,7 +276,7 @@ class RommService {
         'name': name,
         'platform': platform,
         'client': 'freegosy',
-        'client_version': clientVersion,
+        'client_version': clientVersion ?? AppConstants.version,
       };
       final response = await _dio.post(
         '/api/devices',

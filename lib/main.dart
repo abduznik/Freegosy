@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
+import 'core/constants/app_constants.dart';
 import 'core/platform/platform_info.dart';
 import 'core/save/backup_entry.dart';
 import 'providers/shared_prefs_provider.dart';
@@ -16,6 +17,7 @@ final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LoggerService.init();
+  await AppConstants.init(); // Read version from pubspec.yaml
 
   LicenseRegistry.addLicense(() {
     return Stream<LicenseEntry>.fromIterable([
