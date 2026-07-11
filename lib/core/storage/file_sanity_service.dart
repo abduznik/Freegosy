@@ -32,12 +32,15 @@ class FileSanityService {
 
     for (final entry in mappings.entries) {
       final path = entry.key;
-      final file = io.File(path);
-      
-      if (!file.existsSync()) {
-        debugPrint('[Sanity] File no longer exists, removing mapping: $path');
+
+      // Check if path exists as either a file OR directory
+      final existsAsFile = io.File(path).existsSync();
+      final existsAsDir = io.Directory(path).existsSync();
+
+      if (!existsAsFile && !existsAsDir) {
+        debugPrint('[Sanity] Path no longer exists, removing mapping: $path');
         await _mappingService.removeMapping(path);
-        _cacheService.removeFile(io.File(path).path); // Best effort removal from cache
+        _cacheService.removeFile(path);
         removedCount++;
         continue;
       }
@@ -46,7 +49,7 @@ class FileSanityService {
       // instead of folders. Before the folder-based lookup fix, the ROM scanner
       // picked random large files (.xnb, .dll) as the "ROM" for Windows games.
       // Now Windows games should map to their game folder, not a file inside.
-      if (_isWindowsGameMapping(path)) {
+      if (existsAsFile && _isWindowsGameMapping(path)) {
         debugPrint('[Sanity] Clearing stale Windows game mapping (file instead of folder): $path');
         await _mappingService.removeMapping(path);
         removedCount++;

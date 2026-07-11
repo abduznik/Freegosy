@@ -205,12 +205,12 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           } catch (err) { if (context.mounted) { Navigator.pop(context); ErrorHandler.showException(context, err, contextLabel: 'Download Core Failed'); } }
         }
       } else if ((['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '')) && (e.toString().contains('No executable') || e.toString().contains('not found'))) {
-        await handleWindowsConfig(context, ref, game);
+        await handleWindowsConfig(context, ref, game, fromError: true);
       } else { ErrorHandler.showException(context, e, contextLabel: 'Launch Failed'); }
     }
   }
 
-  Future<void> handleWindowsConfig(BuildContext context, WidgetRef ref, Game game) async {
+  Future<void> handleWindowsConfig(BuildContext context, WidgetRef ref, Game game, {bool fromError = false}) async {
     final registry = ref.read(strategyRegistryProvider).asData?.value;
     final windowsStrategy = registry?.getStrategyForSlug(game.platformSlug ?? '') as WindowsStrategy?;
     final syncService = await ref.read(saveSyncServiceProvider.future);
@@ -223,7 +223,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final argsStr = result['args'] ?? '';
     final argsList = argsStr.isNotEmpty ? argsStr.split(RegExp(r'\s+')) : <String>[];
     await windowsStrategy?.setLaunchArgs(game.id, argsList);
-    if (context.mounted) await handleLaunch(context, ref, game);
+    // Only re-launch if the user actually set an exe path
+    if (result['exe']?.isNotEmpty ?? false) {
+      if (context.mounted) await handleLaunch(context, ref, game);
+    } else if (fromError) {
+      // User clicked Save without setting an exe — can't auto-detect
+      if (context.mounted) ErrorHandler.showInfo(context, 'No Executable Set', message: 'Please set the game executable path to launch it.');
+    }
   }
 
   Future<void> handleDeleteRom(BuildContext context, WidgetRef ref, Game game) async {
