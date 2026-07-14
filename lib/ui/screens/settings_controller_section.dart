@@ -6,6 +6,7 @@ import '../../core/input/gamepad_service.dart';
 import '../../core/input/gamepad_utils.dart';
 import '../../core/input/known_controllers.dart';
 import '../../core/input/custom_controller_mappings.dart';
+import '../../core/input/input_action_bus.dart';
 import '../widgets/dialog_back_bridge.dart';
 import '../widgets/focus_effect_wrapper.dart';
 
@@ -690,6 +691,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
 
   late AnimationController _chargeController;
   StreamSubscription<GamepadEvent>? _rawSubscription;
+  StreamSubscription<GameAction>? _backSubscription;
 
   // Latch: after a button registers we record BOTH the key and the value polarity
   // (+1 / -1). For digital buttons "released" means value < 0.5 on the same key.
@@ -711,12 +713,20 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
       }
     });
     _rawSubscription = widget.service.rawEvents.listen(_onRawEvent);
+    // Listen for back action on the action bus — skip current step instead
+    // of closing the dialog (DialogBackBridge is intentionally NOT used here).
+    _backSubscription = inputActionBus.stream.listen((action) {
+      if (action == GameAction.back && mounted && !_complete) {
+        _skip();
+      }
+    });
   }
 
   @override
   void dispose() {
     _chargeController.dispose();
     _rawSubscription?.cancel();
+    _backSubscription?.cancel();
     super.dispose();
   }
 
@@ -912,8 +922,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
     final actionLabel = _actionLabels[currentAction] ?? currentAction.name;
     final progress = _currentActionIndex / widget.manualActions.length;
 
-    return DialogBackBridge(
-      child: AlertDialog(
+    return AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text('Mapping: ${widget.controllerName}'),
         content: Column(
@@ -1089,8 +1098,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
             onTap: _skip,
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _sniffButton(

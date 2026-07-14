@@ -17,6 +17,7 @@ import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
 import 'settings_controller_section.dart';
+import 'settings_deadzone_section.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/theme_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
@@ -472,6 +473,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             data: (directoryService) {
               if (directoryService == null) return const Center(child: Text('Storage service not available.'));
 
+              final theme = Theme.of(context);
+
               return ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
@@ -480,7 +483,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     context: context,
                     title: 'Controller Setup',
                     icon: Icons.gamepad,
-                    child: const SettingsControllerSection(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SettingsControllerSection(),
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Analog Deadzone',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Ignores small stick drift near the center.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const DeadzoneGlobalRow(),
+                      ],
+                    ),
                   ),
                   _buildAppearanceSection(context, ref),
                   _buildSectionCard(

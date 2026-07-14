@@ -8,6 +8,7 @@ import 'sdl_parser.dart';
 import 'input_action_bus.dart';
 import 'custom_controller_mappings.dart';
 import 'gamepad_utils.dart';
+import 'deadzone_config.dart';
 
 enum GameAction {
   up, down, left, right,
@@ -31,6 +32,9 @@ final gamepadServiceProvider = Provider<GamepadService>((ref) {
 class AxisState {
   bool isNegativeActive = false;
   bool isPositiveActive = false;
+  GameAction? heldDirection;
+  Timer? holdDelayTimer;
+  Timer? holdRepeatTimer;
 }
 
 class GamepadService extends WidgetsBindingObserver {
@@ -42,10 +46,6 @@ class GamepadService extends WidgetsBindingObserver {
   final _rawEventController = StreamController<GamepadEvent>.broadcast();
   // Tracks every raw key seen per controller — used to detect backend-handled axes
   final Map<String, Set<String>> _seenRawKeys = {};
-
-  GameAction? _heldDirection;
-  Timer? _holdDelayTimer;
-  Timer? _holdRepeatTimer;
 
   // Debounce for digital buttons to prevent rapid-fire ghost presses
   final Map<GameAction, DateTime> _lastDigitalPress = {};
@@ -63,6 +63,9 @@ class GamepadService extends WidgetsBindingObserver {
 
     // Load custom mappings
     await loadCustomMappings();
+
+    // Load deadzone settings
+    await loadDeadzoneSettings();
 
     // Load the SDL Database
     await SDLMappingParser.loadDatabase();
@@ -266,10 +269,14 @@ class GamepadService extends WidgetsBindingObserver {
       // Normalize raw DirectInput axis (0–65535) to -1.0..1.0
       // Raw center is ~32767; treat as signed
       final normalized = (event.value - 32767.0) / 32767.0;
+      // Apply deadzone to DirectInput axes too
+      final controllerName = _controllerNames[event.gamepadId] ?? '';
+      final deadzone = getDeadzoneForController(controllerName);
+      final withDeadzone = applyDeadzone(normalized, deadzone);
       final isX = key == 'dwxpos';
       return NormalizedInput(
         action: isX ? GameAction.horizontalAxis : GameAction.verticalAxis,
-        value: normalized,
+        value: withDeadzone,
       );
     }
 
@@ -300,12 +307,13 @@ class GamepadService extends WidgetsBindingObserver {
       final newDirections = _decodePOV(event.value).toSet();
       // Release directions no longer active
       for (final dir in _activePovDirections.difference(newDirections)) {
-        _deactivateDirection(dir);
+        _deactivateDirection(dir, 'pov');
       }
       // Press newly active directions
       for (final dir in newDirections.difference(_activePovDirections)) {
         _triggerAction(dir, 1.0);
-        _activateDirection(dir);
+        _axisStates.putIfAbsent('pov', () => AxisState());
+        _activateDirection(dir, 'pov', isDigital: true);
       }
       _activePovDirections
         ..clear()
@@ -337,10 +345,30 @@ class GamepadService extends WidgetsBindingObserver {
 
       // Invert vertical D-pad axis because D-pad UP is positive on macOS,
       // but analog stick UP is negative. This unifies their behavior.
-      final bool isInverted = event.key.contains('dpad') && normalized.action == GameAction.verticalAxis;
-      final double adjustedValue = isInverted ? -event.value : event.value;
+      // Also apply user Y-axis inversion for analog sticks with flipped axes.
+      final bool isDpadInverted = event.key.contains('dpad') && normalized.action == GameAction.verticalAxis;
+      final bool isAnalogInverted = analogInvertY && !event.key.contains('dpad') && normalized.action == GameAction.verticalAxis;
+      final bool isInverted = isDpadInverted != isAnalogInverted;
+      final double rawAdjusted = isInverted ? -event.value : event.value;
 
-      // Negative threshold (-0.5)
+      // Apply per-controller deadzone
+      final controllerName = _controllerNames[event.gamepadId] ?? '';
+      final deadzone = getDeadzoneForController(controllerName);
+      // DirectInput axes (dwXpos/dwYpos) are already normalized to -1.0..1.0
+      // with deadzone applied in _normalize(). Only apply deadzone here for
+      // standard axes that come in as -1.0..1.0 raw values.
+      final bool isDirectInput = event.key.toLowerCase().startsWith('dw');
+      final double adjustedValue = isDirectInput
+          ? normalized.value
+          : applyDeadzone(rawAdjusted, deadzone);
+
+      // Deactivation must be checked independently of activation so that
+      // crossing from one extreme to the other (e.g. -0.8 → 0.6) properly
+      // deactivates the old direction even while the new one activates.
+      // Without this, both isNegativeActive and isPositiveActive stay true
+      // and the stick appears stuck in one direction.
+
+      // Negative direction
       if (adjustedValue < -0.5) {
         if (!state.isNegativeActive) {
           state.isNegativeActive = true;
@@ -348,19 +376,20 @@ class GamepadService extends WidgetsBindingObserver {
               ? GameAction.left
               : GameAction.up;
           _triggerAction(mappedAction, adjustedValue);
-          _activateDirection(mappedAction);
+          _activateDirection(mappedAction, axisKey);
         }
-      } else if (adjustedValue > -0.15) {
+      }
+      if (adjustedValue > -0.15) {
         if (state.isNegativeActive) {
           state.isNegativeActive = false;
           final mappedAction = (normalized.action == GameAction.horizontalAxis)
               ? GameAction.left
               : GameAction.up;
-          _deactivateDirection(mappedAction);
+          _deactivateDirection(mappedAction, axisKey);
         }
       }
 
-      // Positive threshold (0.5)
+      // Positive direction
       if (adjustedValue > 0.5) {
         if (!state.isPositiveActive) {
           state.isPositiveActive = true;
@@ -368,15 +397,16 @@ class GamepadService extends WidgetsBindingObserver {
               ? GameAction.right
               : GameAction.down;
           _triggerAction(mappedAction, adjustedValue);
-          _activateDirection(mappedAction);
+          _activateDirection(mappedAction, axisKey);
         }
-      } else if (adjustedValue < 0.15) {
+      }
+      if (adjustedValue < 0.15) {
         if (state.isPositiveActive) {
           state.isPositiveActive = false;
           final mappedAction = (normalized.action == GameAction.horizontalAxis)
               ? GameAction.right
               : GameAction.down;
-          _deactivateDirection(mappedAction);
+          _deactivateDirection(mappedAction, axisKey);
         }
       }
     } else {
@@ -392,11 +422,14 @@ class GamepadService extends WidgetsBindingObserver {
 
         _triggerAction(normalized.action, event.value);
         if (_isDirectionAction(normalized.action)) {
-          _activateDirection(normalized.action);
+          final digitalKey = 'digital_${normalized.action.name}';
+          _axisStates.putIfAbsent(digitalKey, () => AxisState());
+          _activateDirection(normalized.action, digitalKey, isDigital: true);
         }
       } else {
         if (_isDirectionAction(normalized.action)) {
-          _deactivateDirection(normalized.action);
+          final digitalKey = 'digital_${normalized.action.name}';
+          _deactivateDirection(normalized.action, digitalKey);
         }
       }
     }
@@ -409,42 +442,55 @@ class GamepadService extends WidgetsBindingObserver {
            action == GameAction.right;
   }
 
-  void _activateDirection(GameAction action) {
-    if (_heldDirection == action) return;
+  void _activateDirection(GameAction action, String axisKey, {bool isDigital = false}) {
+    final state = _axisStates[axisKey];
+    if (state == null) return;
+    if (state.heldDirection == action) return;
 
-    _cancelHoldTimers();
-    _heldDirection = action;
+    _cancelAxisTimers(state);
+    state.heldDirection = action;
 
-    // Start delay timer for 500ms (half a second)
-    _holdDelayTimer = Timer(const Duration(milliseconds: 500), () {
-      // After 500ms delay, start repeating every 120ms
-      _holdRepeatTimer = Timer.periodic(const Duration(milliseconds: 120), (timer) {
-        if (_heldDirection == action) {
-          _triggerAction(action, 1.0);
-        } else {
-          timer.cancel();
-        }
+    // Only start repeat timer for digital buttons (d-pad).
+    // Analog sticks fire once on threshold crossing — you must re-center
+    // and push again to trigger another navigation step.
+    if (isDigital) {
+      state.holdDelayTimer = Timer(const Duration(milliseconds: 500), () {
+        state.holdRepeatTimer = Timer.periodic(const Duration(milliseconds: 120), (timer) {
+          if (state.heldDirection == action && _isAxisStillActive(state, action)) {
+            _triggerAction(action, 1.0);
+          } else {
+            _cancelAxisTimers(state);
+            state.heldDirection = null;
+          }
+        });
       });
-    });
-  }
-
-  void _deactivateDirection(GameAction action) {
-    if (_heldDirection == action) {
-      _cancelHoldTimers();
-      _heldDirection = null;
     }
   }
 
-  void _cancelHoldTimers() {
-    _holdDelayTimer?.cancel();
-    _holdDelayTimer = null;
-    _holdRepeatTimer?.cancel();
-    _holdRepeatTimer = null;
+  void _deactivateDirection(GameAction action, String axisKey) {
+    final state = _axisStates[axisKey];
+    if (state == null) return;
+    if (state.heldDirection == action) {
+      _cancelAxisTimers(state);
+      state.heldDirection = null;
+    }
+  }
+
+  void _cancelAxisTimers(AxisState state) {
+    state.holdDelayTimer?.cancel();
+    state.holdDelayTimer = null;
+    state.holdRepeatTimer?.cancel();
+    state.holdRepeatTimer = null;
+  }
+
+  bool _isAxisStillActive(AxisState state, GameAction direction) {
+    if (direction == GameAction.up || direction == GameAction.left) {
+      return state.isNegativeActive;
+    }
+    return state.isPositiveActive;
   }
 
   void _triggerAction(GameAction action, double value) {
-    // Muted to prevent console clutter:
-    // debugPrint('🎮 Gamepad Action Triggered: $action (value: $value)');
     // Broadcast the action to all listeners (screens, global handlers)
     inputActionBus.add(action);
 
@@ -482,7 +528,9 @@ class GamepadService extends WidgetsBindingObserver {
   void dispose() {
     _subscription?.cancel();
     _scanTimer?.cancel();
-    _cancelHoldTimers();
+    for (final state in _axisStates.values) {
+      _cancelAxisTimers(state);
+    }
     _rawEventController.close();
     WidgetsBinding.instance.removeObserver(this);
   }

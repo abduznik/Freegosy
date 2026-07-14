@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/library_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/dialog_back_bridge.dart';
+import '../widgets/gamepad_slider.dart';
 
 Widget _buildCustomDropdown<T>({
   required BuildContext context,
@@ -307,7 +308,7 @@ Widget buildDisplaySection(
             valueIndicatorColor: theme.colorScheme.primary,
             valueIndicatorTextStyle: TextStyle(color: theme.colorScheme.onPrimary),
           ),
-          child: Slider(
+          child: GamepadSlider(
             value: columnCount.toDouble(),
             min: 2,
             max: 8,
