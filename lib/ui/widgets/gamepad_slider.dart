@@ -87,9 +87,6 @@ class _GamepadSliderState extends ConsumerState<GamepadSlider> {
   }
 
   void _ensureFocused() {
-    // Find our FocusNode and request focus
-    final focusNode = context.findAncestorStateOfType<State>()?.context;
-    // Use a post-frame to ensure the widget tree is settled
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         FocusScope.of(context).requestFocus();
