@@ -10,6 +10,7 @@ class GamePersonalSection extends StatelessWidget {
   final bool isSaving;
   final bool adjustingRating;
   final bool adjustingCompletion;
+  final bool hasLaunchPreference;
   final Function(String?) onStatusChanged;
   final Function(int) onRatingChanged;
   final Function(int) onCompletionChanged;
@@ -18,6 +19,7 @@ class GamePersonalSection extends StatelessWidget {
   final VoidCallback onToggleAdjustingRating;
   final VoidCallback onToggleAdjustingCompletion;
   final VoidCallback onSave;
+  final VoidCallback? onForgetLaunch;
 
   const GamePersonalSection({
     super.key,
@@ -29,6 +31,7 @@ class GamePersonalSection extends StatelessWidget {
     required this.isSaving,
     required this.adjustingRating,
     required this.adjustingCompletion,
+    this.hasLaunchPreference = false,
     required this.onStatusChanged,
     required this.onRatingChanged,
     required this.onCompletionChanged,
@@ -37,6 +40,7 @@ class GamePersonalSection extends StatelessWidget {
     required this.onToggleAdjustingRating,
     required this.onToggleAdjustingCompletion,
     required this.onSave,
+    this.onForgetLaunch,
   });
 
   @override
@@ -457,51 +461,79 @@ class GamePersonalSection extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // 4. Save Changes Button Alone at the very bottom
-        Center(
-          child: SizedBox(
-            width: 288,
-            child: FocusEffectWrapper(
-              onTap: isSaving ? null : onSave,
-              borderRadius: 16.0,
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: isSaving
-                      ? null
-                      : LinearGradient(
-                          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  color: isSaving ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25) : null,
-                  border: Border.all(
-                    color: isSaving
-                        ? theme.colorScheme.outline.withValues(alpha: 0.3)
-                        : theme.colorScheme.primary.withValues(alpha: 0.3),
-                    width: 1.0,
+        // 4. Save Changes + Forget Launch Buttons
+        Row(
+          children: [
+            Expanded(
+              child: FocusEffectWrapper(
+                onTap: isSaving ? null : onSave,
+                borderRadius: 16.0,
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: isSaving
+                        ? null
+                        : LinearGradient(
+                            colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    color: isSaving ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25) : null,
+                    border: Border.all(
+                      color: isSaving
+                          ? theme.colorScheme.outline.withValues(alpha: 0.3)
+                          : theme.colorScheme.primary.withValues(alpha: 0.3),
+                      width: 1.0,
+                    ),
                   ),
-                ),
-                child: isSaving
-                    ? SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.onPrimary),
-                      )
+                  child: isSaving
+                      ? SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.onPrimary),
+                        )
                     : Text(
-                        'Save Changes',
+                        'Save Personal Stats',
                         style: TextStyle(
-                          color: theme.colorScheme.onPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          letterSpacing: 0.3,
+                            color: theme.colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            letterSpacing: 0.3,
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
-          ),
+            if (hasLaunchPreference) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: FocusEffectWrapper(
+                  onTap: onForgetLaunch,
+                  borderRadius: 16.0,
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3), width: 1.0),
+                    ),
+                    child: Text(
+                      'Forget Launch',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ],
     );

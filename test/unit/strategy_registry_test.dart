@@ -65,5 +65,25 @@ void main() {
       
       expect(overlaps, isEmpty, reason: overlaps.join('\n'));
     });
+
+    test('getAllStrategiesForSlug returns multiple strategies for GBA', () {
+      final strategies = registry.getAllStrategiesForSlug('gba');
+      expect(strategies.length, greaterThanOrEqualTo(2));
+    });
+
+    test('getAllStrategiesForSlug returns empty for unknown slug', () {
+      final strategies = registry.getAllStrategiesForSlug('unknown_xyz');
+      expect(strategies, isEmpty);
+    });
+
+    test('getStrategyForSlug with gameId uses per-game preference', () async {
+      await registry.setGameEmulatorPreference('test-game', 'mgba');
+      final strategy = registry.getStrategyForSlug('gba', gameId: 'test-game');
+      expect(strategy?.emulatorId, 'mgba');
+    });
+
+    test('coreOverrides getter returns map', () {
+      expect(registry.coreOverrides, isA<Map<String, String>>());
+    });
   });
 }

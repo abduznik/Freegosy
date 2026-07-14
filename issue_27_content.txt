@@ -1,0 +1,65 @@
+title:	Emulator issues - Win 11
+state:	OPEN
+author:	greavous1138
+labels:	bug
+comments:	4
+assignees:	abduznik
+projects:	
+milestone:	
+number:	27
+--
+General Checklist
+
+[/ ] I have searched for similar existing issues.
+
+[/ ] I can reproduce this issue consistently.
+
+[/ ] I am using the latest version of the software.
+
+Operating System
+
+[/ ] Windows
+
+[ ] macOS
+
+[ ] Linux
+
+What is the issue?
+
+A few bits I noticed around emulator installs.
+
+Please describe the issue briefly below, including what happened and what you expected to happen.
+
+Firstly, this is pretty awesome so thanks! Nice to see somone working on not only Windows but a cross platform ROMM related launcher! I'm mostly gonna be using it on Windows myself. I'm no dev but got a few yrs of software testing under my belt so happy to help where I can.
+
+PCSX2 (pcsx2-v2.6.3-windows-x64-Qt.7z)
+- No portable.ini. Wiki says it tries to makes emulators portable but didn't here. 
+- Freegosy goes to black screen after choosing which package to download. Download completes but Freegosy requires a restart.
+
+<img width="1259" height="704" alt="Image" src="https://github.com/user-attachments/assets/937d8fa2-966e-4e47-a2c4-16f41ac46f5d" />
+
+Retroarch
+- Generally OK but using older version. Version downloaded by Freegosy: 1.20.0. Current stable: 1.22.2
+- 'Sync BIOS' in Freegosy puts BIOS files in .../retroarch/BIOS.  I believe Retroarch uses .../retroarch/RetroArch-Win64/system for BIOS files.
+
+I'm mostly only gonna use the above 2 but ran through the rest anyway so no missing gaps for you in the future hopefully!
+
+Eden/Azahar/Duckstation - Freegosy blackscreen after choosing package to download like PCSX2. Seems to be all that have that 'Select emulator version' popup get this issue.  Required restart, download was OK.
+
+Ryujinx - No packages offered in 'Select emulator version' popup.
+
+<img width="626" height="351" alt="Image" src="https://github.com/user-attachments/assets/8d95bad5-a0ba-462d-b2fd-11aced1ca53c" />
+
+RPCS3 - No download
+
+<img width="600" height="48" alt="Image" src="https://github.com/user-attachments/assets/b15d5f95-598d-423f-9e67-d72675524a11" />
+
+MAME - No download
+
+<img width="493" height="237" alt="Image" src="https://github.com/user-attachments/assets/add6dd64-5321-494b-8541-d9f010f773dc" />
+
+The others not mentioned seemed fine.  They downloaded and was able to open them.
+
+One other thing I noticed not related to emulator install.  I noticed that a retroarch SNES game save from Freegosy was in ROMM as a zip file. I don't believe that there's any actual problem with that (I should probably try and load that save in grout or argosy) but I believe grout/argosy dont zip single file saves, only multi file/folder saves eg PSP, PS2, so SNES gets uploaded to ROMM as a .srm file.  Might be an idea to touch base with their devs and keep save handling similar to ensure save compatibility between apps/launchers on different platforms and help make ROMM even more awesome by having bits like that more standardised.
+
+So yeah keep up the good work and let me know if you need any more info.  

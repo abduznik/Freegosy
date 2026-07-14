@@ -803,4 +803,8 @@ class SaveSyncService {
   void setNdsCore(String core) {
     _retroarch.setNdsCore(core);
   }
+
+  void loadCoreOverrides(Map<String, String> overrides) {
+    _retroarch.loadCoreOverrides(overrides);
+  }
 }

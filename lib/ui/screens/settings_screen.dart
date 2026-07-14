@@ -19,6 +19,8 @@ import 'settings_custom_emulators_section.dart';
 import 'settings_controller_section.dart';
 import 'settings_deadzone_section.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/emulator/retroarch_core_list.dart';
+import '../../core/emulator/strategy_registry.dart';
 import '../../providers/theme_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/dialog_back_bridge.dart';
@@ -305,7 +307,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return FocusEffectWrapper(
       onTap: onTap,
       borderRadius: 16.0,
-      scaleFactor: 1.03,
+      scaleFactor: 1.005,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
@@ -410,7 +412,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 FocusEffectWrapper(
                   onTap: () async => onChanged(await FilePicker.platform.getDirectoryPath()),
                   borderRadius: 12.0,
-                  scaleFactor: 1.05,
+                  scaleFactor: 1.005,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
@@ -519,36 +521,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     child: buildDisplaySection(context, cardAspectRatio, columnCount, cardSpacing, showTitle, activePreset, ref),
                   ),
                   _buildStorageSection(context, directoryService),
-                  _buildRetroArchSettingsSection(context, ref),
                   if (ref.read(platformInfoProvider).isLinux) ...[
                     _buildLinuxSettingsSection(context, ref, directoryService),
                   ],
-                  _buildSectionCard(
+                   _buildSectionCard(
                     context: context,
                     title: 'Emulators',
                     icon: Icons.sports_esports,
                     child: emulatorStatusAsync.when(
-                      data: (states) => buildEmulatorsSection(context, directoryService, true, states, setState, ref),
+                      data: (states) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          buildEmulatorsSection(context, directoryService, true, states, setState, ref),
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          const SizedBox(height: 12),
+                          const SettingsCustomEmulatorsSection(),
+                          if (strategyRegistry != null) ...[
+                            const SizedBox(height: 16),
+                            const Divider(),
+                            const SizedBox(height: 12),
+                            buildConflictsSection(context, strategyRegistry, setState, ref),
+                          ],
+                        ],
+                      ),
                       loading: () => buildEmulatorsSection(context, directoryService, false, {}, setState, ref),
                       error: (e, s) => Center(child: Text('Error: $e')),
                     ),
                   ),
-                  _buildSectionCard(
-                    context: context,
-                    title: 'Custom Emulators',
-                    icon: Icons.settings_input_component,
-                    child: const SettingsCustomEmulatorsSection(),
-                   ),
-                   const SizedBox(height: 20),
-                   if (strategyRegistry != null) ...[
-                    _buildSectionCard(
-                      context: context,
-                      title: 'Emulator Conflicts',
-                      icon: Icons.warning_amber,
-                      child: buildConflictsSection(context, strategyRegistry, setState),
-                    ),
-                  ],
-                  _buildLegalSection(context),
+                   _buildRetroArchSettingsSection(context, ref),
+                   _buildLegalSection(context),
                 ],
               );
             },
@@ -989,8 +991,132 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) => const SizedBox();
+  Widget _buildRetroArchSettingsSection(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final strategyRegistry = ref.watch(strategyRegistryProvider).asData?.value;
+    final coreOverrides = strategyRegistry?.coreOverrides ?? {};
+
+    return _buildSectionCard(
+      context: context,
+      title: 'RetroArch Cores',
+      icon: Icons.extension,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Set default cores per platform. Tap a platform to expand and choose.',
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+
+          // Searchable platform list
+          _buildAllCoresSection(context, ref, coreOverrides, strategyRegistry),
+
+          const SizedBox(height: 16),
+
+          // Reset button
+          Row(
+            children: [
+              _buildActionButton(
+                context,
+                icon: Icons.restore,
+                label: 'Reset All to Defaults',
+                onTap: strategyRegistry != null ? () async {
+                  await strategyRegistry.clearAllCoreOverrides();
+                  setState(() {});
+                } : null,
+                isDestructive: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllCoresSection(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, String> coreOverrides,
+    StrategyRegistry? strategyRegistry,
+  ) {
+    final theme = Theme.of(context);
+    final searchController = TextEditingController();
+
+    // Collect all unique platform slugs with at least one compatible core
+    final allPlatforms = <String>{};
+    for (final core in kRetroArchCores) {
+      allPlatforms.addAll(core.platforms);
+    }
+    final sortedPlatforms = allPlatforms.toList()..sort();
+
+    return StatefulBuilder(
+      builder: (context, setInnerState) {
+        final searchQuery = searchController.text.toLowerCase();
+        final filteredPlatforms = searchQuery.isEmpty
+            ? sortedPlatforms
+            : sortedPlatforms.where((p) => p.toLowerCase().contains(searchQuery)).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'All Platforms (${filteredPlatforms.length})',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: searchController,
+              decoration: InputDecoration(
+                hintText: 'Search platforms...',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (_) => setInnerState(() {}),
+            ),
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: filteredPlatforms.length,
+                itemBuilder: (ctx, i) {
+                  final slug = filteredPlatforms[i];
+                  final compatibleCores = getCoresForSlug(slug);
+                  if (compatibleCores.isEmpty) return const SizedBox.shrink();
+
+                  final currentOverride = coreOverrides[slug];
+                  final defaultCore = getDefaultCoreForSlug(slug);
+                  final currentCoreId = currentOverride ?? defaultCore;
+                  final currentCore = compatibleCores.firstWhere(
+                    (c) => c.id == currentCoreId,
+                    orElse: () => compatibleCores.first,
+                  );
+
+                  return _PlatformCoreExpansionTile(
+                    slug: slug,
+                    compatibleCores: compatibleCores,
+                    currentCore: currentCore,
+                    currentCoreId: currentCoreId,
+                    defaultCore: defaultCore,
+                    coreOverrides: coreOverrides,
+                    strategyRegistry: strategyRegistry,
+                    ref: ref,
+                    onOverrideChanged: () => setInnerState(() {}),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
   Widget _buildLinuxSettingsSection(BuildContext context, WidgetRef ref, DirectoryService directoryService) => const SizedBox();
+
   Widget _buildLegalSection(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
@@ -1070,7 +1196,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 }
               },
               borderRadius: 12.0,
-              scaleFactor: 1.05,
+              scaleFactor: 1.005,
               useSafeScale: false,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -1226,7 +1352,7 @@ class _FilterChip extends StatelessWidget {
     return FocusEffectWrapper(
       onTap: onSelected,
       borderRadius: 12.0,
-      scaleFactor: 1.05,
+      scaleFactor: 1.005,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -1249,6 +1375,161 @@ class _FilterChip extends StatelessWidget {
             color: selected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PlatformCoreExpansionTile extends StatefulWidget {
+  final String slug;
+  final List<RetroArchCore> compatibleCores;
+  final RetroArchCore currentCore;
+  final String? currentCoreId;
+  final String? defaultCore;
+  final Map<String, String> coreOverrides;
+  final StrategyRegistry? strategyRegistry;
+  final WidgetRef ref;
+  final VoidCallback onOverrideChanged;
+
+  const _PlatformCoreExpansionTile({
+    required this.slug,
+    required this.compatibleCores,
+    required this.currentCore,
+    required this.currentCoreId,
+    required this.defaultCore,
+    required this.coreOverrides,
+    required this.strategyRegistry,
+    required this.ref,
+    required this.onOverrideChanged,
+  });
+
+  @override
+  State<_PlatformCoreExpansionTile> createState() => _PlatformCoreExpansionTileState();
+}
+
+class _PlatformCoreExpansionTileState extends State<_PlatformCoreExpansionTile> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasOverride = widget.coreOverrides.containsKey(widget.slug);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: _expanded
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15)
+            : theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasOverride
+              ? theme.colorScheme.primary.withValues(alpha: 0.3)
+              : theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        children: [
+          FocusEffectWrapper(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: 12.0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    _expanded ? Icons.expand_more : Icons.chevron_right,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.slug.toUpperCase(),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: theme.colorScheme.onSurface),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.currentCore.displayName,
+                          style: TextStyle(fontSize: 11, color: hasOverride ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasOverride)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                      child: Text('OVR', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                    ),
+                  const SizedBox(width: 8),
+                  Text('${widget.compatibleCores.length} cores', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Column(
+                children: widget.compatibleCores.map((core) {
+                  final isSelected = core.id == widget.currentCoreId;
+                  final isFav = widget.ref.watch(retroarchFavoriteCoresProvider).contains(core.id);
+                  return FocusEffectWrapper(
+                    onTap: () async {
+                      if (widget.strategyRegistry != null) {
+                        if (core.id == widget.defaultCore) {
+                          await widget.strategyRegistry!.clearCoreOverride(widget.slug);
+                        } else {
+                          await widget.strategyRegistry!.setCoreOverride(widget.slug, core.id);
+                        }
+                        widget.onOverrideChanged();
+                      }
+                    },
+                    borderRadius: 8.0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 2),
+                      decoration: BoxDecoration(
+                        color: isSelected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off, size: 16, color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(children: [
+                                  Text(core.displayName, style: TextStyle(fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: theme.colorScheme.onSurface)),
+                                  if (core.isRecommended) ...[const SizedBox(width: 6), Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1), decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)), child: Text('REC', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)))],
+                                  if (core.id == widget.defaultCore && !isSelected) ...[const SizedBox(width: 6), Text('(default)', style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)))],
+                                ]),
+                                if (core.description != null) Padding(padding: const EdgeInsets.only(top: 1), child: Text(core.description!, style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6)))),
+                              ],
+                            ),
+                          ),
+                          FocusEffectWrapper(
+                            onTap: () => widget.ref.read(retroarchFavoriteCoresProvider.notifier).toggle(core.id),
+                            borderRadius: 8.0,
+                            useSafeScale: false,
+                            child: Padding(padding: const EdgeInsets.all(4), child: Icon(isFav ? Icons.star : Icons.star_border, color: isFav ? Colors.amber : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4), size: 16)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

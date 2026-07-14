@@ -6,4 +6,6 @@ enum InputMode { mouse, gamepad, keyboard }
 final currentTabIndexProvider = StateProvider<int>((ref) => 0);
 final inputModeProvider = StateProvider<InputMode>((ref) => InputMode.mouse);
 final focusedActionProvider = StateProvider<VoidCallback?>((ref) => null);
+final focusedLongPressActionProvider = StateProvider<VoidCallback?>((ref) => null);
 final navigationLockedProvider = StateProvider<bool>((ref) => false);
+final gamePreferenceVersionProvider = StateProvider<int>((ref) => 0);

@@ -688,7 +688,7 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
   _i8.Future<String?> registerDevice({
     required String? name,
     required String? platform,
-    String? clientVersion = '0.5.10',
+    String? clientVersion,
     bool? allowExisting = true,
   }) =>
       (super.noSuchMethod(
@@ -1064,6 +1064,14 @@ class MockStrategyRegistry extends _i1.Mock implements _i13.StrategyRegistry {
   }
 
   @override
+  Map<String, String> get coreOverrides =>
+      (super.noSuchMethod(
+            Invocation.getter(#coreOverrides),
+            returnValue: <String, String>{},
+          )
+          as Map<String, String>);
+
+  @override
   Map<String, List<_i14.EmulatorStrategy>> detectConflicts() =>
       (super.noSuchMethod(
             Invocation.method(#detectConflicts, []),
@@ -1095,11 +1103,109 @@ class MockStrategyRegistry extends _i1.Mock implements _i13.StrategyRegistry {
           as _i8.Future<void>);
 
   @override
-  _i14.EmulatorStrategy? getStrategyForSlug(String? platformSlug) =>
+  _i8.Future<void> setGameEmulatorPreference(
+    String? gameId,
+    String? emulatorId,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#getStrategyForSlug, [platformSlug]),
+            Invocation.method(#setGameEmulatorPreference, [gameId, emulatorId]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  String? getGameEmulatorPreference(String? gameId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getGameEmulatorPreference, [gameId]),
+          )
+          as String?);
+
+  @override
+  _i8.Future<void> clearGameEmulatorPreference(String? gameId) =>
+      (super.noSuchMethod(
+            Invocation.method(#clearGameEmulatorPreference, [gameId]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<void> setGameCorePreference(String? gameId, String? coreId) =>
+      (super.noSuchMethod(
+            Invocation.method(#setGameCorePreference, [gameId, coreId]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  String? getGameCorePreference(String? gameId) =>
+      (super.noSuchMethod(Invocation.method(#getGameCorePreference, [gameId]))
+          as String?);
+
+  @override
+  _i8.Future<void> clearGameCorePreference(String? gameId) =>
+      (super.noSuchMethod(
+            Invocation.method(#clearGameCorePreference, [gameId]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<void> setCoreOverride(String? slug, String? coreId) =>
+      (super.noSuchMethod(
+            Invocation.method(#setCoreOverride, [slug, coreId]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  String? getCoreOverride(String? slug) =>
+      (super.noSuchMethod(Invocation.method(#getCoreOverride, [slug]))
+          as String?);
+
+  @override
+  _i8.Future<void> clearCoreOverride(String? slug) =>
+      (super.noSuchMethod(
+            Invocation.method(#clearCoreOverride, [slug]),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i8.Future<void> clearAllCoreOverrides() =>
+      (super.noSuchMethod(
+            Invocation.method(#clearAllCoreOverrides, []),
+            returnValue: _i8.Future<void>.value(),
+            returnValueForMissingStub: _i8.Future<void>.value(),
+          )
+          as _i8.Future<void>);
+
+  @override
+  _i14.EmulatorStrategy? getStrategyForSlug(
+    String? platformSlug, {
+    String? gameId,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #getStrategyForSlug,
+              [platformSlug],
+              {#gameId: gameId},
+            ),
           )
           as _i14.EmulatorStrategy?);
+
+  @override
+  List<_i14.EmulatorStrategy> getAllStrategiesForSlug(String? platformSlug) =>
+      (super.noSuchMethod(
+            Invocation.method(#getAllStrategiesForSlug, [platformSlug]),
+            returnValue: <_i14.EmulatorStrategy>[],
+          )
+          as List<_i14.EmulatorStrategy>);
 
   @override
   _i14.EmulatorStrategy? getStrategyById(String? id) =>

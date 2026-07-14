@@ -479,6 +479,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       }
     });
 
+    // Watch for preference changes to update Forget Launch button
+    ref.watch(gamePreferenceVersionProvider);
+    final hasLaunchPref = ref.read(strategyRegistryProvider).asData?.value?.getGameEmulatorPreference(_currentGame.id) != null;
+
     final theme = Theme.of(context);
     final headerHeight = MediaQuery.of(context).size.height * 0.4;
     String? backgroundUrl = _currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty
@@ -534,6 +538,21 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                     onNowPlayingChanged: (val) => setState(() => _nowPlaying = val),
                     onToggleAdjustingRating: _toggleAdjustingRating,
                     onToggleAdjustingCompletion: _toggleAdjustingCompletion,
+                    hasLaunchPreference: hasLaunchPref,
+                    onForgetLaunch: () async {
+                      final registry = ref.read(strategyRegistryProvider).asData?.value;
+                      if (registry != null) {
+                        await registry.clearGameEmulatorPreference(_currentGame.id);
+                        await registry.clearGameCorePreference(_currentGame.id);
+                        ref.invalidate(strategyRegistryProvider);
+                        ref.read(gamePreferenceVersionProvider.notifier).state++;
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Launch preference cleared')),
+                          );
+                        }
+                      }
+                    },
                     onSave: () => _saveProps(context),
                   ),
                   const SizedBox(height: 80),
@@ -878,7 +897,7 @@ class GameDetailActionButton extends StatelessWidget {
     return FocusEffectWrapper(
       onTap: onTap,
       borderRadius: 14.0,
-      scaleFactor: 1.05,
+      scaleFactor: 1.005,
       child: Container(
         height: 48,
         decoration: BoxDecoration(

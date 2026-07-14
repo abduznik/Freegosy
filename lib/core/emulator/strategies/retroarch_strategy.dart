@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive_io.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/emulator/retroarch_core_list.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -27,21 +28,12 @@ class MissingRetroArchCoreException implements Exception {
 
 class RetroArchStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
-  String _ndsCore = 'melonds'; // Default NDS core
+  final Map<String, String> _coreOverrides = {}; // slug -> core base name
 
   RetroArchStrategy(this._directoryService, {super.platform});
 
   @override
   DirectoryService get directoryService => _directoryService;
-
-  void setNdsCore(String core) {
-    if (platform.isMacOS && core == 'desmume') {
-      debugPrint('[RetroArch] DeSmuME core is not supported on macOS ARM, defaulting to melonDS.');
-      _ndsCore = 'melonds';
-      return;
-    }
-    _ndsCore = core;
-  }
 
   @override
   String get name => 'RetroArch';
@@ -49,18 +41,15 @@ class RetroArchStrategy extends EmulatorStrategy {
   @override
   String get emulatorId => 'retroarch';
 
+  /// All platform slugs supported by any core in the registry.
   @override
-  List<String> get supportedSlugs => [
-      'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds',
-      'psx', 'ps1', 'playstation',
-      'psp',
-      'segacd', 'saturn',
-      'dc', 'dreamcast',
-      'megadrive', 'genesis', 'md',
-      'gamegear', 'sms', 'mastersystem', 'atari2600', 'atari7800', 'lynx', 'neogeo',
-      'arcade', 'mame', 'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos',
-      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'
-    ];
+  List<String> get supportedSlugs {
+    final slugs = <String>{};
+    for (final core in kRetroArchCores) {
+      slugs.addAll(core.platforms);
+    }
+    return slugs.toList();
+  }
 
   @override
   String get windowsExecutable => 'RetroArch.exe';
@@ -74,63 +63,64 @@ class RetroArchStrategy extends EmulatorStrategy {
   @override
   bool get supportsSaveSync => true;
 
-  static const Map<String, String> _coreMap = {
-    // Nintendo handhelds
-    'gba':         'mgba_libretro',
-    'gbc':         'mgba_libretro',
-    'gb':          'mgba_libretro',
-    'nds':         'melonds_libretro',
-    '3ds':         'azahar_libretro',
-    'n3ds':        'azahar_libretro',
-    'nintendo-3ds':'azahar_libretro',
-    'new-nintendo-3ds': 'azahar_libretro',
-    'new-nintendo-3ds-xl': 'azahar_libretro',
-    'virtualboy':  'mednafen_vb_libretro',
-    // Nintendo home
-    'nes':         'fceumm_libretro',
-    'snes':         'snes9x_libretro',
-    'n64':         'mupen64plus_next_libretro',
-    // Sony
-    'psx':         'pcsx_rearmed_libretro',
-    'ps1':         'pcsx_rearmed_libretro',
-    'playstation': 'pcsx_rearmed_libretro',
-    'psp':         'ppsspp_libretro',
-    // Sega
-    'megadrive':   'genesis_plus_gx_libretro',
-    'genesis':     'genesis_plus_gx_libretro',
-    'md':          'genesis_plus_gx_libretro',
-    'segacd':      'genesis_plus_gx_libretro',
-    'saturn':      'mednafen_saturn_libretro',
-    'dc':          'flycast_libretro',
-    'dreamcast':   'flycast_libretro',
-    'gamegear':    'genesis_plus_gx_libretro',
-    'sms':         'genesis_plus_gx_libretro',
-    'mastersystem':'genesis_plus_gx_libretro',
-    // Atari
-    'atari2600':   'stella_libretro',
-    'atari7800':   'prosystem_libretro',
-    'lynx':        'mednafen_lynx_libretro',
-    // Arcade / SNK
-    'neogeo':      'fbneo_libretro',
-    'arcade':      'fbneo_libretro',
-    'mame':        'mame_libretro',
-    // NEC
-    'pcengine':    'mednafen_pce_libretro',
-    // Bandai
-    'wonderswan':  'mednafen_wswan_libretro',
-    // Other
-    'msx':         'bluemsx_libretro',
-    'dos':         'dosbox_pure_libretro',
-  };
+  // ── Core override system ─────────────────────────────────────
 
-  String? _getCoreForSlug(String? slug) {
+  /// Set a core override for a specific platform slug.
+  void setCoreOverride(String slug, String coreName) {
+    _coreOverrides[slug] = coreName;
+    debugPrint('[RetroArch] Core override set: $slug -> $coreName');
+  }
+
+  /// Get the current core override for a slug, if any.
+  String? getCoreOverride(String slug) => _coreOverrides[slug];
+
+  /// Get all current core overrides.
+  Map<String, String> get coreOverrides => Map.unmodifiable(_coreOverrides);
+
+  /// Clear all core overrides.
+  void clearCoreOverrides() => _coreOverrides.clear();
+
+  /// Load core overrides from a map (e.g. from SharedPreferences).
+  void loadCoreOverrides(Map<String, String> overrides) {
+    _coreOverrides
+      ..clear()
+      ..addAll(overrides);
+  }
+
+  /// Backward-compatible NDS core setter.
+  void setNdsCore(String core) {
+    if (platform.isMacOS && core == 'desmume') {
+      debugPrint('[RetroArch] DeSmuME core is not supported on macOS ARM, defaulting to melonDS.');
+      setCoreOverride('nds', 'melonds_libretro');
+      return;
+    }
+    final coreId = core == 'desmume' ? 'desmume2015_libretro' : '${core}_libretro';
+    setCoreOverride('nds', coreId);
+  }
+
+  /// Returns all cores compatible with a given platform slug.
+  List<RetroArchCore> getAvailableCoresForSlug(String slug) {
+    return getCoresForSlug(slug);
+  }
+
+  /// Resolves the core filename for a given platform slug.
+  /// Priority: per-platform override -> recommended default.
+  String? _getCoreForSlug(String? slug, {String? overrideCoreId}) {
     if (slug == null) return null;
 
-    final String baseName;
-    if (slug.toLowerCase() == 'nds' || slug.toLowerCase() == 'nintendo-ds') {
-      baseName = _ndsCore == 'desmume' ? 'desmume2015_libretro' : 'melonds_libretro';
+    String baseName = '';
+
+    // 1. Explicit override (per-game or per-platform)
+    if (overrideCoreId != null) {
+      baseName = coreBaseName(overrideCoreId);
+    } else if (_coreOverrides.containsKey(slug.toLowerCase())) {
+      baseName = coreBaseName(_coreOverrides[slug.toLowerCase()]!);
     } else {
-      baseName = _coreMap[slug.toLowerCase()] ?? '';
+      // 2. Default from core list
+      final defaultCoreId = getDefaultCoreForSlug(slug.toLowerCase());
+      if (defaultCoreId != null) {
+        baseName = coreBaseName(defaultCoreId);
+      }
     }
 
     if (baseName.isEmpty) return null;
@@ -139,25 +129,19 @@ class RetroArchStrategy extends EmulatorStrategy {
     return '$baseName.$ext';
   }
 
+  // ── Flatpak support ──────────────────────────────────────────
 
-  /// Returns true when [exePath] is a Flatpak command string like
-  /// `"flatpak run org.libretro.RetroArch"`.
   static bool _isFlatpakExePath(String exePath) {
     return exePath.startsWith('flatpak run ');
   }
 
-  /// Extracts the Flatpak package ID from an exePath like
-  /// `"flatpak run org.libretro.RetroArch"` → `"org.libretro.RetroArch"`.
   static String? _flatpakPackageFromExePath(String exePath) {
     if (!_isFlatpakExePath(exePath)) return null;
-    // "flatpak run org.libretro.RetroArch" -> split -> ["flatpak","run","org.libretro.RetroArch"]
     final parts = exePath.split(' ');
     if (parts.length < 3) return null;
     return parts.sublist(2).join(' ');
   }
 
-  /// Returns the RetroArch cores directory inside the Flatpak sandbox.
-  /// Flatpak stores config under `~/.var/app/<package>/config/retroarch/cores/`.
   String? _getFlatpakCoresDir(String exePath) {
     final pkg = _flatpakPackageFromExePath(exePath);
     if (pkg == null) return null;
@@ -168,11 +152,9 @@ class RetroArchStrategy extends EmulatorStrategy {
 
   String _getEmuRootDir(String exePath) {
     if (platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
-      // Go up from RetroArch.app/Contents/MacOS/RetroArch to Emulators/retroarch/
       return io.File(exePath).parent.parent.parent.parent.path;
     }
     if (_isFlatpakExePath(exePath)) {
-      // Cannot derive a filesystem root from a Flatpak command string
       return '';
     }
     return io.File(exePath).parent.path;
@@ -188,7 +170,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       }
     }
 
-    // 2. Check Flatpak data directory when RetroArch is run via Flatpak
+    // 2. Check Flatpak data directory
     if (_isFlatpakExePath(exePath)) {
       final flatpakCoresDir = _getFlatpakCoresDir(exePath);
       if (flatpakCoresDir != null) {
@@ -200,7 +182,6 @@ class RetroArchStrategy extends EmulatorStrategy {
     }
 
     // 3. Try to find core in standalone emulator directory
-    //    Extract emulatorId from coreName: 'azahar_libretro.dylib' -> 'azahar'
     final underscoreIdx = coreName.indexOf('_');
     if (underscoreIdx != -1) {
       final standaloneEmuId = coreName.substring(0, underscoreIdx);
@@ -212,6 +193,8 @@ class RetroArchStrategy extends EmulatorStrategy {
 
     return null;
   }
+
+  // ── 3DS setup ────────────────────────────────────────────────
 
   Future<void> _ensure3dsFonts(String citraSystemDir) async {
     final fontFile = io.File(p.join(citraSystemDir, 'sysdata', 'shared_font.bin'));
@@ -241,6 +224,13 @@ class RetroArchStrategy extends EmulatorStrategy {
     await _ensure3dsFonts(citraDir.path);
   }
 
+  bool _is3dsSlug(String? slug) {
+    return ['3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl']
+        .contains(slug?.toLowerCase());
+  }
+
+  // ── Launch ───────────────────────────────────────────────────
+
   @override
   Future<void> launch(Game game, String romPath) async {
     final exePath = await _directoryService.findEmulatorExecutable(
@@ -252,14 +242,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     final normalizedRomPath = p.absolute(p.normalize(romPath));
     final coreName = _getCoreForSlug(game.platformSlug);
 
-    // 1. Check if platform is 3DS-related
-    final is3ds = [
-      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds',
-      'new-nintendo-3ds', 'new-nintendo-3ds-xl'
-    ].contains(game.platformSlug?.toLowerCase());
-
-    if (is3ds) {
-      // 2. Ensure 'citra' exists inside the RetroArch 'system' directory
+    if (_is3dsSlug(game.platformSlug)) {
       await _ensure3dsSetup();
     }
 
@@ -292,7 +275,7 @@ class RetroArchStrategy extends EmulatorStrategy {
   }
 
   @override
-  Future<Process?> launchWithHandle(Game game, String romPath) async {
+  Future<Process?> launchWithHandle(Game game, String romPath, {String? coreName}) async {
     final exePath = await _directoryService.findEmulatorExecutable(
         emulatorId, getExecutableForPlatform());
     if (exePath == null) {
@@ -300,38 +283,31 @@ class RetroArchStrategy extends EmulatorStrategy {
     }
 
     final normalizedRomPath = p.absolute(p.normalize(romPath));
-    final coreName = _getCoreForSlug(game.platformSlug);
+    final resolvedCoreName = _getCoreForSlug(game.platformSlug, overrideCoreId: coreName);
 
-    // 1. Check if platform is 3DS-related
-    final is3ds = [
-      '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds',
-      'new-nintendo-3ds', 'new-nintendo-3ds-xl'
-    ].contains(game.platformSlug?.toLowerCase());
-
-    if (is3ds) {
-      // 2. Ensure 'citra' exists inside the RetroArch 'system' directory
+    if (_is3dsSlug(game.platformSlug)) {
       await _ensure3dsSetup();
     }
 
-    if (coreName == null) {
+    if (resolvedCoreName == null) {
       return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath);
     }
 
-    final corePath = await _resolveCorePath(exePath, coreName);
+    final corePath = await _resolveCorePath(exePath, resolvedCoreName);
 
     if (corePath == null) {
       String expectedPath;
       if (_isFlatpakExePath(exePath)) {
         final flatpakDir = _getFlatpakCoresDir(exePath);
         expectedPath = flatpakDir != null
-            ? p.join(flatpakDir, coreName)
-            : '$coreName (Flatpak cores dir not found)';
+            ? p.join(flatpakDir, resolvedCoreName)
+            : '$resolvedCoreName (Flatpak cores dir not found)';
       } else {
         final emuDir = _getEmuRootDir(exePath);
-        expectedPath = p.join(emuDir, 'cores', coreName);
+        expectedPath = p.join(emuDir, 'cores', resolvedCoreName);
       }
       throw MissingRetroArchCoreException(
-        coreName: coreName,
+        coreName: resolvedCoreName,
         corePath: expectedPath,
         exePath: exePath,
       );
@@ -340,22 +316,22 @@ class RetroArchStrategy extends EmulatorStrategy {
     return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: ['-L', corePath]);
   }
 
+  // ── Core download ────────────────────────────────────────────
+
   Future<void> downloadCore(String coreName, String coresDir, Dio dio) async {
     String url;
     String ext;
-    
+
     debugPrint('[RetroArch] Downloading core: $coreName to $coresDir');
     debugPrint('[RetroArch] Platform: ${platform.os}');
 
-    // Strip any existing extension from coreName to ensure we append the correct one for the URL
-    final coreBaseName = p.basenameWithoutExtension(coreName);
+    final coreBase = coreBaseName(coreName);
 
     if (platform.isWindows) {
       ext = 'dll';
-      url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreBaseName.dll.zip';
+      url = 'https://buildbot.libretro.com/nightly/windows/x86_64/latest/$coreBase.dll.zip';
     } else if (platform.isMacOS) {
       ext = 'dylib';
-      // Detect if we are on Apple Silicon or Intel
       bool isArm = io.Platform.version.contains('arm64');
       try {
         final result = Process.runSync('uname', ['-m']);
@@ -363,23 +339,22 @@ class RetroArchStrategy extends EmulatorStrategy {
           isArm = true;
         }
       } catch (_) {}
-      
+
       final arch = isArm ? 'arm64' : 'x86_64';
       debugPrint('[RetroArch] Detected macOS architecture: $arch');
-      url = 'https://buildbot.libretro.com/nightly/apple/osx/$arch/latest/$coreBaseName.dylib.zip';
+      url = 'https://buildbot.libretro.com/nightly/apple/osx/$arch/latest/$coreBase.dylib.zip';
 
       if (isArm) {
-        // Fallback for ARM64: if core is missing, try x86_64
         try {
           await dio.head(url);
         } catch (e) {
-          debugPrint('[RetroArch] Core $coreBaseName not found for arm64, falling back to x86_64');
-          url = 'https://buildbot.libretro.com/nightly/apple/osx/x86_64/latest/$coreBaseName.dylib.zip';
+          debugPrint('[RetroArch] Core $coreBase not found for arm64, falling back to x86_64');
+          url = 'https://buildbot.libretro.com/nightly/apple/osx/x86_64/latest/$coreBase.dylib.zip';
         }
       }
     } else {
       ext = 'so';
-      url = 'https://buildbot.libretro.com/nightly/linux/x86_64/latest/$coreBaseName.so.zip';
+      url = 'https://buildbot.libretro.com/nightly/linux/x86_64/latest/$coreBase.so.zip';
     }
 
     debugPrint('[RetroArch] Target URL: $url');

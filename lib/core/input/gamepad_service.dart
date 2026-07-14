@@ -12,7 +12,7 @@ import 'deadzone_config.dart';
 
 enum GameAction {
   up, down, left, right,
-  confirm, back, detail, favorite,
+  confirm, confirmHold, back, detail, favorite,
   verticalAxis, horizontalAxis,
   l1, r1, start, select
 }
@@ -51,6 +51,10 @@ class GamepadService extends WidgetsBindingObserver {
   final Map<GameAction, DateTime> _lastDigitalPress = {};
   static const _digitalDebounce = Duration(milliseconds: 80);
 
+  // Hold detection for non-direction buttons (e.g. confirm)
+  final Map<GameAction, DateTime> _buttonDownTime = {};
+  Timer? _holdTimer;
+
   bool _appHasFocus = true;
 
   /// Raw event stream for controller button sniffing (used by setup dialogs).
@@ -77,7 +81,11 @@ class GamepadService extends WidgetsBindingObserver {
 
     _subscription = Gamepads.events.listen(
       (event) {
-        _handleGamepadEvent(event);
+        try {
+          _handleGamepadEvent(event);
+        } catch (e) {
+          debugPrint('🎮 GamepadService: Event handling error: $e');
+        }
       },
       onError: (err) => debugPrint('🎮 Gamepad Stream Error: $err'),
     );
@@ -90,12 +98,27 @@ class GamepadService extends WidgetsBindingObserver {
   }
 
   void _scan() async {
-    final controllers = await Gamepads.list();
-    for (var c in controllers) {
-      if (!_controllerNames.containsKey(c.id)) {
-        debugPrint('🎮 GamepadService: New controller detected! [${c.id}] ${c.name}');
-        _controllerNames[c.id] = c.name;
+    try {
+      final controllers = await Gamepads.list();
+      final currentIds = <String>{};
+      for (var c in controllers) {
+        currentIds.add(c.id);
+        if (!_controllerNames.containsKey(c.id)) {
+          debugPrint('🎮 GamepadService: New controller detected! [${c.id}] ${c.name}');
+          _controllerNames[c.id] = c.name;
+        }
       }
+      if (controllers.isNotEmpty) {
+        final staleIds = _controllerNames.keys.where((id) => !currentIds.contains(id)).toList();
+        for (final id in staleIds) {
+          debugPrint('🎮 GamepadService: Controller disconnected [${_controllerNames[id]}]');
+          _controllerNames.remove(id);
+          _axisStates.remove(id);
+          _seenRawKeys.remove(id);
+        }
+      }
+    } catch (e) {
+      debugPrint('🎮 GamepadService: Scan error (controller hot-plug?): $e');
     }
   }
 
@@ -290,6 +313,7 @@ class GamepadService extends WidgetsBindingObserver {
 
   void _handleGamepadEvent(GamepadEvent event) {
     // Broadcast raw event for sniffing/configuration dialogs (always allow, for setup dialogs)
+    if (_rawEventController.isClosed) return;
     _rawEventController.add(event);
 
     // If app is not focused, skip input processing but allow raw event broadcasting
@@ -420,16 +444,35 @@ class GamepadService extends WidgetsBindingObserver {
         }
         _lastDigitalPress[normalized.action] = now;
 
-        _triggerAction(normalized.action, event.value);
         if (_isDirectionAction(normalized.action)) {
+          _triggerAction(normalized.action, event.value);
           final digitalKey = 'digital_${normalized.action.name}';
           _axisStates.putIfAbsent(digitalKey, () => AxisState());
           _activateDirection(normalized.action, digitalKey, isDigital: true);
+        } else {
+          // Non-direction button: track press time for hold detection
+          _buttonDownTime[normalized.action] = now;
+          _holdTimer?.cancel();
+          _holdTimer = Timer(const Duration(milliseconds: 500), () {
+            if (_buttonDownTime.containsKey(normalized.action)) {
+              // Button held for 500ms — fire hold action
+              _buttonDownTime.remove(normalized.action);
+              _triggerAction(GameAction.confirmHold, 1.0);
+            }
+          });
+          // Also fire immediate tap (will be superseded by hold if held)
+          _triggerAction(normalized.action, event.value);
         }
       } else {
         if (_isDirectionAction(normalized.action)) {
           final digitalKey = 'digital_${normalized.action.name}';
           _deactivateDirection(normalized.action, digitalKey);
+        } else {
+          // Non-direction button released: cancel hold timer, was a tap
+          if (_buttonDownTime.containsKey(normalized.action)) {
+            _buttonDownTime.remove(normalized.action);
+            _holdTimer?.cancel();
+          }
         }
       }
     }

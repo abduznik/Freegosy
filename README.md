@@ -45,6 +45,12 @@ No pressure at all — the app is and will always be free.
     - Smart binary detection and canonical naming across all platforms.
     - Dynamic architecture selection for RPCS3 on macOS (ARM64 vs x64).
     - Linux Environment Strategies (Default, EmuDeck, RetroDECK) with automatic path detection.
+- **RetroArch Core Management**:
+    - 197 libretro cores with searchable platform browser.
+    - Per-platform default core selection (Settings → RetroArch Cores).
+    - Per-game core override (launch-time picker or long-press in Platform Manager).
+    - Platform Manager: choose between standalone emulator or RetroArch core per platform.
+    - Favorite cores pinning for quick access.
 - **BIOS Management**: Fetch and download BIOS files directly from RomM and automatically place them in the correct directory for each emulator.
 - **Save Sync**:
     - Bidirectional local-to-cloud save synchronization with RomM.
@@ -71,7 +77,7 @@ No pressure at all — the app is and will always be free.
 
 | Emulator | Status | Notes |
 |---|---|---|
-| **RetroArch** | 🟡 Partial | GBA, SNES, NES, Dreamcast, Mega Drive — anything using `.srm`/`.sav` save files. NDS via DeSmuME/mGBA core. PSP may work. |
+| **RetroArch** | 🟢 Full | 197 cores supported. Per-platform core selection, per-game core override, searchable core browser. Tested: GBA (mGBA), SNES (Snes9x), NES (FCEUmm), N64 (mupen64Plus), NDS (melonDS), Dreamcast (Flycast), Mega Drive (Genesis Plus GX), PSP (PPSSPP), PS1 (PCSX ReARMed), Saturn (Mednafen), Arcade (FBNeo), DOS (DOSBox Pure). |
 | **DuckStation** | 🟢 Full | PS1 `.mcd` memory card saves fully synced. |
 | **PPSSPP** | 🟢 Full | PSP save data directory fully synced. |
 | **Ryujinx** | 🟢 Full | Switch save directory fully synced (configurable Title ID mapping). |
@@ -81,7 +87,7 @@ No pressure at all — the app is and will always be free.
 | **MelonDS** | 🟡 Partial | NDS save files synced (limited testing). |
 | **Dolphin** | 🟡 Partial | GC/Wii save files synced. |
 | **Cemu** | 🟡 Partial | Wii U — confirmed working on Windows, needs macOS/Linux testing. |
-| **Azahar** | 🔴 Untested | 3DS — not yet tested on any platform. |
+| **Azahar** | 🟢 Full | 3DS — confirmed working by [@Ramza2k](https://github.com/Ramza2k). |
 | **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
 | **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
 | **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |

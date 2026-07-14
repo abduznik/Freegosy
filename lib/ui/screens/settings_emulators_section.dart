@@ -6,6 +6,8 @@ import '../../core/platform/platform_info.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/storage/system_utils.dart';
 import '../../core/emulator/emulator_registry_data.dart';
+import '../../core/emulator/emulator_strategy.dart';
+import '../../core/emulator/retroarch_core_list.dart';
 import '../../core/emulator/strategy_registry.dart';
 import '../../core/emulator/firmware_service.dart';
 import '../../ui/widgets/emulator_selection_dialog.dart';
@@ -27,7 +29,7 @@ Widget _buildActionButton(
   return FocusEffectWrapper(
     onTap: onTap,
     borderRadius: 12.0,
-    scaleFactor: 1.05,
+    scaleFactor: 1.005,
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       decoration: BoxDecoration(
@@ -545,52 +547,248 @@ Widget buildConflictsSection(
   BuildContext context,
   StrategyRegistry registry,
   Function(void Function()) setState,
+  WidgetRef ref,
 ) {
+  final theme = Theme.of(context);
   final conflicts = registry.detectConflicts();
+  final perGameEnabled = ref.watch(perGameLauncherEnabledProvider);
+
+  // Separate external emulators from RetroArch cores per platform
+  final externalBySlug = <String, List<EmulatorStrategy>>{};
+  final hasRetroarch = <String, bool>{};
+  for (final entry in conflicts.entries) {
+    externalBySlug[entry.key] = entry.value.where((s) => s.emulatorId != 'retroarch').toList();
+    hasRetroarch[entry.key] = entry.value.any((s) => s.emulatorId == 'retroarch');
+  }
+
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text('Emulator Conflicts',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 16),
+      Row(
+        children: [
+          Icon(Icons.swap_horiz, color: theme.colorScheme.primary, size: 20),
+          const SizedBox(width: 8),
+          Text('Platform Manager',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+        ],
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Choose which emulator or core to use for each platform.',
+        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
+      ),
+      const SizedBox(height: 12),
+
+      // Per-game launcher toggle
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              perGameEnabled ? Icons.touch_app : Icons.flash_on,
+              size: 18,
+              color: perGameEnabled ? theme.colorScheme.primary : Colors.green,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Per-Game Launch Picker',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: theme.colorScheme.onSurface),
+                  ),
+                  Text(
+                    perGameEnabled ? 'Shows picker when launching games with multiple options' : 'Auto-uses Platform Manager choice (no picker)',
+                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: perGameEnabled,
+              onChanged: (val) => ref.read(perGameLauncherEnabledProvider.notifier).update(val),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
       if (conflicts.isEmpty)
-        const Text('No conflicts detected', style: TextStyle(color: Colors.grey))
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.green.withValues(alpha: 0.7), size: 20),
+              const SizedBox(width: 10),
+              Text('No conflicts — each platform has one emulator',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        )
       else
         ...conflicts.entries.map((entry) {
           final slug = entry.key;
-          final strategies = entry.value;
+          final externals = externalBySlug[slug] ?? [];
+          final supportsRA = hasRetroarch[slug] ?? false;
           final currentStrategy = registry.getStrategyForSlug(slug);
+          final isRetroarch = currentStrategy?.emulatorId == 'retroarch';
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Row(
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.15)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  children: [
+                    Text(slug.toUpperCase(),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: theme.colorScheme.onSurface)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isRetroarch
+                            ? Colors.purple.withValues(alpha: 0.15)
+                            : Colors.teal.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        isRetroarch ? 'RetroArch' : 'Standalone',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isRetroarch ? Colors.purple : Colors.teal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // External emulators
+                if (externals.isNotEmpty) ...[
+                  Row(
                     children: [
-                      Text(slug, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(strategies.map((s) => s.name).join(' vs '),
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Icon(Icons.phone_android, size: 14, color: Colors.teal.withValues(alpha: 0.8)),
+                      const SizedBox(width: 6),
+                      Text('Standalone Emulators',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.teal.withValues(alpha: 0.8))),
                     ],
                   ),
-                ),
-                DropdownButton<String>(
-                  value: currentStrategy?.emulatorId,
-                  underline: const SizedBox(),
-                  items: strategies.map((s) {
-                    return DropdownMenuItem(
-                      value: s.emulatorId,
-                      child: Text(s.name),
+                  const SizedBox(height: 6),
+                  ...externals.map((strategy) {
+                    final isSelected = strategy.emulatorId == (currentStrategy?.emulatorId ?? '');
+                    return FocusEffectWrapper(
+                      onTap: () async {
+                        await registry.setPreference(slug, strategy.emulatorId);
+                        setState(() {});
+                      },
+                      borderRadius: 8.0,
+                      useSafeScale: false,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        margin: const EdgeInsets.only(bottom: 4),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.teal.withValues(alpha: 0.12)
+                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? Colors.teal.withValues(alpha: 0.4)
+                                : theme.colorScheme.outline.withValues(alpha: 0.1),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                              size: 16,
+                              color: isSelected ? Colors.teal : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(strategy.name,
+                                style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                          ],
+                        ),
+                      ),
                     );
-                  }).toList(),
-                  onChanged: (value) async {
-                    if (value != null) {
-                      await registry.setPreference(slug, value);
+                  }),
+                  const SizedBox(height: 8),
+                ],
+
+                // RetroArch cores
+                if (supportsRA) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.extension, size: 14, color: Colors.purple.withValues(alpha: 0.8)),
+                      const SizedBox(width: 6),
+                      Text('RetroArch Core',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple.withValues(alpha: 0.8))),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  FocusEffectWrapper(
+                    onTap: () async {
+                      await registry.setPreference(slug, 'retroarch');
                       setState(() {});
-                    }
-                  },
-                ),
+                    },
+                    onLongPress: () {
+                      _showCorePickerForPlatform(context, slug, registry, setState);
+                    },
+                    borderRadius: 8.0,
+                    child: Tooltip(
+                      message: 'Tap: select RetroArch\nHold: choose core',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isRetroarch
+                              ? Colors.purple.withValues(alpha: 0.12)
+                              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isRetroarch
+                                ? Colors.purple.withValues(alpha: 0.4)
+                                : theme.colorScheme.outline.withValues(alpha: 0.1),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isRetroarch ? Icons.radio_button_checked : Icons.radio_button_off,
+                              size: 16,
+                              color: isRetroarch ? Colors.purple : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(width: 10),
+                            Text('RetroArch',
+                                style: TextStyle(fontSize: 13, fontWeight: isRetroarch ? FontWeight.bold : FontWeight.normal)),
+                            if (isRetroarch) ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.touch_app, size: 12, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+                              const SizedBox(width: 2),
+                              Text('hold for core',
+                                  style: TextStyle(fontSize: 9, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4))),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           );
@@ -601,7 +799,7 @@ Widget buildConflictsSection(
           _buildActionButton(
             context,
             icon: Icons.restore_page,
-            label: 'Reset Emulator Preferences',
+            label: 'Reset All Preferences',
             onTap: () async {
               await registry.clearPreferences();
               setState(() {});
@@ -611,6 +809,96 @@ Widget buildConflictsSection(
         ],
       ),
     ],
+  );
+}
+
+void _showCorePickerForPlatform(
+  BuildContext context,
+  String slug,
+  StrategyRegistry registry,
+  Function(void Function()) setState,
+) {
+  final cores = getCoresForSlug(slug);
+  if (cores.isEmpty) return;
+
+  final currentOverride = registry.getCoreOverride(slug);
+  final defaultCore = getDefaultCoreForSlug(slug);
+  final currentCoreId = currentOverride ?? defaultCore;
+
+  showDialog(
+    context: context,
+    builder: (ctx) => DialogBackBridge(
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Core for ${slug.toUpperCase()}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: cores.length,
+            itemBuilder: (ctx, i) {
+              final core = cores[i];
+              final isSelected = core.id == currentCoreId;
+              final theme = Theme.of(ctx);
+
+              return FocusEffectWrapper(
+                onTap: () async {
+                  if (core.id == defaultCore) {
+                    await registry.clearCoreOverride(slug);
+                  } else {
+                    await registry.setCoreOverride(slug, core.id);
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  setState(() {});
+                },
+                borderRadius: 8.0,
+                useSafeScale: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                        color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(core.displayName, style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      if (core.isRecommended) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text('REC', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                        ),
+                      ],
+                      if (core.id == defaultCore && !isSelected) ...[
+                        const SizedBox(width: 6),
+                        Text('(default)', style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5))),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    ),
   );
 }
 

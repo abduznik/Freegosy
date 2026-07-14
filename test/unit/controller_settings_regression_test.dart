@@ -509,8 +509,8 @@ void main() {
       ]));
     });
 
-    test('has exactly 14 actions', () {
-      expect(GameAction.values.length, 14);
+    test('has exactly 15 actions', () {
+      expect(GameAction.values.length, 15);
     });
   });
 

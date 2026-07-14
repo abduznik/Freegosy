@@ -29,6 +29,42 @@ class RetroArchSaveStrategy extends SaveStrategy {
     _ndsCore = core;
   }
 
+  /// Per-platform core overrides (slug -> coreId). Set from StrategyRegistry.
+  final Map<String, String> _coreOverrides = {};
+
+  void loadCoreOverrides(Map<String, String> overrides) {
+    _coreOverrides
+      ..clear()
+      ..addAll(overrides);
+  }
+
+  /// Resolves the core info for a slug, checking overrides first.
+  _CoreInfo? _getCoreInfo(String slug) {
+    // 1. NDS dynamic override (backward compat)
+    if (slug == 'nds' || slug == 'nintendo-ds') {
+      return _ndsCore == 'desmume'
+          ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
+          : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
+    }
+
+    // 2. General core override from registry
+    final overrideCoreId = _coreOverrides[slug];
+    if (overrideCoreId != null) {
+      final baseName = overrideCoreId.replaceAll(RegExp(r'\.(dll|so|dylib)$'), '');
+      // Try to find matching _coreMap entry by coreName
+      for (final entry in _coreMap.entries) {
+        if (entry.value.coreName == baseName) {
+          return entry.value;
+        }
+      }
+      // Fallback: use the override core name with generic save folders
+      return _CoreInfo(baseName, baseName, 'States/$baseName');
+    }
+
+    // 3. Default from static map
+    return _coreMap[slug];
+  }
+
   @override
   String get strategyId => 'retroarch';
 
@@ -37,24 +73,69 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   // _CoreInfo maps platform slugs to RetroArch core info, including save and state directories.
   static const Map<String, _CoreInfo> _coreMap = {
+    // Nintendo
     'gba':       _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'),
-    'gbc':       _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'), // mGBA uses the same save folder for GBA/GBC/GB
+    'gbc':       _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'),
     'gb':        _CoreInfo('mgba_libretro',            'mGBA',               'mGBA'),
-    'snes':      _CoreInfo('snes9x_libretro',          'Snes9x',             'Snes9x'),
     'nes':       _CoreInfo('fceumm_libretro',          'NES',                'States/NES'),
+    'snes':      _CoreInfo('snes9x_libretro',          'Snes9x',             'Snes9x'),
     'n64':       _CoreInfo('mupen64plus_next_libretro', 'N64',                'States/N64'),
-    'nds':       _CoreInfo('desmume2015_libretro',     'NDS',                'States/NDS'),
+    'nds':       _CoreInfo('melonds_libretro',         'NDS',                'States/NDS'),
+    'nintendo-ds': _CoreInfo('melonds_libretro',       'NDS',                'States/NDS'),
+    '3ds':       _CoreInfo('azahar_libretro',          '3DS',                'States/3DS'),
+    'n3ds':      _CoreInfo('azahar_libretro',          '3DS',                'States/3DS'),
+    'nintendo-3ds': _CoreInfo('azahar_libretro',       '3DS',                'States/3DS'),
+    'virtualboy': _CoreInfo('mednafen_vb_libretro',    'Virtual Boy',        'States/Virtual Boy'),
+    // Sony
     'psx':       _CoreInfo('pcsx_rearmed_libretro',    'PCSX-ReARMed',       'PCSX-ReARMed'),
-    'psp':       _CoreInfo('ppsspp_libretro',          'PPSSPP/PSP/SAVEDATA', 'PPSSPP'), // Note: saveFolder is 'PPSSPP/PSP/SAVEDATA', statesFolder is 'PPSSPP'
-    'playstation': _CoreInfo('pcsx_rearmed_libretro', 'PCSX-ReARMed', 'PCSX-ReARMed'), // Assuming this is also PSX and needs save/state dir logic
-    'playstation-portable': _CoreInfo('ppsspp_libretro', 'PPSSPP/PSP/SAVEDATA', 'PPSSPP'), // Alias for PSP
-    'dreamcast': _CoreInfo('flycast_libretro',         'Dreamcast',          'States/Dreamcast'),
-    'dc':        _CoreInfo('flycast_libretro',         'Dreamcast',          'States/Dreamcast'), // Alias for Dreamcast
+    'ps1':       _CoreInfo('pcsx_rearmed_libretro',    'PCSX-ReARMed',       'PCSX-ReARMed'),
+    'playstation': _CoreInfo('pcsx_rearmed_libretro',  'PCSX-ReARMed',       'PCSX-ReARMed'),
+    'psp':       _CoreInfo('ppsspp_libretro',          'PPSSPP/PSP/SAVEDATA', 'PPSSPP'),
+    'playstation-portable': _CoreInfo('ppsspp_libretro', 'PPSSPP/PSP/SAVEDATA', 'PPSSPP'),
+    'ps2':       _CoreInfo('pcsx2_libretro',           'PCSX2',              'States/PCSX2'),
+    // Sega
     'megadrive': _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'),
-    'genesis':   _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
-    'md':        _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'), // Alias for Mega Drive
+    'genesis':   _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'),
+    'md':        _CoreInfo('genesis_plus_gx_libretro', 'Mega Drive',         'States/Mega Drive'),
+    'segacd':    _CoreInfo('genesis_plus_gx_libretro', 'Sega CD',            'States/Sega CD'),
     'sms':       _CoreInfo('genesis_plus_gx_libretro', 'Sega Master System', 'States/Sega Master System'),
     'mastersystem': _CoreInfo('genesis_plus_gx_libretro', 'Sega Master System', 'States/Sega Master System'),
+    'gamegear':  _CoreInfo('genesis_plus_gx_libretro', 'Game Gear',          'States/Game Gear'),
+    'saturn':    _CoreInfo('mednafen_saturn_libretro', 'Saturn',             'States/Saturn'),
+    'dc':        _CoreInfo('flycast_libretro',         'Dreamcast',          'States/Dreamcast'),
+    'dreamcast': _CoreInfo('flycast_libretro',         'Dreamcast',          'States/Dreamcast'),
+    // Atari
+    'atari2600': _CoreInfo('stella_libretro',          'Atari 2600',         'States/Atari 2600'),
+    'atari7800': _CoreInfo('prosystem_libretro',       'Atari 7800',         'States/Atari 7800'),
+    'atari5200': _CoreInfo('atari800_libretro',        'Atari 800',          'States/Atari 800'),
+    'atari800':  _CoreInfo('atari800_libretro',        'Atari 800',          'States/Atari 800'),
+    'lynx':      _CoreInfo('mednafen_lynx_libretro',   'Lynx',               'States/Lynx'),
+    // Arcade / SNK
+    'neogeo':    _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'arcade':    _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'mame':      _CoreInfo('mame_libretro',            'MAME',               'States/MAME'),
+    // NEC
+    'pcengine':  _CoreInfo('mednafen_pce_libretro',    'PCE',                'States/PCE'),
+    'pcenginecd': _CoreInfo('mednafen_pce_libretro',   'PCE',                'States/PCE'),
+    'supergrafx': _CoreInfo('mednafen_supergrafx_libretro', 'SuperGrafx',    'States/SuperGrafx'),
+    'pcfx':      _CoreInfo('mednafen_pcfx_libretro',   'PC-FX',              'States/PC-FX'),
+    // Bandai
+    'wonderswan': _CoreInfo('mednafen_wswan_libretro', 'WonderSwan',         'States/WonderSwan'),
+    'wonderswancolor': _CoreInfo('mednafen_wswan_libretro', 'WonderSwan',    'States/WonderSwan'),
+    'ngp':       _CoreInfo('mednafen_ngp_libretro',    'Neo Geo Pocket',     'States/Neo Geo Pocket'),
+    'ngpc':      _CoreInfo('mednafen_ngp_libretro',    'Neo Geo Pocket',     'States/Neo Geo Pocket'),
+    // Computer
+    'dos':       _CoreInfo('dosbox_pure_libretro',     'DOSBox Pure',        'States/DOSBox Pure'),
+    'msx':       _CoreInfo('bluemsx_libretro',         'blueMSX',            'States/blueMSX'),
+    'c64':       _CoreInfo('vice_x64_libretro',        'VICE',               'States/VICE'),
+    'commodore64': _CoreInfo('vice_x64_libretro',      'VICE',               'States/VICE'),
+    'amiga':     _CoreInfo('puae_libretro',            'PUAE',               'States/PUAE'),
+    'zxspectrum': _CoreInfo('fuse_libretro',           'Fuse',               'States/Fuse'),
+    'amstradcpc': _CoreInfo('cap32_libretro',          'Caprice32',          'States/Caprice32'),
+    'sharp68000': _CoreInfo('px68k_libretro',          'PX-68K',             'States/PX-68K'),
+    'pc98':      _CoreInfo('np2kai_libretro',          'Neko Project II',    'States/Neko Project II'),
+    // Other
+    'vectrex':   _CoreInfo('vecx_libretro',            'VecX',               'States/VecX'),
   };
 
   /// Reads `savefile_directory` from retroarch.cfg if available.
@@ -131,14 +212,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
-    _CoreInfo? coreInfo = _coreMap[slug];
-
-    // Dynamic override for NDS based on user preference
-    if (slug == 'nds' || slug == 'nintendo-ds') {
-      coreInfo = _ndsCore == 'desmume'
-          ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
-          : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
-    }
+    final coreInfo = _getCoreInfo(slug);
 
     if (coreInfo == null) return null;
 
@@ -170,14 +244,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   Future<Map<io.File, io.File?>> getSaveFilesWithScreenshots(Game game, String romPath, {DateTime? sessionStart, String syncMode = 'both'}) async {
     final slug = game.platformSlug?.toLowerCase() ?? '';
-    _CoreInfo? coreInfo = _coreMap[slug];
-
-    // Dynamic override for NDS based on user preference
-    if (slug == 'nds' || slug == 'nintendo-ds') {
-      coreInfo = _ndsCore == 'desmume'
-          ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
-          : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
-    }
+    final coreInfo = _getCoreInfo(slug);
 
     if (coreInfo == null) return {};
 
@@ -322,14 +389,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
       final slug = game.platformSlug?.toLowerCase() ?? '';
-      _CoreInfo? coreInfo = _coreMap[slug];
-
-      // Dynamic override for NDS based on user preference
-      if (slug == 'nds' || slug == 'nintendo-ds') {
-        coreInfo = _ndsCore == 'desmume'
-            ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
-            : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
-      }
+      final coreInfo = _getCoreInfo(slug);
 
       if (coreInfo == null) return false;
 

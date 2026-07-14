@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
@@ -32,6 +33,18 @@ class StrategyRegistry {
   final List<CustomEmulatorConfig> _customEmulatorConfigs;
   final Map<String, String> _slugPreferences = {};
 
+  // Per-game emulator preference (gameId -> emulatorId)
+  static const String _gameEmulatorPrefix = 'game_emu_';
+  final Map<String, String> _gameEmulatorPrefs = {};
+
+  // Per-game RetroArch core preference (gameId -> coreId)
+  static const String _gameCorePrefix = 'retroarch_core_';
+  final Map<String, String> _gameCorePrefs = {};
+
+  // Per-platform RetroArch core overrides (slug -> coreId)
+  static const String _coreOverridePrefix = 'ra_core_';
+  final Map<String, String> _coreOverrides = {};
+
   StrategyRegistry(this._directoryService, this._prefs, {List<CustomEmulatorConfig> customEmulators = const [], PlatformInfo? platform}) 
     : _customEmulatorConfigs = customEmulators,
       _platform = platform ?? PlatformInfo.current {
@@ -58,7 +71,7 @@ class StrategyRegistry {
 
     _strategies = allPossibleStrategies.where((strategy) {
       final definition = getDefinition(strategy.emulatorId);
-      if (definition == null) return true; // Default to including if no definition found
+      if (definition == null) return true;
       final supported = List<String>.from(definition['supported_platforms'] ?? []);
       if (_platform.isWindows && supported.contains('windows')) return true;
       if (_platform.isLinux && supported.contains('linux')) return true;
@@ -67,7 +80,12 @@ class StrategyRegistry {
     }).toList();
     
     _loadPreferences();
+    _loadCoreOverrides();
+    _loadGamePreferences();
+    _applyCoreOverridesToRetroArch();
   }
+
+  // ── Conflict detection ───────────────────────────────────────
 
   Map<String, List<EmulatorStrategy>> detectConflicts() {
     final Map<String, List<EmulatorStrategy>> slugToStrategies = {};
@@ -77,7 +95,6 @@ class StrategyRegistry {
       }
     }
 
-    // Identify slugs with conflicts
     final Map<String, List<EmulatorStrategy>> allConflicts = {};
     slugToStrategies.forEach((slug, list) {
       if (list.length > 1) {
@@ -87,8 +104,7 @@ class StrategyRegistry {
 
     if (allConflicts.isEmpty) return {};
 
-    // Group slugs that have the exact same set of strategies
-    final Map<String, List<String>> groups = {}; // key: stringified sorted emulator IDs, value: list of slugs
+    final Map<String, List<String>> groups = {};
     allConflicts.forEach((slug, strategies) {
       final ids = strategies.map((s) => s.emulatorId).toList()..sort();
       final key = ids.join('|');
@@ -97,14 +113,14 @@ class StrategyRegistry {
 
     final Map<String, List<EmulatorStrategy>> canonicalConflicts = {};
     groups.forEach((key, slugs) {
-      // Pick canonical name: longest slug
       final canonical = slugs.reduce((a, b) => a.length > b.length ? a : b);
-      // Strategies are the same for all slugs in this group
       canonicalConflicts[canonical] = allConflicts[slugs.first]!;
     });
 
     return canonicalConflicts;
   }
+
+  // ── Per-platform emulator preference ─────────────────────────
 
   String? getPreferredEmulatorId(String slug) => _slugPreferences[slug];
 
@@ -121,7 +137,6 @@ class StrategyRegistry {
   }
 
   Future<void> setPreference(String canonicalSlug, String emulatorId) async {
-    // Find all slugs that belong to the same group as this canonicalSlug
     final slugToStrategies = <String, List<String>>{};
     for (final strategy in _strategies) {
       for (final slug in strategy.supportedSlugs) {
@@ -131,7 +146,6 @@ class StrategyRegistry {
     
     final targetStrategies = slugToStrategies[canonicalSlug];
     if (targetStrategies == null) {
-      // Fallback: just set for this slug
       await _prefs.setString('emulator_pref_$canonicalSlug', emulatorId);
       _slugPreferences[canonicalSlug] = emulatorId;
       return;
@@ -140,7 +154,6 @@ class StrategyRegistry {
     targetStrategies.sort();
     final targetKey = targetStrategies.join('|');
     
-    // Apply preference to all slugs with the same strategy set
     for (final entry in slugToStrategies.entries) {
       final ids = entry.value..sort();
       if (ids.join('|') == targetKey) {
@@ -159,9 +172,129 @@ class StrategyRegistry {
     _slugPreferences.clear();
   }
 
-  EmulatorStrategy? getStrategyForSlug(String platformSlug) {
+  // ── Per-game emulator preference ─────────────────────────────
+
+  void _loadGamePreferences() {
+    for (final key in _prefs.getKeys()) {
+      if (key.startsWith(_gameEmulatorPrefix)) {
+        final gameId = key.substring(_gameEmulatorPrefix.length);
+        final emulatorId = _prefs.getString(key);
+        if (emulatorId != null) {
+          _gameEmulatorPrefs[gameId] = emulatorId;
+        }
+      }
+      if (key.startsWith(_gameCorePrefix)) {
+        final gameId = key.substring(_gameCorePrefix.length);
+        final coreId = _prefs.getString(key);
+        if (coreId != null) {
+          _gameCorePrefs[gameId] = coreId;
+        }
+      }
+    }
+  }
+
+  /// Set which emulator to use for a specific game.
+  Future<void> setGameEmulatorPreference(String gameId, String emulatorId) async {
+    _gameEmulatorPrefs[gameId] = emulatorId;
+    await _prefs.setString('$_gameEmulatorPrefix$gameId', emulatorId);
+  }
+
+  /// Get the preferred emulator for a specific game.
+  String? getGameEmulatorPreference(String gameId) => _gameEmulatorPrefs[gameId];
+
+  /// Remove per-game emulator preference.
+  Future<void> clearGameEmulatorPreference(String gameId) async {
+    _gameEmulatorPrefs.remove(gameId);
+    await _prefs.remove('$_gameEmulatorPrefix$gameId');
+  }
+
+  // ── Per-game RetroArch core preference ───────────────────────
+
+  /// Set which RetroArch core to use for a specific game.
+  Future<void> setGameCorePreference(String gameId, String coreId) async {
+    _gameCorePrefs[gameId] = coreId;
+    await _prefs.setString('$_gameCorePrefix$gameId', coreId);
+  }
+
+  /// Get the preferred RetroArch core for a specific game.
+  String? getGameCorePreference(String gameId) => _gameCorePrefs[gameId];
+
+  /// Remove per-game core preference.
+  Future<void> clearGameCorePreference(String gameId) async {
+    _gameCorePrefs.remove(gameId);
+    await _prefs.remove('$_gameCorePrefix$gameId');
+  }
+
+  // ── Per-platform RetroArch core overrides ─────────────────────
+
+  void _loadCoreOverrides() {
+    for (final key in _prefs.getKeys()) {
+      if (key.startsWith(_coreOverridePrefix)) {
+        final slug = key.substring(_coreOverridePrefix.length);
+        final coreId = _prefs.getString(key);
+        if (coreId != null) {
+          _coreOverrides[slug] = coreId;
+        }
+      }
+    }
+  }
+
+  /// Set a default RetroArch core for a platform slug.
+  Future<void> setCoreOverride(String slug, String coreId) async {
+    _coreOverrides[slug] = coreId;
+    await _prefs.setString('$_coreOverridePrefix$slug', coreId);
+    _applyCoreOverridesToRetroArch();
+  }
+
+  /// Get the default RetroArch core for a platform slug.
+  String? getCoreOverride(String slug) => _coreOverrides[slug];
+
+  /// Get all platform core overrides.
+  Map<String, String> get coreOverrides => Map.unmodifiable(_coreOverrides);
+
+  /// Remove a platform core override.
+  Future<void> clearCoreOverride(String slug) async {
+    _coreOverrides.remove(slug);
+    await _prefs.remove('$_coreOverridePrefix$slug');
+    _applyCoreOverridesToRetroArch();
+  }
+
+  /// Remove all platform core overrides.
+  Future<void> clearAllCoreOverrides() async {
+    final keys = _prefs.getKeys().where((k) => k.startsWith(_coreOverridePrefix)).toList();
+    for (final key in keys) {
+      await _prefs.remove(key);
+    }
+    _coreOverrides.clear();
+    _applyCoreOverridesToRetroArch();
+  }
+
+  void _applyCoreOverridesToRetroArch() {
+    final retroarch = getStrategyById('retroarch');
+    if (retroarch is RetroArchStrategy) {
+      retroarch.loadCoreOverrides(_coreOverrides);
+    }
+  }
+
+  // ── Strategy resolution ──────────────────────────────────────
+
+  EmulatorStrategy? getStrategyForSlug(String platformSlug, {String? gameId}) {
     if (kIsWeb) return null;
 
+    // 1. Per-game emulator preference
+    if (gameId != null) {
+      final preferredId = _gameEmulatorPrefs[gameId];
+      if (preferredId != null) {
+        for (final strategy in _strategies) {
+          if (strategy.emulatorId == preferredId) {
+            debugPrint("[Registry] Using per-game emulator for $gameId: $preferredId");
+            return strategy;
+          }
+        }
+      }
+    }
+
+    // 2. Per-platform emulator preference
     final preferredId = _slugPreferences[platformSlug];
     if (preferredId != null) {
       for (final strategy in _strategies) {
@@ -172,6 +305,7 @@ class StrategyRegistry {
       }
     }
 
+    // 3. First supported strategy
     for (final strategy in _strategies) {
       if (strategy.supportedSlugs.contains(platformSlug)) {
         debugPrint("[Registry] Falling back to first supported emulator for $platformSlug: ${strategy.emulatorId}");
@@ -180,6 +314,11 @@ class StrategyRegistry {
     }
     debugPrint("[Registry] No emulator found for slug: $platformSlug");
     return null;
+  }
+
+  /// Returns all strategies that support a given platform slug.
+  List<EmulatorStrategy> getAllStrategiesForSlug(String platformSlug) {
+    return _strategies.where((s) => s.supportedSlugs.contains(platformSlug)).toList();
   }
 
   EmulatorStrategy? getStrategyById(String id) => _strategies.cast<EmulatorStrategy?>().firstWhere((s) => s?.emulatorId == id, orElse: () => null);

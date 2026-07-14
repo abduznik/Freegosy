@@ -89,6 +89,12 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
           debugPrint('🎯 Global: Executing focused action.');
           focusedAction();
         }
+      } else if (action == GameAction.confirmHold) {
+        final focusedLongPress = ref.read(focusedLongPressActionProvider);
+        if (focusedLongPress != null) {
+          debugPrint('🎯 Global: Executing focused long-press action.');
+          focusedLongPress();
+        }
       } else if (action == GameAction.l1) {
         final current = ref.read(currentTabIndexProvider);
         if (current > 0) {
@@ -141,6 +147,15 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       }
       if (syncService != null) {
         syncService.setNdsCore(next);
+      }
+    });
+
+    // Apply core overrides to save sync service when strategy registry changes
+    ref.listen(strategyRegistryProvider, (previous, next) {
+      final syncService = ref.read(saveSyncServiceProvider).asData?.value;
+      final registry = next.value;
+      if (registry != null && syncService != null) {
+        syncService.loadCoreOverrides(registry.coreOverrides);
       }
     });
 

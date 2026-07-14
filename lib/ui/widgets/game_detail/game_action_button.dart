@@ -28,7 +28,7 @@ class GameActionButton extends StatelessWidget {
       focusNode: focusNode,
       onTap: onPressed,
       borderRadius: 16.0,
-      scaleFactor: isPrimary ? 1.03 : 1.05,
+      scaleFactor: 1.005,
       child: Container(
         alignment: Alignment.center,
         padding: EdgeInsets.symmetric(

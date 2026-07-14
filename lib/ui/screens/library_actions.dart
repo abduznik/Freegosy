@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/error/error_handler.dart';
 import '../../core/platform/platform_info.dart';
 import '../../providers/library_provider.dart';
+import '../../providers/ui_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
@@ -22,7 +23,9 @@ import '../../core/save/strategies/eden_save_strategy.dart';
 import '../../core/save/strategies/ryujinx_save_strategy.dart';
 import '../../core/save/strategies/azahar_save_strategy.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
+import '../../core/emulator/emulator_strategy.dart';
 import '../../core/emulator/strategies/retroarch_strategy.dart';
+import '../widgets/retroarch_core_picker_dialog.dart';
 import '../widgets/windows_game_config_dialog.dart';
 import '../widgets/multi_disc_picker.dart';
 import '../../core/save/save_sync_service.dart';
@@ -57,7 +60,48 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game) async {
     final registryReady = await ref.read(strategyRegistryProvider.future);
     if (!context.mounted || registryReady == null) return;
-    final strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
+
+    // Check per-game emulator preference first
+    final gamePrefEmulator = registryReady.getGameEmulatorPreference(game.id);
+    final gamePrefCore = registryReady.getGameCorePreference(game.id);
+
+    EmulatorStrategy? strategy;
+    String? overrideCoreId;
+
+    if (gamePrefEmulator != null) {
+      // Use saved per-game preference
+      strategy = registryReady.getStrategyById(gamePrefEmulator);
+      overrideCoreId = gamePrefCore;
+    } else {
+      // Check if platform has multiple emulator options
+      final allStrategies = registryReady.getAllStrategiesForSlug(game.platformSlug ?? '');
+      final perGameEnabled = ref.read(perGameLauncherEnabledProvider);
+
+      if (allStrategies.length > 1 && perGameEnabled && context.mounted) {
+        // Per-game picker enabled — show dialog
+        final choice = await RetroArchCorePickerDialog.show(
+          context,
+          game: game,
+          availableStrategies: allStrategies,
+          registry: registryReady,
+        );
+        if (choice == null) return; // cancelled
+
+        strategy = registryReady.getStrategyById(choice.emulatorId);
+        overrideCoreId = choice.coreId;
+
+        // Save preference if "remember" was checked
+        if (choice.remember) {
+          await registryReady.setGameEmulatorPreference(game.id, choice.emulatorId);
+          if (choice.coreId != null) {
+            await registryReady.setGameCorePreference(game.id, choice.coreId!);
+          }
+          ref.read(gamePreferenceVersionProvider.notifier).state++;
+        }
+      } else {
+        strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
+      }
+    }
 
     if (strategy == null) {
       ErrorHandler.showInfo(context, 'No Emulator', message: 'No emulator configured for ${game.platformDisplayName ?? game.platformSlug ?? 'this platform'}');
@@ -145,13 +189,19 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
       final sessionStart = DateTime.now();
 
-      Process? process = await strategy.launchWithHandle(game, romPath);
+      Process? process;
+      if (strategy is RetroArchStrategy && overrideCoreId != null) {
+        process = await strategy.launchWithHandle(game, romPath, coreName: overrideCoreId);
+      } else {
+        process = await strategy.launchWithHandle(game, romPath);
+      }
       if (!context.mounted) return;
       if (process == null) await strategy.launch(game, romPath);
       else {
+        final proc = process;
         unawaited(Future.delayed(Duration.zero, () async {
           try {
-            await process.exitCode;
+            await proc.exitCode;
             final sessionEnd = DateTime.now();
 
             if (!context.mounted) return;

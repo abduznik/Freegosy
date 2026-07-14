@@ -45,7 +45,7 @@ Widget _buildActionButton(
   return FocusEffectWrapper(
     onTap: onTap,
     borderRadius: 12.0,
-    scaleFactor: 1.05,
+    scaleFactor: 1.005,
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
@@ -417,7 +417,7 @@ class SettingsCustomEmulatorsSection extends ConsumerWidget {
                 Navigator.pop(context);
               },
               borderRadius: 12.0,
-              scaleFactor: 1.05,
+              scaleFactor: 1.005,
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
                 decoration: BoxDecoration(

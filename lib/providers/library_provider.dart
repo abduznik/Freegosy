@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/romm/romm_models.dart';
 import 'romm_provider.dart';
@@ -191,6 +192,33 @@ final retroarchSyncModeProvider = createPersistentProvider<String>('retroarch_sy
 final rpcs3ArchitectureProvider = createPersistentProvider<String>('rpcs3_macos_architecture', 'x64');
 final edenBuildTypeProvider = createPersistentProvider<String>('eden_build_type', 'stable');
 final retroarchNdsCoreProvider = createPersistentProvider<String>('retroarch_nds_core', 'melonds');
+final perGameLauncherEnabledProvider = createPersistentProvider<bool>('per_game_launcher_enabled', true);
+
+// RetroArch favorite cores (JSON-encoded list of core IDs)
+final retroarchFavoriteCoresProvider = StateNotifierProvider<_FavoriteCoresNotifier, List<String>>((ref) {
+  return _FavoriteCoresNotifier(ref.watch(sharedPreferencesProvider));
+});
+
+class _FavoriteCoresNotifier extends StateNotifier<List<String>> {
+  final SharedPreferences _prefs;
+  static const String _key = 'retroarch_fav_cores';
+
+  _FavoriteCoresNotifier(this._prefs) : super([]) {
+    final stored = _prefs.getStringList(_key);
+    if (stored != null) state = stored;
+  }
+
+  void toggle(String coreId) {
+    if (state.contains(coreId)) {
+      state = [...state]..remove(coreId);
+    } else {
+      state = [...state, coreId];
+    }
+    _prefs.setStringList(_key, state);
+  }
+
+  bool isFavorite(String coreId) => state.contains(coreId);
+}
 
 // Legacy compatibility
 final retroarchSyncModeLoaderProvider = FutureProvider<void>((ref) async {});
