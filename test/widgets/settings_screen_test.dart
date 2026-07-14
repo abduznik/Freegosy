@@ -44,6 +44,7 @@ void main() {
     when(mockDirectoryService.useFlatEmulatorLayout).thenReturn(false);
     when(mockRommService.getPlatforms()).thenAnswer((_) async => []);
     when(mockStrategyRegistry.detectConflicts()).thenReturn(<String, List<EmulatorStrategy>>{});
+    when(mockStrategyRegistry.coreOverrides).thenReturn(<String, String>{});
   });
 
   Widget createSettingsScreen() {
