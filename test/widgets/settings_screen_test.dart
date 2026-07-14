@@ -88,13 +88,19 @@ void main() {
     });
 
     testWidgets('renders emulator section', (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.physicalSize = const Size(1200, 4000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(createSettingsScreen());
       await tester.pumpAndSettle();
 
+      // Scroll to the bottom of the settings list to find the Emulators section
+      final listView = find.byType(ListView);
+      if (listView.evaluate().isNotEmpty) {
+        await tester.drag(listView, const Offset(0, -2000));
+        await tester.pumpAndSettle();
+      }
       expect(find.text('Emulators'), findsWidgets);
     });
 
