@@ -7,6 +7,7 @@ class WindowsGameConfigDialog extends StatefulWidget {
   final String? currentExePath;
   final String? currentSavePath;
   final String? currentLaunchArgs;
+  final String? currentSaveFilter;
 
   const WindowsGameConfigDialog({
     super.key,
@@ -14,6 +15,7 @@ class WindowsGameConfigDialog extends StatefulWidget {
     this.currentExePath,
     this.currentSavePath,
     this.currentLaunchArgs,
+    this.currentSaveFilter,
   });
 
   @override
@@ -24,6 +26,7 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
   late TextEditingController _exeController;
   late TextEditingController _saveController;
   late TextEditingController _argsController;
+  late TextEditingController _filterController;
 
   @override
   void initState() {
@@ -31,6 +34,7 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
     _exeController = TextEditingController(text: widget.currentExePath ?? '');
     _saveController = TextEditingController(text: widget.currentSavePath ?? '');
     _argsController = TextEditingController(text: widget.currentLaunchArgs ?? '');
+    _filterController = TextEditingController(text: widget.currentSaveFilter ?? '');
   }
 
   @override
@@ -38,6 +42,7 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
     _exeController.dispose();
     _saveController.dispose();
     _argsController.dispose();
+    _filterController.dispose();
     super.dispose();
   }
 
@@ -148,6 +153,26 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            const Text(
+              'Save File Filter',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Comma-separated patterns to include. Leave empty to sync all files.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _filterController,
+              decoration: const InputDecoration(
+                hintText: 'e.g. *.ini, *.bin, eeprom.*, saves/*',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              style: const TextStyle(fontSize: 12),
+            ),
           ],
         ),
       ),
@@ -161,6 +186,7 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
             'exe': _exeController.text.trim(),
             'save': _saveController.text.trim(),
             'args': _argsController.text.trim(),
+            'filter': _filterController.text.trim(),
           }),
           child: const Text('Save'),
         ),

@@ -266,10 +266,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (!context.mounted) return;
     final currentArgs = windowsStrategy?.getLaunchArgs(game.id).join(' ') ?? '';
-    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id), currentLaunchArgs: currentArgs));
+    final currentFilter = syncService?.windowsSaveStrategy.getSaveFilter(game.id) ?? '';
+    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id), currentLaunchArgs: currentArgs, currentSaveFilter: currentFilter));
     if (result == null) return;
     if (result['exe']?.isNotEmpty ?? false) await windowsStrategy?.setExeOverride(game.id, result['exe']!);
     if (result['save']?.isNotEmpty ?? false) await syncService?.windowsSaveStrategy.setManualOverride(game.id, result['save']!);
+    final filter = result['filter'] ?? '';
+    await syncService?.windowsSaveStrategy.setSaveFilter(game.id, filter);
     final argsStr = result['args'] ?? '';
     final argsList = argsStr.isNotEmpty ? argsStr.split(RegExp(r'\s+')) : <String>[];
     await windowsStrategy?.setLaunchArgs(game.id, argsList);

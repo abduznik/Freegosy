@@ -17,6 +17,8 @@ class WindowsSaveStrategy extends SaveStrategy {
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
+  // Save file filter patterns per game id (comma-separated: "*.ini, *.bin, eeprom.*")
+  final Map<String, String> _saveFilters = {};
 
   WindowsSaveStrategy(this._prefs, {PlatformInfo? platform})
       : _wikiService = PcGamingWikiService(Dio()),
@@ -44,6 +46,24 @@ class WindowsSaveStrategy extends SaveStrategy {
   }
 
   String? getManualOverride(String gameId) => _manualOverrides[gameId];
+
+  static const String _filterPrefix = 'win_filter_';
+
+  void loadPersistedFilters() {
+    final keys = _prefs.getKeys().where((k) => k.startsWith(_filterPrefix));
+    for (final key in keys) {
+      final gameId = key.substring(_filterPrefix.length);
+      final filter = _prefs.getString(key);
+      if (filter != null) _saveFilters[gameId] = filter;
+    }
+  }
+
+  Future<void> setSaveFilter(String gameId, String filter) async {
+    _saveFilters[gameId] = filter;
+    await _prefs.setString('$_filterPrefix$gameId', filter);
+  }
+
+  String? getSaveFilter(String gameId) => _saveFilters[gameId];
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
@@ -99,6 +119,12 @@ class WindowsSaveStrategy extends SaveStrategy {
       return found;
     }
 
+    // Fallback: check if saves are alongside the exe (e.g. Perfect Dark with eeprom.bin)
+    if (await _hasSaveFiles(Directory(gameDir))) {
+      debugPrint('[WindowsSave] Saves found alongside executable: $gameDir');
+      return gameDir;
+    }
+
     debugPrint('[WindowsSave] No save directory found for ${game.name}');
     return null;
   }
@@ -122,6 +148,39 @@ class WindowsSaveStrategy extends SaveStrategy {
   /// Limits search to 4 levels deep to avoid scanning the entire drive.
   Future<String?> _findSaveFolderRecursive(String rootDir, {int maxDepth = 4}) async {
     return _searchDir(Directory(rootDir), 0, maxDepth);
+  }
+
+  /// Parses a comma-separated filter string into a list of glob patterns.
+  /// Supports: *.ext, name.*, exact names, and path prefixes (saves/*).
+  static List<String> _parseFilterPatterns(String? filter) {
+    if (filter == null || filter.trim().isEmpty) return [];
+    return filter.split(',').map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty).toList();
+  }
+
+  /// Checks if a file path matches any of the filter patterns.
+  static bool _matchesAnyPattern(String filePath, List<String> patterns) {
+    final fileName = p.basename(filePath).toLowerCase();
+    final relativePath = filePath.replaceAll('\\', '/').toLowerCase();
+    for (final pattern in patterns) {
+      // Exact name match
+      if (fileName == pattern) return true;
+      // Glob: *.ext
+      if (pattern.startsWith('*.')) {
+        final ext = pattern.substring(1); // e.g. ".ini"
+        if (fileName.endsWith(ext)) return true;
+      }
+      // Glob: name.* (match any extension)
+      if (pattern.endsWith('.*')) {
+        final name = pattern.substring(0, pattern.length - 2); // e.g. "eeprom"
+        if (fileName.startsWith(name)) return true;
+      }
+      // Path prefix: saves/* (match any file under a directory)
+      if (pattern.endsWith('/*')) {
+        final prefix = pattern.substring(0, pattern.length - 1); // e.g. "saves/"
+        if (relativePath.contains(prefix)) return true;
+      }
+    }
+    return false;
   }
 
   Future<String?> _searchDir(Directory dir, int depth, int maxDepth) async {
@@ -159,7 +218,10 @@ class WindowsSaveStrategy extends SaveStrategy {
     final dir = Directory(saveDir);
     if (!await dir.exists()) return [];
 
-    // Check if any files exist (respecting sessionStart)
+    final filter = _saveFilters[game.id];
+    final includePatterns = _parseFilterPatterns(filter);
+
+    // Check if any files exist (respecting sessionStart and filter)
     bool hasFiles = false;
     await for (final entity in dir.list(recursive: true)) {
       if (entity is! File) continue;
@@ -167,6 +229,8 @@ class WindowsSaveStrategy extends SaveStrategy {
         final stat = await entity.stat();
         if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
       }
+      // Apply filter if patterns exist
+      if (includePatterns.isNotEmpty && !_matchesAnyPattern(entity.path, includePatterns)) continue;
       hasFiles = true;
       break;
     }
