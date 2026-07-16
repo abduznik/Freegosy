@@ -259,7 +259,14 @@ class GamepadService extends WidgetsBindingObserver {
       }
     }
 
-    // 4. Fallback
+    // 4. Check if name tokenizes to nothing (Bluetooth filler names)
+    final tokens = GamepadUtils.tokenize(name);
+    if (tokens.isEmpty && name.isNotEmpty) {
+      debugPrint('🎮 Controller "$name" has no recognizable tokens — using default mapping. '
+          'Add a mapping in known_controllers.dart for better support.');
+    }
+
+    // 5. Fallback
     return kDefaultMapping;
   }
 

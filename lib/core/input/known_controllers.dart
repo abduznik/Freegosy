@@ -224,30 +224,6 @@ const Map<String, Map<String, GameAction>> kControllerMappings = {
     'button_9': GameAction.start,
   },
 
-  // PlayStation controllers via Bluetooth on Windows (generic HID name)
-  'Wireless Controller': {
-    'cross': GameAction.confirm,
-    'circle': GameAction.back,
-    'square': GameAction.detail,
-    'triangle': GameAction.favorite,
-    'button_0': GameAction.confirm,
-    'button_1': GameAction.back,
-    'button_2': GameAction.detail,
-    'button_3': GameAction.favorite,
-    'dpad_up': GameAction.up,
-    'dpad_down': GameAction.down,
-    'dpad_left': GameAction.left,
-    'dpad_right': GameAction.right,
-    'leftshoulder': GameAction.l1,
-    'rightshoulder': GameAction.r1,
-    'leftstick': GameAction.horizontalAxis,
-    'rightstick': GameAction.verticalAxis,
-    'button_options': GameAction.select,
-    'button_touchpad': GameAction.start,
-    'button_8': GameAction.select,
-    'button_9': GameAction.start,
-  },
-
   // PS5 Access Controller
   'PS5 Access Controller': {
     'cross': GameAction.confirm,
@@ -446,8 +422,9 @@ const Map<String, Map<String, GameAction>> kControllerMappings = {
     'button_options': GameAction.select,
   },
 
-  // macOS Pro Controller / Switch-style Descriptive Strings
+  // Pro Controller / Switch-style (macOS IOKit + Windows Bluetooth)
   'Pro Controller': {
+    // macOS IOKit keys
     'a.circle': GameAction.confirm,
     'b.circle': GameAction.back,
     'x.circle': GameAction.detail,
@@ -460,6 +437,27 @@ const Map<String, Map<String, GameAction>> kControllerMappings = {
     'buttonOptions': GameAction.select,
     'l.rectangle.roundedbottom': GameAction.l1,
     'r.rectangle.roundedbottom': GameAction.r1,
+    // Windows Bluetooth / SDL2 keys
+    'a': GameAction.confirm,
+    'b': GameAction.back,
+    'x': GameAction.detail,
+    'y': GameAction.favorite,
+    'button_0': GameAction.confirm,
+    'button_1': GameAction.back,
+    'button_2': GameAction.detail,
+    'button_3': GameAction.favorite,
+    'dpad_up': GameAction.up,
+    'dpad_down': GameAction.down,
+    'dpad_left': GameAction.left,
+    'dpad_right': GameAction.right,
+    'leftshoulder': GameAction.l1,
+    'rightshoulder': GameAction.r1,
+    'leftstick': GameAction.horizontalAxis,
+    'rightstick': GameAction.verticalAxis,
+    'button_8': GameAction.select,
+    'button_9': GameAction.start,
+    'plus': GameAction.start,
+    'minus': GameAction.select,
   },
 
   // Steam Deck
