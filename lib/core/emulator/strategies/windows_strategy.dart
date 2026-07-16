@@ -202,25 +202,7 @@ class WindowsStrategy extends EmulatorStrategy {
     }
 
     final args = getLaunchArgs(game.id);
-    final process = await Process.start(
-      exePath,
-      args,
-      workingDirectory: File(exePath).parent.path,
-    );
-
-    // Wait up to 5 seconds — if process exits that fast it crashed
-    final exitCode = await process.exitCode
-        .timeout(const Duration(seconds: 5))
-        .catchError((_) => -99999);
-
-    if (exitCode != -99999 && exitCode != 0) {
-      throw Exception(
-        '${game.name} crashed immediately (exit code $exitCode). '
-        'This is likely due to missing DirectX, Visual C++ redistributables, or other dependencies.',
-      );
-    }
-
-    return process;
+    return await directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: args);
   }
 
   @override

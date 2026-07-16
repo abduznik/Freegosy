@@ -12,6 +12,7 @@ import '../../providers/library_provider.dart';
 import '../../providers/ui_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../core/romm/romm_service.dart';
 import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
@@ -43,6 +44,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       ErrorHandler.showInfo(context, 'Not Connected', message: 'Not connected to RomM');
       return;
     }
+
+    // Multi-file game: show selection dialog
+    if (game.hasMultipleFiles && game.files.isNotEmpty) {
+      _showMultiFileDownloadDialog(context, ref, game, service);
+      return;
+    }
+
     final url = service.getDownloadUrl(game);
     final headers = <String, String>{'Authorization': service.authHeader};
     ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
@@ -57,13 +65,186 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
   }
 
+  void _showMultiFileDownloadDialog(BuildContext context, WidgetRef ref, Game game, RommService service) {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Multi-File Game'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${game.name} has ${game.files.length} files:',
+              style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+            ),
+            const SizedBox(height: 8),
+            ...game.files.take(5).map((f) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '• ${f['file_name'] ?? 'Unknown'}',
+                style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+            if (game.files.length > 5)
+              Text(
+                '...and ${game.files.length - 5} more',
+                style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _downloadAllFiles(context, ref, game, service);
+            },
+            child: const Text('Download All'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showFileSelectionDialog(context, ref, game, service);
+            },
+            child: const Text('Select Files'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _downloadAllFiles(BuildContext context, WidgetRef ref, Game game, RommService service) {
+    final url = service.getDownloadUrl(game);
+    final headers = <String, String>{'Authorization': service.authHeader};
+    ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
+    if (context.mounted) {
+      ErrorHandler.showInfo(context, 'Download Started', message: 'Downloading all files for ${game.name}...');
+    }
+  }
+
+  void _showFileSelectionDialog(BuildContext context, WidgetRef ref, Game game, RommService service) {
+    final selectedFiles = <int>{};
+    final theme = Theme.of(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text('Select Files'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select which files to download:',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 8),
+                ...game.files.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final file = entry.value;
+                  final isSelected = selectedFiles.contains(i);
+                  final sizeMB = ((file['file_size_bytes'] ?? 0) / (1024 * 1024)).toStringAsFixed(1);
+                  return CheckboxListTile(
+                    dense: true,
+                    value: isSelected,
+                    onChanged: (val) {
+                      setDialogState(() {
+                        if (val == true) {
+                          selectedFiles.add(i);
+                        } else {
+                          selectedFiles.remove(i);
+                        }
+                      });
+                    },
+                    title: Text(
+                      file['file_name'] ?? 'Unknown',
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '$sizeMB MB',
+                      style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selectedFiles.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _downloadSelectedFiles(context, ref, game, service, selectedFiles.toList());
+                    },
+              child: Text('Download ${selectedFiles.length} File${selectedFiles.length == 1 ? '' : 's'}'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _downloadSelectedFiles(BuildContext context, WidgetRef ref, Game game, RommService service, List<int> fileIndices) {
+    final headers = <String, String>{'Authorization': service.authHeader};
+    final baseUrl = service.config.baseUrl;
+
+    for (final i in fileIndices) {
+      final file = game.files[i];
+      final fileName = file['file_name'] ?? '';
+      if (fileName.isEmpty) continue;
+
+      final encoded = Uri.encodeComponent(fileName);
+      final url = '$baseUrl/api/roms/${game.id}/content/$encoded';
+
+      // Create a temporary game-like object for the download
+      final tempGame = Game(
+        id: '${game.id}_$i',
+        name: fileName,
+        fileSize: file['file_size_bytes'] ?? 0,
+        platformSlug: game.platformSlug,
+        hasMultipleFiles: false,
+      );
+
+      ref.read(downloadProvider.notifier).startDownload(tempGame, url, headers: headers);
+    }
+
+    if (context.mounted) {
+      ErrorHandler.showInfo(
+        context,
+        'Download Started',
+        message: 'Downloading ${fileIndices.length} file${fileIndices.length == 1 ? '' : 's'} for ${game.name}...',
+      );
+    }
+  }
+
   Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game) async {
+    debugPrint('[Launch] Starting launch for: ${game.name} (id: ${game.id})');
+    debugPrint('[Launch] Platform: ${game.platformSlug}, hasMultipleFiles: ${game.hasMultipleFiles}, files: ${game.files.length}');
+    
     final registryReady = await ref.read(strategyRegistryProvider.future);
     if (!context.mounted || registryReady == null) return;
 
     // Check per-game emulator preference first
     final gamePrefEmulator = registryReady.getGameEmulatorPreference(game.id);
     final gamePrefCore = registryReady.getGameCorePreference(game.id);
+    debugPrint('[Launch] Per-game preference: emulator=$gamePrefEmulator, core=$gamePrefCore');
 
     EmulatorStrategy? strategy;
     String? overrideCoreId;
@@ -131,26 +312,66 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     String romPath = existingRomPath;
     bool isAutoDetected = await io.File(existingRomPath).exists();
 
-    if (game.hasMultipleFiles && game.files.isNotEmpty) {
-      if (isAutoDetected && !await io.Directory(romPath).exists()) {
-        debugPrint('[LibraryActions] Automatic detection found file: $romPath. Skipping picker.');
-      } else {
+    if (game.hasMultipleFiles) {
+      // If files array is empty (paginated API doesn't include it), fetch full details
+      List<Map<String, dynamic>> files = game.files;
+      if (files.isEmpty) {
+        debugPrint('[Launch] Multi-file game but files array empty, fetching full details...');
+        try {
+          final service = ref.read(rommServiceProvider);
+          if (service != null) {
+            final response = await service.getGame(game.id);
+            if (response != null) {
+              files = response.files;
+              debugPrint('[Launch] Fetched ${files.length} files from API');
+            }
+          }
+        } catch (e) {
+          debugPrint('[Launch] Failed to fetch game details: $e');
+        }
+      }
+      
+      if (files.isNotEmpty) {
+        debugPrint('[Launch] Multi-file game detected, filtering launchable files...');
+        // Filter to only launchable files (exclude .m3u, .cue, etc.)
+        final launchableFiles = MultiDiscPicker.filterLaunchableFiles(files);
+        debugPrint('[Launch] Launchable files: ${launchableFiles.length} (from ${files.length} total)');
+        
+        if (launchableFiles.isEmpty) {
+          // All files are non-launchable, try using the ROM path directly
+          debugPrint('[Launch] All files non-launchable, using romPath: $romPath');
+        } else if (isAutoDetected && !await io.Directory(romPath).exists()) {
+          debugPrint('[Launch] Automatic detection found file: $romPath. Skipping picker.');
+        } else {
+          debugPrint('[Launch] Showing multi-file picker with ${launchableFiles.length} files...');
         if (!context.mounted) return;
         String? selectedFilePath;
-        await MultiDiscPicker.show(context, game: game, files: game.files, onSelect: (file) {
-          selectedFilePath = file['full_path']?.toString() ?? file['file_name']?.toString();
+        await MultiDiscPicker.show(context, game: game, files: launchableFiles, onSelect: (file) {
+          // full_path includes platform prefix (e.g. "switch/roms/..."), strip it
+          final fp = file['full_path']?.toString();
+          if (fp != null) {
+            // Remove the platform directory prefix (e.g. "switch/roms/") 
+            final platformPrefix = '${game.platformSlug ?? ''}/roms/';
+            selectedFilePath = fp.toLowerCase().startsWith(platformPrefix.toLowerCase())
+                ? fp.substring(platformPrefix.length)
+                : fp;
+          } else {
+            selectedFilePath = file['file_name']?.toString();
+          }
+          debugPrint('[Launch] User selected: $selectedFilePath');
         });
-        if (selectedFilePath == null) return;
-        
-        final segments = selectedFilePath!.split(RegExp(r'[/\\]'));
-        final sanitizedSegments = segments.map((s) => s.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim()).toList();
-        romPath = sanitizedSegments.join(PlatformInfo.current.isWindows ? '\\' : '/');
-        
-        if (!context.mounted) return;
-        if (!romPath.startsWith('/') && !romPath.contains(':\\')) {
-          final romsRoot = await dir.getRomsDirectory();
-          romPath = p.join(romsRoot, romPath);
+        if (selectedFilePath == null) {
+          debugPrint('[Launch] User cancelled file selection');
+          return;
         }
+        
+        // Construct the full path from ROMs root + relative path
+        final romsRoot = await dir.getRomsDirectory();
+        romPath = p.join(romsRoot, selectedFilePath);
+        debugPrint('[Launch] Resolved romPath: $romPath');
+        }
+      } else {
+        debugPrint('[Launch] No files available for multi-file game, using romPath: $romPath');
       }
     }
 
@@ -185,6 +406,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
     try {
       if (!context.mounted) return;
+      debugPrint('[Launch] Strategy: ${strategy.name}, ROM: $romPath');
       ErrorHandler.showInfo(context, 'Launching', message: 'Launching ${game.name}...');
 
       final sessionStart = DateTime.now();

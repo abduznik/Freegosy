@@ -13,6 +13,16 @@ class MultiDiscPicker extends StatelessWidget {
     required this.onSelect,
   });
 
+  /// Filters files to only show launchable ROM files (excludes playlists like .m3u).
+  static List<Map<String, dynamic>> filterLaunchableFiles(List<Map<String, dynamic>> files) {
+    const nonLaunchableExts = {'.m3u', '.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
+    return files.where((f) {
+      final name = (f['file_name'] ?? '').toLowerCase();
+      final ext = name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
+      return !nonLaunchableExts.contains(ext);
+    }).toList();
+  }
+
   static Future<void> show(
     BuildContext context, {
     required Game game,
