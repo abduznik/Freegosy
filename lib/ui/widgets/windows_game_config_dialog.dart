@@ -160,18 +160,47 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Comma-separated patterns to include. Leave empty to sync all files.',
+              'Select which files to back up. Leave empty to sync all.',
               style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
             const SizedBox(height: 4),
-            TextField(
-              controller: _filterController,
-              decoration: const InputDecoration(
-                hintText: 'e.g. *.ini, *.bin, eeprom.*, saves/*',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              style: const TextStyle(fontSize: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _filterController,
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. *.ini, *.bin, eeprom.*',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      allowMultiple: true,
+                      type: FileType.any,
+                    );
+                    if (result != null && result.files.isNotEmpty) {
+                      final names = result.files
+                          .where((f) => f.name.isNotEmpty)
+                          .map((f) => f.name)
+                          .join(', ');
+                      setState(() {
+                        if (_filterController.text.isNotEmpty) {
+                          _filterController.text = '${_filterController.text}, $names';
+                        } else {
+                          _filterController.text = names;
+                        }
+                      });
+                    }
+                  },
+                  child: const Text('Browse'),
+                ),
+              ],
             ),
           ],
         ),
