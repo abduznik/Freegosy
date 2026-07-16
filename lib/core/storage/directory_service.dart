@@ -332,7 +332,7 @@ class DirectoryService {
 
   Future<String> getRomFilePath(Game game) async {
     final romDir = await getRomDirectory(game);
-    final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?!]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     return p.join(romDir, fileName);
   }
 

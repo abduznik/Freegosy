@@ -297,7 +297,7 @@ class DownloadService {
   Future<void> _extractMultiFile(Game game, String zipPath) async {
     final romDir = await directoryService.getRomDirectory(game);
     // Sanitize game name for use as folder name - matches DirectoryService sanitization
-    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?!]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     String extractDir = p.join(romDir, folderName);
 
     debugPrint('[DownloadService] Extraction starting...');

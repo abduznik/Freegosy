@@ -23,7 +23,7 @@ class RomLookupService {
     if (game.fsName != null) namesToCheck.add(game.fsName!);
     if (game.fileName != null) namesToCheck.add(game.fileName!);
     
-    final sanitizedName = game.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final sanitizedName = game.name.replaceAll(RegExp(r'[<>:"/\\|?!]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     namesToCheck.add(sanitizedName);
 
     // 1. Check using Index if provided (Case-Insensitive & Fast)

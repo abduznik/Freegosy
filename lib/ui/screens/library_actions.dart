@@ -344,31 +344,22 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           debugPrint('[Launch] Automatic detection found file: $romPath. Skipping picker.');
         } else {
           debugPrint('[Launch] Showing multi-file picker with ${launchableFiles.length} files...');
-        if (!context.mounted) return;
-        String? selectedFilePath;
-        await MultiDiscPicker.show(context, game: game, files: launchableFiles, onSelect: (file) {
-          // full_path includes platform prefix (e.g. "switch/roms/..."), strip it
-          final fp = file['full_path']?.toString();
-          if (fp != null) {
-            // Remove the platform directory prefix (e.g. "switch/roms/") 
-            final platformPrefix = '${game.platformSlug ?? ''}/roms/';
-            selectedFilePath = fp.toLowerCase().startsWith(platformPrefix.toLowerCase())
-                ? fp.substring(platformPrefix.length)
-                : fp;
-          } else {
+          if (!context.mounted) return;
+          String? selectedFilePath;
+          await MultiDiscPicker.show(context, game: game, files: launchableFiles, onSelect: (file) {
+            // Use file_name for the actual filename, not full_path which includes platform prefix
             selectedFilePath = file['file_name']?.toString();
+            debugPrint('[Launch] User selected file: $selectedFilePath');
+          });
+          if (selectedFilePath == null) {
+            debugPrint('[Launch] User cancelled file selection');
+            return;
           }
-          debugPrint('[Launch] User selected: $selectedFilePath');
-        });
-        if (selectedFilePath == null) {
-          debugPrint('[Launch] User cancelled file selection');
-          return;
-        }
-        
-        // Construct the full path from ROMs root + relative path
-        final romsRoot = await dir.getRomsDirectory();
-        romPath = p.join(romsRoot, selectedFilePath);
-        debugPrint('[Launch] Resolved romPath: $romPath');
+          
+          // The selected file is relative to the game's directory (existingRomPath)
+          // existingRomPath is already the correct directory on disk
+          romPath = p.join(existingRomPath, selectedFilePath);
+          debugPrint('[Launch] Resolved romPath: $romPath');
         }
       } else {
         debugPrint('[Launch] No files available for multi-file game, using romPath: $romPath');
