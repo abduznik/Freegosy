@@ -8,6 +8,7 @@ import 'package:freegosy/core/emulator/strategies/dolphin_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/eden_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/ryujinx_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/rpcs3_strategy.dart';
+import 'package:freegosy/core/emulator/strategies/ares_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/pcsx2_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/azahar_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/cemu_strategy.dart';
@@ -62,6 +63,7 @@ class StrategyRegistry {
       MelonDSStrategy(_directoryService, platform: _platform),
       PPSSPPStrategy(_directoryService),
       MGBAStrategy(_directoryService),
+      AresStrategy(_directoryService, platform: _platform),
       MAMEStrategy(_directoryService),
       XemuStrategy(_directoryService),
       XeniaStrategy(_directoryService),
@@ -87,7 +89,7 @@ class StrategyRegistry {
 
   // ── Conflict detection ───────────────────────────────────────
 
-  Map<String, List<EmulatorStrategy>> detectConflicts() {
+  Map<String, ({List<EmulatorStrategy> strategies, List<String> mergedSlugs})> detectConflicts() {
     final Map<String, List<EmulatorStrategy>> slugToStrategies = {};
     for (final strategy in _strategies) {
       for (final slug in strategy.supportedSlugs) {
@@ -111,13 +113,18 @@ class StrategyRegistry {
       groups.putIfAbsent(key, () => []).add(slug);
     });
 
-    final Map<String, List<EmulatorStrategy>> canonicalConflicts = {};
+    final result = <String, ({List<EmulatorStrategy> strategies, List<String> mergedSlugs})>{};
     groups.forEach((key, slugs) {
-      final canonical = slugs.reduce((a, b) => a.length > b.length ? a : b);
-      canonicalConflicts[canonical] = allConflicts[slugs.first]!;
+      // Pick most recognizable slug: shortest without hyphens, fallback to shortest
+      final canonical = slugs.firstWhere(
+        (s) => !s.contains('-'),
+        orElse: () => slugs.reduce((a, b) => a.length < b.length ? a : b),
+      );
+      final merged = slugs.where((s) => s != canonical).toList()..sort();
+      result[canonical] = (strategies: allConflicts[slugs.first]!, mergedSlugs: merged);
     });
 
-    return canonicalConflicts;
+    return result;
   }
 
   // ── Per-platform emulator preference ─────────────────────────

@@ -18,6 +18,7 @@ import 'strategies/pcsx2_save_strategy.dart';
 import 'strategies/rpcs3_save_strategy.dart';
 import 'strategies/xenia_save_strategy.dart';
 import 'strategies/duckstation_save_strategy.dart';
+import 'strategies/ares_save_strategy.dart';
 import 'strategies/melonds_save_strategy.dart';
 import 'strategies/mgba_save_strategy.dart';
 import 'strategies/ppsspp_save_strategy.dart';
@@ -64,6 +65,7 @@ class SaveSyncService {
   late final PpssppSaveStrategy _ppsspp;
   late final CemuSaveStrategy _cemu;
   late final AzaharSaveStrategy _azahar;
+  late final AresSaveStrategy _ares;
 
   SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry, this._prefs) {
     _retroarch = RetroArchSaveStrategy(_directoryService);
@@ -80,6 +82,7 @@ class SaveSyncService {
     _ppsspp = PpssppSaveStrategy(_directoryService);
     _cemu = CemuSaveStrategy(_directoryService);
     _azahar = AzaharSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
+    _ares = AresSaveStrategy(_directoryService);
   }
 
   /// Returns the manual Title ID mapping for a given game.
@@ -122,6 +125,7 @@ class SaveSyncService {
         if (id == 'ryujinx') return _ryujinx;
         if (id == 'windows') return _windows;
         if (id == 'azahar') return _azahar;
+        if (id == 'ares') return _ares;
       }
     }
 
