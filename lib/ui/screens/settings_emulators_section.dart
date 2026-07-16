@@ -553,14 +553,6 @@ Widget buildConflictsSection(
   final conflicts = registry.detectConflicts();
   final perGameEnabled = ref.watch(perGameLauncherEnabledProvider);
 
-  // Separate external emulators from RetroArch cores per platform
-  final externalBySlug = <String, List<EmulatorStrategy>>{};
-  final hasRetroarch = <String, bool>{};
-  for (final entry in conflicts.entries) {
-    externalBySlug[entry.key] = entry.value.where((s) => s.emulatorId != 'retroarch').toList();
-    hasRetroarch[entry.key] = entry.value.any((s) => s.emulatorId == 'retroarch');
-  }
-
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -618,27 +610,32 @@ Widget buildConflictsSection(
         ),
       ),
       const SizedBox(height: 12),
-      if (conflicts.isEmpty)
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.green.withValues(alpha: 0.7), size: 20),
-              const SizedBox(width: 10),
-              Text('No conflicts — each platform has one emulator',
-                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-            ],
-          ),
-        )
-      else
-        ...conflicts.entries.map((entry) {
+      // Platform list: hidden when per-game launcher is ON
+      if (!perGameEnabled) ...[
+        if (conflicts.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.green.withValues(alpha: 0.7), size: 20),
+                const SizedBox(width: 10),
+                Text('No conflicts — each platform has one emulator',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          )
+        else
+          ...conflicts.entries.map((entry) {
           final slug = entry.key;
-          final externals = externalBySlug[slug] ?? [];
-          final supportsRA = hasRetroarch[slug] ?? false;
+          final data = entry.value;
+          final strategies = data.strategies;
+          final mergedSlugs = data.mergedSlugs;
+          final externals = strategies.where((s) => s.emulatorId != 'retroarch').toList();
+          final supportsRA = strategies.any((s) => s.emulatorId == 'retroarch');
           final currentStrategy = registry.getStrategyForSlug(slug);
           final isRetroarch = currentStrategy?.emulatorId == 'retroarch';
 
@@ -657,6 +654,13 @@ Widget buildConflictsSection(
                   children: [
                     Text(slug.toUpperCase(),
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: theme.colorScheme.onSurface)),
+                    if (mergedSlugs.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        'also: ${mergedSlugs.join(", ")}',
+                        style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                      ),
+                    ],
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -793,6 +797,7 @@ Widget buildConflictsSection(
             ),
           );
         }),
+      ], // end !perGameEnabled
       const SizedBox(height: 16),
       Row(
         children: [

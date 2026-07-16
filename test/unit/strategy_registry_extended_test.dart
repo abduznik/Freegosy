@@ -104,18 +104,31 @@ void main() {
     group('detectConflicts', () {
       test('returns non-empty map when conflicts exist', () {
         final conflicts = registry.detectConflicts();
-        // Multiple emulators support some platforms (e.g. GBA via RetroArch and mGBA)
-        // At least some conflicts should exist in a full registry
-        // This may be empty if only one strategy per slug — both outcomes valid
         expect(conflicts, isA<Map<String, dynamic>>());
       });
 
-      test('conflict values are lists of strategies', () {
+      test('conflict values have strategies and mergedSlugs', () {
         final conflicts = registry.detectConflicts();
         for (final entry in conflicts.entries) {
-          expect(entry.value, isA<List>());
-          expect(entry.value.length, greaterThan(1),
+          expect(entry.value.strategies, isA<List>());
+          expect(entry.value.strategies.length, greaterThan(1),
               reason: 'Conflict for ${entry.key} should have >1 strategy');
+          expect(entry.value.mergedSlugs, isA<List<String>>());
+        }
+      });
+
+      test('Game Boy slugs have identical strategy sets', () {
+        final gbSlugs = ['gba', 'gbc', 'gb', 'game-boy-advance', 'game-boy-color', 'game-boy'];
+        final strategySets = <String, Set<String>>{};
+        for (final slug in gbSlugs) {
+          final strategies = registry.getAllStrategiesForSlug(slug);
+          strategySets[slug] = strategies.map((s) => s.emulatorId).toSet();
+        }
+        // All should have the same set
+        final first = strategySets.values.first;
+        for (final entry in strategySets.entries) {
+          expect(entry.value, first,
+              reason: 'Slug ${entry.key} has different strategy set: ${entry.value} vs $first');
         }
       });
     });

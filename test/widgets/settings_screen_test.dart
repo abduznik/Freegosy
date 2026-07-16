@@ -43,7 +43,7 @@ void main() {
     when(mockDirectoryService.linuxSyncPreset).thenReturn('default');
     when(mockDirectoryService.useFlatEmulatorLayout).thenReturn(false);
     when(mockRommService.getPlatforms()).thenAnswer((_) async => []);
-    when(mockStrategyRegistry.detectConflicts()).thenReturn(<String, List<EmulatorStrategy>>{});
+    when(mockStrategyRegistry.detectConflicts()).thenReturn(<String, ({List<EmulatorStrategy> strategies, List<String> mergedSlugs})>{});
     when(mockStrategyRegistry.coreOverrides).thenReturn(<String, String>{});
   });
 

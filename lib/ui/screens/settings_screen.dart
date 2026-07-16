@@ -51,6 +51,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _usernameController = TextEditingController();
     _passwordController = TextEditingController();
     _apiKeyController = TextEditingController();
+    // Refresh emulator status when settings screen is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(emulatorStatusProvider);
+    });
   }
 
   @override
@@ -530,21 +534,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     icon: Icons.sports_esports,
                     child: emulatorStatusAsync.when(
                       data: (states) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          buildEmulatorsSection(context, directoryService, true, states, setState, ref),
-                          const SizedBox(height: 16),
-                          const Divider(),
-                          const SizedBox(height: 12),
-                          const SettingsCustomEmulatorsSection(),
-                          if (strategyRegistry != null) ...[
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            buildEmulatorsSection(context, directoryService, true, states, setState, ref),
                             const SizedBox(height: 16),
                             const Divider(),
                             const SizedBox(height: 12),
-                            buildConflictsSection(context, strategyRegistry, setState, ref),
+                            const SettingsCustomEmulatorsSection(),
+                            // Platform Manager: header + toggle always visible, list collapses when per-game ON
+                            if (strategyRegistry != null) ...[
+                              const SizedBox(height: 16),
+                              const Divider(),
+                              const SizedBox(height: 12),
+                              buildConflictsSection(context, strategyRegistry, setState, ref),
+                            ],
                           ],
-                        ],
-                      ),
+                        ),
                       loading: () => buildEmulatorsSection(context, directoryService, false, {}, setState, ref),
                       error: (e, s) => Center(child: Text('Error: $e')),
                     ),
