@@ -90,12 +90,13 @@ No pressure at all — the app is and will always be free.
 | **Azahar** | 🟢 Full | 3DS — confirmed working by [@Ramza2k](https://github.com/Ramza2k). |
 | **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
 | **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
+| **Ares** | 🔴 Untested | Multi-system (GBA, SNES, N64, Genesis, PS1, MSX, etc.). Launch and save sync implemented, needs real-world testing. Searching for testers! |
 | **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
 
 **Per-OS Notes:**
-- **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure.
-- **Windows**: Same emulator support. DuckStation portable mode auto-configured via `portable.txt`. RetroArch config file resolution via `APPDATA`.
-- **Linux** (Steam Deck / EmuDeck / RetroDECK): RetroArch, DuckStation, Dolphin, PPSSPP, PCSX2 all supported via EmuDeck/RetroDECK save structure presets.
+- **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure. Ares save path: `~/Library/Application Support/ares/`.
+- **Windows**: Same emulator support. DuckStation portable mode auto-configured via `portable.txt`. RetroArch config file resolution via `APPDATA`. Ares portable (settings next to exe) or `%LOCALAPPDATA%/ares/`.
+- **Linux** (Steam Deck / EmuDeck / RetroDECK): RetroArch, DuckStation, Dolphin, PPSSPP, PCSX2 all supported via EmuDeck/RetroDECK save structure presets. Ares save path: `~/.local/share/ares/`.
 
 > Help wanted — if you're using an emulator marked 🔴 or 🟡 and can confirm compatibility, please report your experience!
 
