@@ -1072,12 +1072,26 @@ class MockStrategyRegistry extends _i1.Mock implements _i13.StrategyRegistry {
           as Map<String, String>);
 
   @override
-  Map<String, List<_i14.EmulatorStrategy>> detectConflicts() =>
+  Map<
+    String,
+    ({List<String> mergedSlugs, List<_i14.EmulatorStrategy> strategies})
+  >
+  detectConflicts() =>
       (super.noSuchMethod(
             Invocation.method(#detectConflicts, []),
-            returnValue: <String, List<_i14.EmulatorStrategy>>{},
+            returnValue:
+                <
+                  String,
+                  ({
+                    List<String> mergedSlugs,
+                    List<_i14.EmulatorStrategy> strategies,
+                  })
+                >{},
           )
-          as Map<String, List<_i14.EmulatorStrategy>>);
+          as Map<
+            String,
+            ({List<String> mergedSlugs, List<_i14.EmulatorStrategy> strategies})
+          >);
 
   @override
   String? getPreferredEmulatorId(String? slug) =>
