@@ -96,10 +96,11 @@ class _RetroArchCorePickerDialogState extends ConsumerState<RetroArchCorePickerD
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           // Drag handle
           Center(
             child: Container(
@@ -401,6 +402,7 @@ class _RetroArchCorePickerDialogState extends ConsumerState<RetroArchCorePickerD
             ],
           ),
         ],
+        ),
       ),
     );
   }
