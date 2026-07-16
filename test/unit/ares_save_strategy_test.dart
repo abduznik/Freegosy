@@ -173,11 +173,14 @@ void main() {
   });
 
   group('restoreSave directory creation', () {
-    test('returns false when Ares data dir cannot be resolved', () async {
+    test('returns false when Ares data dir cannot be resolved (Windows)', () async {
+      // On Windows, _getAresDataDir requires findEmulatorExecutable to succeed.
+      // With no ares installed, it returns null and restoreSave returns false.
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final dirService = DirectoryService(prefs);
-      final strategy = AresSaveStrategy(dirService);
+      final platform = PlatformInfo('windows');
+      final strategy = AresSaveStrategy(dirService, platform: platform);
 
       final game = _makeGame('Test Game.gba', 'gba');
       final result = await strategy.restoreSave(
@@ -187,7 +190,7 @@ void main() {
         'Test Game.gba.ram',
       );
       expect(result, isFalse,
-          reason: 'restoreSave returns false when Ares data dir cannot be resolved');
+          reason: 'restoreSave returns false on Windows when Ares not installed');
     });
 
     test('creates Saves/<Platform> subfolder when it does not exist yet', () async {
