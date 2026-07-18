@@ -66,6 +66,11 @@ class RetroArchSaveStrategy extends SaveStrategy {
           return entry.value;
         }
       }
+      // Try _coreFolderOverrides (maps core IDs to correct save folders)
+      final stripped = baseName.replaceAll(RegExp(r'_libretro$'), '');
+      final folderInfo = _coreFolderOverrides[stripped];
+      if (folderInfo != null) return folderInfo;
+
       // Fallback: use the override core name with generic save folders
       return _CoreInfo(baseName, baseName, 'States/$baseName');
     }
