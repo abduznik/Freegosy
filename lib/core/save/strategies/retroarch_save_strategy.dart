@@ -377,7 +377,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
     final expectedDir = p.join(saveRoot, coreInfo.saveFolder);
     if (await io.Directory(expectedDir).exists()) return expectedDir;
 
-    // Fallback: scan saveRoot subdirectories for the ROM's save file.
+    // Fallback 1: scan saveRoot subdirectories for the ROM's save file.
     // RetroArch core folder names are unpredictable (e.g. "ParaLLEl N64"
     // vs "Parallel N64" vs "N64"). Scanning finds the actual folder.
     final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
@@ -394,6 +394,21 @@ class RetroArchSaveStrategy extends SaveStrategy {
           }
         }
       }
+
+      // Fallback 2: no save file exists yet (first pull). Pick the most
+      // recently modified core subfolder — the user just played with it.
+      io.Directory? newestDir;
+      DateTime newestTime = DateTime(0);
+      await for (final entity in rootDir.list()) {
+        if (entity is! io.Directory) continue;
+        // Skip non-core directories (e.g. "SNES" parent folder on macOS)
+        final stat = await entity.stat();
+        if (stat.modified.isAfter(newestTime)) {
+          newestTime = stat.modified;
+          newestDir = entity;
+        }
+      }
+      if (newestDir != null) return newestDir.path;
     }
 
     return expectedDir;
