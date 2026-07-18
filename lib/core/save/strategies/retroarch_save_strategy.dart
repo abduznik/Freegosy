@@ -372,7 +372,31 @@ class RetroArchSaveStrategy extends SaveStrategy {
       // sort_savefiles_enable=false: saves go flat into saveRoot, no core subfolder
       return saveRoot;
     }
-    return p.join(saveRoot, coreInfo.saveFolder);
+
+    // Try the expected core subfolder first
+    final expectedDir = p.join(saveRoot, coreInfo.saveFolder);
+    if (await io.Directory(expectedDir).exists()) return expectedDir;
+
+    // Fallback: scan saveRoot subdirectories for the ROM's save file.
+    // RetroArch core folder names are unpredictable (e.g. "ParaLLEl N64"
+    // vs "Parallel N64" vs "N64"). Scanning finds the actual folder.
+    final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
+    final rootDir = io.Directory(saveRoot);
+    if (await rootDir.exists()) {
+      await for (final entity in rootDir.list()) {
+        if (entity is! io.Directory) continue;
+        final subdir = entity.path;
+        await for (final f in io.Directory(subdir).list()) {
+          if (f is! io.File) continue;
+          final fname = p.basename(f.path).toLowerCase();
+          if (fname.startsWith(romStem) && _isSaveFile(fname)) {
+            return subdir;
+          }
+        }
+      }
+    }
+
+    return expectedDir;
   }
 
   @override
@@ -541,30 +565,25 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
           final isFileState = file.name.contains('.state');
           String? fileTargetDir;
-          if (_platform.isLinux) {
-            final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
-            if (_directoryService.linuxSyncPreset == 'emudeck') {
-              if (isFileState) {
+          if (isFileState) {
+            if (_platform.isLinux) {
+              final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+              if (_directoryService.linuxSyncPreset == 'emudeck') {
                 final emulationRoot = p.dirname(p.dirname(baseDir));
                 fileTargetDir = p.join(emulationRoot, 'states', 'retroarch', coreInfo.statesFolder);
+              } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
+                fileTargetDir = p.join(baseDir, 'states', coreInfo.statesFolder);
               } else {
-                fileTargetDir = p.join(baseDir, coreInfo.saveFolder);
+                fileTargetDir = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
               }
-            } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
-              fileTargetDir = isFileState
-                  ? p.join(baseDir, 'states', coreInfo.statesFolder)
-                  : p.join(baseDir, 'saves', coreInfo.saveFolder);
             } else {
-              fileTargetDir = isFileState
-                  ? p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder)
-                  : p.join(baseDir, coreInfo.saveFolder);
+              final saveRoot = await _resolveSaveRoot();
+              fileTargetDir = p.join(io.Directory(saveRoot).parent.path, 'states', coreInfo.statesFolder);
             }
           } else {
-            final saveRoot = await _resolveSaveRoot();
-            fileTargetDir = isFileState
-                ? p.join(io.Directory(saveRoot).parent.path, 'states', coreInfo.statesFolder)
-                : p.join(saveRoot, coreInfo.saveFolder);
+            fileTargetDir = await getSaveDir(game, destPath);
           }
+          if (fileTargetDir == null) return true;
           final dir = io.Directory(fileTargetDir);
           if (!await dir.exists()) await dir.create(recursive: true);
 
@@ -583,32 +602,27 @@ class RetroArchSaveStrategy extends SaveStrategy {
       String? targetDir;
       final isState = filename.contains('.state');
 
-      if (_platform.isLinux) {
-        final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
-
-        if (_directoryService.linuxSyncPreset == 'emudeck') {
-          if (isState) {
+      if (isState) {
+        if (_platform.isLinux) {
+          final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
+          if (_directoryService.linuxSyncPreset == 'emudeck') {
             final emulationRoot = p.dirname(p.dirname(baseDir));
             targetDir = p.join(emulationRoot, 'states', 'retroarch', coreInfo.statesFolder);
+          } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
+            targetDir = p.join(baseDir, 'states', coreInfo.statesFolder);
           } else {
-            targetDir = p.join(baseDir, coreInfo.saveFolder);
+            targetDir = p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder);
           }
-        } else if (_directoryService.linuxSyncPreset == 'retrodeck') {
-          targetDir = isState
-              ? p.join(baseDir, 'states', coreInfo.statesFolder)
-              : p.join(baseDir, 'saves', coreInfo.saveFolder);
         } else {
-          targetDir = isState
-              ? p.join(p.dirname(baseDir), 'states', coreInfo.statesFolder)
-              : p.join(baseDir, coreInfo.saveFolder);
+          final saveRoot = await _resolveSaveRoot();
+          targetDir = p.join(io.Directory(saveRoot).parent.path, 'states', coreInfo.statesFolder);
         }
       } else {
-        final saveRoot = await _resolveSaveRoot();
-        targetDir = isState
-            ? p.join(io.Directory(saveRoot).parent.path, 'states', coreInfo.statesFolder)
-            : p.join(saveRoot, coreInfo.saveFolder);
+        // For saves: use getSaveDir() which scans for the actual folder
+        targetDir = await getSaveDir(game, destPath);
       }
 
+      if (targetDir == null) return false;
       final dir = io.Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
