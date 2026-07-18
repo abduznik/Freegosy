@@ -379,7 +379,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // (60s) prevents redundant network requests on rapid re-launches.
     // The actual save sync happens post-exit in the unawaited block below.
     if (syncService != null) {
-      unawaited(syncService.pullSave(game, romPath).catchError((_) => false));
+      unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId).catchError((_) => false));
     }
 
     // Platform-specific checks (e.g. 3DS keys)
@@ -424,6 +424,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
                 game, romPath,
                 sessionStart: sessionStart,
                 syncMode: syncMode,
+                coreOverride: overrideCoreId,
               );
               try {
                 final backupService = ref.read(backupServiceProvider);

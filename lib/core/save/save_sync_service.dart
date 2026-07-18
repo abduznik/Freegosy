@@ -272,14 +272,14 @@ class SaveSyncService {
   ///
   /// Routes to [_devicePushSaves] on RomM 4.9+ or [_legacyPushSaves] on older.
   Future<bool> pushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
     final caps = await _rommService.fetchCapabilities();
     if (caps.hasDeviceSaveSync) {
       return _devicePushSaves(game, romPath,
-          sessionStart: sessionStart, syncMode: syncMode, force: force);
+          sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride);
     }
     return _legacyPushSaves(game, romPath,
-        sessionStart: sessionStart, syncMode: syncMode, force: force);
+        sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride);
   }
 
   /// In-memory cache of the last pull-check timestamp per game.
@@ -296,7 +296,7 @@ class SaveSyncService {
   /// Skips network requests if the last check was within [_pullCheckCooldown].
   /// This is called before emulator launch — the save is usually already on
   /// disk from the last session, so the pull is non-blocking (fire-and-forget).
-  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
+  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride}) async {
     final now = DateTime.now();
     final lastCheck = _lastPullCheck[game.id];
     if (saveData == null && lastCheck != null && now.difference(lastCheck) < _pullCheckCooldown) {
@@ -307,9 +307,9 @@ class SaveSyncService {
 
     final caps = await _rommService.fetchCapabilities();
     if (caps.hasDeviceSaveSync) {
-      return _devicePullSave(game, romPath, saveData: saveData);
+      return _devicePullSave(game, romPath, saveData: saveData, coreOverride: coreOverride);
     }
-    return _legacyPullSave(game, romPath, saveData: saveData);
+    return _legacyPullSave(game, romPath, saveData: saveData, coreOverride: coreOverride);
   }
 
   // ---------------------------------------------------------------------------
@@ -318,8 +318,10 @@ class SaveSyncService {
 
   String? _getDeviceId() => _prefs.getString('romm_device_id');
 
-  void _applyStrategyMappings(SaveStrategy strategy, Game game) {
-    if (strategy is EdenSaveStrategy) {
+  void _applyStrategyMappings(SaveStrategy strategy, Game game, {String? coreOverride}) {
+    if (strategy is RetroArchSaveStrategy) {
+      strategy.setLaunchCoreOverride(coreOverride);
+    } else if (strategy is EdenSaveStrategy) {
       strategy.setManualMapping(getMappedFolder(game.id));
       strategy.setActiveProfileOverride(getActiveProfile());
     } else if (strategy is RyujinxSaveStrategy) {
@@ -376,11 +378,11 @@ class SaveSyncService {
   // ---------------------------------------------------------------------------
 
   Future<bool> _devicePushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
-      _applyStrategyMappings(strategy, game);
+      _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
       var filesMap = await strategy.getSaveFilesWithScreenshots(
         game, romPath,
@@ -509,11 +511,11 @@ class SaveSyncService {
   }
 
   Future<bool> _devicePullSave(Game game, String romPath,
-      {Map<String, dynamic>? saveData}) async {
+      {Map<String, dynamic>? saveData, String? coreOverride}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
-      _applyStrategyMappings(strategy, game);
+      _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
       final deviceId = _getDeviceId();
       final Map<String, dynamic>? save =
@@ -580,12 +582,12 @@ class SaveSyncService {
   /// Legacy upload path for RomM versions prior to 4.9.
   /// Uses timestamp-based conflict detection and manual save pruning.
   Future<bool> _legacyPushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both', bool force = false}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
 
-      _applyStrategyMappings(strategy, game);
+      _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
       var filesMap = await strategy.getSaveFilesWithScreenshots(
         game, romPath,
@@ -802,12 +804,12 @@ class SaveSyncService {
 
   /// Legacy pull path for RomM versions prior to 4.9.
   /// Uses stored last-pull timestamps for freshness checks.
-  Future<bool> _legacyPullSave(Game game, String romPath, {Map<String, dynamic>? saveData}) async {
+  Future<bool> _legacyPullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride}) async {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) return false;
 
-      _applyStrategyMappings(strategy, game);
+      _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
       final Map<String, dynamic>? save = saveData ?? await _rommService.getLatestSave(game.id);
       if (save == null) return false;

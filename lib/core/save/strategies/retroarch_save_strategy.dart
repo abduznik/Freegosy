@@ -47,6 +47,12 @@ class RetroArchSaveStrategy extends SaveStrategy {
       ..addAll(overrides);
   }
 
+  /// Temporarily overrides the core for a single push/pull operation.
+  /// Used when the launch code knows which core was used (from the core picker)
+  /// but the strategy registry hasn't been updated yet.
+  String? _launchCoreOverride;
+  void setLaunchCoreOverride(String? coreId) => _launchCoreOverride = coreId;
+
   /// Resolves the core info for a slug, checking overrides first.
   _CoreInfo? _getCoreInfo(String slug) {
     // 1. NDS dynamic override (backward compat)
@@ -56,7 +62,20 @@ class RetroArchSaveStrategy extends SaveStrategy {
           : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
     }
 
-    // 2. General core override from registry
+    // 2. Launch-time core override (from core picker dialog)
+    if (_launchCoreOverride != null) {
+      final baseName = _launchCoreOverride!.replaceAll(RegExp(r'\.(dll|so|dylib)$'), '');
+      final stripped = baseName.replaceAll(RegExp(r'_libretro$'), '');
+      final folderInfo = _coreFolderOverrides[stripped];
+      if (folderInfo != null) return folderInfo;
+      // Fallback: check _coreMap
+      for (final entry in _coreMap.entries) {
+        if (entry.value.coreName == baseName) return entry.value;
+      }
+      return _CoreInfo(baseName, baseName, 'States/$baseName');
+    }
+
+    // 3. General core override from registry
     final overrideCoreId = _coreOverrides[slug];
     if (overrideCoreId != null) {
       final baseName = overrideCoreId.replaceAll(RegExp(r'\.(dll|so|dylib)$'), '');
