@@ -348,9 +348,15 @@ class SaveSyncService {
         return filtered;
       }
       final pathLower = entry.key.path.toLowerCase();
+      // Battery-backed save files — must match RetroArchSaveStrategy._saveExtensions
       if (pathLower.endsWith('.srm') ||
           pathLower.endsWith('.sav') ||
-          pathLower.endsWith('.gci')) {
+          pathLower.endsWith('.gci') ||
+          pathLower.endsWith('.sra') ||
+          pathLower.endsWith('.eep') ||
+          pathLower.endsWith('.fla') ||
+          pathLower.endsWith('.mpk') ||
+          pathLower.endsWith('.mcd')) {
         filtered[entry.key] = entry.value;
         break;
       }
@@ -532,11 +538,23 @@ class SaveSyncService {
           save['download_path'] as String? ?? save['url'] as String?;
       if (downloadUrl == null) return false;
 
+      final filename =
+          save['file_name'] as String? ?? downloadUrl.split('/').last;
+
+      // Skip save states — only sync battery-backed saves (.srm, .sav, .sra, etc.)
+      final fnameLower = filename.toLowerCase();
+      if (fnameLower.endsWith('.state') ||
+          fnameLower.contains('.state.') ||
+          fnameLower.endsWith('.state.auto') ||
+          RegExp(r'\.state\d+$').hasMatch(fnameLower)) {
+        debugPrint(
+            '[SyncService] Skipping pull for ${game.displayName}: latest cloud save is a state file ($filename)');
+        return false;
+      }
+
       final bytes = await _rommService.downloadSave(downloadUrl, deviceId: deviceId);
       if (bytes == null) return false;
 
-      final filename =
-          save['file_name'] as String? ?? downloadUrl.split('/').last;
       final adjustedFilename = _adjustFilenameForFormat(bytes, normalizeSaveFilename(filename));
 
       final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
@@ -810,12 +828,22 @@ class SaveSyncService {
           ?? save['url'] as String?;
       if (downloadUrl == null) return false;
 
+      final filename = save['file_name'] as String?
+          ?? downloadUrl.split('/').last;
+
+      // Skip save states — only sync battery-backed saves
+      final fnameLower = filename.toLowerCase();
+      if (fnameLower.endsWith('.state') ||
+          fnameLower.contains('.state.') ||
+          fnameLower.endsWith('.state.auto') ||
+          RegExp(r'\.state\d+$').hasMatch(fnameLower)) {
+        debugPrint('[SyncService] [legacy] Skipping pull for ${game.displayName}: latest save is a state file ($filename)');
+        return false;
+      }
+
       final bytes = await _rommService.downloadSave(
           downloadUrl);
       if (bytes == null) return false;
-
-      final filename = save['file_name'] as String?
-          ?? downloadUrl.split('/').last;
 
       // Sniff actual bytes so that ZIP files (even those manually uploaded or
       // stored under a non-.zip name) are correctly extracted on restore.
