@@ -23,6 +23,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
   bool? _cachedSortSavefilesByContent;
   bool? _cachedSavefilesInContentDir;
 
+  /// The last-loaded RetroArch core ID parsed from `libretro_path` in retroarch.cfg.
+  /// Used to resolve the correct save folder when a platform has multiple cores.
+  String? _cachedActiveCore;
+
   // Test-only override to skip reading the real retroarch.cfg.
   @visibleForTesting
   bool skipConfigRead = false;
@@ -66,7 +70,22 @@ class RetroArchSaveStrategy extends SaveStrategy {
       return _CoreInfo(baseName, baseName, 'States/$baseName');
     }
 
-    // 3. Default from static map
+    // 3. Active core from retroarch.cfg libretro_path.
+    // When the user switches cores (e.g. Mupen64Plus → Parallel N64),
+    // the save directory changes. Detect this and use the correct folder.
+    if (_cachedActiveCore != null) {
+      final activeInfo = _coreFolderOverrides[_cachedActiveCore!];
+      if (activeInfo != null) {
+        // Check if this core supports the requested platform
+        // by verifying the core's default map entry exists for this slug
+        final defaultInfo = _coreMap[slug];
+        if (defaultInfo != null) {
+          return activeInfo;
+        }
+      }
+    }
+
+    // 4. Default from static map
     return _coreMap[slug];
   }
 
@@ -152,6 +171,37 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'vectrex':   _CoreInfo('vecx_libretro',            'VecX',               'States/VecX'),
   };
 
+  /// Maps libretro core IDs (from `libretro_path` in retroarch.cfg) to their
+  /// on-disk save folder names. When the active core differs from the default
+  /// in `_coreMap`, this overrides the save folder resolution.
+  static const Map<String, _CoreInfo> _coreFolderOverrides = {
+    // N64 cores
+    'mupen64plus_next':    _CoreInfo('mupen64plus_next_libretro', 'N64',              'States/N64'),
+    'parallel_n64':        _CoreInfo('parallel_n64_libretro',     'Parallel N64',     'States/Parallel N64'),
+    'mupen64plus':         _CoreInfo('mupen64plus_libretro',      'Mupen64Plus',      'States/Mupen64Plus'),
+    // GBA cores
+    'mgba':                _CoreInfo('mgba_libretro',             'mGBA',             'mGBA'),
+    'vbam':                _CoreInfo('vbam_libretro',             'VBA-M',            'VBA-M'),
+    'gpSP':                _CoreInfo('gpsp_libretro',             'gpSP',             'gpSP'),
+    // SNES cores
+    'snes9x':              _CoreInfo('snes9x_libretro',           'Snes9x',           'Snes9x'),
+    'bsnes':               _CoreInfo('bsnes_libretro',            'bsnes',            'bsnes'),
+    'bsnes_hd_beta':       _CoreInfo('bsnes_hd_beta_libretro',    'bsnes',            'bsnes'),
+    // PS1 cores
+    'pcsx_rearmed':        _CoreInfo('pcsx_rearmed_libretro',     'PCSX-ReARMed',     'PCSX-ReARMed'),
+    'beetle_psx':          _CoreInfo('beetle_psx_libretro',       'Mednafen PSX',     'Mednafen PSX'),
+    'beetle_psx_hw':       _CoreInfo('beetle_psx_hw_libretro',    'Mednafen PSX HW',  'Mednafen PSX HW'),
+    'duckstation':         _CoreInfo('duckstation_libretro',      'DuckStation',      'DuckStation'),
+    // NDS cores
+    'melonds':             _CoreInfo('melonds_libretro',          'NDS',              'States/NDS'),
+    'desmume':             _CoreInfo('desmume2015_libretro',      'NDS',              'States/NDS'),
+    // PSP cores
+    'ppsspp':              _CoreInfo('ppsspp_libretro',           'PPSSPP/PSP/SAVEDATA', 'PPSSPP'),
+    // Genesis cores
+    'genesis_plus_gx':     _CoreInfo('genesis_plus_gx_libretro',  'Mega Drive',       'States/Mega Drive'),
+    'fceumm':              _CoreInfo('fceumm_libretro',           'NES',              'States/NES'),
+  };
+
   /// Reads `savefile_directory` and sort flags from retroarch.cfg.
   ///
   /// Parses these RetroArch config keys:
@@ -189,6 +239,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     final savefileDirRe = RegExp(r'^\s*savefile_directory\s*=\s*"([^"]*)"');
     final boolRe = RegExp(r'^\s*(sort_savefiles_enable|sort_savefiles_by_content_enable|savefiles_in_content_dir)\s*=\s*"?(true|false)"?');
+    final libretroPathRe = RegExp(r'^\s*libretro_path\s*=\s*"([^"]*)"');
 
     for (final cfgPath in candidates) {
       final cfgFile = io.File(cfgPath);
@@ -222,6 +273,24 @@ class RetroArchSaveStrategy extends SaveStrategy {
               case 'savefiles_in_content_dir':
                 _cachedSavefilesInContentDir = value;
                 break;
+            }
+          }
+
+          // Parse libretro_path to detect the last-used core.
+          // Example: libretro_path = "/path/to/parallel_n64_libretro.dylib"
+          final coreMatch = libretroPathRe.firstMatch(line);
+          if (coreMatch != null) {
+            final corePath = coreMatch.group(1)!;
+            if (corePath.isNotEmpty && corePath != 'default') {
+              final coreFilename = p.basename(corePath);
+              // Strip extension and _libretro suffix to get the base core ID
+              // e.g. "parallel_n64_libretro.dylib" → "parallel_n64"
+              final coreBase = coreFilename
+                  .replaceAll(RegExp(r'\.(dll|so|dylib)$'), '')
+                  .replaceAll(RegExp(r'_libretro$'), '');
+              if (coreBase.isNotEmpty) {
+                _cachedActiveCore = coreBase;
+              }
             }
           }
         }
