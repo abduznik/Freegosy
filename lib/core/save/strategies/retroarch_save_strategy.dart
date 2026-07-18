@@ -76,6 +76,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
   @override
   bool get shouldZip => false;
 
+  /// Save file extensions recognized by RetroArch cores.
+  /// N64 cores use .sra/.eep/.fla/.mpk; most others use .srm/.sav/.mcd.
+  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk'};
+
+  static bool _isSaveFile(String filename) {
+    final ext = p.extension(filename).toLowerCase();
+    return _saveExtensions.contains(ext);
+  }
+
   // _CoreInfo maps platform slugs to RetroArch core info, including save and state directories.
   static const Map<String, _CoreInfo> _coreMap = {
     // Nintendo
@@ -365,7 +374,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
           await for (final entity in savesDirObj.list()) {
             if (entity is! io.File) continue;
             final fname = p.basename(entity.path).toLowerCase();
-            if (fname.startsWith(stemLower) && (fname.endsWith('.srm') || fname.endsWith('.sav') || fname.endsWith('.mcd'))) {
+            if (fname.startsWith(stemLower) && _isSaveFile(fname)) {
               filesToCheck.add(entity);
               found = true;
               break;
@@ -375,7 +384,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
             await for (final entity in savesDirObj.list()) {
               if (entity is! io.File) continue;
               final fname = p.basename(entity.path).toLowerCase();
-              if (fname.endsWith('.srm') || fname.endsWith('.sav') || fname.endsWith('.mcd')) {
+              if (_isSaveFile(fname)) {
                 final stemWords = stemLower
                     .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
                     .split(' ')
@@ -394,7 +403,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
             await for (final entity in savesDirObj.list()) {
               if (entity is! io.File) continue;
               final fname = p.basename(entity.path).toLowerCase();
-              if (fname.endsWith('.srm') || fname.endsWith('.sav') || fname.endsWith('.mcd')) {
+              if (_isSaveFile(fname)) {
                 filesToCheck.add(entity);
                 found = true;
                 break;
