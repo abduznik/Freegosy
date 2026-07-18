@@ -110,6 +110,7 @@ class FirmwareService {
     );
 
     if (bytes != null) {
+      await destFile.parent.create(recursive: true);
       await destFile.writeAsBytes(bytes);
       debugPrint('[FirmwareService] Successfully saved firmware: ${firmware.fileName}');
     } else {

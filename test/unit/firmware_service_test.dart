@@ -103,4 +103,118 @@ void main() {
       await tempDir.delete(recursive: true);
     });
   });
+
+  group('Firmware filePath subdirectory preservation', () {
+    test('uses filePath for subdirectory structure when provided', () async {
+      final tempDir = await Directory.systemTemp.createTemp('firmware_subdir_test');
+      final biosDir = p.join(tempDir.path, 'BIOS');
+      await Directory(biosDir).create();
+
+      // Firmware with filePath containing subdirectory (e.g. Flycast dc/dc_boot.bin)
+      final firmware = Firmware(
+        id: 3,
+        fileName: 'dc_boot.bin',
+        filePath: 'dc/dc_boot.bin',
+        fileSizeBytes: 100,
+      );
+
+      final platform = Platform(
+        id: 3,
+        name: 'Dreamcast',
+        slug: 'dc',
+        firmware: [firmware],
+      );
+
+      final mockStrategy = MockEmulatorStrategy();
+
+      when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
+      when(mockStrategyRegistry.getStrategyForSlug('dc')).thenReturn(mockStrategy);
+      when(mockDirectoryService.getEmulatorBiosDirectory('test_emulator')).thenAnswer((_) async => biosDir);
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([1, 2, 3]));
+
+      await service.syncAllFirmware();
+
+      // Should be in system/dc/dc_boot.bin, NOT system/dc_boot.bin
+      final correctPath = File(p.join(biosDir, 'dc', 'dc_boot.bin'));
+      final wrongPath = File(p.join(biosDir, 'dc_boot.bin'));
+
+      expect(await correctPath.exists(), isTrue,
+          reason: 'BIOS should be in dc/ subdirectory');
+      expect(await wrongPath.exists(), isFalse,
+          reason: 'BIOS should NOT be flat in system root');
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('falls back to fileName when filePath is null', () async {
+      final tempDir = await Directory.systemTemp.createTemp('firmware_flat_test');
+      final biosDir = p.join(tempDir.path, 'BIOS');
+      await Directory(biosDir).create();
+
+      final firmware = Firmware(
+        id: 4,
+        fileName: 'gba_bios.bin',
+        filePath: null,
+        fileSizeBytes: 100,
+      );
+
+      final platform = Platform(
+        id: 4,
+        name: 'GBA',
+        slug: 'gba',
+        firmware: [firmware],
+      );
+
+      final mockStrategy = MockEmulatorStrategy();
+
+      when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
+      when(mockStrategyRegistry.getStrategyForSlug('gba')).thenReturn(mockStrategy);
+      when(mockDirectoryService.getEmulatorBiosDirectory('test_emulator')).thenAnswer((_) async => biosDir);
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([4, 5, 6]));
+
+      await service.syncAllFirmware();
+
+      final destFile = File(p.join(biosDir, 'gba_bios.bin'));
+      expect(await destFile.exists(), isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('falls back to fileName when filePath is empty string', () async {
+      final tempDir = await Directory.systemTemp.createTemp('firmware_empty_path_test');
+      final biosDir = p.join(tempDir.path, 'BIOS');
+      await Directory(biosDir).create();
+
+      final firmware = Firmware(
+        id: 5,
+        fileName: 'psx_bios.bin',
+        filePath: '',
+        fileSizeBytes: 100,
+      );
+
+      final platform = Platform(
+        id: 5,
+        name: 'PS1',
+        slug: 'psx',
+        firmware: [firmware],
+      );
+
+      final mockStrategy = MockEmulatorStrategy();
+
+      when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
+      when(mockStrategyRegistry.getStrategyForSlug('psx')).thenReturn(mockStrategy);
+      when(mockDirectoryService.getEmulatorBiosDirectory('test_emulator')).thenAnswer((_) async => biosDir);
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([7, 8, 9]));
+
+      await service.syncAllFirmware();
+
+      final destFile = File(p.join(biosDir, 'psx_bios.bin'));
+      expect(await destFile.exists(), isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
+  });
 }
