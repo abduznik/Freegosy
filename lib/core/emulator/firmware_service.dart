@@ -84,7 +84,12 @@ class FirmwareService {
   }
 
   Future<void> _downloadAndPlaceFirmware(Firmware firmware, String biosDir, {FirmwareProgressCallback? onProgress}) async {
-    final destPath = p.join(biosDir, firmware.fileName);
+    // Use filePath from RomM to preserve subdirectory structure (e.g. "dc/dc_boot.bin").
+    // Some cores like Flycast expect BIOS files in subdirectories, not flat.
+    final relativePath = firmware.filePath?.isNotEmpty == true
+        ? firmware.filePath!
+        : firmware.fileName;
+    final destPath = p.join(biosDir, relativePath);
     final destFile = File(destPath);
 
     if (await destFile.exists()) {
