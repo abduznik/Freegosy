@@ -51,6 +51,12 @@ class SaveSyncService {
   final StrategyRegistry _strategyRegistry;
   final SharedPreferences _prefs;
 
+  /// Minimum save file size in bytes to consider valid for upload.
+  /// Files smaller than this are likely empty/blank saves created by an
+  /// emulator that didn't actually save, and should not overwrite a
+  /// legitimate cloud save (issues #42, #24).
+  static const int minValidSaveSizeBytes = 100;
+
   late final RetroArchSaveStrategy _retroarch;
   late final DolphinSaveStrategy _dolphin;
   late final EdenSaveStrategy _eden;
@@ -110,25 +116,18 @@ class SaveSyncService {
     if (platformSlug != null) {
       final preferredId = _strategyRegistry.getPreferredEmulatorId(platformSlug);
       if (preferredId != null) {
-        final id = preferredId.toLowerCase();
-        if (id == 'melonds') return _melonds;
-        if (id == 'mgba') return _mgba;
-        if (id == 'duckstation') return _duckstation;
-        if (id == 'retroarch') return _retroarch;
-        if (id == 'ppsspp') return _ppsspp;
-        if (id == 'cemu') return _cemu;
-        if (id == 'pcsx2') return _pcsx2;
-        if (id == 'rpcs3') return _rpcs3;
-        if (id == 'dolphin') return _dolphin;
-        if (id == 'xenia' || id == 'xenia_canary') return _xenia;
-        if (id == 'eden') return _eden;
-        if (id == 'ryujinx') return _ryujinx;
-        if (id == 'windows') return _windows;
-        if (id == 'azahar') return _azahar;
-        if (id == 'ares') return _ares;
+        return _saveStrategyForEmulatorId(preferredId);
+      }
+
+      // No user preference set: check which emulator the registry would use
+      // by default (first registered strategy that supports this slug).
+      final defaultEmulatorStrategy = _strategyRegistry.getStrategyForSlug(platformSlug);
+      if (defaultEmulatorStrategy != null) {
+        return _saveStrategyForEmulatorId(defaultEmulatorStrategy.emulatorId);
       }
     }
 
+    // Hardcoded fallback (should rarely be reached)
     switch (platformSlug?.toLowerCase()) {
       case 'gba':
       case 'gbc':
@@ -199,6 +198,27 @@ class SaveSyncService {
       default:
         return null;
     }
+  }
+
+  /// Maps an emulator strategy ID to the corresponding save strategy.
+  SaveStrategy? _saveStrategyForEmulatorId(String emulatorId) {
+    final id = emulatorId.toLowerCase();
+    if (id == 'melonds') return _melonds;
+    if (id == 'mgba') return _mgba;
+    if (id == 'duckstation') return _duckstation;
+    if (id == 'retroarch') return _retroarch;
+    if (id == 'ppsspp') return _ppsspp;
+    if (id == 'cemu') return _cemu;
+    if (id == 'pcsx2') return _pcsx2;
+    if (id == 'rpcs3') return _rpcs3;
+    if (id == 'dolphin') return _dolphin;
+    if (id == 'xenia' || id == 'xenia_canary') return _xenia;
+    if (id == 'eden') return _eden;
+    if (id == 'ryujinx') return _ryujinx;
+    if (id == 'windows') return _windows;
+    if (id == 'azahar') return _azahar;
+    if (id == 'ares') return _ares;
+    return null;
   }
 
   String _hashKey(String gameId, String filename) =>
@@ -409,6 +429,17 @@ class SaveSyncService {
             filesMap.values.firstWhere((s) => s != null, orElse: () => null);
       }
 
+      // Reject empty/blank saves to prevent overwriting legitimate cloud saves.
+      final fileLen = await finalUploadFile.length();
+      if (fileLen < minValidSaveSizeBytes) {
+        debugPrint(
+            '[SyncService] Rejecting save for $displayStem: $fileLen bytes < $minValidSaveSizeBytes min');
+        if (isBundle && await finalUploadFile.exists()) {
+          await finalUploadFile.delete();
+        }
+        return false;
+      }
+
       final String localHash = await _hashFile(finalUploadFile);
       final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
@@ -506,7 +537,7 @@ class SaveSyncService {
 
       final filename =
           save['file_name'] as String? ?? downloadUrl.split('/').last;
-      final adjustedFilename = _adjustFilenameForFormat(bytes, _normalizeFilename(filename));
+      final adjustedFilename = _adjustFilenameForFormat(bytes, normalizeSaveFilename(filename));
 
       final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
       if (!ok) {
@@ -646,6 +677,14 @@ class SaveSyncService {
         debugPrint('[Sync] Uploading bundled save: $uploadFilename');
       }
 
+      // Reject empty/blank saves to prevent overwriting legitimate cloud saves.
+      final fileLen = await finalUploadFile.length();
+      if (fileLen < minValidSaveSizeBytes) {
+        debugPrint('[SyncService] [legacy] Rejecting save for $displayStem: $fileLen bytes < $minValidSaveSizeBytes min');
+        if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
+        return false;
+      }
+
       final String localHash = await _hashFile(finalUploadFile);
       final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
@@ -733,7 +772,8 @@ class SaveSyncService {
   ///
   /// Also handles pure timestamp filenames (legacy artifacts) by replacing
   /// them with "save{ext}".
-  String _normalizeFilename(String filename) {
+  @visibleForTesting
+  static String normalizeSaveFilename(String filename) {
     var base = p.basenameWithoutExtension(filename);
     final ext = p.extension(filename);
     if (_timestampPattern.hasMatch(base)) return 'save$ext';
@@ -779,7 +819,7 @@ class SaveSyncService {
 
       // Sniff actual bytes so that ZIP files (even those manually uploaded or
       // stored under a non-.zip name) are correctly extracted on restore.
-      final adjustedFilename = _adjustFilenameForFormat(bytes, _normalizeFilename(filename));
+      final adjustedFilename = _adjustFilenameForFormat(bytes, normalizeSaveFilename(filename));
 
       final ok = await strategy.restoreSave(
           game, romPath, bytes, adjustedFilename);

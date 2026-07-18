@@ -27,6 +27,7 @@ void main() {
     mockStrategyRegistry = MockStrategyRegistry();
     
     when(mockStrategyRegistry.getPreferredEmulatorId(any)).thenReturn(null);
+    when(mockStrategyRegistry.getStrategyForSlug(any)).thenReturn(null);
     
     when(mockDirectoryService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
         .thenAnswer((_) async => '/nonexistent_directory_for_testing');
@@ -108,9 +109,9 @@ void main() {
       
       // Create a save file and a state file to simulate multiple files
       final saveFile = File(p.join(tempDir.path, 'game.sav'));
-      await saveFile.writeAsString('sav content');
+      await saveFile.writeAsString('x' * 150);
       final stateFile = File(p.join(tempDir.path, 'game.state1'));
-      await stateFile.writeAsString('state content');
+      await stateFile.writeAsString('x' * 150);
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -142,7 +143,7 @@ void main() {
       
       // Verify that the uploaded file is unzipped and contains the raw save content
       final content = await uploadedFile!.readAsString();
-      expect(content, 'sav content');
+      expect(content, 'x' * 150);
       
       await tempDir.delete(recursive: true);
     });
@@ -168,9 +169,9 @@ void main() {
 
       // Create multiple save files
       final file1 = File(p.join(tempDir.path, 'save1.dat'));
-      await file1.writeAsString('data1');
+      await file1.writeAsString('x' * 150);
       final file2 = File(p.join(tempDir.path, 'save2.dat'));
-      await file2.writeAsString('data2');
+      await file2.writeAsString('x' * 150);
 
       File? uploadedFile;
       String? uploadedFilename;

@@ -18,6 +18,11 @@ class RetroArchSaveStrategy extends SaveStrategy {
   String _ndsCore = 'melonds'; // Default NDS core
   String? _cachedSaveRoot; // Cached from retroarch.cfg
 
+  /// Cached RetroArch config flags read from retroarch.cfg.
+  bool? _cachedSortSavefiles;
+  bool? _cachedSortSavefilesByContent;
+  bool? _cachedSavefilesInContentDir;
+
   // Test-only override to skip reading the real retroarch.cfg.
   @visibleForTesting
   bool skipConfigRead = false;
@@ -138,7 +143,13 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'vectrex':   _CoreInfo('vecx_libretro',            'VecX',               'States/VecX'),
   };
 
-  /// Reads `savefile_directory` from retroarch.cfg if available.
+  /// Reads `savefile_directory` and sort flags from retroarch.cfg.
+  ///
+  /// Parses these RetroArch config keys:
+  /// - `savefile_directory` — base save directory
+  /// - `sort_savefiles_enable` — when "true", saves go into core subfolders
+  /// - `sort_savefiles_by_content_enable` — when "true", saves go into ROM parent folder subfolders
+  /// - `savefiles_in_content_dir` — when "true", saves go next to the ROM
   Future<String?> _readConfigSaveRoot() async {
     if (skipConfigRead) return null;
     if (_cachedSaveRoot != null) return _cachedSaveRoot;
@@ -167,29 +178,63 @@ class RetroArchSaveStrategy extends SaveStrategy {
       candidates.add(p.join(exeDir, 'retroarch.cfg'));
     }
 
+    final savefileDirRe = RegExp(r'^\s*savefile_directory\s*=\s*"([^"]*)"');
+    final boolRe = RegExp(r'^\s*(sort_savefiles_enable|sort_savefiles_by_content_enable|savefiles_in_content_dir)\s*=\s*"?(true|false)"?');
+
     for (final cfgPath in candidates) {
       final cfgFile = io.File(cfgPath);
       if (!await cfgFile.exists()) continue;
       try {
         final lines = await cfgFile.readAsLines();
         for (final line in lines) {
-          final match = RegExp(r'^\s*savefile_directory\s*=\s*"([^"]*)"').firstMatch(line);
-          if (match != null) {
-            var dir = match.group(1)!;
+          final saveMatch = savefileDirRe.firstMatch(line);
+          if (saveMatch != null) {
+            var dir = saveMatch.group(1)!;
             if (dir.startsWith('~')) {
               final home = _platform.environment['HOME'];
               if (home != null) dir = dir.replaceFirst('~', home);
             }
             if (await io.Directory(dir).exists()) {
               _cachedSaveRoot = dir;
-              return dir;
+            }
+          }
+
+          final boolMatch = boolRe.firstMatch(line);
+          if (boolMatch != null) {
+            final key = boolMatch.group(1)!;
+            final value = boolMatch.group(2)!.toLowerCase() == 'true';
+            switch (key) {
+              case 'sort_savefiles_enable':
+                _cachedSortSavefiles = value;
+                break;
+              case 'sort_savefiles_by_content_enable':
+                _cachedSortSavefilesByContent = value;
+                break;
+              case 'savefiles_in_content_dir':
+                _cachedSavefilesInContentDir = value;
+                break;
             }
           }
         }
+        if (_cachedSaveRoot != null) break;
       } catch (_) {}
     }
-    return null;
+    return _cachedSaveRoot;
   }
+
+  /// Whether RetroArch sorts saves into core subfolders (e.g. `saves/mGBA/`).
+  /// Defaults to `true` (RetroArch's default).
+  bool get _sortSavefiles => _cachedSortSavefiles ?? true;
+
+  /// Whether RetroArch sorts saves into ROM parent folder subfolders.
+  /// Parsed from config but currently unused in path resolution — RetroArch
+  /// handles this internally when the flag is set. Kept for future use if
+  /// we need to construct paths including the content directory name.
+  // ignore: unused_element
+  bool get _sortSavefilesByContent => _cachedSortSavefilesByContent ?? false;
+
+  /// Whether RetroArch saves are placed next to the ROM instead of a central dir.
+  bool get _savefilesInContentDir => _cachedSavefilesInContentDir ?? false;
 
   /// Resolves the save root directory: retroarch.cfg first, then exe-relative.
   Future<String> _resolveSaveRoot() async {
@@ -216,6 +261,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     if (coreInfo == null) return null;
 
+    // Ensure config flags are parsed on all platforms (Linux, macOS, Windows).
+    await _readConfigSaveRoot();
+
     if (_platform.isLinux) {
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
 
@@ -227,11 +275,25 @@ class RetroArchSaveStrategy extends SaveStrategy {
         return p.join(baseDir, 'saves', coreInfo.saveFolder);
       }
 
+      // Non-EmuDeck Linux: respect sort_savefiles_enable config flag
+      if (!_sortSavefiles) {
+        // sort_savefiles_enable=false: saves go flat into baseDir, no core subfolder
+        return baseDir;
+      }
       // EmuDeck mapping returns the folder containing the actual saves
       return p.join(baseDir, coreInfo.saveFolder);
     }
 
+    // macOS / Windows: respect sort_savefiles_enable config flag
+    if (_savefilesInContentDir) {
+      // savefiles_in_content_dir=true: saves go next to the ROM
+      return io.File(romPath).parent.path;
+    }
     final saveRoot = await _resolveSaveRoot();
+    if (!_sortSavefiles) {
+      // sort_savefiles_enable=false: saves go flat into saveRoot, no core subfolder
+      return saveRoot;
+    }
     return p.join(saveRoot, coreInfo.saveFolder);
   }
 

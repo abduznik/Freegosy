@@ -76,12 +76,13 @@ abstract class SaveStrategy {
 
   // ─── Shared helper: RetroArch config lookup ──────────────────────────────
 
-  /// Reads `savefile_directory` from retroarch.cfg for platforms where RetroArch
-  /// manages saves via a core subfolder (e.g. mGBA, MelonDS, Dolphin).
+  /// Reads `savefile_directory` and sort flags from retroarch.cfg for platforms
+  /// where RetroArch manages saves via a core subfolder (e.g. mGBA, MelonDS).
   ///
   /// Returns the full path to the core-specific subfolder (e.g.
-  /// `/Users/xyz/Documents/RetroArch/saves/mGBA`), or `null` if the config
-  /// is not found or the core folder does not exist.
+  /// `/Users/xyz/Documents/RetroArch/saves/mGBA`) when `sort_savefiles_enable`
+  /// is true (the default), or the flat save directory when it is false.
+  /// Returns `null` if the config is not found.
   static Future<String?> retroarchCoreSaveDir(DirectoryService directoryService, String coreSaveFolder, {PlatformInfo? platform}) async {
     final p_ = platform ?? PlatformInfo.current;
     final List<String> configCandidates = [];
@@ -107,13 +108,18 @@ abstract class SaveStrategy {
       configCandidates.add(p.join(exeDir, 'retroarch.cfg'));
     }
 
+    final savefileDirRe = RegExp(r'^\s*savefile_directory\s*=\s*"([^"]*)"');
+    final sortRe = RegExp(r'^\s*sort_savefiles_enable\s*=\s*"?(true|false)"?');
+
     for (final cfgPath in configCandidates) {
       final cfgFile = io.File(cfgPath);
       if (!await cfgFile.exists()) continue;
       try {
         final lines = await cfgFile.readAsLines();
+        String? saveDir;
+        bool sortSavefiles = true; // RetroArch default
         for (final line in lines) {
-          final match = RegExp(r'^\s*savefile_directory\s*=\s*"([^"]*)"').firstMatch(line);
+          final match = savefileDirRe.firstMatch(line);
           if (match != null) {
             var dir = match.group(1)!;
             if (dir.startsWith('~')) {
@@ -121,11 +127,22 @@ abstract class SaveStrategy {
               if (home != null) dir = dir.replaceFirst('~', home);
             }
             if (await io.Directory(dir).exists()) {
-              final coreDir = p.join(dir, coreSaveFolder);
-              if (await io.Directory(coreDir).exists()) {
-                return coreDir;
-              }
+              saveDir = dir;
             }
+          }
+          final sortMatch = sortRe.firstMatch(line);
+          if (sortMatch != null) {
+            sortSavefiles = sortMatch.group(1)!.toLowerCase() == 'true';
+          }
+        }
+        if (saveDir != null) {
+          if (!sortSavefiles) {
+            // sort_savefiles_enable=false: saves are flat, no core subfolder
+            return saveDir;
+          }
+          final coreDir = p.join(saveDir, coreSaveFolder);
+          if (await io.Directory(coreDir).exists()) {
+            return coreDir;
           }
         }
       } catch (_) {}

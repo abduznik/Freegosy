@@ -27,6 +27,7 @@ void main() {
     
     // Default preferred emulator is null to use built-in fallbacks
     when(mockStrategyRegistry.getPreferredEmulatorId(any)).thenReturn(null);
+    when(mockStrategyRegistry.getStrategyForSlug(any)).thenReturn(null);
     
     // Ensure that on Linux tests we don't accidentally pick up a real system directory or a mock that returns empty string
     when(mockDirectoryService.getEmulatorAppSupportDirectory(any))
@@ -56,7 +57,7 @@ void main() {
       final tempDir = await Directory.systemTemp.createTemp('save_sync_test');
       final romPath = p.join(tempDir.path, 'game.gba');
       final saveFile = File(p.join(tempDir.path, 'game.sav'));
-      await saveFile.writeAsString('new content');
+      await saveFile.writeAsString('x' * 150);
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -95,7 +96,7 @@ void main() {
       final tempDir = await Directory.systemTemp.createTemp('save_sync_test_skip');
       final romPath = p.join(tempDir.path, 'game.gba');
       final saveFile = File(p.join(tempDir.path, 'game.sav'));
-      await saveFile.writeAsString('content');
+      await saveFile.writeAsString('x' * 150);
 
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -143,7 +144,7 @@ void main() {
         // fetchCapabilities already returns unknown() in setUp
         final tempDir = await Directory.systemTemp.createTemp('routing_legacy');
         final romPath = '${tempDir.path}/game.gba';
-        await File('${tempDir.path}/game.sav').writeAsString('data');
+        await File('${tempDir.path}/game.sav').writeAsString('x' * 150);
 
         final game = Game(id: 'g1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -188,7 +189,7 @@ void main() {
 
         final tempDir = await Directory.systemTemp.createTemp('routing_device');
         final romPath = '${tempDir.path}/game.gba';
-        await File('${tempDir.path}/game.sav').writeAsString('data');
+        await File('${tempDir.path}/game.sav').writeAsString('x' * 150);
 
         final game = Game(id: 'g2', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -230,7 +231,7 @@ void main() {
         final tempDir = await Directory.systemTemp.createTemp('session_grace');
         final romPath = '${tempDir.path}/game.gba';
         final saveFile = File('${tempDir.path}/game.sav');
-        await saveFile.writeAsString('save content');
+        await saveFile.writeAsString('x' * 150);
 
         final game = Game(id: 'sg1', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -258,7 +259,7 @@ void main() {
         final tempDir = await Directory.systemTemp.createTemp('session_old');
         final romPath = '${tempDir.path}/game.gba';
         final saveFile = File('${tempDir.path}/game.sav');
-        await saveFile.writeAsString('old save');
+        await saveFile.writeAsString('x' * 150);
 
         final game = Game(id: 'sg2', name: 'game', platformSlug: 'gba', fileSize: 0);
 
@@ -290,7 +291,7 @@ void main() {
         final saveDir = Directory('${tempDir.path}/Wii/title/00010000/474d4345');
         await saveDir.create(recursive: true);
         final saveDataFile = File('${saveDir.path}/game.bin');
-        await saveDataFile.writeAsString('wii save data');
+        await saveDataFile.writeAsString('x' * 150);
         final romPath = '${tempDir.path}/game.iso';
 
         // Use a Game that routes to dolphin strategy
@@ -325,7 +326,7 @@ void main() {
       final tempDir = await Directory.systemTemp.createTemp('save_sync_test_conflict');
       final romPath = p.join(tempDir.path, 'game.gba');
       final saveFile = File(p.join(tempDir.path, 'game.sav'));
-      await saveFile.writeAsString('local change');
+      await saveFile.writeAsString('x' * 150);
       
       final game = Game(id: 'game1', name: 'game', platformSlug: 'gba', fileSize: 0);
       
