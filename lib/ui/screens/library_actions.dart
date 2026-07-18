@@ -312,6 +312,38 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     String romPath = existingRomPath;
     bool isAutoDetected = await io.File(existingRomPath).exists();
 
+    // If romPath is a directory, scan for disc files and show picker if multiple found.
+    // This handles cases where RomM doesn't set hasMultipleFiles correctly
+    // (e.g. GameCube multidisc with .m3u).
+    if (!game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
+      final dir = io.Directory(existingRomPath);
+      final discFiles = <Map<String, dynamic>>[];
+      await for (final entity in dir.list()) {
+        if (entity is! io.File) continue;
+        final name = p.basename(entity.path).toLowerCase();
+        // Match common disc image formats
+        if (name.endsWith('.rvz') || name.endsWith('.gcm') || name.endsWith('.iso') ||
+            name.endsWith('.cso') || name.endsWith('.wbfs') || name.endsWith('.iso')) {
+          final stat = await entity.stat();
+          discFiles.add({
+            'file_name': p.basename(entity.path),
+            'file_size_bytes': stat.size,
+          });
+        }
+      }
+      if (discFiles.length > 1) {
+        debugPrint('[Launch] Directory has ${discFiles.length} disc files, showing picker');
+        if (!context.mounted) return;
+        String? selectedFilePath;
+        await MultiDiscPicker.show(context, game: game, files: discFiles, onSelect: (file) {
+          selectedFilePath = file['file_name']?.toString();
+        });
+        if (selectedFilePath == null) return;
+        romPath = p.join(existingRomPath, selectedFilePath);
+        debugPrint('[Launch] Resolved romPath: $romPath');
+      }
+    }
+
     if (game.hasMultipleFiles) {
       // If files array is empty (paginated API doesn't include it), fetch full details
       List<Map<String, dynamic>> files = game.files;
