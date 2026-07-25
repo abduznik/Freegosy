@@ -23,6 +23,10 @@ on:
         description: 'Build macOS?'
         type: boolean
         default: true
+      build_nix:
+        description: 'Build Nix package?'
+        type: boolean
+        default: true
 
 jobs:
   build_linux:
@@ -173,9 +177,30 @@ jobs:
             freegosy-macos.dmg
             freegosy-macos-x64.zip
 
+  build_nix:
+    name: Build Nix Package
+    if: ${{ inputs.build_nix }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v27
+      - name: Update version in flake.nix
+        run: sed -i "s/version = \".*\"/version = \"${{ github.event.inputs.version }}\"/" flake.nix
+      - name: Build Nix package
+        run: nix build .#default --no-link --print-out-paths > result-path.txt
+      - name: Package Nix output
+        run: |
+          RESULT_PATH=$(cat result-path.txt)
+          tar -czf freegosy-nix-x86_64-linux.tar.gz -C "$(dirname $RESULT_PATH)" .
+      - name: Upload Nix Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nix-release
+          path: freegosy-nix-x86_64-linux.tar.gz
+
   release:
     name: Create Release
-    needs: [build_linux, build_windows, build_macos]
+    needs: [build_linux, build_windows, build_macos, build_nix]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -204,6 +229,13 @@ jobs:
           name: macos-release
           path: artifacts/
 
+      - name: Download Nix Artifact
+        if: ${{ inputs.build_nix }}
+        uses: actions/download-artifact@v4
+        with:
+          name: nix-release
+          path: artifacts/
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -216,6 +248,7 @@ jobs:
             artifacts/freegosy-windows-x64.zip
             artifacts/freegosy-macos.dmg
             artifacts/freegosy-macos-x64.zip
+            artifacts/freegosy-nix-x86_64-linux.tar.gz
           fail_on_unmatched_files: false
           draft: false
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
