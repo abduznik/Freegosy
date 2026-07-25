@@ -217,6 +217,7 @@ jobs:
   release:
     name: Create Release
     needs: [build_linux, build_windows, build_macos, build_nix]
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -237,6 +238,7 @@ jobs:
         with:
           name: windows-release
           path: artifacts/
+        continue-on-error: true
           
       - name: Download macOS Artifact
         if: ${{ inputs.build_macos }}
@@ -244,6 +246,7 @@ jobs:
         with:
           name: macos-release
           path: artifacts/
+        continue-on-error: true
 
       - name: Download Nix Artifact
         if: ${{ inputs.build_linux }}
