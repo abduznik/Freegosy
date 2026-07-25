@@ -221,7 +221,24 @@ class WindowsSaveStrategy extends SaveStrategy {
     final filter = _saveFilters[game.id];
     final includePatterns = _parseFilterPatterns(filter);
 
-    // Check if any files exist (respecting sessionStart and filter)
+    // When a filter is active, return individual matching files
+    // so the sync service zips only those files (not the whole directory).
+    if (includePatterns.isNotEmpty) {
+      final matchedFiles = <File>[];
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is! File) continue;
+        if (sessionStart != null) {
+          final stat = await entity.stat();
+          if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
+        }
+        if (_matchesAnyPattern(entity.path, includePatterns)) {
+          matchedFiles.add(entity);
+        }
+      }
+      return matchedFiles;
+    }
+
+    // No filter: check if any files exist, then return the directory.
     bool hasFiles = false;
     await for (final entity in dir.list(recursive: true)) {
       if (entity is! File) continue;
@@ -229,15 +246,11 @@ class WindowsSaveStrategy extends SaveStrategy {
         final stat = await entity.stat();
         if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
       }
-      // Apply filter if patterns exist
-      if (includePatterns.isNotEmpty && !_matchesAnyPattern(entity.path, includePatterns)) continue;
       hasFiles = true;
       break;
     }
     if (!hasFiles) return [];
 
-    // Return the directory itself (wrapped in File for the strategy API)
-    // SaveSyncService will add it as a directory to the bundle zip.
     return [File(dir.path)];
   }
 
