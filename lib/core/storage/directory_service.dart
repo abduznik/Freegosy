@@ -316,20 +316,81 @@ class DirectoryService {
 
   Future<String> getRomsDirectory() async => romsRootPath;
 
+  /// Maps any platform slug variant to a single canonical ROM folder name.
+  /// Ensures e.g. "neo-geo", "neogeo", "mvs" all resolve to the same folder.
+  static const Map<String, String> _slugToCanonicalFolder = {
+    // Nintendo
+    '3ds': '3ds', 'n3ds': '3ds', 'nintendo-3ds': '3ds', 'nintendo3ds': '3ds',
+    'new-nintendo-3ds': '3ds', 'new-nintendo-3ds-xl': '3ds',
+    'gba': 'gba', 'game-boy-advance': 'gba',
+    'gbc': 'gbc', 'game-boy-color': 'gbc',
+    'gb': 'gb', 'game-boy': 'gb',
+    'nds': 'nds', 'nintendo-ds': 'nds', 'ds': 'nds',
+    'n64': 'n64', 'nintendo-64': 'n64', 'n64dd': 'n64',
+    'snes': 'snes', 'snesna': 'snes', 'sfc': 'snes',
+    'nes': 'nes', 'famicom': 'nes',
+    'fds': 'fds', 'famicom-disk-system': 'fds',
+    'gc': 'gc', 'gamecube': 'gc', 'ngc': 'gc',
+    'wii': 'wii',
+    'wiiu': 'wiiu', 'wii-u': 'wiiu', 'nintendo-wii-u': 'wiiu', 'nintendo-wiiu': 'wiiu',
+    'switch': 'switch', 'nintendo-switch': 'switch', 'ns': 'switch',
+    // Sega
+    'megadrive': 'megadrive', 'genesis': 'megadrive', 'md': 'megadrive',
+    'segacd': 'segacd', 'megacd': 'segacd',
+    'mastersystem': 'mastersystem', 'sms': 'mastersystem',
+    'gamegear': 'gamegear',
+    'saturn': 'saturn',
+    'dreamcast': 'dreamcast', 'dc': 'dreamcast',
+    // Sony
+    'psx': 'psx', 'ps1': 'psx', 'playstation': 'psx',
+    'ps2': 'ps2', 'playstation-2': 'ps2', 'playstation2': 'ps2',
+    'ps3': 'ps3', 'playstation-3': 'ps3', 'playstation3': 'ps3',
+    'psp': 'psp', 'playstation-portable': 'psp',
+    // SNK / Arcade
+    'neogeo': 'neogeo', 'neo-geo': 'neogeo', 'neo-geo-aes': 'neogeo',
+    'neo-geo-mvs': 'neogeo', 'mvs': 'neogeo', 'aes': 'neogeo',
+    'neogeocd': 'neogeocd', 'neocd': 'neogeocd',
+    'ngp': 'ngp', 'ngpc': 'ngp', 'neo-geo-pocket': 'ngp',
+    'arcade': 'arcade', 'mame': 'arcade',
+    // NEC
+    'pcengine': 'pcengine', 'tg16': 'pcengine', 'turbografx16': 'pcengine',
+    'turbografx-16': 'pcengine', 'pce': 'pcengine', 'pcenginecd': 'pcengine',
+    // Bandai
+    'wonderswan': 'wonderswan', 'wonderswancolor': 'wonderswan',
+    // PC
+    'windows': 'windows', 'pc': 'windows', 'win': 'windows',
+  };
+
   String _resolveFolderName(String platformSlug) {
     final lower = platformSlug.toLowerCase();
+    // 1. EmuDeck aliases take precedence (EmuDeck has its own folder conventions)
     if (linuxSyncPreset == 'emudeck') {
       return _emudeckFolderAliases[lower] ?? lower;
     }
+    // 2. Canonical slug→folder mapping (applies to all other presets)
+    final canonical = _slugToCanonicalFolder[lower];
+    if (canonical != null) return canonical;
+    // 3. Raw slug as-is (unknown platforms)
     return lower;
   }
 
   Future<String> getRomDirectory(Game game) async {
     final platformSlug = game.platformSlug ?? 'unknown';
     final folderName = _resolveFolderName(platformSlug);
-    final dirPath = p.join(romsRootPath, folderName);
-    await _ensureDirectoryExists(dirPath);
-    return dirPath;
+    final canonicalDirPath = p.join(romsRootPath, folderName);
+
+    // Backwards compatibility: if the canonical folder doesn't exist
+    // but the raw-slug folder does, use the raw-slug folder to avoid
+    // losing access to already-downloaded ROMs.
+    final rawSlugDirPath = p.join(romsRootPath, platformSlug.toLowerCase());
+    if (folderName != platformSlug.toLowerCase() &&
+        !await io.Directory(canonicalDirPath).exists() &&
+        await io.Directory(rawSlugDirPath).exists()) {
+      return rawSlugDirPath;
+    }
+
+    await _ensureDirectoryExists(canonicalDirPath);
+    return canonicalDirPath;
   }
 
   Future<String> getRomFilePath(Game game) async {
