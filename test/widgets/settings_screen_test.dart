@@ -97,11 +97,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Scroll to the bottom of the settings list to find the Emulators section
-      final listView = find.byType(ListView);
-      if (listView.evaluate().isNotEmpty) {
-        await tester.drag(listView, const Offset(0, -2000));
-        await tester.pumpAndSettle();
-      }
+      final listView = find.byType(ListView).first;
+      await tester.drag(listView, const Offset(0, -2000));
       expect(find.text('Emulators'), findsWidgets);
     });
 

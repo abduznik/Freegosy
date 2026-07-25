@@ -697,4 +697,93 @@ void main() {
       expect(getDeadzoneForController('XBOX WIRELESS'), 0.20);
     });
   });
+
+  // =========================================================================
+  // 14. PlayStation USB controller mappings (recent additions)
+  // =========================================================================
+  group('PlayStation USB controller mappings', () {
+    const psFaceButtonPattern = {
+      'cross': GameAction.confirm,
+      'circle': GameAction.back,
+      'square': GameAction.detail,
+      'triangle': GameAction.favorite,
+    };
+
+    test('PS4 Controller (Windows USB) exists with face buttons', () {
+      final m = kControllerMappings['PS4 Controller'];
+      expect(m, isNotNull, reason: 'PS4 Controller entry missing from kControllerMappings');
+      for (final entry in psFaceButtonPattern.entries) {
+        expect(m![entry.key], entry.value,
+            reason: 'PS4 Controller ${entry.key} should map to ${entry.value}');
+      }
+    });
+
+    test('PS5 Controller (Windows USB) exists with face buttons', () {
+      final m = kControllerMappings['PS5 Controller'];
+      expect(m, isNotNull, reason: 'PS5 Controller entry missing');
+      for (final entry in psFaceButtonPattern.entries) {
+        expect(m![entry.key], entry.value,
+            reason: 'PS5 Controller ${entry.key} should map to ${entry.value}');
+      }
+    });
+
+    test('PS5 Access Controller exists with face buttons', () {
+      final m = kControllerMappings['PS5 Access Controller'];
+      expect(m, isNotNull, reason: 'PS5 Access Controller entry missing');
+      for (final entry in psFaceButtonPattern.entries) {
+        expect(m![entry.key], entry.value,
+            reason: 'PS5 Access Controller ${entry.key} should map to ${entry.value}');
+      }
+    });
+
+    test('Sony Interactive Entertainment Wireless Controller (macOS/Linux) exists', () {
+      final m = kControllerMappings['Sony Interactive Entertainment Wireless Controller'];
+      expect(m, isNotNull, reason: 'Sony ISE Wireless Controller entry missing');
+      for (final entry in psFaceButtonPattern.entries) {
+        expect(m![entry.key], entry.value);
+      }
+    });
+
+    test('all PlayStation entries have d-pad and shoulder buttons', () {
+      const psNames = [
+        'PS4 Controller',
+        'PS5 Controller',
+        'PS5 Access Controller',
+        'Sony Interactive Entertainment Wireless Controller',
+      ];
+      for (final name in psNames) {
+        final m = kControllerMappings[name];
+        expect(m, isNotNull, reason: '$name missing');
+        expect(m!['dpad_up'], GameAction.up, reason: '$name dpad_up');
+        expect(m['dpad_down'], GameAction.down, reason: '$name dpad_down');
+        expect(m['dpad_left'], GameAction.left, reason: '$name dpad_left');
+        expect(m['dpad_right'], GameAction.right, reason: '$name dpad_right');
+        expect(m['leftshoulder'], GameAction.l1, reason: '$name L1');
+        expect(m['rightshoulder'], GameAction.r1, reason: '$name R1');
+      }
+    });
+  });
+
+  // =========================================================================
+  // 15. Empty-token fallback (Bluetooth noise-only controller names)
+  // =========================================================================
+  group('Empty-token controller fallback', () {
+    test('noise-only names tokenize to empty set', () {
+      expect(GamepadUtils.tokenize('Wireless Controller'), isEmpty);
+      expect(GamepadUtils.tokenize('USB HID Gamepad'), isEmpty);
+    });
+
+    test('empty string returns empty set (not a fallback trigger)', () {
+      final tokens = GamepadUtils.tokenize('');
+      expect(tokens, isEmpty);
+      // Empty name should NOT trigger the warning — only non-empty noise names do
+    });
+
+    test('partial noise keeps meaningful tokens', () {
+      final t = GamepadUtils.tokenize('Wireless Xbox Controller');
+      expect(t, contains('xbox'));
+      expect(t, isNot(contains('wireless')));
+      expect(t, isNot(contains('controller')));
+    });
+  });
 }
