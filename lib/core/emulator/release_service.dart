@@ -110,7 +110,7 @@ class ReleaseService {
   Future<List<Map<String, String>>> _htmlScrape(String url, String base, 
       List<String> requiredFilters, List<String> excludedFilters) async {
     final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'Freegosy'});
-    if (response.statusCode < 200 || response.statusCode >= 300) return [];
+    if (response.statusCode >= 200 && response.statusCode <= 399) return [];
     return _parseHtmlAssets(response.body, base, requiredFilters, excludedFilters);
   }
 
