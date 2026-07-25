@@ -188,9 +188,14 @@ jobs:
           path: dist/
       - name: Compute hash and update flake.nix
         run: |
-          HASH=$(nix hash to-sri --type sha256 --flat dist/Freegosy-x86_64.AppImage)
-          echo "AppImage SRI hash: $HASH"
-          sed -i "s|hash = \".*\"|hash = \"${HASH}\"|" flake.nix
+          SRI=$(python3 -c "
+          import hashlib, base64
+          with open('dist/Freegosy-x86_64.AppImage', 'rb') as f:
+              h = hashlib.sha256(f.read()).digest()
+          print('sha256-' + base64.b64encode(h).decode())
+          ")
+          echo "AppImage SRI: $SRI"
+          sed -i "s|hash = \".*\"|hash = \"${SRI}\"|" flake.nix
           sed -i "s|version = \".*\"|version = \"${{ github.event.inputs.version }}\"|" flake.nix
           cat flake.nix | grep -A2 "hash\|version"
       - name: Build Nix package
