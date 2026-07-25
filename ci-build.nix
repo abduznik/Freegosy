@@ -2,7 +2,7 @@
 # Usage: FREEGOSY_SRC=./Freegosy-x86_64.AppImage nix-build ci-build.nix
 let
   pkgs = import <nixpkgs> {};
-  src = ./. + (builtins.getEnv "FREEGOSY_SRC");
+  src = ./. + "/${builtins.getEnv "FREEGOSY_SRC"}";
   pname = "freegosy";
   version = builtins.getEnv "FREEGOSY_VERSION";
   appimageContents = pkgs.appimageTools.extractType1 { inherit pname version src; };
