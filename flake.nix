@@ -21,7 +21,7 @@
             hash = "sha256-PLACEHOLDER"; # nix will compute on first build
           };
 
-          appimageContents = pkgs.appimageTools.extractType1 { inherit pname src; };
+          appimageContents = pkgs.appimageTools.extractType1 { inherit pname version src; };
         in {
           default = pkgs.appimageTools.wrapType2 rec {
             inherit pname version src;
