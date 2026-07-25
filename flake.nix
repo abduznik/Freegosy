@@ -16,10 +16,15 @@
           version = "0.5.10";
           pname = "freegosy";
 
-          src = pkgs.fetchurl {
-            url = "https://github.com/abduznik/Freegosy/releases/download/v${version}/Freegosy-linux-x86_64.AppImage";
-            hash = "sha256-PLACEHOLDER"; # Updated by CI, or run nix-build once to get hash
-          };
+          # CI sets FREEGOSY_SRC env var to use local AppImage
+          # End users get fetchurl from GitHub Releases
+          localSrc = builtins.getEnv "FREEGOSY_SRC";
+          src = if localSrc != ""
+            then ./. + "/${localSrc}"
+            else pkgs.fetchurl {
+              url = "https://github.com/abduznik/Freegosy/releases/download/v${version}/Freegosy-linux-x86_64.AppImage";
+              hash = "sha256-PLACEHOLDER";
+            };
 
           appimageContents = pkgs.appimageTools.extractType1 { inherit pname version src; };
         in {
@@ -29,11 +34,9 @@
             extraPkgs = pkgs: [ pkgs.webkitgtk_4_1 ];
 
             extraInstallCommands = ''
-              # Fix desktop entry
               substituteInPlace $out/share/applications/${pname}.desktop \
                 --replace-fail 'Exec=AppRun' 'Exec=${meta.mainProgram}' \
                 --replace-fail 'Icon=AppRun' 'Icon=${pname}'
-              # Install icon if present
               if [ -f "${appimageContents}/${pname}.png" ]; then
                 mkdir -p $out/share/icons/hicolor/512x512/apps
                 cp "${appimageContents}/${pname}.png" $out/share/icons/hicolor/512x512/apps/${pname}.png
@@ -53,7 +56,6 @@
         }
       );
 
-      # Quick run: nix run github:abduznik/Freegosy
       apps = forAllSystems (system: {
         default = {
           type = "app";
@@ -61,7 +63,6 @@
         };
       });
 
-      # Development shell
       devShells = forAllSystems (system: {
         default = nixpkgs.legacyPackages.${system}.mkShell {
           buildInputs = with nixpkgs.legacyPackages.${system}; [

@@ -200,15 +200,8 @@ jobs:
           cat flake.nix | grep -A2 "hash\|version"
       - name: Build Nix package
         run: |
-          # Use local file instead of fetching from releases
-          nix-build -E '
-            let pkgs = import <nixpkgs> {}; in
-            pkgs.appimageTools.wrapType2 {
-              pname = "freegosy";
-              version = "${{ github.event.inputs.version }}";
-              src = ./Freegosy-x86_64.AppImage;
-            }
-          ' --no-out-link > result-path.txt
+          cp dist/Freegosy-x86_64.AppImage .
+          FREEGOSY_SRC=Freegosy-x86_64.AppImage nix build .#default --no-link --print-out-paths > result-path.txt
       - name: Package Nix output
         run: |
           RESULT_PATH=$(cat result-path.txt)
