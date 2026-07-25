@@ -188,9 +188,9 @@ jobs:
           path: dist/
       - name: Compute hash and update flake.nix
         run: |
-          HASH=$(nix-hash --type sha256 --flat --base32 dist/Freegosy-x86_64.AppImage)
-          echo "AppImage hash: $HASH"
-          sed -i "s|hash = \".*\"|hash = \"sha256-$HASH\"|" flake.nix
+          HASH=$(nix hash to-sri --type sha256 --flat dist/Freegosy-x86_64.AppImage)
+          echo "AppImage SRI hash: $HASH"
+          sed -i "s|hash = \".*\"|hash = \"${HASH}\"|" flake.nix
           sed -i "s|version = \".*\"|version = \"${{ github.event.inputs.version }}\"|" flake.nix
           cat flake.nix | grep -A2 "hash\|version"
       - name: Build Nix package
