@@ -138,7 +138,7 @@ class ReleaseService {
 
   Future<List<Map<String, String>>> _scrapeDolphin(List<String> requiredFilters, List<String> excludedFilters) async {
     try {
-      final response = await http.get(Uri.parse('https://dolphin-emu.org/download/'), headers: {'User-Agent': 'Freegosy'});
+      final response = await http.get(Uri.parse('https://dolphin-emu.org/download/'), headers: {'User-Agent': 'Freegosy', 'Accept-Language': 'en-US'});
       // Accept any 2xx status; Dolphin's site may 302-redirect based on locale.
       if (response.statusCode < 200 || response.statusCode >= 300) return [];
 
