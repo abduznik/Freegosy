@@ -16,15 +16,10 @@
           version = "0.5.10";
           pname = "freegosy";
 
-          # CI sets FREEGOSY_SRC env var to use local AppImage
-          # End users get fetchurl from GitHub Releases
-          localSrc = builtins.getEnv "FREEGOSY_SRC";
-          src = if localSrc != ""
-            then ./. + "/${localSrc}"
-            else pkgs.fetchurl {
-              url = "https://github.com/abduznik/Freegosy/releases/download/v${version}/Freegosy-linux-x86_64.AppImage";
-              hash = "sha256-PLACEHOLDER";
-            };
+          src = pkgs.fetchurl {
+            url = "https://github.com/abduznik/Freegosy/releases/download/v${version}/Freegosy-linux-x86_64.AppImage";
+            hash = "sha256-PLACEHOLDER";
+          };
 
           appimageContents = pkgs.appimageTools.extractType1 { inherit pname version src; };
         in {

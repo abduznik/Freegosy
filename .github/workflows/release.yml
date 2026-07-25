@@ -201,7 +201,7 @@ jobs:
       - name: Build Nix package
         run: |
           cp dist/Freegosy-x86_64.AppImage .
-          FREEGOSY_SRC=Freegosy-x86_64.AppImage nix build .#default --no-link --print-out-paths > result-path.txt
+          FREEGOSY_SRC=./Freegosy-x86_64.AppImage FREEGOSY_VERSION=${{ github.event.inputs.version }} nix-build ci-build.nix --no-out-link > result-path.txt
       - name: Package Nix output
         run: |
           RESULT_PATH=$(cat result-path.txt)
