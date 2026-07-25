@@ -316,6 +316,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // This handles cases where RomM doesn't set hasMultipleFiles correctly
     // (e.g. GameCube multidisc with .m3u).
     if (!game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
+      debugPrint('[Launch] romPath is a directory: $existingRomPath');
       final dir = io.Directory(existingRomPath);
       final discFiles = <Map<String, dynamic>>[];
       bool hasM3u = false;
@@ -325,6 +326,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         // Detect .m3u playlist as strong multi-disc signal
         if (name.endsWith('.m3u')) {
           hasM3u = true;
+          debugPrint('[Launch] Found .m3u: ${p.basename(entity.path)}');
           continue;
         }
         // Match common disc image formats (GC/Wii + PS1/PS2 + PSP)
@@ -337,11 +339,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             'file_name': p.basename(entity.path),
             'file_size_bytes': stat.size,
           });
+          debugPrint('[Launch] Found disc file: ${p.basename(entity.path)} (${stat.size} bytes)');
         }
       }
+      debugPrint('[Launch] Scan complete: ${discFiles.length} disc files, hasM3u=$hasM3u');
       // Show picker if .m3u found OR multiple disc images detected
       if (hasM3u || discFiles.length > 1) {
-        debugPrint('[Launch] Directory has ${discFiles.length} disc files (m3u=$hasM3u), showing picker');
+        debugPrint('[Launch] Multi-disc detected (${discFiles.length} files, m3u=$hasM3u), showing picker');
         if (!context.mounted) return;
         String? selectedFilePath;
         await MultiDiscPicker.show(context, game: game, files: discFiles, onSelect: (file) {

@@ -63,62 +63,64 @@ class GamepadService extends WidgetsBindingObserver {
   GamepadService(this._ref);
 
   void initialize() async {
-    debugPrint('🎮 GamepadService: Starting direct action listener...');
+    debugPrint('[Controller] initialize: starting');
 
-    // Load custom mappings
     await loadCustomMappings();
+    debugPrint('[Controller] custom mappings loaded');
 
-    // Load deadzone settings
     await loadDeadzoneSettings();
 
-    // Load the SDL Database
     await SDLMappingParser.loadDatabase();
+    debugPrint('[Controller] SDL database loaded');
 
     WidgetsBinding.instance.addObserver(this);
 
     _scan();
     _scanTimer = Timer.periodic(const Duration(seconds: 3), (_) => _scan());
+    debugPrint('[Controller] scan timer started (3s interval)');
 
     _subscription = Gamepads.events.listen(
       (event) {
         try {
           _handleGamepadEvent(event);
         } catch (e) {
-          debugPrint('🎮 GamepadService: Event handling error: $e');
+          debugPrint('[Controller] event handling error: $e');
         }
       },
-      onError: (err) => debugPrint('🎮 Gamepad Stream Error: $err'),
+      onError: (err) => debugPrint('[Controller] stream error: $err'),
     );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appHasFocus = state == AppLifecycleState.resumed;
-    debugPrint('🎮 GamepadService: App focus changed to $_appHasFocus');
+    debugPrint('[Controller] app focus changed: $_appHasFocus');
   }
 
   void _scan() async {
     try {
       final controllers = await Gamepads.list();
+      debugPrint('[Controller] scan: found ${controllers.length} controller(s)');
       final currentIds = <String>{};
       for (var c in controllers) {
         currentIds.add(c.id);
         if (!_controllerNames.containsKey(c.id)) {
-          debugPrint('🎮 GamepadService: New controller detected! [${c.id}] ${c.name}');
+          debugPrint('[Controller] new controller: [${c.id}] ${c.name}');
           _controllerNames[c.id] = c.name;
         }
       }
-      if (controllers.isNotEmpty) {
-        final staleIds = _controllerNames.keys.where((id) => !currentIds.contains(id)).toList();
-        for (final id in staleIds) {
-          debugPrint('🎮 GamepadService: Controller disconnected [${_controllerNames[id]}]');
-          _controllerNames.remove(id);
-          _axisStates.remove(id);
-          _seenRawKeys.remove(id);
-        }
+      final staleIds = _controllerNames.keys.where((id) => !currentIds.contains(id)).toList();
+      for (final id in staleIds) {
+        debugPrint('[Controller] disconnected: [${_controllerNames[id]}]');
+        _controllerNames.remove(id);
+        _axisStates.remove(id);
+        _seenRawKeys.remove(id);
+      }
+      if (staleIds.isNotEmpty) {
+        debugPrint('[Controller] cleaned up ${staleIds.length} stale controller(s)');
       }
     } catch (e) {
-      debugPrint('🎮 GamepadService: Scan error (controller hot-plug?): $e');
+      debugPrint('[Controller] scan error: $e');
     }
   }
 
@@ -134,11 +136,16 @@ class GamepadService extends WidgetsBindingObserver {
   /// Returns a record: (source, mapping) where source is 'custom', 'builtin', 'sdl', or null if not found.
   ({String source, Map<String, GameAction> mapping})? tryAutoMap(String controllerId) {
     final name = _controllerNames[controllerId] ?? '';
-    if (name.isEmpty) return null;
+    if (name.isEmpty) {
+      debugPrint('[Controller] tryAutoMap: no name for controller $controllerId');
+      return null;
+    }
+    debugPrint('[Controller] tryAutoMap: attempting match for "$name"');
 
     // 1. Custom mappings
     for (final entry in customControllerMappings.entries) {
       if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        debugPrint('[Controller] tryAutoMap: matched custom mapping "${entry.key}"');
         return (source: 'custom', mapping: Map<String, GameAction>.from(entry.value));
       }
     }
@@ -146,6 +153,7 @@ class GamepadService extends WidgetsBindingObserver {
     // 2. SDL Database
     final sdlMapping = SDLMappingParser.getMapping(name);
     if (sdlMapping != null && sdlMapping.isNotEmpty) {
+      debugPrint('[Controller] tryAutoMap: matched SDL mapping');
       return (source: 'sdl', mapping: Map<String, GameAction>.from(sdlMapping));
     }
 
@@ -154,6 +162,7 @@ class GamepadService extends WidgetsBindingObserver {
     for (final entry in kControllerMappings.entries) {
       if (nameLower.contains(entry.key.toLowerCase()) ||
           entry.key.toLowerCase().contains(nameLower)) {
+        debugPrint('[Controller] tryAutoMap: matched builtin "${entry.key}"');
         return (source: 'builtin', mapping: Map<String, GameAction>.from(entry.value));
       }
     }
@@ -173,9 +182,11 @@ class GamepadService extends WidgetsBindingObserver {
       }
     }
     if (bestBuiltinKey != null) {
+      debugPrint('[Controller] tryAutoMap: fuzzy matched builtin "$bestBuiltinKey"');
       return (source: 'builtin', mapping: Map<String, GameAction>.from(kControllerMappings[bestBuiltinKey]!));
     }
 
+    debugPrint('[Controller] tryAutoMap: no match found for "$name"');
     return null;
   }
 
@@ -194,6 +205,7 @@ class GamepadService extends WidgetsBindingObserver {
     // Check custom mappings first
     for (final entry in customControllerMappings.entries) {
       if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        debugPrint('[Controller] getCurrentMapping: using custom "${entry.key}"');
         return entry.value;
       }
     }
@@ -201,11 +213,13 @@ class GamepadService extends WidgetsBindingObserver {
     // Check hardcoded mappings
     for (final entry in kControllerMappings.entries) {
       if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        debugPrint('[Controller] getCurrentMapping: using hardcoded "${entry.key}"');
         return entry.value;
       }
     }
 
     // Return default mapping
+    debugPrint('[Controller] getCurrentMapping: using default mapping');
     return kDefaultMapping;
   }
 
@@ -262,8 +276,7 @@ class GamepadService extends WidgetsBindingObserver {
     // 4. Check if name tokenizes to nothing (Bluetooth filler names)
     final tokens = GamepadUtils.tokenize(name);
     if (tokens.isEmpty && name.isNotEmpty) {
-      debugPrint('🎮 Controller "$name" has no recognizable tokens — using default mapping. '
-          'Add a mapping in known_controllers.dart for better support.');
+      debugPrint('[Controller] controller "$name" has no recognizable tokens — using default mapping');
     }
 
     // 5. Fallback
@@ -276,6 +289,7 @@ class GamepadService extends WidgetsBindingObserver {
     // First try a plain key lookup (digital buttons, named keys like dpad_up).
     final directAction = mapping[event.key];
     if (directAction != null) {
+      debugPrint('[Controller] normalize: key "${event.key}" → ${directAction.name}');
       return NormalizedInput(action: directAction, value: event.value);
     }
 
@@ -288,6 +302,7 @@ class GamepadService extends WidgetsBindingObserver {
       final polarityKey = GamepadUtils.encodeKey(event.key, event.value >= 0 ? 1 : -1);
       final polarAction = mapping[polarityKey];
       if (polarAction != null) {
+        debugPrint('[Controller] normalize: polarity key "$polarityKey" → ${polarAction.name}');
         return NormalizedInput(action: polarAction, value: event.value);
       }
     }
@@ -304,12 +319,14 @@ class GamepadService extends WidgetsBindingObserver {
       final deadzone = getDeadzoneForController(controllerName);
       final withDeadzone = applyDeadzone(normalized, deadzone);
       final isX = key == 'dwxpos';
+      debugPrint('[Controller] normalize: DirectInput axis "$key" → ${isX ? "horizontal" : "vertical"}');
       return NormalizedInput(
         action: isX ? GameAction.horizontalAxis : GameAction.verticalAxis,
         value: withDeadzone,
       );
     }
 
+    debugPrint('[Controller] normalize: unmapped key "${event.key}" (value=${event.value})');
     return null;
   }
 
@@ -326,6 +343,8 @@ class GamepadService extends WidgetsBindingObserver {
     // If app is not focused, skip input processing but allow raw event broadcasting
     if (!_appHasFocus) return;
 
+    debugPrint('[Controller] event: key=${event.key} value=${event.value} id=${event.gamepadId}');
+
     // Track all raw keys seen per controller for backend-detection
     _seenRawKeys.putIfAbsent(event.gamepadId, () => {}).add(event.key.toLowerCase());
 
@@ -333,9 +352,11 @@ class GamepadService extends WidgetsBindingObserver {
     final keyLower = event.key.toLowerCase();
     if (keyLower == 'dwpov' || keyLower.startsWith('pov') || keyLower.startsWith('hat')) {
       if (_ref.read(inputModeProvider) != InputMode.gamepad) {
+        debugPrint('[Controller] switching to gamepad mode (POV event)');
         _ref.read(inputModeProvider.notifier).state = InputMode.gamepad;
       }
       final newDirections = _decodePOV(event.value).toSet();
+      debugPrint('[Controller] POV directions: $newDirections');
       // Release directions no longer active
       for (final dir in _activePovDirections.difference(newDirections)) {
         _deactivateDirection(dir, 'pov');
@@ -355,17 +376,12 @@ class GamepadService extends WidgetsBindingObserver {
     // 1. Switch to Gamepad input mode if significant event occurs
     if (_ref.read(inputModeProvider) != InputMode.gamepad) {
       if (event.value.abs() > 0.5) {
-        debugPrint('🎮 Switching to GAMEPAD mode.');
+        debugPrint('[Controller] switching to gamepad mode (axis/button)');
         _ref.read(inputModeProvider.notifier).state = InputMode.gamepad;
       }
     }
 
     final normalized = _normalize(event);
-
-    // --- SMART LOGGING ---
-    if (normalized == null && event.value.abs() > 0.5) {
-      debugPrint('🎮 UNMAPPED HID [${event.gamepadId}]: ${event.key} = ${event.value}');
-    }
 
     if (normalized == null) return;
 
@@ -373,6 +389,7 @@ class GamepadService extends WidgetsBindingObserver {
     if (normalized.action == GameAction.horizontalAxis || normalized.action == GameAction.verticalAxis) {
       final axisKey = '${event.gamepadId}_${event.key}';
       final state = _axisStates.putIfAbsent(axisKey, () => AxisState());
+      debugPrint('[Controller] axis: ${normalized.action.name} raw=${event.value}');
 
       // Invert vertical D-pad axis because D-pad UP is positive on macOS,
       // but analog stick UP is negative. This unifies their behavior.

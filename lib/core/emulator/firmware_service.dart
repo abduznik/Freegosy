@@ -84,6 +84,8 @@ class FirmwareService {
   }
 
   Future<void> _downloadAndPlaceFirmware(Firmware firmware, String biosDir, {FirmwareProgressCallback? onProgress}) async {
+    debugPrint('[Firmware] firmware.fileName=${firmware.fileName}, firmware.filePath=${firmware.filePath}');
+
     // Use filePath from RomM to preserve subdirectory structure (e.g. "dc/dc_boot.bin").
     // Some cores like Flycast expect BIOS files in subdirectories, not flat.
     // Real RomM servers return filePath as the directory path and fileName separately,
@@ -93,14 +95,13 @@ class FirmwareService {
         : firmware.fileName;
     final destPath = p.join(biosDir, relativePath);
     final destFile = File(destPath);
+    debugPrint('[Firmware] relativePath=$relativePath, destPath=$destPath');
 
     if (await destFile.exists()) {
-      debugPrint('[FirmwareService] Firmware already exists: ${firmware.fileName}');
+      debugPrint('[Firmware] File already exists, skipping: $destPath');
       return;
     }
 
-    debugPrint('[FirmwareService] Downloading firmware: ${firmware.fileName} to $destPath');
-    
     // Initial progress report
     onProgress?.call(firmware.fileName, 0, firmware.fileSizeBytes);
 
@@ -114,9 +115,9 @@ class FirmwareService {
     if (bytes != null) {
       await destFile.parent.create(recursive: true);
       await destFile.writeAsBytes(bytes);
-      debugPrint('[FirmwareService] Successfully saved firmware: ${firmware.fileName}');
+      debugPrint('[Firmware] Wrote ${bytes.length} bytes to $destPath');
     } else {
-      debugPrint('[FirmwareService] Failed to download firmware: ${firmware.fileName}');
+      debugPrint('[Firmware] Download returned null bytes for ${firmware.fileName}');
     }
   }
 }
