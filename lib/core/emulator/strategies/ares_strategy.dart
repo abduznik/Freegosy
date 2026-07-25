@@ -34,6 +34,8 @@ const Map<String, String> kAresSystemNames = {
   'pcengine':        'PC Engine',
   'neogeo':          'Neo Geo',
   'neo-geo':         'Neo Geo',
+  'neogeoaes':       'Neo Geo',
+  'neogeomvs':       'Neo Geo',
   'neo-geo-aes':     'Neo Geo',
   'neo-geo-mvs':     'Neo Geo',
   'mvs':             'Neo Geo',

@@ -191,6 +191,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
     // Arcade / SNK
     'neogeo':    _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
     'neo-geo':   _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'neogeoaes': _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'neogeomvs': _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
     'neo-geo-aes': _CoreInfo('fbneo_libretro',         'FinalBurn Neo',      'States/FinalBurn Neo'),
     'neo-geo-mvs': _CoreInfo('fbneo_libretro',         'FinalBurn Neo',      'States/FinalBurn Neo'),
     'mvs':       _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),

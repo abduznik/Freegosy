@@ -347,8 +347,8 @@ class DirectoryService {
     'ps3': 'ps3', 'playstation-3': 'ps3', 'playstation3': 'ps3',
     'psp': 'psp', 'playstation-portable': 'psp',
     // SNK / Arcade
-    'neogeo': 'neogeo', 'neo-geo': 'neogeo', 'neo-geo-aes': 'neogeo',
-    'neo-geo-mvs': 'neogeo', 'mvs': 'neogeo', 'aes': 'neogeo',
+    'neogeo': 'neogeo', 'neo-geo': 'neogeo', 'neogeoaes': 'neogeo', 'neogeomvs': 'neogeo',
+    'neo-geo-aes': 'neogeo', 'neo-geo-mvs': 'neogeo', 'mvs': 'neogeo', 'aes': 'neogeo',
     'neogeocd': 'neogeocd', 'neocd': 'neogeocd',
     'ngp': 'ngp', 'ngpc': 'ngp', 'neo-geo-pocket': 'ngp',
     'arcade': 'arcade', 'mame': 'arcade',

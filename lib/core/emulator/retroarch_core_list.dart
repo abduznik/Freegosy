@@ -574,7 +574,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fbneo_libretro',
     displayName: 'FinalBurn Neo',
-    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade', 'fbneo'],
+    platforms: ['neogeo', 'neo-geo', 'neogeoaes', 'neogeomvs', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade', 'fbneo'],
     category: CoreCategory.arcade,
     isRecommended: true,
     description: 'Best arcade core',
@@ -582,7 +582,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fbalpha2012_libretro',
     displayName: 'FB Alpha 2012',
-    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade'],
+    platforms: ['neogeo', 'neo-geo', 'neogeoaes', 'neogeomvs', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade'],
     category: CoreCategory.arcade,
   ),
   RetroArchCore(
@@ -606,13 +606,13 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fbalpha2012_neogeo_libretro',
     displayName: 'FB Alpha 2012 Neo Geo',
-    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes'],
+    platforms: ['neogeo', 'neo-geo', 'neogeoaes', 'neogeomvs', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes'],
     category: CoreCategory.arcade,
   ),
   RetroArchCore(
     id: 'fbalpha_libretro',
     displayName: 'FB Alpha',
-    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade'],
+    platforms: ['neogeo', 'neo-geo', 'neogeoaes', 'neogeomvs', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade'],
     category: CoreCategory.arcade,
   ),
   RetroArchCore(
