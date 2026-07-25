@@ -18,7 +18,7 @@
 
           src = pkgs.fetchurl {
             url = "https://github.com/abduznik/Freegosy/releases/download/v${version}/Freegosy-linux-x86_64.AppImage";
-            hash = "sha256-PLACEHOLDER"; # nix will compute on first build
+            hash = "sha256-PLACEHOLDER"; # Updated by CI, or run nix-build once to get hash
           };
 
           appimageContents = pkgs.appimageTools.extractType1 { inherit pname version src; };
