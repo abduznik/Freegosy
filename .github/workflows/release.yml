@@ -196,7 +196,9 @@ jobs:
           ")
           echo "AppImage SRI: $SRI"
           sed -i "s|hash = \".*\"|hash = \"${SRI}\"|" flake.nix
-          sed -i "s|version = \".*\"|version = \"${{ github.event.inputs.version }}\"|" flake.nix
+          VERSION="${{ github.event.inputs.version }}"
+          VERSION="${VERSION#v}"
+          sed -i "s|version = \".*\"|version = \"${VERSION}\"|" flake.nix
           cat flake.nix | grep -A2 "hash\|version"
       - name: Build Nix package
         run: nix build .#default --no-link --print-out-paths > result-path.txt
