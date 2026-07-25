@@ -23,10 +23,6 @@ on:
         description: 'Build macOS?'
         type: boolean
         default: true
-      build_nix:
-        description: 'Build Nix package?'
-        type: boolean
-        default: true
 
 jobs:
   build_linux:
@@ -179,13 +175,24 @@ jobs:
 
   build_nix:
     name: Build Nix Package
-    if: ${{ inputs.build_nix }}
+    if: ${{ inputs.build_linux }}
+    needs: [build_linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
-      - name: Update version in flake.nix
-        run: sed -i "s/version = \".*\"/version = \"${{ github.event.inputs.version }}\"/" flake.nix
+      - name: Download AppImage from Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: dist/
+      - name: Compute hash and update flake.nix
+        run: |
+          HASH=$(nix-hash --type sha256 --flat --base32 dist/Freegosy-x86_64.AppImage)
+          echo "AppImage hash: $HASH"
+          sed -i "s|hash = \".*\"|hash = \"sha256-$HASH\"|" flake.nix
+          sed -i "s|version = \".*\"|version = \"${{ github.event.inputs.version }}\"|" flake.nix
+          cat flake.nix | grep -A2 "hash\|version"
       - name: Build Nix package
         run: nix build .#default --no-link --print-out-paths > result-path.txt
       - name: Package Nix output
@@ -230,11 +237,12 @@ jobs:
           path: artifacts/
 
       - name: Download Nix Artifact
-        if: ${{ inputs.build_nix }}
+        if: ${{ inputs.build_linux }}
         uses: actions/download-artifact@v4
         with:
           name: nix-release
           path: artifacts/
+        continue-on-error: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
