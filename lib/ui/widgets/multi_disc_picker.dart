@@ -48,15 +48,17 @@ class MultiDiscPicker extends StatelessWidget {
   }
 
   String _discLabel(String filename, int index) {
-    // Try to detect disc number from filename
+    // Try to detect disc/track number from filename
     final lower = filename.toLowerCase();
-    // Matches: "Disc 1", "Disk 2", "CD 1", "Part 1",
-    //          "(Disc 1)", "(Disk 2)", "disc_1", "disk_2", "Disc1"
+    // Matches: "Disc 1", "Disk 2", "CD 1", "Part 1", "Track 1",
+    //          "(Disc 1)", "(Disk 2)", "disc_1", "disk_2", "Disc1", "Track 02"
     final discMatch = RegExp(
-      r'(?:[\(\[]?\s*)?(?:disc|disk|cd|part)\s*[_\s]?\s*(\d+)(?:\s*[\)\]]?)',
+      r'(?:[\(\[]?\s*)?(?:disc|disk|cd|part|track)\s*[_\s]?\s*(\d+)(?:\s*[\)\]]?)',
     ).firstMatch(lower);
     if (discMatch != null) {
-      return 'Disc ${discMatch.group(1)}';
+      final raw = discMatch.group(1)!;
+      if (lower.contains('track')) return 'Track ${raw.padLeft(2, '0')}';
+      return 'Disc $raw';
     }
     return 'File ${index + 1}';
   }

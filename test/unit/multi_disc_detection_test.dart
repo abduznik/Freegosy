@@ -7,10 +7,11 @@ void main() {
     String discLabel(String filename, int index) {
       final lower = filename.toLowerCase();
       final discMatch = RegExp(
-        r'(?:[\(\[]?\s*)?(?:disc|disk|cd|part)\s*[_\s]?\s*(\d+)(?:\s*[\)\]]?)',
+        r'(?:[\(\[]?\s*)?(?:disc|disk|cd|part|track)\s*[_\s]?\s*(\d+)(?:\s*[\)\]]?)',
       ).firstMatch(lower);
       if (discMatch != null) {
-        return 'Disc ${discMatch.group(1)}';
+        final num = discMatch.group(1)!.padLeft(2, '0');
+        return lower.contains('track') ? 'Track $num' : 'Disc ${discMatch.group(1)}';
       }
       return 'File ${index + 1}';
     }
@@ -54,6 +55,12 @@ void main() {
     test('no disc indicator falls back to File N', () {
       expect(discLabel('Game.bin', 0), 'File 1');
       expect(discLabel('Game.chd', 3), 'File 4');
+    });
+
+    test('"Track" format with zero-padded numbers', () {
+      expect(discLabel('Game (Track 1).chd', 0), 'Track 01');
+      expect(discLabel('Game (Track 02).chd', 1), 'Track 02');
+      expect(discLabel('Game (Track 10).chd', 2), 'Track 10');
     });
   });
 
