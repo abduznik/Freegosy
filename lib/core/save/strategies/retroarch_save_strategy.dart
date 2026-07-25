@@ -169,8 +169,16 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'lynx':      _CoreInfo('mednafen_lynx_libretro',   'Lynx',               'States/Lynx'),
     // Arcade / SNK
     'neogeo':    _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'neo-geo':   _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'neo-geo-aes': _CoreInfo('fbneo_libretro',         'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'neo-geo-mvs': _CoreInfo('fbneo_libretro',         'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'mvs':       _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
+    'aes':       _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
     'arcade':    _CoreInfo('fbneo_libretro',           'FinalBurn Neo',      'States/FinalBurn Neo'),
     'mame':      _CoreInfo('mame_libretro',            'MAME',               'States/MAME'),
+    // FDS
+    'fds':       _CoreInfo('fceumm_libretro',          'FDS',                'States/FDS'),
+    'famicom-disk-system': _CoreInfo('fceumm_libretro', 'FDS',               'States/FDS'),
     // NEC
     'pcengine':  _CoreInfo('mednafen_pce_libretro',    'PCE',                'States/PCE'),
     'pcenginecd': _CoreInfo('mednafen_pce_libretro',   'PCE',                'States/PCE'),

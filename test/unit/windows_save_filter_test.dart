@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/save/strategies/windows_save_strategy.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/romm/romm_models.dart';
 
 void main() {
   group('WindowsSaveStrategy filter parsing', () {
@@ -55,6 +58,100 @@ void main() {
     test('case insensitive matching', () {
       expect(_matchesPattern('EEPROM.BIN', ['eeprom.*']), isTrue);
       expect(_matchesPattern('Save.INI', ['*.ini']), isTrue);
+    });
+  });
+
+  group('Issue #48 — loadPersistedFilters', () {
+    test('filters round-trip through SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({
+        'win_filter_game1': '*.ini,*.bin',
+        'win_filter_game2': 'eeprom.*',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final strategy = WindowsSaveStrategy(prefs);
+
+      strategy.loadPersistedFilters();
+
+      expect(strategy.getSaveFilter('game1'), '*.ini,*.bin');
+      expect(strategy.getSaveFilter('game2'), 'eeprom.*');
+      expect(strategy.getSaveFilter('game3'), isNull);
+    });
+
+    test('setSaveFilter persists to SharedPreferences', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final strategy = WindowsSaveStrategy(prefs);
+
+      await strategy.setSaveFilter('game1', '*.ini,save.bin');
+
+      // Reload from prefs to verify persistence
+      final strategy2 = WindowsSaveStrategy(prefs);
+      strategy2.loadPersistedFilters();
+      expect(strategy2.getSaveFilter('game1'), '*.ini,save.bin');
+    });
+  });
+
+  group('Issue #48 — getSaveFiles with filter', () {
+    late Directory tempDir;
+    late Directory saveDir;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('win_save_filter_test_');
+      saveDir = Directory('${tempDir.path}/saves');
+      await saveDir.create();
+    });
+
+    tearDown(() async {
+      if (await tempDir.exists()) await tempDir.delete(recursive: true);
+    });
+
+    test('returns individual filtered files when filter is active', () async {
+      // Create test files
+      await File('${saveDir.path}/eeprom.bin').writeAsBytes([1, 2, 3]);
+      await File('${saveDir.path}/config.ini').writeAsBytes([4, 5, 6]);
+      await File('${saveDir.path}/game.exe').writeAsBytes([7, 8, 9]);
+      await File('${saveDir.path}/readme.txt').writeAsBytes([10, 11, 12]);
+
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final strategy = WindowsSaveStrategy(prefs);
+
+      // Set filter: only .bin and .ini files
+      await strategy.setSaveFilter('testgame', '*.bin,*.ini');
+
+      final game = Game(id: 'testgame', name: 'Test Game', platformSlug: 'windows', fileSize: 0);
+
+      // Set manual override to point to our test directory
+      await strategy.setManualOverride('testgame', saveDir.path);
+
+      final files = await strategy.getSaveFiles(game, '${tempDir.path}/roms/test.exe');
+
+      // Should return only the filtered files, not the directory
+      expect(files.length, 2);
+      final names = files.map((f) => f.uri.pathSegments.last).toSet();
+      expect(names, containsAll(['eeprom.bin', 'config.ini']));
+      expect(names, isNot(contains('game.exe')));
+      expect(names, isNot(contains('readme.txt')));
+      // Should NOT be a directory entry
+      expect(files.any((f) => FileSystemEntity.isDirectorySync(f.path)), isFalse,
+          reason: 'Filtered results should be individual files, not directories');
+    });
+
+    test('returns directory when no filter is set', () async {
+      await File('${saveDir.path}/save.bin').writeAsBytes([1, 2, 3]);
+
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final strategy = WindowsSaveStrategy(prefs);
+
+      await strategy.setManualOverride('testgame', saveDir.path);
+
+      final game = Game(id: 'testgame', name: 'Test Game', platformSlug: 'windows', fileSize: 0);
+      final files = await strategy.getSaveFiles(game, '${tempDir.path}/roms/test.exe');
+
+      // Should return the directory (wrapped as File)
+      expect(files.length, 1);
+      expect(files[0].path, saveDir.path);
     });
   });
 }

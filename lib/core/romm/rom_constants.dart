@@ -35,6 +35,13 @@ class RomConstants {
     'arcade': ['.zip', '.chd', '.7z'],
     'mame': ['.zip', '.chd', '.7z'],
     'neogeo': ['.zip', '.chd', '.7z'],
+    'neo-geo': ['.zip', '.chd', '.7z'],
+    'neo-geo-aes': ['.zip', '.chd', '.7z'],
+    'neo-geo-mvs': ['.zip', '.chd', '.7z'],
+    'mvs': ['.zip', '.chd', '.7z'],
+    'aes': ['.zip', '.chd', '.7z'],
+    'fds': ['.fds', '.zip', '.7z'],
+    'famicom-disk-system': ['.fds', '.zip', '.7z'],
     'sms': ['.sms', '.gg', '.gen', '.zip', '.7z'],
     'mastersystem': ['.sms', '.gg', '.gen', '.zip', '.7z'],
     // Windows games are folder-based — the game folder is returned by

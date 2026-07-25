@@ -147,6 +147,7 @@ final saveSyncServiceProvider = FutureProvider<SaveSyncService?>((ref) async {
   if (rommService == null || directoryService == null || strategyRegistry == null) return null;
   final service = SaveSyncService(rommService, directoryService, strategyRegistry, prefs);
   service.windowsSaveStrategy.loadPersistedOverrides();
+  service.windowsSaveStrategy.loadPersistedFilters();
   return service;
 });
 
