@@ -27,6 +27,8 @@ class DirectoryService {
     'megacd': 'segacd',
     'tg16': 'pcengine',
     'famicom': 'nes',
+    'famicom-disk-system': 'fds',
+    'fds': 'fds',
     'snesna': 'snes',
     'wonderswancolor': 'wonderswan',
     'n64dd': 'n64',

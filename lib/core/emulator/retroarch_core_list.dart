@@ -59,7 +59,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'mesen_libretro',
     displayName: 'Mesen',
-    platforms: ['nes'],
+    platforms: ['nes', 'fds', 'famicom-disk-system'],
     category: CoreCategory.nintendo,
     isRecommended: true,
     description: 'Highly accurate NES core',
@@ -67,7 +67,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fceumm_libretro',
     displayName: 'FCEUmm',
-    platforms: ['nes'],
+    platforms: ['nes', 'fds', 'famicom-disk-system'],
     category: CoreCategory.nintendo,
     isRecommended: true,
     description: 'Popular NES core with good compatibility',
@@ -75,7 +75,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'nestopia_libretro',
     displayName: 'Nestopia UE',
-    platforms: ['nes'],
+    platforms: ['nes', 'fds', 'famicom-disk-system'],
     category: CoreCategory.nintendo,
     description: 'Accurate NES / Famicom emulator',
   ),
@@ -574,7 +574,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fbneo_libretro',
     displayName: 'FinalBurn Neo',
-    platforms: ['neogeo', 'arcade', 'fbneo'],
+    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade', 'fbneo'],
     category: CoreCategory.arcade,
     isRecommended: true,
     description: 'Best arcade core',
@@ -582,7 +582,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fbalpha2012_libretro',
     displayName: 'FB Alpha 2012',
-    platforms: ['neogeo', 'arcade'],
+    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade'],
     category: CoreCategory.arcade,
   ),
   RetroArchCore(
@@ -606,13 +606,13 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'fbalpha2012_neogeo_libretro',
     displayName: 'FB Alpha 2012 Neo Geo',
-    platforms: ['neogeo'],
+    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes'],
     category: CoreCategory.arcade,
   ),
   RetroArchCore(
     id: 'fbalpha_libretro',
     displayName: 'FB Alpha',
-    platforms: ['neogeo', 'arcade'],
+    platforms: ['neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade'],
     category: CoreCategory.arcade,
   ),
   RetroArchCore(

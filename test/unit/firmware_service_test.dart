@@ -110,11 +110,12 @@ void main() {
       final biosDir = p.join(tempDir.path, 'BIOS');
       await Directory(biosDir).create();
 
-      // Firmware with filePath containing subdirectory (e.g. Flycast dc/dc_boot.bin)
+      // Firmware with filePath as directory (real RomM servers return file_path as directory,
+      // file_name as filename). E.g. Flycast expects dc/dc_boot.bin in BIOS/dc/dc_boot.bin.
       final firmware = Firmware(
         id: 3,
         fileName: 'dc_boot.bin',
-        filePath: 'dc/dc_boot.bin',
+        filePath: 'dc',
         fileSizeBytes: 100,
       );
 
@@ -213,6 +214,52 @@ void main() {
 
       final destFile = File(p.join(biosDir, 'psx_bios.bin'));
       expect(await destFile.exists(), isTrue);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('real-world firmware: filePath is directory path (e.g. psp/bios)', () async {
+      final tempDir = await Directory.systemTemp.createTemp('firmware_realworld_test');
+      final biosDir = p.join(tempDir.path, 'BIOS');
+      await Directory(biosDir).create();
+
+      // Real RomM servers return file_path as directory, file_name as filename.
+      // E.g. psp/bios/cheat.db should be placed at BIOS/psp/bios/cheat.db
+      final firmware = Firmware(
+        id: 6,
+        fileName: 'cheat.db',
+        filePath: 'psp/bios',
+        fileSizeBytes: 200,
+      );
+
+      final platform = Platform(
+        id: 6,
+        name: 'PSP',
+        slug: 'psp',
+        firmware: [firmware],
+      );
+
+      final mockStrategy = MockEmulatorStrategy();
+
+      when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
+      when(mockStrategyRegistry.getStrategyForSlug('psp')).thenReturn(mockStrategy);
+      when(mockDirectoryService.getEmulatorBiosDirectory('test_emulator')).thenAnswer((_) async => biosDir);
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([10, 11, 12]));
+
+      await service.syncAllFirmware();
+
+      // Should be in BIOS/psp/bios/cheat.db, NOT BIOS/psp/bios (wrong) or BIOS/cheat.db (wrong)
+      final correctPath = File(p.join(biosDir, 'psp', 'bios', 'cheat.db'));
+      final wrongDirPath = File(p.join(biosDir, 'psp', 'bios'));
+      final wrongFlatPath = File(p.join(biosDir, 'cheat.db'));
+
+      expect(await correctPath.exists(), isTrue,
+          reason: 'Firmware should be in psp/bios/cheat.db subdirectory');
+      expect(await wrongDirPath.exists(), isFalse,
+          reason: 'Firmware should NOT be named as a directory');
+      expect(await wrongFlatPath.exists(), isFalse,
+          reason: 'Firmware should NOT be flat in BIOS root');
 
       await tempDir.delete(recursive: true);
     });

@@ -10,9 +10,9 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'macos_url': 'https://buildbot.libretro.com/stable/1.22.2/apple/osx/universal/RetroArch_Metal.dmg',
     'macos_executable': 'RetroArch.app/Contents/MacOS/RetroArch',
     'platform_slugs': [
-      'gba', 'gbc', 'gb', 'nes', 'snes', 'n64', 'nds', 'psx', 'ps1', 'playstation',
+      'gba', 'gbc', 'gb', 'nes', 'fds', 'famicom-disk-system', 'snes', 'n64', 'nds', 'psx', 'ps1', 'playstation',
       'psp', 'dc', 'dreamcast', 'segacd', 'saturn', 'megadrive', 'genesis', 'md',
-      'gamegear', 'sms', 'mastersystem', 'atari2600', 'atari7800', 'lynx', 'neogeo', 'arcade', 'mame',
+      'gamegear', 'sms', 'mastersystem', 'atari2600', 'atari7800', 'lynx', 'neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes', 'arcade', 'mame',
       'pcengine', 'wonderswan', 'virtualboy', 'msx', 'dos', '3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'
     ],
     'supported_platforms': ['windows', 'linux', 'macos'],
@@ -266,7 +266,7 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
       'psx', 'ps1', 'playstation',
       'pce', 'pcengine',
       'ngp', 'ngpc', 'neo-geo-pocket',
-      'neogeo', 'neo-geo',
+      'neogeo', 'neo-geo', 'neo-geo-aes', 'neo-geo-mvs', 'mvs', 'aes',
       'msx',
       'atari2600',
       'coleco', 'colecovision',

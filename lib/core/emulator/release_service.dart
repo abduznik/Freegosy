@@ -88,7 +88,7 @@ class ReleaseService {
       // GitHub: use Atom feed to get latest tag, then construct asset URLs
       final feedUrl = 'https://github.com/$repo/releases.atom';
       final feedResponse = await http.get(Uri.parse(feedUrl), headers: {'User-Agent': 'Freegosy'});
-      if (feedResponse.statusCode != 200) return [];
+      if (feedResponse.statusCode < 200 || feedResponse.statusCode >= 300) return [];
 
       // Extract latest release tag from Atom feed
       final tagRegex = RegExp(r'<id>tag:github\.com,2008:Repository/\d+/([^<]+)</id>');
@@ -99,7 +99,7 @@ class ReleaseService {
       // Now fetch the release page for that specific tag to get asset links
       final releasePage = 'https://github.com/$repo/releases/expanded_assets/$tag';
       final pageResponse = await http.get(Uri.parse(releasePage), headers: {'User-Agent': 'Freegosy'});
-      if (pageResponse.statusCode != 200) return [];
+      if (pageResponse.statusCode < 200 || pageResponse.statusCode >= 300) return [];
 
       return _parseHtmlAssets(pageResponse.body, 'https://github.com', requiredFilters, excludedFilters);
     } catch (e) {
@@ -110,7 +110,7 @@ class ReleaseService {
   Future<List<Map<String, String>>> _htmlScrape(String url, String base, 
       List<String> requiredFilters, List<String> excludedFilters) async {
     final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'Freegosy'});
-    if (response.statusCode != 200) return [];
+    if (response.statusCode < 200 || response.statusCode >= 300) return [];
     return _parseHtmlAssets(response.body, base, requiredFilters, excludedFilters);
   }
 
@@ -139,7 +139,8 @@ class ReleaseService {
   Future<List<Map<String, String>>> _scrapeDolphin(List<String> requiredFilters, List<String> excludedFilters) async {
     try {
       final response = await http.get(Uri.parse('https://dolphin-emu.org/download/'), headers: {'User-Agent': 'Freegosy'});
-      if (response.statusCode != 200) return [];
+      // Accept any 2xx status; Dolphin's site may 302-redirect based on locale.
+      if (response.statusCode < 200 || response.statusCode >= 300) return [];
 
       final html = response.body;
       // Scrape for dl.dolphin-emu.org links within the "download-releases" section
