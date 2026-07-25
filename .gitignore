@@ -64,3 +64,9 @@ tmp/
 # Mock server storage
 test/_mock_romm_storage/
 
+# Environment / credentials
+.env
+.env.*
+*.env
+tool/integration_tests/
+
