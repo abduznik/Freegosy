@@ -3,14 +3,15 @@ import 'package:freegosy/ui/widgets/multi_disc_picker.dart';
 
 void main() {
   group('MultiDiscPicker.filterLaunchableFiles', () {
-    test('filters out .m3u files', () {
+    test('keeps .m3u files (launchable playlists)', () {
       final files = [
         {'file_name': 'Game.m3u', 'file_size_bytes': 100},
         {'file_name': 'Game.nsp', 'file_size_bytes': 1000000},
       ];
       final result = MultiDiscPicker.filterLaunchableFiles(files);
-      expect(result.length, 1);
-      expect(result[0]['file_name'], 'Game.nsp');
+      expect(result.length, 2);
+      expect(result[0]['file_name'], 'Game.m3u');
+      expect(result[1]['file_name'], 'Game.nsp');
     });
 
     test('filters out .cue files', () {
@@ -99,8 +100,8 @@ void main() {
 
     test('all non-launchable returns empty', () {
       final files = [
-        {'file_name': 'Game.m3u', 'file_size_bytes': 100},
         {'file_name': 'Game.cue', 'file_size_bytes': 100},
+        {'file_name': 'Game.ccd', 'file_size_bytes': 100},
       ];
       final result = MultiDiscPicker.filterLaunchableFiles(files);
       expect(result, isEmpty);
@@ -114,9 +115,10 @@ void main() {
         {'file_name': 'Game.iso', 'file_size_bytes': 5000000},
       ];
       final result = MultiDiscPicker.filterLaunchableFiles(files);
-      expect(result.length, 2);
-      expect(result[0]['file_name'], 'Game.nsp');
-      expect(result[1]['file_name'], 'Game.iso');
+      expect(result.length, 3);
+      expect(result[0]['file_name'], 'Game.m3u');
+      expect(result[1]['file_name'], 'Game.nsp');
+      expect(result[2]['file_name'], 'Game.iso');
     });
   });
 }

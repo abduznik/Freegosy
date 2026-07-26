@@ -13,9 +13,10 @@ class MultiDiscPicker extends StatelessWidget {
     required this.onSelect,
   });
 
-  /// Filters files to only show launchable ROM files (excludes playlists like .m3u).
+  /// Filters files to only show launchable ROM files (excludes metadata like .cue, .ccd, etc.).
+  /// .m3u playlists are included as they are valid input for multi-disc emulators (e.g. RetroArch).
   static List<Map<String, dynamic>> filterLaunchableFiles(List<Map<String, dynamic>> files) {
-    const nonLaunchableExts = {'.m3u', '.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
+    const nonLaunchableExts = {'.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
     return files.where((f) {
       final name = (f['file_name'] ?? '').toLowerCase();
       final ext = name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
@@ -48,8 +49,8 @@ class MultiDiscPicker extends StatelessWidget {
   }
 
   String _discLabel(String filename, int index) {
-    // Try to detect disc/track number from filename
     final lower = filename.toLowerCase();
+    if (lower.endsWith('.m3u')) return 'Playlist';
     // Matches: "Disc 1", "Disk 2", "CD 1", "Part 1", "Track 1",
     //          "(Disc 1)", "(Disk 2)", "disc_1", "disk_2", "Disc1", "Track 02"
     final discMatch = RegExp(

@@ -319,18 +319,20 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       debugPrint('[Launch] romPath is a directory: $existingRomPath');
       final dir = io.Directory(existingRomPath);
       final discFiles = <Map<String, dynamic>>[];
-      bool hasM3u = false;
       await for (final entity in dir.list()) {
         if (entity is! io.File) continue;
         final name = p.basename(entity.path).toLowerCase();
-        // Detect .m3u playlist as strong multi-disc signal
+        // Match .m3u playlists (valid multi-disc input for RetroArch)
         if (name.endsWith('.m3u')) {
-          hasM3u = true;
-          debugPrint('[Launch] Found .m3u: ${p.basename(entity.path)}');
-          continue;
+          final stat = await entity.stat();
+          discFiles.add({
+            'file_name': p.basename(entity.path),
+            'file_size_bytes': stat.size,
+          });
+          debugPrint('[Launch] Found .m3u playlist: ${p.basename(entity.path)} (${stat.size} bytes)');
         }
         // Match common disc image formats (GC/Wii + PS1/PS2 + PSP)
-        if (name.endsWith('.rvz') || name.endsWith('.gcm') || name.endsWith('.iso') ||
+        else if (name.endsWith('.rvz') || name.endsWith('.gcm') || name.endsWith('.iso') ||
             name.endsWith('.cso') || name.endsWith('.wbfs') ||
             name.endsWith('.bin') || name.endsWith('.img') ||
             name.endsWith('.chd') || name.endsWith('.pbp') || name.endsWith('.ccd')) {
@@ -342,10 +344,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           debugPrint('[Launch] Found disc file: ${p.basename(entity.path)} (${stat.size} bytes)');
         }
       }
-      debugPrint('[Launch] Scan complete: ${discFiles.length} disc files, hasM3u=$hasM3u');
-      // Show picker if .m3u found OR multiple disc images detected
-      if (hasM3u || discFiles.length > 1) {
-        debugPrint('[Launch] Multi-disc detected (${discFiles.length} files, m3u=$hasM3u), showing picker');
+      debugPrint('[Launch] Scan complete: ${discFiles.length} disc files');
+      // Show picker if multiple launchable files found (including .m3u playlists)
+      if (discFiles.length > 1) {
+        debugPrint('[Launch] Multi-disc detected (${discFiles.length} files), showing picker');
         if (!context.mounted) return;
         String? selectedFilePath;
         await MultiDiscPicker.show(context, game: game, files: discFiles, onSelect: (file) {

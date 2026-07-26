@@ -66,7 +66,7 @@ void main() {
 
   group('filterLaunchableFiles', () {
     List<Map<String, dynamic>> filterLaunchableFiles(List<Map<String, dynamic>> files) {
-      const nonLaunchableExts = {'.m3u', '.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
+      const nonLaunchableExts = {'.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
       return files.where((f) {
         final name = (f['file_name'] ?? '').toLowerCase();
         final ext = name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
@@ -74,16 +74,17 @@ void main() {
       }).toList();
     }
 
-    test('excludes .m3u playlists', () {
+    test('keeps .m3u playlists (launchable)', () {
       final files = [
         {'file_name': 'Game (Disc 1).chd'},
         {'file_name': 'Game (Disc 2).chd'},
         {'file_name': 'Game.m3u'},
       ];
       final result = filterLaunchableFiles(files);
-      expect(result.length, 2);
+      expect(result.length, 3);
       expect(result[0]['file_name'], 'Game (Disc 1).chd');
       expect(result[1]['file_name'], 'Game (Disc 2).chd');
+      expect(result[2]['file_name'], 'Game.m3u');
     });
 
     test('excludes .cue sheets', () {
