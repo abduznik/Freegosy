@@ -10,6 +10,7 @@ import '../../core/emulator/emulator_strategy.dart';
 import '../../core/emulator/retroarch_core_list.dart';
 import '../../core/emulator/strategy_registry.dart';
 import '../../core/emulator/firmware_service.dart';
+import '../../core/emulator/bios_registry.dart';
 import '../../ui/widgets/emulator_selection_dialog.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
@@ -222,6 +223,7 @@ Widget buildEmulatorsSection(
                         emulatorName,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
+                      _BiosStatusInline(emulatorId: emulatorId),
                       if (overridePath != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
@@ -1077,6 +1079,70 @@ void _showFlatpakOverrideDialog(BuildContext context, DirectoryService directory
       ),
     ),
   );
+}
+
+class _BiosStatusInline extends ConsumerWidget {
+  final String emulatorId;
+  const _BiosStatusInline({required this.emulatorId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final biosSpec = getBiosSpecForEmulator(emulatorId);
+    if (biosSpec == null) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+
+    if (biosSpec.hasHleBios && biosSpec.files.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 1),
+        child: Text(
+          'No BIOS needed (HLE)',
+          style: TextStyle(fontSize: 10, color: Colors.green.withValues(alpha: 0.8)),
+        ),
+      );
+    }
+
+    final requiredCount = biosSpec.requiredCount;
+    final optionalCount = biosSpec.optionalCount;
+
+    if (requiredCount == 0 && optionalCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 1),
+      child: Row(
+        children: [
+          if (requiredCount > 0) ...[
+            Icon(Icons.error_outline, size: 10, color: Colors.orange.withValues(alpha: 0.8)),
+            const SizedBox(width: 2),
+            Text(
+              '$requiredCount required',
+              style: TextStyle(fontSize: 10, color: Colors.orange.withValues(alpha: 0.8)),
+            ),
+          ],
+          if (requiredCount > 0 && optionalCount > 0) ...[
+            const SizedBox(width: 6),
+          ],
+          if (optionalCount > 0) ...[
+            Icon(Icons.info_outline, size: 10, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+            const SizedBox(width: 2),
+            Text(
+              '$optionalCount optional',
+              style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+            ),
+          ],
+          if (biosSpec.hasHleBios) ...[
+            const SizedBox(width: 6),
+            Text(
+              '(HLE fallback)',
+              style: TextStyle(fontSize: 9, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _FirmwareProgressDialog extends StatefulWidget {

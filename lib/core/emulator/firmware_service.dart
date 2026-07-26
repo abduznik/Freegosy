@@ -1,12 +1,41 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
+import 'package:freegosy/core/emulator/bios_registry.dart';
 
 typedef FirmwareProgressCallback = void Function(String fileName, int received, int total);
+
+/// Describes the status of a single BIOS file on the local filesystem.
+enum BiosFileStatus {
+  /// File is present and MD5 matches (if hash available).
+  valid,
+
+  /// File is present but MD5 does not match — likely wrong version or corrupted.
+  mismatch,
+
+  /// File is present, no hash to verify against — assumed OK.
+  present,
+
+  /// File is not present on disk.
+  missing,
+
+  /// This BIOS file is not needed (HLE core or no registry entry).
+  notNeeded,
+}
+
+class BiosFileInfo {
+  final BiosFileSpec spec;
+  final BiosFileStatus status;
+  final String? actualPath;
+
+  const BiosFileInfo({required this.spec, required this.status, this.actualPath});
+}
 
 class FirmwareService {
   final RommService _rommService;
@@ -29,9 +58,10 @@ class FirmwareService {
         }
 
         final biosDir = await _directoryService.getEmulatorBiosDirectory(strategy.emulatorId);
+        final biosSpec = getBiosSpecForEmulator(strategy.emulatorId);
         
         for (final firmware in platform.firmware) {
-          await _downloadAndPlaceFirmware(firmware, biosDir, onProgress: onProgress);
+          await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: strategy.emulatorId, biosSpec: biosSpec, onProgress: onProgress);
         }
       }
     } catch (e) {
@@ -54,9 +84,10 @@ class FirmwareService {
       }
 
       final biosDir = await _directoryService.getEmulatorBiosDirectory(strategy.emulatorId);
+      final biosSpec = getBiosSpecForEmulator(strategy.emulatorId);
       
       for (final firmware in platform.firmware) {
-        await _downloadAndPlaceFirmware(firmware, biosDir, onProgress: onProgress);
+        await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: strategy.emulatorId, biosSpec: biosSpec, onProgress: onProgress);
       }
     } catch (e) {
       debugPrint('[FirmwareService] Error syncing firmware for $platformSlug: $e');
@@ -68,13 +99,14 @@ class FirmwareService {
     try {
       final platforms = await _rommService.getPlatforms();
       final biosDir = await _directoryService.getEmulatorBiosDirectory(emulatorId);
+      final biosSpec = getBiosSpecForEmulator(emulatorId);
 
       for (final platform in platforms) {
         final strategy = _strategyRegistry.getStrategyForSlug(platform.slug);
         if (strategy?.emulatorId == emulatorId) {
           if (platform.firmware.isEmpty) continue;
           for (final firmware in platform.firmware) {
-            await _downloadAndPlaceFirmware(firmware, biosDir, onProgress: onProgress);
+            await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: emulatorId, biosSpec: biosSpec, onProgress: onProgress);
           }
         }
       }
@@ -83,7 +115,59 @@ class FirmwareService {
     }
   }
 
-  Future<void> _downloadAndPlaceFirmware(Firmware firmware, String biosDir, {FirmwareProgressCallback? onProgress}) async {
+  /// Checks the current BIOS status for an emulator.
+  ///
+  /// Returns a list of [BiosFileInfo] for each known BIOS file spec,
+  /// with the current on-disk status.
+  Future<List<BiosFileInfo>> checkBiosStatus(String emulatorId) async {
+    final biosSpec = getBiosSpecForEmulator(emulatorId);
+    if (biosSpec == null || biosSpec.files.isEmpty) return [];
+
+    final biosDir = await _directoryService.getEmulatorBiosDirectory(emulatorId);
+    final results = <BiosFileInfo>[];
+
+    for (final spec in biosSpec.files) {
+      // Resolve the actual path considering subdirectory
+      final relativePath = spec.subdirectory != null
+          ? p.join(spec.subdirectory!, spec.fileName)
+          : spec.fileName;
+      final filePath = p.join(biosDir, relativePath);
+      final file = File(filePath);
+
+      if (!await file.exists()) {
+        results.add(BiosFileInfo(spec: spec, status: BiosFileStatus.missing));
+        continue;
+      }
+
+      // If we have a known MD5 hash, verify it
+      if (spec.md5Hash != null) {
+        try {
+          final bytes = await file.readAsBytes();
+          final digest = md5.convert(bytes).toString();
+          if (digest.toLowerCase() == spec.md5Hash!.toLowerCase()) {
+            results.add(BiosFileInfo(spec: spec, status: BiosFileStatus.valid, actualPath: filePath));
+          } else {
+            results.add(BiosFileInfo(spec: spec, status: BiosFileStatus.mismatch, actualPath: filePath));
+          }
+        } catch (_) {
+          // If we can't read the file, report it as present (unverifiable)
+          results.add(BiosFileInfo(spec: spec, status: BiosFileStatus.present, actualPath: filePath));
+        }
+      } else {
+        results.add(BiosFileInfo(spec: spec, status: BiosFileStatus.present, actualPath: filePath));
+      }
+    }
+
+    return results;
+  }
+
+  Future<void> _downloadAndPlaceFirmware(
+    Firmware firmware,
+    String biosDir, {
+    String? emulatorId,
+    EmulatorBiosSpec? biosSpec,
+    FirmwareProgressCallback? onProgress,
+  }) async {
     debugPrint('[Firmware] firmware.fileName=${firmware.fileName}, firmware.filePath=${firmware.filePath}');
 
     // Use filePath from RomM to preserve subdirectory structure (e.g. "dc/dc_boot.bin").
@@ -98,8 +182,27 @@ class FirmwareService {
     debugPrint('[Firmware] relativePath=$relativePath, destPath=$destPath');
 
     if (await destFile.exists()) {
-      debugPrint('[Firmware] File already exists, skipping: $destPath');
-      return;
+      // If we have a registry entry with a known MD5, verify the existing file
+      final matchingSpec = _findMatchingSpec(firmware.fileName, biosSpec);
+      if (matchingSpec?.md5Hash != null) {
+        try {
+          final bytes = await destFile.readAsBytes();
+          final digest = md5.convert(bytes).toString();
+          if (digest.toLowerCase() == matchingSpec!.md5Hash!.toLowerCase()) {
+            debugPrint('[Firmware] File exists and MD5 matches, skipping: $destPath');
+            return;
+          } else {
+            debugPrint('[Firmware] File exists but MD5 mismatch! Expected ${matchingSpec.md5Hash}, got $digest. Overwriting: $destPath');
+            // Fall through to re-download
+          }
+        } catch (e) {
+          debugPrint('[Firmware] Could not verify MD5 for $destPath: $e, skipping');
+          return;
+        }
+      } else {
+        debugPrint('[Firmware] File already exists (no hash to verify), skipping: $destPath');
+        return;
+      }
     }
 
     // Initial progress report
@@ -116,8 +219,31 @@ class FirmwareService {
       await destFile.parent.create(recursive: true);
       await destFile.writeAsBytes(bytes);
       debugPrint('[Firmware] Wrote ${bytes.length} bytes to $destPath');
+
+      // Post-download MD5 verification if we have a known hash
+      final matchingSpec = _findMatchingSpec(firmware.fileName, biosSpec);
+      if (matchingSpec?.md5Hash != null) {
+        try {
+          final digest = md5.convert(bytes).toString();
+          if (digest.toLowerCase() != matchingSpec!.md5Hash!.toLowerCase()) {
+            debugPrint('[Firmware] WARNING: Downloaded file MD5 mismatch! Expected ${matchingSpec.md5Hash}, got $digest');
+          }
+        } catch (_) {}
+      }
     } else {
       debugPrint('[Firmware] Download returned null bytes for ${firmware.fileName}');
+    }
+  }
+
+  /// Find a matching BIOS spec for a given filename.
+  BiosFileSpec? _findMatchingSpec(String fileName, EmulatorBiosSpec? biosSpec) {
+    if (biosSpec == null) return null;
+    try {
+      return biosSpec.files.firstWhere(
+        (spec) => spec.fileName.toLowerCase() == fileName.toLowerCase(),
+      );
+    } catch (_) {
+      return null;
     }
   }
 }
