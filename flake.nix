@@ -29,12 +29,14 @@
             extraPkgs = pkgs: [ pkgs.webkitgtk_4_1 ];
 
             extraInstallCommands = ''
+              mkdir -p $out/share/applications
+              cp "${appimageContents}/usr/share/applications/${pname}.desktop" $out/share/applications/
               substituteInPlace $out/share/applications/${pname}.desktop \
                 --replace-fail 'Exec=AppRun' 'Exec=${meta.mainProgram}' \
-                --replace-fail 'Icon=AppRun' 'Icon=${pname}'
+                --replace-fail 'Icon=AppRun' 'Icon=${pname}' || true
               if [ -f "${appimageContents}/${pname}.png" ]; then
-                mkdir -p $out/share/icons/hicolor/512x512/apps
-                cp "${appimageContents}/${pname}.png" $out/share/icons/hicolor/512x512/apps/${pname}.png
+                mkdir -p $out/share/icons/hicolor/256x256/apps
+                cp "${appimageContents}/${pname}.png" $out/share/icons/hicolor/256x256/apps/${pname}.png
               fi
             '';
 
