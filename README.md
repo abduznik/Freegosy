@@ -109,3 +109,36 @@ I am currently searching for testers on **macOS**, **Windows**, and **Linux (Ste
 ## About RomM
 
 Freegosy is built to complement [RomM](https://github.com/rommapp/romm), a modern ROM manager. It connects to your RomM instance to provide a lightweight, portable way to access and play your games.
+
+## Installation
+
+### Nix / NixOS
+
+Freegosy provides a flake for Nix-based systems. Add it as an input in your flake:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    freegosy.url = "github:abduznik/Freegosy";
+  };
+
+  outputs = { self, nixpkgs, freegosy }: {
+    # Use in your configuration
+  };
+}
+```
+
+Or run directly without installing:
+
+```bash
+nix run github:abduznik/Freegosy
+```
+
+### Other Platforms
+
+Download the latest release for your platform from the [Releases page](https://github.com/abduznik/Freegosy/releases):
+
+- **Windows**: `.exe` installer
+- **macOS**: `.dmg` disk image
+- **Linux**: AppImage (`.AppImage`) or tarball (`.tar.gz`)

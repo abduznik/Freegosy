@@ -79,14 +79,14 @@ jobs:
           chmod +x AppDir/AppRun
 
           # Build AppImage
-          ARCH=x86_64 /usr/local/bin/appimagetool --appimage-extract-and-run AppDir Freegosy-x86_64.AppImage
+          ARCH=x86_64 /usr/local/bin/appimagetool --appimage-extract-and-run AppDir Freegosy-linux-x86_64.AppImage
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-release
           path: |
             freegosy-linux-x64.tar.gz
-            Freegosy-x86_64.AppImage
+            Freegosy-linux-x86_64.AppImage
 
   build_windows:
     name: Build Windows Installer
@@ -173,8 +173,8 @@ jobs:
             freegosy-macos.dmg
             freegosy-macos-x64.zip
 
-  build_nix:
-    name: Build Nix Package
+  update_nix_flake:
+    name: Update Nix Flake
     if: ${{ inputs.build_linux }}
     needs: [build_linux]
     runs-on: ubuntu-latest
@@ -184,9 +184,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
-      - uses: cachix/install-nix-action@v27
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
       - name: Download AppImage from Linux build
         uses: actions/download-artifact@v4
         with:
@@ -196,13 +193,11 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           VERSION="${VERSION#v}"
-          HASH=$(sha256sum dist/Freegosy-x86_64.AppImage | awk '{print $1}')
+          HASH=$(sha256sum dist/Freegosy-linux-x86_64.AppImage | awk '{print $1}')
           SRI="sha256-$(echo "$HASH" | xxd -r -p | base64)"
           echo "AppImage SRI: $SRI"
           sed -i "s|hash = \".*\"|hash = \"${SRI}\"|" flake.nix
           sed -i "s|version = \".*\"|version = \"${VERSION}\"|" flake.nix
-          # Copy AppImage to repo root for local Nix build
-          cp dist/Freegosy-x86_64.AppImage .
           cat flake.nix | grep -A2 "hash\|version"
       - name: Commit updated flake.nix
         run: |
@@ -213,25 +208,10 @@ jobs:
             git commit -m "chore: update flake.nix hash for ${{ github.event.inputs.version }}"
             git push origin HEAD:${{ github.ref_name }}
           fi
-      - name: Build Nix package
-        run: |
-          cp dist/Freegosy-x86_64.AppImage .
-          FREEGOSY_SRC=Freegosy-x86_64.AppImage FREEGOSY_VERSION=${{ github.event.inputs.version }} nix-build ci-build.nix --no-out-link > result-path.txt
-      - name: Package Nix output
-        run: |
-          RESULT_PATH=$(cat result-path.txt)
-          nix-store --export $(nix-store -qR "$RESULT_PATH") > freegosy-nix-x86_64-linux.nar
-          echo "$RESULT_PATH" > freegosy-nix-x86_64-linux.result-path
-          tar -czf freegosy-nix-x86_64-linux.tar.gz freegosy-nix-x86_64-linux.nar freegosy-nix-x86_64-linux.result-path
-      - name: Upload Nix Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: nix-release
-          path: freegosy-nix-x86_64-linux.tar.gz
 
   release:
     name: Create Release
-    needs: [build_linux, build_windows, build_macos, build_nix]
+    needs: [build_linux, build_windows, build_macos, update_nix_flake]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -263,14 +243,6 @@ jobs:
           path: artifacts/
         continue-on-error: true
 
-      - name: Download Nix Artifact
-        if: ${{ inputs.build_linux }}
-        uses: actions/download-artifact@v4
-        with:
-          name: nix-release
-          path: artifacts/
-        continue-on-error: true
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -278,12 +250,11 @@ jobs:
           name: Release ${{ github.event.inputs.version }}
           files: |
             artifacts/freegosy-linux-x64.tar.gz
-            artifacts/Freegosy-x86_64.AppImage
+            artifacts/Freegosy-linux-x86_64.AppImage
             artifacts/*.exe
             artifacts/freegosy-windows-x64.zip
             artifacts/freegosy-macos.dmg
             artifacts/freegosy-macos-x64.zip
-            artifacts/freegosy-nix-x86_64-linux.tar.gz
           fail_on_unmatched_files: false
           draft: false
           prerelease: ${{ github.event.inputs.prerelease == 'true' }}
