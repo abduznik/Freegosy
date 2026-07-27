@@ -220,7 +220,9 @@ jobs:
       - name: Package Nix output
         run: |
           RESULT_PATH=$(cat result-path.txt)
-          tar -czf freegosy-nix-x86_64-linux.tar.gz -C "$(dirname $RESULT_PATH)" "$(basename $RESULT_PATH)"
+          nix-store --export $(nix-store -qR "$RESULT_PATH") > freegosy-nix-x86_64-linux.nar
+          echo "$RESULT_PATH" > freegosy-nix-x86_64-linux.result-path
+          tar -czf freegosy-nix-x86_64-linux.tar.gz freegosy-nix-x86_64-linux.nar freegosy-nix-x86_64-linux.result-path
       - name: Upload Nix Artifact
         uses: actions/upload-artifact@v4
         with:
