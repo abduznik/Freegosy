@@ -178,8 +178,12 @@ jobs:
     if: ${{ inputs.build_linux }}
     needs: [build_linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
       - uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
@@ -200,6 +204,15 @@ jobs:
           # Copy AppImage to repo root for local Nix build
           cp dist/Freegosy-x86_64.AppImage .
           cat flake.nix | grep -A2 "hash\|version"
+      - name: Commit updated flake.nix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- flake.nix; then
+            git add flake.nix
+            git commit -m "chore: update flake.nix hash for ${{ github.event.inputs.version }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
       - name: Build Nix package
         run: |
           cp dist/Freegosy-x86_64.AppImage .
