@@ -26,14 +26,18 @@
           default = pkgs.appimageTools.wrapType2 rec {
             inherit pname version src;
 
-            extraPkgs = pkgs: [ pkgs.webkitgtk_4_1 ];
+            extraPkgs = pkgs: [ pkgs.webkitgtk_4_1 pkgs.libepoxy ];
 
             extraInstallCommands = ''
               mkdir -p $out/share/applications
-              cp "${appimageContents}/usr/share/applications/${pname}.desktop" $out/share/applications/
-              substituteInPlace $out/share/applications/${pname}.desktop \
-                --replace-fail 'Exec=AppRun' 'Exec=${meta.mainProgram}' \
-                --replace-fail 'Icon=AppRun' 'Icon=${pname}' || true
+              cat > $out/share/applications/${pname}.desktop <<EOF
+              [Desktop Entry]
+              Name=Freegosy
+              Exec=${meta.mainProgram}
+              Icon=${pname}
+              Type=Application
+              Categories=Game;
+              EOF
               if [ -f "${appimageContents}/${pname}.png" ]; then
                 mkdir -p $out/share/icons/hicolor/256x256/apps
                 cp "${appimageContents}/${pname}.png" $out/share/icons/hicolor/256x256/apps/${pname}.png
