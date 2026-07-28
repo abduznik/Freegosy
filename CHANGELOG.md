@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.10] - 2026-06-28
+## [0.5.10] - 2026-07-28
 
 ### Added
 - **PlatformInfo abstraction**: Introduced injectable platform detection (`PlatformInfo`) replacing all 177+ direct `dart:io` `Platform.is*` checks across the entire codebase. Tests can now simulate any OS via `PlatformInfo('windows')`, `PlatformInfo('macos')`, `PlatformInfo('linux')`.
@@ -9,27 +9,23 @@
 - **19 new controller mappings**: DualShock 3, 8BitDo SN30 Pro, 8BitDo Lite, 8BitDo Zero 2, 8BitDo Ultimate C, Razer Kishi, Razer Wolverine, SteelSeries Nimbus, SteelSeries Stratus, Backbone One, GameSir G7, GameSir T4, Hori Fighting Commander, Hori Split Pad, Nacon Revolution, PDP, Scuf, ASUS ROG Raikiri, Flydigi, GuliKit, Amazon Luna, MSI Force GC.
 - **107 new unit tests** across 14 test files covering ROM lookup, download cache, URL construction, SDL parser, extraction service, library snapshots, PCSX2 serial extraction, strategy registry, AppImage detection, gamepad debouncing, melonDS save paths, download extension preservation, directory service, ROM constants, and cross-platform simulation.
 - **Cross-platform simulation tests**: 20 tests verifying critical logic works identically on simulated Windows, macOS, and Linux.
+- **Save sync debug logging**: Unified `[SaveSync]` logging across all save strategies showing game name, slug, romPath, strategy selected, files found with paths/sizes, and upload/download results. Helps users and developers troubleshoot save sync issues (issues #42, #24, #28).
 
 ### Fixed
 - **Single-file-foldered ROM downloads missing extension (issue #44)**: Games stored in RomM as `/platform/gamename/gamename.chd` were downloaded without the `.chd` extension, preventing emulators from opening them.
 - **AppImage emulators not detected on Linux (issue #43)**: Expanded search paths to `~/.local/bin` and `~/bin`. Added fuzzy matching that strips architecture suffixes (`x86_64`, `amd64`, `linux`, `gtk`) and `.appimage` extensions. Added melonds/dolphin/duckstation/mgba to EmuDeck folder map.
 - **Controller ghost/stuck inputs (issue #41)**: Added 80ms debounce on digital button presses to prevent rapid-fire ghost inputs on Steam Deck and third-party controllers.
 - **melonDS save directory detection (issue #42)**: Added `%USERPROFILE%\Documents\melonDS` for Windows, `~/Library/Application Support/melonDS` for macOS, and RetroArch fallback on Linux.
-- **pubspec.yaml description**: Updated from boilerplate "A new Flutter project." to actual project description.
-
-### Changed
-- **Full PlatformInfo migration**: All 177+ `dart:io` `Platform.isWindows/isMacOS/isLinux` and `Platform.environment` checks replaced with injectable `PlatformInfo` across 43 production files. `defaultTargetPlatform` checks in providers and UI also migrated.
-- Added `plugin_platform_interface` and `path_provider_platform_interface` to dev_dependencies for test mocking.
-
-## [0.5.10] - 2026-06-19
-
-### Fixed
-- **Controller input leaks to background apps**: Freegosy was processing gamepad input even when another app (e.g. a game) was in focus. Controller navigation now only activates when Freegosy's window is the focused app.
 - **MelonDS launch regression**: melonDS was silently failing to start after the v0.5.9 launch refactor — it requires its working directory set to the exe folder to find `melonDS.ini` and firmware files. Restored per-platform launch overrides.
 - **MelonDS hangs before launching**: The pre-launch sync was performing a push + pull sequentially (up to 5-minute timeout each). Now only pulls before launch with a 30-second hard timeout. Push happens after the game exits as intended.
 - **Linux AppImages not detected (issue #43)**: Emulators installed as AppImages via EmuDeck (`~/Applications/`) or Gear Lever (`~/AppImages/`) are now detected automatically. Fixes Eden, PCSX2, DuckStation, Cemu not showing as installed.
 - **Push button shows "Up to Date" when no saves found**: Manual push was reporting success even when Freegosy couldn't locate any save files. Now shows a clear "No Saves Found" message with guidance.
 - **MelonDS save detection on Windows**: Added `%APPDATA%\melonDS` and `%APPDATA%\melonds` to the Windows save search path for users who configured a dedicated melonDS save folder.
+- **pubspec.yaml description**: Updated from boilerplate "A new Flutter project." to actual project description.
+
+### Changed
+- **Full PlatformInfo migration**: All 177+ `dart:io` `Platform.isWindows/isMacOS/isLinux` and `Platform.environment` checks replaced with injectable `PlatformInfo` across 43 production files. `defaultTargetPlatform` checks in providers and UI also migrated.
+- Added `plugin_platform_interface` and `path_provider_platform_interface` to dev_dependencies for test mocking.
 
 ## [0.5.9] - 2026-06-13
 
