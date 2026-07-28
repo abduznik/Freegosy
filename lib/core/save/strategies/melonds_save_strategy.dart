@@ -1,5 +1,5 @@
 import 'dart:io' as io;
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
 import '../../platform/platform_info.dart';
@@ -27,12 +27,21 @@ class MelonDsSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
+    debugPrint('[SaveSync] [melonDS] getSaveDir: romPath=$romPath');
+
     if (_platform.isLinux) {
       final emuDir = await _directoryService.getEmulatorAppSupportDirectory('melonds');
-      if (await io.Directory(emuDir).exists()) return emuDir;
+      if (await io.Directory(emuDir).exists()) {
+        debugPrint('[SaveSync] [melonDS]   → Linux melonDS dir: $emuDir');
+        return emuDir;
+      }
+      debugPrint('[SaveSync] [melonDS]   Linux melonDS dir not found: $emuDir');
       // Also check the RetroArch save dir on Linux
       _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'NDS', platform: _platform);
-      if (_cachedRetroarchDir != null && await io.Directory(_cachedRetroarchDir!).exists()) return _cachedRetroarchDir;
+      if (_cachedRetroarchDir != null && await io.Directory(_cachedRetroarchDir!).exists()) {
+        debugPrint('[SaveSync] [melonDS]   → Linux RetroArch fallback: $_cachedRetroarchDir');
+        return _cachedRetroarchDir;
+      }
     }
 
     final romDir = io.File(romPath).parent.path;
@@ -44,26 +53,33 @@ class MelonDsSaveStrategy extends SaveStrategy {
       await for (final entity in dir.list()) {
         if (entity is io.File) {
           final fname = p.basename(entity.path).toLowerCase();
-          if (fname == '$stem.sav' || fname == '$stem.srm') return romDir;
+          if (fname == '$stem.sav' || fname == '$stem.srm') {
+            debugPrint('[SaveSync] [melonDS]   → ROM-adjacent match: $fname in $romDir');
+            return romDir;
+          }
         }
       }
     }
 
-    // 2. %APPDATA%\melonDS on Windows (when user configures a dedicated save folder)
+    // 2. %APPDATA%\melonDS on Windows
     if (_platform.isWindows) {
       final appData = _platform.environment['APPDATA'] ?? '';
       if (appData.isNotEmpty) {
-        // melonDS uses 'melonDS' (capital D S) as its appdata folder name
         for (final folderName in ['melonDS', 'melonds']) {
           final melonDir = io.Directory(p.join(appData, folderName));
-          if (await melonDir.exists()) return melonDir.path;
+          if (await melonDir.exists()) {
+            debugPrint('[SaveSync] [melonDS]   → Windows APPDATA: ${melonDir.path}');
+            return melonDir.path;
+          }
         }
       }
-      // Also check USERPROFILE\Documents\melonDS
       final userProfile = _platform.environment['USERPROFILE'] ?? '';
       if (userProfile.isNotEmpty) {
         final docsDir = io.Directory(p.join(userProfile, 'Documents', 'melonDS'));
-        if (await docsDir.exists()) return docsDir.path;
+        if (await docsDir.exists()) {
+          debugPrint('[SaveSync] [melonDS]   → Windows Documents: ${docsDir.path}');
+          return docsDir.path;
+        }
       }
     }
 
@@ -72,15 +88,22 @@ class MelonDsSaveStrategy extends SaveStrategy {
       final home = _platform.environment['HOME'] ?? '';
       if (home.isNotEmpty) {
         final macDir = io.Directory(p.join(home, 'Library', 'Application Support', 'melonDS'));
-        if (await macDir.exists()) return macDir.path;
+        if (await macDir.exists()) {
+          debugPrint('[SaveSync] [melonDS]   → macOS App Support: ${macDir.path}');
+          return macDir.path;
+        }
       }
     }
 
     // 4. Fallback: RetroArch melonDS/DeSmuME core save directory
     _cachedRetroarchDir ??= await SaveStrategy.retroarchCoreSaveDir(_directoryService, 'NDS', platform: _platform);
-    if (_cachedRetroarchDir != null) return _cachedRetroarchDir;
+    if (_cachedRetroarchDir != null) {
+      debugPrint('[SaveSync] [melonDS]   → RetroArch core fallback: $_cachedRetroarchDir');
+      return _cachedRetroarchDir;
+    }
 
     // 5. Absolute fallback
+    debugPrint('[SaveSync] [melonDS]   → absolute fallback: $romDir (ROM directory)');
     return romDir;
   }
 
@@ -88,7 +111,10 @@ class MelonDsSaveStrategy extends SaveStrategy {
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final saveDir = await getSaveDir(game, romPath);
-    if (saveDir == null) return [];
+    if (saveDir == null) {
+      debugPrint('[SaveSync] [melonDS] getSaveFiles: no save dir found');
+      return [];
+    }
 
     final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
     final fallbackStem = getRomStem(game).toLowerCase();
@@ -98,9 +124,16 @@ class MelonDsSaveStrategy extends SaveStrategy {
         .where((w) => w.length >= 3)
         .toList();
 
-    final dir = io.Directory(saveDir);
-    if (!await dir.exists()) return [];
+    debugPrint('[SaveSync] [melonDS] getSaveFiles: searching in $saveDir');
+    debugPrint('[SaveSync] [melonDS]   looking for: $romStem.sav / $romStem.srm (or $fallbackStem.*)');
 
+    final dir = io.Directory(saveDir);
+    if (!await dir.exists()) {
+      debugPrint('[SaveSync] [melonDS]   save dir does not exist');
+      return [];
+    }
+
+    // Exact match
     final List<io.File> foundFiles = [];
     await for (final entity in dir.list()) {
       if (entity is! io.File) continue;
@@ -108,15 +141,20 @@ class MelonDsSaveStrategy extends SaveStrategy {
       if ((fname == '$romStem.sav' || fname == '$fallbackStem.sav' || fname == '$romStem.srm' || fname == '$fallbackStem.srm')) {
         if (sessionStart != null) {
           final stat = await entity.stat();
-          if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
+          if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) {
+            debugPrint('[SaveSync] [melonDS]   skip (before sessionStart): $fname');
+            continue;
+          }
         }
+        debugPrint('[SaveSync] [melonDS]   → exact match: ${entity.path}');
         foundFiles.add(entity);
         break;
       }
     }
 
-    // Fuzzy fallback: match by word tokens (e.g. "Dragon Ball Z: Legacy" matches "Dragon Ball Z - Legacy.srm")
+    // Fuzzy fallback: match by word tokens
     if (foundFiles.isEmpty && stemWords.isNotEmpty) {
+      debugPrint('[SaveSync] [melonDS]   no exact match, trying fuzzy: $stemWords');
       await for (final entity in dir.list()) {
         if (entity is! io.File) continue;
         final fname = p.basename(entity.path).toLowerCase();
@@ -126,12 +164,16 @@ class MelonDsSaveStrategy extends SaveStrategy {
             final stat = await entity.stat();
             if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
           }
+          debugPrint('[SaveSync] [melonDS]   → fuzzy match: ${entity.path}');
           foundFiles.add(entity);
           break;
         }
       }
     }
 
+    if (foundFiles.isEmpty) {
+      debugPrint('[SaveSync] [melonDS]   no save files found in $saveDir');
+    }
     return foundFiles;
   }
 
@@ -140,24 +182,31 @@ class MelonDsSaveStrategy extends SaveStrategy {
       Game game, String destPath, Uint8List data, String filename) async {
     try {
       final saveDir = await getSaveDir(game, destPath);
-      if (saveDir == null) return false;
+      if (saveDir == null) {
+        debugPrint('[SaveSync] [melonDS] restoreSave: no save dir');
+        return false;
+      }
 
       final romStem = p.basenameWithoutExtension(destPath).toLowerCase();
       final fallbackStem = getRomStem(game).toLowerCase();
       String targetPath = p.normalize(p.join(saveDir, '$romStem.sav'));
+      debugPrint('[SaveSync] [melonDS] restoreSave: filename=$filename  targetDir=$saveDir');
 
       if (filename.toLowerCase().endsWith('.zip')) {
+        debugPrint('[SaveSync] [melonDS]   extracting ZIP...');
         final archive = ZipDecoder().decodeBytes(data);
         for (final file in archive) {
           if (!file.isFile) continue;
           if (file.name == 'freegosy_sync.txt') continue;
           if (file.name.toLowerCase().endsWith('.sav')) {
+            debugPrint('[SaveSync] [melonDS]   → extracted ${file.name} → $targetPath');
             await io.Directory(p.dirname(targetPath)).create(recursive: true);
             await backupSave(targetPath);
             await io.File(targetPath).writeAsBytes(file.content);
             return true;
           }
         }
+        debugPrint('[SaveSync] [melonDS]   ZIP contained no .sav files');
         return true;
       }
 
@@ -168,6 +217,7 @@ class MelonDsSaveStrategy extends SaveStrategy {
           final fname = p.basename(entity.path).toLowerCase();
           if (fname == '$romStem.sav' || fname == '$fallbackStem.sav' || fname == '$romStem.srm' || fname == '$fallbackStem.srm') {
             targetPath = entity.path;
+            debugPrint('[SaveSync] [melonDS]   → found existing save: $targetPath');
             break;
           }
         }
@@ -185,6 +235,7 @@ class MelonDsSaveStrategy extends SaveStrategy {
               if (!fname.endsWith('.srm') && !fname.endsWith('.sav')) continue;
               if (stemWords.any((word) => fname.contains(word))) {
                 targetPath = entity.path;
+                debugPrint('[SaveSync] [melonDS]   → fuzzy match existing: $targetPath');
                 break;
               }
             }
@@ -192,11 +243,13 @@ class MelonDsSaveStrategy extends SaveStrategy {
         }
       }
 
+      debugPrint('[SaveSync] [melonDS]   writing ${data.length} bytes → $targetPath');
       await io.Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
+      debugPrint('[SaveSync] [melonDS] restoreSave ERROR: $e');
       return false;
     }
   }

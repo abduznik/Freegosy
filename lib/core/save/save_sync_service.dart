@@ -113,12 +113,12 @@ class SaveSyncService {
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
   SaveStrategy? getStrategyForSlug(String? platformSlug) {
-    debugPrint('[SyncService] getStrategyForSlug: slug=$platformSlug');
+    debugPrint('[SaveSync] Resolving strategy for slug="$platformSlug"');
     if (platformSlug != null) {
       final preferredId = _strategyRegistry.getPreferredEmulatorId(platformSlug);
       if (preferredId != null) {
         final strategy = _saveStrategyForEmulatorId(preferredId);
-        debugPrint('[SyncService] getStrategyForSlug: resolved via preferred=$preferredId -> ${strategy?.strategyId ?? "null"}');
+        debugPrint('[SaveSync]   → preferred emulator="$preferredId" → strategy=${strategy?.strategyId ?? "none"}');
         return strategy;
       }
 
@@ -127,12 +127,13 @@ class SaveSyncService {
       final defaultEmulatorStrategy = _strategyRegistry.getStrategyForSlug(platformSlug);
       if (defaultEmulatorStrategy != null) {
         final strategy = _saveStrategyForEmulatorId(defaultEmulatorStrategy.emulatorId);
-        debugPrint('[SyncService] getStrategyForSlug: resolved via registry -> ${strategy?.strategyId ?? "null"}');
+        debugPrint('[SaveSync]   → default emulator="${defaultEmulatorStrategy.emulatorId}" → strategy=${strategy?.strategyId ?? "none"}');
         return strategy;
       }
     }
 
     // Hardcoded fallback (should rarely be reached)
+    debugPrint('[SaveSync]   → no registry match, using hardcoded fallback');
     switch (platformSlug?.toLowerCase()) {
       case 'gba':
       case 'gbc':
@@ -201,7 +202,7 @@ class SaveSyncService {
       case 'new-nintendo-3ds-xl':
         return _azahar;
       default:
-        debugPrint('[SyncService] getStrategyForSlug: no strategy for slug=$platformSlug');
+        debugPrint('[SaveSync]   → no strategy for slug="$platformSlug"');
         return null;
     }
   }
@@ -246,7 +247,7 @@ class SaveSyncService {
     for (final key in keys) {
       await _prefs.remove(key);
     }
-    debugPrint('[SyncService] Cleared hash cache for game $gameId');
+    debugPrint('[SaveSync] Cleared hash cache for game $gameId');
   }
 
   Future<String> _hashFile(io.File file) async {
@@ -279,8 +280,13 @@ class SaveSyncService {
   /// Routes to [_devicePushSaves] on RomM 4.9+ or [_legacyPushSaves] on older.
   Future<bool> pushSaves(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
+    debugPrint('[SaveSync] ─── PUSH START ─── game="${game.displayName}" slug=${game.platformSlug}');
+    debugPrint('[SaveSync]   romPath: $romPath');
+    debugPrint('[SaveSync]   syncMode=$syncMode  force=$force  coreOverride=$coreOverride  sessionStart=$sessionStart');
     final caps = await _rommService.fetchCapabilities();
-    if (caps.hasDeviceSaveSync) {
+    final useDevice = caps.hasDeviceSaveSync;
+    debugPrint('[SaveSync]   RomM version: ${useDevice ? "4.9+ (device sync)" : "legacy (<4.9)"}');
+    if (useDevice) {
       return _devicePushSaves(game, romPath,
           sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride);
     }
@@ -306,13 +312,17 @@ class SaveSyncService {
     final now = DateTime.now();
     final lastCheck = _lastPullCheck[game.id];
     if (saveData == null && lastCheck != null && now.difference(lastCheck) < _pullCheckCooldown) {
-      debugPrint('[SyncService] Skipping pull for ${game.displayName}: checked ${now.difference(lastCheck).inSeconds}s ago');
+      debugPrint('[SaveSync] ─── PULL SKIP ─── "${game.displayName}" checked ${now.difference(lastCheck).inSeconds}s ago (cooldown)');
       return false;
     }
     _lastPullCheck[game.id] = now;
 
+    debugPrint('[SaveSync] ─── PULL START ─── game="${game.displayName}" slug=${game.platformSlug}');
+    debugPrint('[SaveSync]   romPath: $romPath  coreOverride=$coreOverride  saveData=${saveData != null ? "manual" : "auto"}');
     final caps = await _rommService.fetchCapabilities();
-    if (caps.hasDeviceSaveSync) {
+    final useDevice = caps.hasDeviceSaveSync;
+    debugPrint('[SaveSync]   RomM version: ${useDevice ? "4.9+ (device sync)" : "legacy (<4.9)"}');
+    if (useDevice) {
       return _devicePullSave(game, romPath, saveData: saveData, coreOverride: coreOverride);
     }
     return _legacyPullSave(game, romPath, saveData: saveData, coreOverride: coreOverride);
@@ -347,7 +357,10 @@ class SaveSyncService {
   /// them. Dropping them here was the root cause of Wii saves never uploading.
   Map<io.File, io.File?> _filterFilesMap(
       SaveStrategy strategy, Map<io.File, io.File?> filesMap) {
-    if (strategy.shouldZip) return filesMap;
+    if (strategy.shouldZip) {
+      debugPrint('[SaveSync]   Filter: strategy supports ZIP, passing all ${filesMap.length} file(s) through');
+      return filesMap;
+    }
     final filtered = <io.File, io.File?>{};
     for (final entry in filesMap.entries) {
       // Always pass directories through — callers zip them.
@@ -371,6 +384,7 @@ class SaveSyncService {
     }
     if (filtered.isEmpty) {
       // Last resort: take the first file entry.
+      debugPrint('[SaveSync]   Filter: no .srm/.sav/.gci/etc. found, taking first entry as fallback');
       for (final entry in filesMap.entries) {
         filtered[entry.key] = entry.value;
         break;
@@ -388,10 +402,10 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        debugPrint('[SyncService] [4.9] _devicePushSaves: no strategy for ${game.displayName} (slug=${game.platformSlug})');
+        debugPrint('[SaveSync] [push] No save strategy for slug="${game.platformSlug}" — game "${game.displayName}" not supported');
         return false;
       }
-      debugPrint('[SyncService] [4.9] _devicePushSaves: strategy=${strategy.strategyId}, game=${game.displayName}');
+      debugPrint('[SaveSync] [push] Strategy: ${strategy.strategyId}  game="${game.displayName}"');
       _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
       var filesMap = await strategy.getSaveFilesWithScreenshots(
@@ -399,10 +413,25 @@ class SaveSyncService {
         sessionStart: sessionStart,
         syncMode: syncMode,
       );
-      debugPrint('[SyncService] [4.9] _devicePushSaves: filesCount=${filesMap.length}');
-      if (filesMap.isEmpty) return false;
+      debugPrint('[SaveSync] [push] Found ${filesMap.length} save file(s) from strategy');
+      if (filesMap.isEmpty) {
+        debugPrint('[SaveSync] [push] No save files found on disk — nothing to upload');
+        return false;
+      }
+      // Log what was found (paths + sizes)
+      for (final entry in filesMap.entries) {
+        final f = entry.key;
+        final isDir = io.FileSystemEntity.isDirectorySync(f.path);
+        final exists = io.FileSystemEntity.isFileSync(f.path);
+        final size = exists && !isDir ? io.File(f.path).lengthSync() : -1;
+        debugPrint('[SaveSync] [push]   → ${f.path}  (${isDir ? "dir" : "$size bytes"})');
+      }
       filesMap = _filterFilesMap(strategy, filesMap);
-      if (filesMap.isEmpty) return false;
+      debugPrint('[SaveSync] [push] After filter: ${filesMap.length} file(s) to upload');
+      if (filesMap.isEmpty) {
+        debugPrint('[SaveSync] [push] All files filtered out — nothing to upload');
+        return false;
+      }
 
       final displayStem =
           game.displayName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
@@ -422,7 +451,7 @@ class SaveSyncService {
         finalUploadFile = entry.key;
         finalScreenshotFile = entry.value;
         uploadFilename = p.basename(finalUploadFile.path);
-        debugPrint('[SyncService] [4.9] _devicePushSaves: mode=single, file=$uploadFilename');
+        debugPrint('[SaveSync] [push] Mode: single file → $uploadFilename');
       } else {
         isBundle = true;
         debugPrint('[SyncService] [4.9] _devicePushSaves: mode=bundle');
@@ -453,8 +482,7 @@ class SaveSyncService {
       // Reject empty/blank saves to prevent overwriting legitimate cloud saves.
       final fileLen = await finalUploadFile.length();
       if (fileLen < minValidSaveSizeBytes) {
-        debugPrint(
-            '[SyncService] Rejecting save for $displayStem: $fileLen bytes < $minValidSaveSizeBytes min');
+        debugPrint('[SaveSync] [push] Rejected: $displayStem is only $fileLen bytes (min=$minValidSaveSizeBytes)');
         if (isBundle && await finalUploadFile.exists()) {
           await finalUploadFile.delete();
         }
@@ -465,7 +493,7 @@ class SaveSyncService {
       final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
       if (!force && storedHash != null && localHash == storedHash) {
-        debugPrint('[SyncService] [4.9] _devicePushSaves: hash match, skipping upload');
+        debugPrint('[SaveSync] [push] Hash unchanged — skipping upload (already synced)');
         if (isBundle && await finalUploadFile.exists()) {
           await finalUploadFile.delete();
         }
@@ -486,7 +514,7 @@ class SaveSyncService {
       );
 
       if (!result.ok && result.conflict != null) {
-        debugPrint('[SyncService] [4.9] _devicePushSaves: conflict detected');
+        debugPrint('[SaveSync] [push] Conflict detected — cloud save is newer');
         final cloudTimeStr = result.conflict!['current_save_time']?.toString();
         final cloudTime =
             cloudTimeStr != null ? DateTime.tryParse(cloudTimeStr) : null;
@@ -507,17 +535,20 @@ class SaveSyncService {
 
       if (result.ok) {
         await _storeHash(game.id, uploadFilename, localHash);
-        debugPrint('[SyncService] [4.9] _devicePushSaves: upload ok, hash stored');
+        debugPrint('[SaveSync] [push] Upload OK — $uploadFilename ($fileLen bytes) saved to RomM');
+      } else {
+        debugPrint('[SaveSync] [push] Upload FAILED — server returned ok=false');
       }
 
       if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
       final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
       if (await metaFile.exists()) await metaFile.delete();
+      debugPrint('[SaveSync] ─── PUSH END ─── ok=${result.ok}');
       return result.ok;
     } on SaveConflictException {
       rethrow;
     } catch (e) {
-      debugPrint('[SyncService] [4.9] _devicePushSaves: error=$e');
+      debugPrint('[SaveSync] [push] ERROR: $e');
       return false;
     }
   }
@@ -527,21 +558,20 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        debugPrint('[SyncService] [4.9] _devicePullSave: no strategy for ${game.displayName} (slug=${game.platformSlug})');
+        debugPrint('[SaveSync] [pull] No save strategy for slug="${game.platformSlug}"');
         return false;
       }
-      debugPrint('[SyncService] [4.9] _devicePullSave: strategy=${strategy.strategyId}, game=${game.displayName}');
+      debugPrint('[SaveSync] [pull] Strategy: ${strategy.strategyId}');
       _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
       final deviceId = _getDeviceId();
-      debugPrint('[SyncService] [4.9] _devicePullSave: deviceId=${deviceId ?? "none"}');
+      debugPrint('[SaveSync] [pull] Fetching latest save from server (deviceId=${deviceId ?? "none"})...');
       final Map<String, dynamic>? save =
           saveData ?? await _rommService.getLatestSave(game.id, deviceId: deviceId);
       if (save == null) {
-        debugPrint('[SyncService] [4.9] _devicePullSave: no save found on server');
+        debugPrint('[SaveSync] [pull] No save found on server — nothing to pull');
         return false;
       }
-      debugPrint('[SyncService] [4.9] _devicePullSave: save found, checking current...');
 
       // If server says we already have the current version, skip
       if (saveData == null && deviceId != null) {
@@ -551,8 +581,7 @@ class SaveSyncService {
           orElse: () => null,
         );
         if (mySync != null && mySync['is_current'] == true) {
-          debugPrint(
-              '[SyncService] [4.9] Already current for ${game.displayName}, skipping pull');
+          debugPrint('[SaveSync] [pull] Already current on this device — skipping');
           return false;
         }
       }
@@ -560,13 +589,13 @@ class SaveSyncService {
       final downloadUrl =
           save['download_path'] as String? ?? save['url'] as String?;
       if (downloadUrl == null) {
-        debugPrint('[SyncService] [4.9] _devicePullSave: no download URL');
+        debugPrint('[SaveSync] [pull] Save record found but no download URL');
         return false;
       }
 
       final filename =
           save['file_name'] as String? ?? downloadUrl.split('/').last;
-      debugPrint('[SyncService] [4.9] _devicePullSave: filename=$filename');
+      debugPrint('[SaveSync] [pull] Cloud save: $filename');
 
       // Skip save states — only sync battery-backed saves (.srm, .sav, .sra, etc.)
       final fnameLower = filename.toLowerCase();
@@ -574,26 +603,26 @@ class SaveSyncService {
           fnameLower.contains('.state.') ||
           fnameLower.endsWith('.state.auto') ||
           RegExp(r'\.state\d+$').hasMatch(fnameLower)) {
-        debugPrint(
-            '[SyncService] Skipping pull for ${game.displayName}: latest cloud save is a state file ($filename)');
+        debugPrint('[SaveSync] [pull] Skipping — latest cloud save is a state file ($filename)');
         return false;
       }
 
       final bytes = await _rommService.downloadSave(downloadUrl, deviceId: deviceId);
       if (bytes == null) {
-        debugPrint('[SyncService] [4.9] _devicePullSave: download failed');
+        debugPrint('[SaveSync] [pull] Download failed');
         return false;
       }
-      debugPrint('[SyncService] [4.9] _devicePullSave: downloaded ${bytes.length} bytes');
 
       final adjustedFilename = _adjustFilenameForFormat(bytes, normalizeSaveFilename(filename));
+      debugPrint('[SaveSync] [pull] Downloaded ${bytes.length} bytes → restoring as "$adjustedFilename"');
 
       final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
-      debugPrint('[SyncService] [4.9] _devicePullSave: restore result=$ok');
       if (!ok) {
+        debugPrint('[SaveSync] [pull] Strategy failed to restore save');
         throw Exception(
             'Strategy [${strategy.strategyId}] failed to restore save: $filename');
       }
+      debugPrint('[SaveSync] ─── PULL END ─── restored OK');
       return ok;
     } on io.FileSystemException catch (e) {
       throw Exception('Disk Error: ${e.message} (Path: ${e.path})');
@@ -616,10 +645,10 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        debugPrint('[SyncService] [legacy] _legacyPushSaves: no strategy for ${game.displayName} (slug=${game.platformSlug})');
+        debugPrint('[SaveSync] [push] No save strategy for slug="${game.platformSlug}"');
         return false;
       }
-      debugPrint('[SyncService] [legacy] _legacyPushSaves: strategy=${strategy.strategyId}, game=${game.displayName}');
+      debugPrint('[SaveSync] [push] Strategy: ${strategy.strategyId}  (legacy path)');
 
       _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
@@ -628,8 +657,18 @@ class SaveSyncService {
         sessionStart: sessionStart,
         syncMode: syncMode,
       );
-      debugPrint('[SyncService] [legacy] _legacyPushSaves: filesCount=${filesMap.length}');
-      if (filesMap.isEmpty) return false;
+      debugPrint('[SaveSync] [push] Found ${filesMap.length} save file(s)');
+      for (final entry in filesMap.entries) {
+        final f = entry.key;
+        final isDir = io.FileSystemEntity.isDirectorySync(f.path);
+        final exists = io.FileSystemEntity.isFileSync(f.path);
+        final size = exists && !isDir ? io.File(f.path).lengthSync() : -1;
+        debugPrint('[SaveSync] [push]   → ${f.path}  (${isDir ? "dir" : "$size bytes"})');
+      }
+      if (filesMap.isEmpty) {
+        debugPrint('[SaveSync] [push] No save files found — nothing to upload');
+        return false;
+      }
 
       // If the strategy does not support zipping, filter filesMap to only keep the primary save file
       // (typically ending in .srm, .sav, or .gci) to ensure it is uploaded raw/unzipped.
@@ -657,7 +696,7 @@ class SaveSyncService {
 
       // --- Conflict Detection ---
       if (!force) {
-        debugPrint('[SyncService] [legacy] _legacyPushSaves: checking for conflicts...');
+        debugPrint('[SaveSync] [push] Checking for conflicts...');
         final latestRemote = await _rommService.getLatestSave(game.id);
         if (latestRemote != null) {
           final remoteTime = DateTime.tryParse(latestRemote['updated_at']?.toString() ?? '');
@@ -703,10 +742,10 @@ class SaveSyncService {
         finalUploadFile = entry.key;
         finalScreenshotFile = entry.value;
         uploadFilename = p.basename(finalUploadFile.path);
-        debugPrint('[SyncService] [legacy] _legacyPushSaves: mode=single, file=$uploadFilename');
+        debugPrint('[SaveSync] [push] Mode: single file → $uploadFilename');
       } else {
         isBundle = true;
-        debugPrint('[SyncService] [legacy] _legacyPushSaves: mode=bundle');
+        debugPrint('[SaveSync] [push] Mode: bundle (${filesMap.length} files)');
         // --- Prepare unique bundle ZIP to bypass server-side deduplication ---
         final bundleZipPath = p.join(tempDir, '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
         final encoder = ZipFileEncoder();
@@ -737,7 +776,7 @@ class SaveSyncService {
       // Reject empty/blank saves to prevent overwriting legitimate cloud saves.
       final fileLen = await finalUploadFile.length();
       if (fileLen < minValidSaveSizeBytes) {
-        debugPrint('[SyncService] [legacy] Rejecting save for $displayStem: $fileLen bytes < $minValidSaveSizeBytes min');
+        debugPrint('[SaveSync] [push] Rejected: $displayStem is only $fileLen bytes (min=$minValidSaveSizeBytes)');
         if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
         return false;
       }
@@ -745,13 +784,8 @@ class SaveSyncService {
       final String localHash = await _hashFile(finalUploadFile);
       final String? storedHash = _getStoredHash(game.id, uploadFilename);
 
-      // Local deduplication check (only for automatic syncs)
-      // When force=true (manual "Push" button), this check is bypassed.
-      // Previously, the lack of force=true on manual push meant saves
-      // with unchanged content were never re-uploaded. Now the "Push"
-      // button passes force=true which sets overwrite=true on the server.
       if (!force && storedHash != null && localHash == storedHash) {
-        debugPrint('[SyncService] [legacy] _legacyPushSaves: hash match, skipping upload');
+        debugPrint('[SaveSync] [push] Hash unchanged — skipping upload');
         if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
         return true; 
       }
@@ -774,18 +808,21 @@ class SaveSyncService {
       if (result.ok) {
         uploaded++;
         await _storeHash(game.id, uploadFilename, localHash);
-        debugPrint('[SyncService] [legacy] _legacyPushSaves: upload ok, hash stored');
+        debugPrint('[SaveSync] [push] Upload OK — $uploadFilename ($fileLen bytes) saved to RomM');
+      } else {
+        debugPrint('[SaveSync] [push] Upload FAILED');
       }
 
       if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
       final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
       if (await metaFile.exists()) await metaFile.delete();
 
+      debugPrint('[SaveSync] ─── PUSH END ─── ok=${uploaded > 0}');
       return uploaded > 0;
     } on SaveConflictException {
       rethrow;
     } catch (e) {
-      debugPrint('[SyncService] [legacy] _legacyPushSaves: error=$e');
+      debugPrint('[SaveSync] [push] ERROR: $e');
       return false;
     }
   }
@@ -845,16 +882,17 @@ class SaveSyncService {
     try {
       final strategy = getStrategyForSlug(game.platformSlug);
       if (strategy == null) {
-        debugPrint('[SyncService] [legacy] _legacyPullSave: no strategy for ${game.displayName} (slug=${game.platformSlug})');
+        debugPrint('[SaveSync] [pull] No save strategy for slug="${game.platformSlug}"');
         return false;
       }
-      debugPrint('[SyncService] [legacy] _legacyPullSave: strategy=${strategy.strategyId}, game=${game.displayName}');
+      debugPrint('[SaveSync] [pull] Strategy: ${strategy.strategyId}  (legacy path)');
 
       _applyStrategyMappings(strategy, game, coreOverride: coreOverride);
 
+      debugPrint('[SaveSync] [pull] Fetching latest save from server...');
       final Map<String, dynamic>? save = saveData ?? await _rommService.getLatestSave(game.id);
       if (save == null) {
-        debugPrint('[SyncService] [legacy] _legacyPullSave: no save found on server');
+        debugPrint('[SaveSync] [pull] No save found on server');
         return false;
       }
 
@@ -866,7 +904,7 @@ class SaveSyncService {
         if (lastPull != null &&
             remoteUpdatedAt != null &&
             !remoteUpdatedAt.isAfter(lastPull)) {
-          debugPrint('[SyncService] [legacy] _legacyPullSave: stale save, skipping (remote=$remoteUpdatedAt, lastPull=$lastPull)');
+          debugPrint('[SaveSync] [pull] Save not newer than last pull — skipping');
           return false;
         }
       }
@@ -874,13 +912,12 @@ class SaveSyncService {
       final downloadUrl = save['download_path'] as String?
           ?? save['url'] as String?;
       if (downloadUrl == null) {
-        debugPrint('[SyncService] [legacy] _legacyPullSave: no download URL');
+        debugPrint('[SaveSync] [pull] Save record found but no download URL');
         return false;
       }
 
       final filename = save['file_name'] as String?
           ?? downloadUrl.split('/').last;
-      debugPrint('[SyncService] [legacy] _legacyPullSave: filename=$filename');
 
       // Skip save states — only sync battery-backed saves
       final fnameLower = filename.toLowerCase();
@@ -888,29 +925,28 @@ class SaveSyncService {
           fnameLower.contains('.state.') ||
           fnameLower.endsWith('.state.auto') ||
           RegExp(r'\.state\d+$').hasMatch(fnameLower)) {
-        debugPrint('[SyncService] [legacy] Skipping pull for ${game.displayName}: latest save is a state file ($filename)');
+        debugPrint('[SaveSync] [pull] Skipping — cloud save is a state file ($filename)');
         return false;
       }
 
-      final bytes = await _rommService.downloadSave(
-          downloadUrl);
+      final bytes = await _rommService.downloadSave(downloadUrl);
       if (bytes == null) {
-        debugPrint('[SyncService] [legacy] _legacyPullSave: download failed');
+        debugPrint('[SaveSync] [pull] Download failed');
         return false;
       }
-      debugPrint('[SyncService] [legacy] _legacyPullSave: downloaded ${bytes.length} bytes');
 
       // Sniff actual bytes so that ZIP files (even those manually uploaded or
       // stored under a non-.zip name) are correctly extracted on restore.
       final adjustedFilename = _adjustFilenameForFormat(bytes, normalizeSaveFilename(filename));
+      debugPrint('[SaveSync] [pull] Downloaded ${bytes.length} bytes → restoring as "$adjustedFilename"');
 
-      final ok = await strategy.restoreSave(
-          game, romPath, bytes, adjustedFilename);
+      final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
 
-      debugPrint('[SyncService] [legacy] _legacyPullSave: restore result=$ok');
       if (ok) {
         await _setLastPullTime(game.id);
+        debugPrint('[SaveSync] ─── PULL END ─── restored OK');
       } else {
+        debugPrint('[SaveSync] [pull] Strategy failed to restore save');
         throw Exception('Strategy [${strategy.strategyId}] failed to restore save file: $filename');
       }
       return ok;

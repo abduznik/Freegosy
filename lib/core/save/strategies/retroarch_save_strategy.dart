@@ -55,14 +55,14 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   /// Resolves the core info for a slug, checking overrides first.
   _CoreInfo? _getCoreInfo(String slug) {
-    debugPrint('[RetroArch-Save] _getCoreInfo slug=$slug');
+    debugPrint('[SaveSync] [retroarch] _getCoreInfo: slug="$slug"  ndsCore=$_ndsCore');
 
     // 1. NDS dynamic override (backward compat)
     if (slug == 'nds' || slug == 'nintendo-ds') {
       final info = _ndsCore == 'desmume'
           ? const _CoreInfo('desmume2015_libretro', 'NDS', 'States/NDS')
           : const _CoreInfo('melonds_libretro', 'NDS', 'States/NDS');
-      debugPrint('[RetroArch-Save] _getCoreInfo NDS override → core=${info.coreName}');
+      debugPrint('[SaveSync] [retroarch]   → NDS override: core=${info.coreName}');
       return info;
     }
 
@@ -72,29 +72,29 @@ class RetroArchSaveStrategy extends SaveStrategy {
       final stripped = baseName.replaceAll(RegExp(r'_libretro$'), '');
       final folderInfo = _coreFolderOverrides[stripped];
       if (folderInfo != null) {
-        debugPrint('[RetroArch-Save] _getCoreInfo launch override (folderOverrides) → core=${folderInfo.coreName}');
+        debugPrint('[SaveSync] [retroarch] _getCoreInfo launch override (folderOverrides) → core=${folderInfo.coreName}');
         return folderInfo;
       }
       // Fallback: check _coreMap
       for (final entry in _coreMap.entries) {
         if (entry.value.coreName == baseName) {
-          debugPrint('[RetroArch-Save] _getCoreInfo launch override (_coreMap) → core=${entry.value.coreName}');
+          debugPrint('[SaveSync] [retroarch] _getCoreInfo launch override (_coreMap) → core=${entry.value.coreName}');
           return entry.value;
         }
       }
-      debugPrint('[RetroArch-Save] _getCoreInfo launch override (fallback) → core=$baseName');
+      debugPrint('[SaveSync] [retroarch] _getCoreInfo launch override (fallback) → core=$baseName');
       return _CoreInfo(baseName, baseName, 'States/$baseName');
     }
 
     // 3. General core override from registry
     final overrideCoreId = _coreOverrides[slug];
     if (overrideCoreId != null) {
-      debugPrint('[RetroArch-Save] _getCoreInfo registry override overrideCoreId=$overrideCoreId');
+      debugPrint('[SaveSync] [retroarch] _getCoreInfo registry override overrideCoreId=$overrideCoreId');
       final baseName = overrideCoreId.replaceAll(RegExp(r'\.(dll|so|dylib)$'), '');
       // Try to find matching _coreMap entry by coreName
       for (final entry in _coreMap.entries) {
         if (entry.value.coreName == baseName) {
-          debugPrint('[RetroArch-Save] _getCoreInfo registry override (_coreMap) → core=${entry.value.coreName}');
+          debugPrint('[SaveSync] [retroarch] _getCoreInfo registry override (_coreMap) → core=${entry.value.coreName}');
           return entry.value;
         }
       }
@@ -102,12 +102,12 @@ class RetroArchSaveStrategy extends SaveStrategy {
       final stripped = baseName.replaceAll(RegExp(r'_libretro$'), '');
       final folderInfo = _coreFolderOverrides[stripped];
       if (folderInfo != null) {
-        debugPrint('[RetroArch-Save] _getCoreInfo registry override (folderOverrides) → core=${folderInfo.coreName}');
+        debugPrint('[SaveSync] [retroarch] _getCoreInfo registry override (folderOverrides) → core=${folderInfo.coreName}');
         return folderInfo;
       }
 
       // Fallback: use the override core name with generic save folders
-      debugPrint('[RetroArch-Save] _getCoreInfo registry override (fallback) → core=$baseName');
+      debugPrint('[SaveSync] [retroarch] _getCoreInfo registry override (fallback) → core=$baseName');
       return _CoreInfo(baseName, baseName, 'States/$baseName');
     }
 
@@ -115,14 +115,14 @@ class RetroArchSaveStrategy extends SaveStrategy {
     // When the user switches cores (e.g. Mupen64Plus → Parallel N64),
     // the save directory changes. Detect this and use the correct folder.
     if (_cachedActiveCore != null) {
-      debugPrint('[RetroArch-Save] _getCoreInfo activeCore=${_cachedActiveCore!}');
+      debugPrint('[SaveSync] [retroarch] _getCoreInfo activeCore=${_cachedActiveCore!}');
       final activeInfo = _coreFolderOverrides[_cachedActiveCore!];
       if (activeInfo != null) {
         // Check if this core supports the requested platform
         // by verifying the core's default map entry exists for this slug
         final defaultInfo = _coreMap[slug];
         if (defaultInfo != null) {
-          debugPrint('[RetroArch-Save] _getCoreInfo active core override → core=${activeInfo.coreName}');
+          debugPrint('[SaveSync] [retroarch] _getCoreInfo active core override → core=${activeInfo.coreName}');
           return activeInfo;
         }
       }
@@ -130,7 +130,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
     // 4. Default from static map
     final defaultCore = _coreMap[slug];
-    debugPrint('[RetroArch-Save] _getCoreInfo default map → ${defaultCore?.coreName ?? "null"}');
+    debugPrint('[SaveSync] [retroarch] _getCoreInfo default map → ${defaultCore?.coreName ?? "null"}');
     return defaultCore;
   }
 
@@ -291,7 +291,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
       if (await io.FileSystemEntity.isDirectory(exePath)) exeDir = exePath;
       candidates.add(p.join(exeDir, 'retroarch.cfg'));
     }
-    debugPrint('[RetroArch-Save] _readConfigSaveRoot candidates=${candidates.length}: ${candidates.map((c) => p.basename(p.dirname(c))).join(', ')}');
+    debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot candidates=${candidates.length}: ${candidates.map((c) => p.basename(p.dirname(c))).join(', ')}');
 
     final savefileDirRe = RegExp(r'^\s*savefile_directory\s*=\s*"([^"]*)"');
     final boolRe = RegExp(r'^\s*(sort_savefiles_enable|sort_savefiles_by_content_enable|savefiles_in_content_dir)\s*=\s*"?(true|false)"?');
@@ -300,10 +300,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
     for (final cfgPath in candidates) {
       final cfgFile = io.File(cfgPath);
       if (!await cfgFile.exists()) {
-        debugPrint('[RetroArch-Save] _readConfigSaveRoot not found: $cfgPath');
+        debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot not found: $cfgPath');
         continue;
       }
-      debugPrint('[RetroArch-Save] _readConfigSaveRoot reading: $cfgPath');
+      debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot reading: $cfgPath');
       try {
         final lines = await cfgFile.readAsLines();
         for (final line in lines) {
@@ -316,9 +316,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
             }
             if (await io.Directory(dir).exists()) {
               _cachedSaveRoot = dir;
-              debugPrint('[RetroArch-Save] _readConfigSaveRoot savefile_directory=$dir');
+              debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot savefile_directory=$dir');
             } else {
-              debugPrint('[RetroArch-Save] _readConfigSaveRoot savefile_directory=$dir (dir does not exist)');
+              debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot savefile_directory=$dir (dir does not exist)');
             }
           }
 
@@ -329,15 +329,15 @@ class RetroArchSaveStrategy extends SaveStrategy {
             switch (key) {
               case 'sort_savefiles_enable':
                 _cachedSortSavefiles = value;
-                debugPrint('[RetroArch-Save] _readConfigSaveRoot sort_savefiles_enable=$value');
+                debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot sort_savefiles_enable=$value');
                 break;
               case 'sort_savefiles_by_content_enable':
                 _cachedSortSavefilesByContent = value;
-                debugPrint('[RetroArch-Save] _readConfigSaveRoot sort_savefiles_by_content_enable=$value');
+                debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot sort_savefiles_by_content_enable=$value');
                 break;
               case 'savefiles_in_content_dir':
                 _cachedSavefilesInContentDir = value;
-                debugPrint('[RetroArch-Save] _readConfigSaveRoot savefiles_in_content_dir=$value');
+                debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot savefiles_in_content_dir=$value');
                 break;
             }
           }
@@ -356,7 +356,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
                   .replaceAll(RegExp(r'_libretro$'), '');
               if (coreBase.isNotEmpty) {
                 _cachedActiveCore = coreBase;
-                debugPrint('[RetroArch-Save] _readConfigSaveRoot activeCore=$coreBase (from $coreFilename)');
+                debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot activeCore=$coreBase (from $coreFilename)');
               }
             }
           }
@@ -364,7 +364,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
         if (_cachedSaveRoot != null) break;
       } catch (_) {}
     }
-    debugPrint('[RetroArch-Save] _readConfigSaveRoot result: saveRoot=${_cachedSaveRoot ?? "null"}');
+    debugPrint('[SaveSync] [retroarch] _readConfigSaveRoot result: saveRoot=${_cachedSaveRoot ?? "null"}');
     return _cachedSaveRoot;
   }
 
@@ -406,38 +406,38 @@ class RetroArchSaveStrategy extends SaveStrategy {
     final coreInfo = _getCoreInfo(slug);
 
     if (coreInfo == null) {
-      debugPrint('[RetroArch-Save] getSaveDir slug=$slug → coreInfo=null, returning null');
+      debugPrint('[SaveSync] [retroarch] getSaveDir: no core info for slug="$slug"');
       return null;
     }
 
     // Ensure config flags are parsed on all platforms (Linux, macOS, Windows).
     await _readConfigSaveRoot();
 
-    debugPrint('[RetroArch-Save] getSaveDir slug=$slug core=${coreInfo.coreName} sortSavefiles=$_sortSavefiles savefilesInContentDir=$_savefilesInContentDir');
+    debugPrint('[SaveSync] [retroarch] getSaveDir: slug="$slug" core=${coreInfo.coreName} saveFolder=${coreInfo.saveFolder}');
 
     if (_platform.isLinux) {
       final baseDir = await _directoryService.getEmulatorAppSupportDirectory('retroarch', platformSlug: slug);
       final isEmuDeck = _directoryService.linuxSyncPreset == 'emudeck' || baseDir.contains('Emulation/saves');
-      debugPrint('[RetroArch-Save] getSaveDir linux baseDir=$baseDir emudeck=$isEmuDeck');
+      debugPrint('[SaveSync] [retroarch] getSaveDir linux baseDir=$baseDir emudeck=$isEmuDeck');
 
       if (isEmuDeck) {
         // EmuDeck structure: Emulation/saves/retroarch/saves/CoreName
         final result = p.basename(baseDir) == 'saves'
             ? p.join(baseDir, coreInfo.saveFolder)
             : p.join(baseDir, 'saves', coreInfo.saveFolder);
-        debugPrint('[RetroArch-Save] getSaveDir emudeck → $result');
+        debugPrint('[SaveSync] [retroarch] getSaveDir emudeck → $result');
         return result;
       }
 
       // Non-EmuDeck Linux: respect sort_savefiles_enable config flag
       if (!_sortSavefiles) {
         // sort_savefiles_enable=false: saves go flat into baseDir, no core subfolder
-        debugPrint('[RetroArch-Save] getSaveDir linux no-sort → $baseDir');
+        debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $baseDir');
         return baseDir;
       }
       // EmuDeck mapping returns the folder containing the actual saves
       final result = p.join(baseDir, coreInfo.saveFolder);
-      debugPrint('[RetroArch-Save] getSaveDir linux sorted → $result');
+      debugPrint('[SaveSync] [retroarch] getSaveDir linux sorted → $result');
       return result;
     }
 
@@ -445,20 +445,20 @@ class RetroArchSaveStrategy extends SaveStrategy {
     if (_savefilesInContentDir) {
       // savefiles_in_content_dir=true: saves go next to the ROM
       final result = io.File(romPath).parent.path;
-      debugPrint('[RetroArch-Save] getSaveDir savefilesInContentDir → $result');
+      debugPrint('[SaveSync] [retroarch] getSaveDir savefilesInContentDir → $result');
       return result;
     }
     final saveRoot = await _resolveSaveRoot();
     if (!_sortSavefiles) {
       // sort_savefiles_enable=false: saves go flat into saveRoot, no core subfolder
-      debugPrint('[RetroArch-Save] getSaveDir no-sort → $saveRoot');
+      debugPrint('[SaveSync] [retroarch] getSaveDir no-sort → $saveRoot');
       return saveRoot;
     }
 
     // Try the expected core subfolder first
     final expectedDir = p.join(saveRoot, coreInfo.saveFolder);
     if (await io.Directory(expectedDir).exists()) {
-      debugPrint('[RetroArch-Save] getSaveDir expectedDir exists → $expectedDir');
+      debugPrint('[SaveSync] [retroarch] getSaveDir expectedDir exists → $expectedDir');
       return expectedDir;
     }
 
@@ -475,7 +475,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
           if (f is! io.File) continue;
           final fname = p.basename(f.path).toLowerCase();
           if (fname.startsWith(romStem) && _isSaveFile(fname)) {
-            debugPrint('[RetroArch-Save] getSaveDir fallback1 scan matched → $subdir');
+            debugPrint('[SaveSync] [retroarch] getSaveDir fallback1 scan matched → $subdir');
             return subdir;
           }
         }
@@ -495,12 +495,12 @@ class RetroArchSaveStrategy extends SaveStrategy {
         }
       }
       if (newestDir != null) {
-        debugPrint('[RetroArch-Save] getSaveDir fallback2 newest → ${newestDir.path}');
+        debugPrint('[SaveSync] [retroarch] getSaveDir fallback2 newest → ${newestDir.path}');
         return newestDir.path;
       }
     }
 
-    debugPrint('[RetroArch-Save] getSaveDir fallback expectedDir → $expectedDir');
+    debugPrint('[SaveSync] [retroarch] getSaveDir fallback expectedDir → $expectedDir');
     return expectedDir;
   }
 
@@ -543,13 +543,13 @@ class RetroArchSaveStrategy extends SaveStrategy {
       statesRoot = p.join(io.Directory(saveRoot).parent.path, 'states', coreInfo.statesFolder);
     }
 
-    debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots slug=$slug rootSaveDir=$rootSaveDir statesRoot=$statesRoot');
+    debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots slug=$slug rootSaveDir=$rootSaveDir statesRoot=$statesRoot');
 
     if (rootSaveDir == null) return {};
 
     final stem = getRomStem(game);
     final List<io.File> filesToCheck = [];
-    debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots stem=$stem syncMode=$syncMode');
+    debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots stem=$stem syncMode=$syncMode');
 
     // Special case for PSP saves
     if (slug == 'psp' || slug == 'playstation-portable') {
@@ -563,7 +563,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
           }
           if (hasFiles) {
             filesToCheck.add(io.File(rootSaveDir));
-            debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots PSP dir has files');
+            debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots PSP dir has files');
           }
         }
       }
@@ -579,7 +579,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
             if (fname.startsWith(stemLower) && _isSaveFile(fname)) {
               filesToCheck.add(entity);
               found = true;
-              debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots exact match: $fname');
+              debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots exact match: $fname');
               break;
             }
           }
@@ -596,7 +596,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
                 if (stemWords.any((word) => fname.contains(word))) {
                   filesToCheck.add(entity);
                   found = true;
-                  debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots fuzzy match: $fname');
+                  debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots fuzzy match: $fname');
                   break;
                 }
               }
@@ -610,17 +610,17 @@ class RetroArchSaveStrategy extends SaveStrategy {
               if (_isSaveFile(fname)) {
                 filesToCheck.add(entity);
                 found = true;
-                debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots any-match: $fname');
+                debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots any-match: $fname');
                 break;
               }
             }
             if (!found) {
-              debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots no saves found, defaulting to $stem.srm');
+              debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots no saves found, defaulting to $stem.srm');
               filesToCheck.add(io.File(p.join(rootSaveDir, '$stem.srm')));
             }
           }
         } else {
-          debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots rootSaveDir does not exist');
+          debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots rootSaveDir does not exist');
           filesToCheck.add(io.File(p.join(rootSaveDir, '$stem.srm')));
         }
       }
@@ -660,7 +660,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
       finalResult[f] = screenshot;
     }
-    debugPrint('[RetroArch-Save] getSaveFilesWithScreenshots result: ${finalResult.length} file(s) found');
+    debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots result: ${finalResult.length} file(s) found');
     return finalResult;
   }
 

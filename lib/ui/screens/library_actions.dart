@@ -426,6 +426,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // (60s) prevents redundant network requests on rapid re-launches.
     // The actual save sync happens post-exit in the unawaited block below.
     if (syncService != null) {
+      debugPrint('[SaveSync] Auto-pulling save before launch: game="${game.displayName}"');
       unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId).catchError((_) => false));
     }
 
@@ -467,6 +468,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             if (!context.mounted) return;
             if (syncService != null) {
               final syncMode = ref.read(retroarchSyncModeProvider);
+              debugPrint('[SaveSync] Auto-pushing saves after exit: game="${game.displayName}" syncMode=$syncMode');
               final ok = await syncService.pushSaves(
                 game, romPath,
                 sessionStart: sessionStart,
@@ -607,6 +609,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     
     if (!context.mounted) return;
     final syncMode = ref.read(retroarchSyncModeProvider);
+    debugPrint('[SaveSync] handlePushSaves: game="${game.displayName}" romPath=$romPath syncMode=$syncMode');
     try {
       ErrorHandler.showInfo(context, 'Syncing', message: 'Uploading saves for ${game.name}...');
       final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
@@ -623,6 +626,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final dir = ref.read(directoryServiceProvider).asData?.value;
     final romPath = dir != null ? await dir.getRomFilePath(game) : '';
     if (!context.mounted) return;
+    debugPrint('[SaveSync] handlePullSaves: game="${game.displayName}" romPath=$romPath');
     try {
       ErrorHandler.showInfo(context, 'Syncing', message: 'Fetching cloud saves...');
       final saves = await syncService.getSavesForGame(game.id);
