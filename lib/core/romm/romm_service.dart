@@ -197,20 +197,33 @@ class RommService {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
       headers: {'User-Agent': _ua},
     ));
 
-    final response = await dio.post(
-      '/api/client-tokens/exchange',
-      data: {'code': code},
-    );
+    const maxRetries = 2;
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await dio.post(
+          '/api/client-tokens/exchange',
+          data: {'code': code},
+        );
 
-    final token = response.data['raw_token'] as String?;
-    if (token == null || token.isEmpty) throw Exception('Pairing failed: no token in response');
+        final token = response.data['raw_token'] as String?;
+        if (token == null || token.isEmpty) throw Exception('Pairing failed: no token in response');
 
-    return token;
+        return token;
+      } on DioException catch (e) {
+        if (attempt < maxRetries && e.type != DioExceptionType.badResponse) {
+          await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+          continue;
+        }
+        rethrow;
+      }
+    }
+
+    throw Exception('Pairing failed after $maxRetries retries');
   }
 
   Future<void> refreshToken(SharedPreferences prefs) async {

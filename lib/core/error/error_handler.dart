@@ -29,7 +29,7 @@ class ErrorHandler {
         case DioExceptionType.sendTimeout:
           return AppError(
             title: 'Connection Timeout',
-            message: 'Could not reach the server. Check your network or RomM connection.',
+            message: 'Could not reach the server. The pairing may have succeeded on RomM — check your RomM dashboard, or try generating a new pairing code.',
             severity: ErrorSeverity.error,
             technical: error.toString(),
           );
