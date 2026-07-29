@@ -3,6 +3,7 @@ import 'dart:io' as io;
 import 'dart:math';
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +48,16 @@ class RommService {
     
     if (dio != null) {
       _dio.options.baseUrl = _normalizeBaseUrl(_config.baseUrl);
+    }
+
+    if (_config.trustSelfSigned) {
+      _dio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = io.HttpClient()
+            ..badCertificateCallback = (cert, host, port) => true;
+          return client;
+        },
+      );
     }
     
     if (kDebugMode || _platform.isLinux || _platform.isMacOS) {
@@ -193,7 +204,7 @@ class RommService {
     return token;
   }
 
-  static Future<String> exchangePairingCode(String baseUrl, String code) async {
+  static Future<String> exchangePairingCode(String baseUrl, String code, {bool trustSelfSigned = false}) async {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
@@ -201,6 +212,16 @@ class RommService {
       receiveTimeout: const Duration(seconds: 30),
       headers: {'User-Agent': _ua},
     ));
+
+    if (trustSelfSigned) {
+      dio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = io.HttpClient()
+            ..badCertificateCallback = (cert, host, port) => true;
+          return client;
+        },
+      );
+    }
 
     const maxRetries = 2;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {

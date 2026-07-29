@@ -32,6 +32,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _isTesting = false;
   String? _testError;
   bool _testSuccess = false;
+  bool _trustSelfSigned = false;
 
   // Step 2: Storage Config
   String? _romsRoot;
@@ -67,6 +68,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final romsRoot = prefs.getString('romsRootPath');
     final emusRoot = prefs.getString('emulatorsRootPath');
     final linuxPreset = prefs.getString('linuxSyncPreset') ?? 'default';
+    final trustSelfSigned = prefs.getBool('rommTrustSelfSigned') ?? false;
     String? presetRoot;
     if (linuxPreset == 'emudeck') {
       presetRoot = prefs.getString('emudeckRootPath');
@@ -88,6 +90,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (romsRoot != null || emusRoot != null) {
         _isStorageInitialized = true;
       }
+      _trustSelfSigned = trustSelfSigned;
     });
   }
 
@@ -122,7 +125,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           setState(() => _testError = 'Please enter a pairing code');
           return;
         }
-        final token = await RommService.exchangePairingCode(url, code);
+        final token = await RommService.exchangePairingCode(url, code, trustSelfSigned: _trustSelfSigned);
         _apiKeyController.text = token;
         apiKey = token;
       }
@@ -133,6 +136,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         token: authToken,
         username: '',
         password: '',
+        trustSelfSigned: _trustSelfSigned,
       );
       final testService = RommService(testConfig);
       await testService.getPlatforms(); // Quick check
@@ -167,6 +171,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     // Save RomM Config
     await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
     await SecureStorageService.write('rommApiKey', _apiKeyController.text.trim(), prefs);
+    await prefs.setBool('rommTrustSelfSigned', _trustSelfSigned);
     
     final platform = ref.read(platformInfoProvider);
     if (platform.isLinux && _linuxPreset != 'default' && _presetRoot != null) {
@@ -348,7 +353,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ],
               ),
             ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Trust self-signed certificates', style: TextStyle(fontSize: 14)),
+            subtitle: const Text('Enable if your RomM server uses a self-signed SSL certificate', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            value: _trustSelfSigned,
+            onChanged: (value) => setState(() => _trustSelfSigned = value),
+            activeColor: Colors.deepPurple,
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(

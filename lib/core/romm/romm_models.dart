@@ -445,14 +445,16 @@ class RomMConfig {
   final String username;
   final String password;
   final String? token;
-  final String apiKey; // Added apiKey field
+  final String apiKey;
+  final bool trustSelfSigned;
 
   RomMConfig({
     required this.baseUrl,
     required this.username,
     required this.password,
     this.token,
-    this.apiKey = '', // Added apiKey to constructor with default
+    this.apiKey = '',
+    this.trustSelfSigned = false,
   });
 
   factory RomMConfig.fromJson(Map<String, dynamic> json) {
@@ -461,7 +463,8 @@ class RomMConfig {
       username: json['username']?.toString() ?? '',
       password: json['password']?.toString() ?? '',
       token: json['token']?.toString(),
-      apiKey: json['apiKey']?.toString() ?? '', // Added apiKey from JSON with default
+      apiKey: json['apiKey']?.toString() ?? '',
+      trustSelfSigned: json['trustSelfSigned'] == true,
     );
   }
 
@@ -471,7 +474,8 @@ class RomMConfig {
       'username': username,
       'password': password,
       if (token != null) 'token': token,
-      'apiKey': apiKey, // Added apiKey to toJson
+      'apiKey': apiKey,
+      'trustSelfSigned': trustSelfSigned,
     };
   }
 
@@ -481,6 +485,7 @@ class RomMConfig {
     String? password,
     String? token,
     String? apiKey,
+    bool? trustSelfSigned,
   }) {
     return RomMConfig(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -488,6 +493,7 @@ class RomMConfig {
       password: password ?? this.password,
       token: token ?? this.token,
       apiKey: apiKey ?? this.apiKey,
+      trustSelfSigned: trustSelfSigned ?? this.trustSelfSigned,
     );
   }
 }

@@ -73,6 +73,7 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
   final password = await SecureStorageService.read('rommPassword', prefs) ?? '';
   final token = await SecureStorageService.read('rommAuthToken', prefs);
   final apiKey = await SecureStorageService.read('rommApiKey', prefs) ?? '';
+  final trustSelfSigned = prefs.getBool('rommTrustSelfSigned') ?? false;
 
   debugPrint('[RomM-Init] Loading config:');
   debugPrint('  - Base URL: $baseUrl');
@@ -85,7 +86,8 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
     username: username, 
     password: password, 
     token: token, 
-    apiKey: apiKey
+    apiKey: apiKey,
+    trustSelfSigned: trustSelfSigned,
   );
 });
 

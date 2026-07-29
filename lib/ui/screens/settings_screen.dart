@@ -1152,6 +1152,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showPairingDialog(BuildContext context) {
     final codeController = TextEditingController();
     final theme = Theme.of(context);
+    final rommConfig = ref.read(rommConfigProvider).valueOrNull;
     showDialog(
       context: context,
       builder: (context) => DialogBackBridge(
@@ -1187,7 +1188,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a Server URL first.')));
                     return;
                   }
-                  final token = await RommService.exchangePairingCode(url, code);
+                   final token = await RommService.exchangePairingCode(url, code, trustSelfSigned: rommConfig?.trustSelfSigned ?? false);
                   _apiKeyController.text = token;
                   setState(() => _isLegacyAuth = false);
                   if (context.mounted) {
