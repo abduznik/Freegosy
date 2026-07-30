@@ -11,6 +11,7 @@ import '../../providers/shared_prefs_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/storage/secure_storage_service.dart';
+import '../../core/error/error_handler.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -30,7 +31,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _pairingCodeController = TextEditingController();
   bool _usePairingCode = false;
   bool _isTesting = false;
-  String? _testError;
+  AppError? _testError;
   bool _testSuccess = false;
   bool _trustSelfSigned = false;
 
@@ -105,7 +106,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _testConnection() async {
     final url = _baseUrlController.text.trim();
     if (url.isEmpty || url == 'http://' || url == 'https://') {
-      setState(() => _testError = 'Please enter a valid Server URL');
+      setState(() => _testError = AppError(title: 'Invalid URL', message: 'Please enter a valid Server URL', severity: ErrorSeverity.warning));
       return;
     }
 
@@ -122,7 +123,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       if (_usePairingCode) {
         final code = _pairingCodeController.text.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
         if (code.isEmpty) {
-          setState(() => _testError = 'Please enter a pairing code');
+          setState(() => _testError = AppError(title: 'Missing Code', message: 'Please enter a pairing code', severity: ErrorSeverity.warning));
           return;
         }
         final token = await RommService.exchangePairingCode(url, code, trustSelfSigned: _trustSelfSigned);
@@ -138,7 +139,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         password: '',
         trustSelfSigned: _trustSelfSigned,
       );
-      final testService = RommService(testConfig);
+      final testService = RommService(testConfig, skipConnectivityCheck: true);
       await testService.getPlatforms(); // Quick check
       
       setState(() {
@@ -148,9 +149,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     } catch (e) {
       setState(() {
         _isTesting = false;
-        _testError = 'Connection failed: ${e.toString().split('\n').first}';
+        _testError = ErrorHandler.parse(e, context: 'Pairing');
       });
     }
+  }
+
+  void _showErrorDetails(BuildContext context, AppError error) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(error.title),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            error.technical ?? 'No details available',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initializeDefaultStorage() async {
@@ -436,14 +458,54 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
+                color: _testError!.severity == ErrorSeverity.warning
+                    ? Colors.orange.withValues(alpha: 0.1)
+                    : Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.red),
+                  Icon(
+                    _testError!.severity == ErrorSeverity.warning
+                        ? Icons.warning_amber_outlined
+                        : Icons.error_outline,
+                    color: _testError!.severity == ErrorSeverity.warning
+                        ? Colors.orange
+                        : Colors.red,
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(_testError!, style: const TextStyle(color: Colors.red))),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _testError!.message,
+                          style: TextStyle(
+                            color: _testError!.severity == ErrorSeverity.warning
+                                ? Colors.orange
+                                : Colors.red,
+                          ),
+                        ),
+                        if (_testError!.technical != null)
+                          GestureDetector(
+                            onTap: () => _showErrorDetails(context, _testError!),
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Show raw logs',
+                                style: TextStyle(
+                                  color: _testError!.severity == ErrorSeverity.warning
+                                      ? Colors.orange.shade300
+                                      : Colors.red.shade300,
+                                  fontSize: 12,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
