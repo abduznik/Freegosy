@@ -222,7 +222,7 @@ class SaveSyncService {
     if (id == 'xenia' || id == 'xenia_canary') return _xenia;
     if (id == 'eden') return _eden;
     if (id == 'ryujinx') return _ryujinx;
-    if (id == 'windows') return _windows;
+    if (id == 'windows_native') return _windows;
     if (id == 'azahar') return _azahar;
     if (id == 'ares') return _ares;
     return null;
