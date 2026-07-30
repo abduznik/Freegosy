@@ -33,7 +33,7 @@ class RommService {
   static String _normalizeBaseUrl(String url) =>
       url.endsWith('/') ? url.substring(0, url.length - 1) : url;
 
-  RommService(this._config, {Dio? dio, PlatformInfo? platform})
+  RommService(this._config, {Dio? dio, PlatformInfo? platform, bool skipConnectivityCheck = false})
       : _dio = dio ?? Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(_config.baseUrl),
           connectTimeout: const Duration(seconds: 5),
@@ -117,7 +117,9 @@ class RommService {
       },
     ));
     
-    _initializeConnectivity();
+    if (!skipConnectivityCheck) {
+      _initializeConnectivity();
+    }
   }
 
   void startHeartbeat() {
