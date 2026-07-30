@@ -13,6 +13,7 @@ import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/storage/logger_service.dart';
+import '../../core/error/error_handler.dart';
 import 'settings_emulators_section.dart';
 import 'settings_display_section.dart';
 import 'settings_custom_emulators_section.dart';
@@ -39,8 +40,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _apiKeyController;
   bool _preferencesLoaded = false;
   bool _isLegacyAuth = false;
+  bool _trustSelfSigned = false;
   bool _isTestingConnection = false;
-  String? _connectionError;
+  AppError? _connectionAppError;
   String? _pairedToken;
   bool _isEditingServer = false;
 
@@ -473,6 +475,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _apiKeyController.text = rommConfig.apiKey;
             _isLegacyAuth = rommConfig.apiKey.isEmpty && 
                            (rommConfig.username.isNotEmpty || rommConfig.password.isNotEmpty);
+            _trustSelfSigned = rommConfig.trustSelfSigned;
             _preferencesLoaded = true;
           }
           return directoryServiceAsync.when(
@@ -637,8 +640,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return 'None / Just App Logo';
       default:
         return 'Daily Game Recommendation';
-    }
   }
+  }
+
 
   Widget _buildRommServerSection(BuildContext context, WidgetRef ref, RommService? rommService, RomMConfig rommConfig) {
     final theme = Theme.of(context);
@@ -708,10 +712,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onChanged: !_isEditingServer ? null : (val) => setState(() => _isLegacyAuth = val),
           ),
           const SizedBox(height: 16),
-          if (_connectionError != null)
+          _buildCustomToggleRow(
+            context,
+            title: 'Trust Self-Signed Certificates',
+            subtitle: 'Enable if your RomM server uses a self-signed SSL certificate',
+            value: _trustSelfSigned,
+            onChanged: !_isEditingServer ? null : (val) => setState(() => _trustSelfSigned = val),
+          ),
+          const SizedBox(height: 16),
+          if (_connectionAppError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Text(_connectionError!, style: TextStyle(color: theme.colorScheme.error, fontSize: 13, fontWeight: FontWeight.bold)),
+              child: GestureDetector(
+                onTap: _connectionAppError!.technical != null
+                    ? () => _showConnectionErrorDetails(context, _connectionAppError!)
+                    : null,
+                child: Text(
+                  _connectionAppError!.message,
+                  style: TextStyle(
+                    color: _connectionAppError!.severity == ErrorSeverity.warning
+                        ? Colors.orange
+                        : theme.colorScheme.error,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    decoration: _connectionAppError!.technical != null
+                        ? TextDecoration.underline
+                        : null,
+                  ),
+                ),
+              ),
             ),
           Row(
             children: [
@@ -732,13 +761,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onTap: !_isEditingServer || _isTestingConnection ? null : () async {
                     final baseUrl = _baseUrlController.text.trim();
                     if (baseUrl.isEmpty) {
-                      setState(() => _connectionError = 'Server URL is required');
+                      setState(() {
+                        _connectionAppError = AppError(title: 'Missing URL', message: 'Server URL is required', severity: ErrorSeverity.warning);
+                      });
                       return;
                     }
 
                     setState(() {
                       _isTestingConnection = true;
-                      _connectionError = null;
+                      _connectionAppError = null;
                     });
 
                     try {
@@ -748,9 +779,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         password: _passwordController.text,
                         apiKey: _pairedToken == null ? _apiKeyController.text.trim() : '',
                         token: _pairedToken,
+                        trustSelfSigned: _trustSelfSigned,
                       );
                       
-                      final testService = RommService(testConfig);
+                      final testService = RommService(testConfig, skipConnectivityCheck: true);
                       await testService.getPlatforms();
                       
                       if (mounted) {
@@ -763,7 +795,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       if (mounted) {
                         setState(() {
                           _isTestingConnection = false;
-                          _connectionError = 'Connection failed: ${e.toString().split('\n').first}';
+                          _connectionAppError = ErrorHandler.parse(e, context: 'Connection test');
                         });
                       }
                     }
@@ -780,6 +812,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: !_isEditingServer ? null : () async {
               final prefs = ref.read(sharedPreferencesProvider);
               await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
+              await prefs.setBool('rommTrustSelfSigned', _trustSelfSigned);
               if (_isLegacyAuth) {
                  await prefs.setString('rommUsername', _usernameController.text.trim());
                  await SecureStorageService.write('rommPassword', _passwordController.text, prefs);
@@ -1197,7 +1230,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Pairing failed: ${e.toString().split('\n').first}')));
+                    ErrorHandler.showException(context, e, contextLabel: 'Pairing');
                   }
                 }
               },
@@ -1218,6 +1251,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showConnectionErrorDetails(BuildContext context, AppError error) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(error.title),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            error.technical ?? 'No details available',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
