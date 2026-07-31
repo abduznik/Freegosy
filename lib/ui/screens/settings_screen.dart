@@ -1256,13 +1256,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showConnectionErrorDetails(BuildContext context, AppError error) {
+    final rawLogs = LoggerService().logs.map((e) => e.toString()).join('\n');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(error.title),
+        title: const Text('Raw Logs'),
         content: SingleChildScrollView(
           child: SelectableText(
-            error.technical ?? 'No details available',
+            rawLogs.isEmpty ? 'No logs available' : rawLogs,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
           ),
         ),

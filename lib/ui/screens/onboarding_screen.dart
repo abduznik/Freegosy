@@ -11,6 +11,7 @@ import '../../providers/shared_prefs_provider.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/storage/secure_storage_service.dart';
+import '../../core/storage/logger_service.dart';
 import '../../core/error/error_handler.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -155,13 +156,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _showErrorDetails(BuildContext context, AppError error) {
+    final rawLogs = LoggerService().logs.map((e) => e.toString()).join('\n');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(error.title),
+        title: const Text('Raw Logs'),
         content: SingleChildScrollView(
           child: SelectableText(
-            error.technical ?? 'No details available',
+            rawLogs.isEmpty ? 'No logs available' : rawLogs,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
           ),
         ),

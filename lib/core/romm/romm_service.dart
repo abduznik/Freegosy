@@ -36,8 +36,8 @@ class RommService {
   RommService(this._config, {Dio? dio, PlatformInfo? platform, bool skipConnectivityCheck = false})
       : _dio = dio ?? Dio(BaseOptions(
           baseUrl: _normalizeBaseUrl(_config.baseUrl),
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
           headers: {
             'User-Agent': _ua,
             'Accept': 'application/json',
