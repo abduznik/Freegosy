@@ -126,7 +126,27 @@ class EdenSaveStrategy extends SaveStrategy {
     throw ProfileConflictException(candidates);
   }
 
+  String _getEdenExe() {
+    if (_platform.isWindows) return 'eden.exe';
+    if (_platform.isMacOS) return 'Eden.app/Contents/MacOS/Eden';
+    return 'eden';
+  }
+
   Future<String> _getEdenSaveBase({String? platformSlug}) async {
+    // 1. Check portable mode first — 'user' folder next to the executable
+    final exePath = await _directoryService.findEmulatorExecutable('eden', _getEdenExe());
+    if (exePath != null) {
+      String exeDir = io.File(exePath).parent.path;
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        exeDir = io.File(exePath).parent.parent.parent.parent.path;
+      } else if (await io.FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
+      final portableSave = p.join(exeDir, 'user', 'nand', 'user', 'save');
+      if (await io.Directory(portableSave).exists()) return portableSave;
+    }
+
+    // 2. Standard install paths
     final String resolvedPath;
     if (_platform.isMacOS || _platform.isLinux) {
       resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('eden', platformSlug: platformSlug);
