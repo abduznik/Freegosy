@@ -13,6 +13,7 @@ import '../../providers/ui_provider.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../core/romm/romm_service.dart';
+import '../../core/romm/rom_constants.dart';
 import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
@@ -412,6 +413,26 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         debugPrint('[Launch] No files available for multi-file game, using romPath: $romPath');
       }
     }
+
+    // If romPath points to a directory try to find the actual rom inside it, unless platform is windows (folder based games)
+    if(await io.Directory(romPath).exists()) {
+        var lowerPlatformSlug = game.platformSlug!.toLowerCase();
+        if (!["windows", "pc", "win"].contains(lowerPlatformSlug)){
+          debugPrint('[Launch] Searching for a valid rom in: $romPath');
+          var knownExtensions = RomConstants.platformExtensions[lowerPlatformSlug] ?? [];
+          final dir = io.Directory(romPath);
+          await for (final entity in dir.list()) {  
+            if (entity is! io.File) continue;
+            final name = p.basename(entity.path).toLowerCase();
+            if (knownExtensions.where((ext) => name.endsWith(ext)).isNotEmpty) {
+              romPath = entity.path;
+              debugPrint('[Launch] Matched rom by extension: $romPath');
+              break;
+            }
+          }
+        }
+    }
+
 
     if (!await io.File(romPath).exists() && !await io.Directory(romPath).exists()) {
        if (context.mounted) ErrorHandler.showInfo(context, 'File Not Found', message: 'The ROM was not found at the expected location.');
