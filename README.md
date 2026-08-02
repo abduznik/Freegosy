@@ -1,11 +1,16 @@
+## Support This Project
+
+> **All projects made with passion** 💙
+
+[![Sponsor me](https://img.shields.io/badge/❤️%20Sponsor-GitHub-red?style=for-the-badge)](https://github.com/sponsors/abduznik)
+
 # Freegosy
 
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
-[![Discord](https://img.shields.io/badge/Join%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/PEBUzGNMaw)
-[![Sponsor](https://img.shields.io/badge/❤️%20Sponsor-GitHub-red?style=for-the-badge)](https://github.com/sponsors/abduznik)
-
 [**Watch the Feature Walkthrough on YouTube**](https://youtu.be/SE5BoFoA700)
+
+**Join our [Discord community](https://discord.gg/PEBUzGNMaw)** to chat, get help, and be the first to test new releases!
 
 ![Main Menu](screenshots/screenshot1.png)
 *The main menu showcasing the intuitive game card interface.*
