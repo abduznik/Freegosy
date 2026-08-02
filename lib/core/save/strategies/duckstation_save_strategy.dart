@@ -68,15 +68,19 @@ class DuckstationSaveStrategy extends SaveStrategy {
 
     final result = <File>[];
     final stem = getRomStem(game);
-    debugPrint('[DuckStation] ROM stem: $stem  sessionStart=$sessionStart');
+    // Normalize the stem so multi-disc .m3u filenames like
+    // "Final Fantasy VII (USA).m3u" match the bare save title card
+    // "Final Fantasy VII_1.mcd" (issue #62).
+    final cleanStem = normalizeSaveMatchName(stem).toLowerCase();
+    debugPrint('[DuckStation] ROM stem: $stem  cleanStem: $cleanStem  sessionStart=$sessionStart');
 
     final memcardsDir = Directory(p.join(baseDir, 'memcards'));
     if (await memcardsDir.exists()) {
       // Layer 1: per-game .mcd. DuckStation's per-game cards are named
       // `{title}_N.mcd` (PerGameTitle) or `{serial}_N.mcd` (PerGame) with a
-      // slot-number suffix. We match by stem as a substring, which covers both
-      // (e.g. "Suikoden II_1.mcd" contains "Suikoden II"). Keep only the
-      // newest matching card to avoid uploading multiple per-game saves.
+      // slot-number suffix. We match by normalized stem as a substring, which
+      // covers both (e.g. "Suikoden II_1.mcd" contains "Suikoden II"). Keep
+      // only the newest matching card to avoid uploading multiple saves.
       File? bestMcd;
       DateTime? bestMcdMtime;
       await for (final entity in memcardsDir.list()) {
@@ -86,7 +90,29 @@ class DuckstationSaveStrategy extends SaveStrategy {
         // Shared cards (shared_card_N.mcd) are handled in Layer 2 — never
         // treat them as a per-game match here.
         if (base.startsWith('shared_card_')) continue;
-        if (!base.contains(stem.toLowerCase())) {
+        // Strip the `_N` slot suffix and any tags from the card name before
+        // comparing, so "suikoden ii_1" matches cleanStem "suikoden ii".
+        final cardName = base.substring(0, base.length - 4); // drop ".mcd"
+        final cleanCard = normalizeSaveMatchName(
+                cardName.replaceAll(RegExp(r'_\d+$'), ''))
+            .toLowerCase();
+
+        // Word-token match: split the stem into tokens (>=3 chars) and require
+        // every token to appear in the card. This avoids substring false
+        // positives like "final fantasy vii" matching "final fantasy viii".
+        final stemTokens = cleanStem
+            .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+            .split(' ')
+            .where((w) => w.length >= 3)
+            .toList();
+        final cardTokens = cleanCard
+            .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+            .split(' ')
+            .where((w) => w.isNotEmpty)
+            .toList();
+        final matches = stemTokens.isNotEmpty &&
+            stemTokens.every((w) => cardTokens.contains(w));
+        if (!matches) {
           debugPrint('[DuckStation]   skipping (no stem match): ${entity.path}');
           continue;
         }

@@ -74,6 +74,24 @@ abstract class SaveStrategy {
     return name;
   }
 
+  /// Strips region/version tags from [name] and collapses whitespace, so it can
+  /// be substring-matched against emulator save filenames (which use the bare
+  /// game title, e.g. DuckStation's "Suikoden II_1.mcd").
+  ///
+  /// Multi-disc ROMs exposed via RomM are `.m3u` playlists whose filename
+  /// carries tags the save files don't have, e.g. "Final Fantasy VII (USA).m3u"
+  /// → "Final Fantasy VII_1.mcd". Without stripping `(USA)`, the save card
+  /// never matches and pushes/pulls silently do nothing (issue #62).
+  String normalizeSaveMatchName(String name) {
+    var cleaned = name
+        .replaceAll(RegExp(r'\([^)]*\)'), '') // region/version (USA) (Rev 1)
+        .replaceAll(RegExp(r'\[[^\]]*\]'), '') // [!] [b] [T+Eng]
+        .replaceAll(RegExp(r'[\s._-]+$'), '') // trailing dots/dashes/underscores
+        .replaceAll(RegExp(r'\s+'), ' ') // collapse spaces
+        .trim();
+    return cleaned.isEmpty ? name : cleaned;
+  }
+
   // ─── Shared helper: RetroArch config lookup ──────────────────────────────
 
   /// Reads `savefile_directory` and sort flags from retroarch.cfg for platforms

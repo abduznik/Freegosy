@@ -154,5 +154,81 @@ void main() {
         await base.delete(recursive: true);
       }
     });
+
+    test('matches per-game card for multi-disc .m3u with region tags (issue #62)', () async {
+      final base = await Directory.systemTemp.createTemp('duckstation_multidisc');
+      try {
+        final memcardsDir = Directory(p.join(base.path, 'memcards'));
+        await memcardsDir.create(recursive: true);
+        // DuckStation PerGameTitle card uses the bare disc-set title, while
+        // RomM exposes the multidisc ROM as "Final Fantasy VII (USA).m3u".
+        await File(p.join(memcardsDir.path, 'Final Fantasy VII_1.mcd'))
+            .writeAsBytes(List.filled(150, 1));
+
+        final ds = await _StubDirectoryService.create(
+          exePath: null,
+          appSupport: base.path,
+        );
+        final strategy = DuckstationSaveStrategy(
+          ds,
+          platform: const PlatformInfo('linux', environment: {'HOME': ''}),
+        );
+
+        final files = await strategy.getSaveFiles(
+          Game(id: 'g5', name: 'Final Fantasy VII (USA).m3u', platformSlug: 'ps1', fileSize: 0),
+          p.join(base.path, 'Final Fantasy VII (USA).m3u'),
+        );
+
+        expect(files, hasLength(1));
+        expect(p.basename(files.first.path), 'Final Fantasy VII_1.mcd');
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+
+    test('does not match per-game card when region tag differs (no false positive)', () async {
+      final base = await Directory.systemTemp.createTemp('duckstation_region_mismatch');
+      try {
+        final memcardsDir = Directory(p.join(base.path, 'memcards'));
+        await memcardsDir.create(recursive: true);
+        // Card for a different game in the same series.
+        await File(p.join(memcardsDir.path, 'Final Fantasy VIII_1.mcd'))
+            .writeAsBytes(List.filled(150, 1));
+
+        final ds = await _StubDirectoryService.create(
+          exePath: null,
+          appSupport: base.path,
+        );
+        final strategy = DuckstationSaveStrategy(
+          ds,
+          platform: const PlatformInfo('linux', environment: {'HOME': ''}),
+        );
+
+        final files = await strategy.getSaveFiles(
+          Game(id: 'g6', name: 'Final Fantasy VII (USA).m3u', platformSlug: 'ps1', fileSize: 0),
+          p.join(base.path, 'Final Fantasy VII (USA).m3u'),
+        );
+
+        expect(files, isEmpty);
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+  });
+
+  group('SaveStrategy.normalizeSaveMatchName', () {
+    test('strips region/version tags and collapses whitespace', () async {
+      final ds = await _StubDirectoryService.create(exePath: null, appSupport: '');
+      final strategy = DuckstationSaveStrategy(
+        ds,
+        platform: const PlatformInfo('linux', environment: {'HOME': ''}),
+      );
+
+      expect(strategy.normalizeSaveMatchName('Final Fantasy VII (USA)'), 'Final Fantasy VII');
+      expect(strategy.normalizeSaveMatchName('Suikoden II [Rev 1]'), 'Suikoden II');
+      expect(strategy.normalizeSaveMatchName('Game (USA) (En,Fr)'), 'Game');
+      expect(strategy.normalizeSaveMatchName('  spaced   name  '), 'spaced name');
+      expect(strategy.normalizeSaveMatchName('Trailing---'), 'Trailing');
+    });
   });
 }
