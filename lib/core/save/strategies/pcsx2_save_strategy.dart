@@ -183,9 +183,12 @@ class Pcsx2SaveStrategy extends SaveStrategy {
     final result = <io.File>[];
 
     if (syncMode == 'saves' || syncMode == 'both') {
-      // --- Layer 1: PCSX2 Qt per-game folder saves (saves/{Serial}/) ---
-      // PCSX2 1.7+ stores saves in a per-game folder named after the serial.
-      // This takes priority over shared memcard files when present.
+      // --- Layer 1: per-game folder saves (saves/{Serial}/) ---
+      // NOTE: PCSX2 itself does NOT create this layout — verified against
+      // upstream source. Its memcards live in the memcards/ folder as
+      // Mcd001.ps2/Mcd002.ps2 (file OR folder type). This `saves/{Serial}`
+      // check is kept as a best-effort for user-created structures and some
+      // third-party setups; it only fires if the folder actually exists.
       final serial = await _extractSerial(romPath);
       if (serial != null) {
         final perGameDir = io.Directory(isEmuDeck
@@ -222,16 +225,19 @@ class Pcsx2SaveStrategy extends SaveStrategy {
         debugPrint('[PCSX2]   serial null — skipping per-game folder layer');
       }
 
-      // --- Layer 2: Shared memcard files (Mcd001.ps2 / Mcd002.ps2) ---
-      // Used by PCSX2 1.6 and earlier, and still common in portable setups.
-      // Only fall back to this if no per-game folder was found.
+      // --- Layer 2: memcards (Mcd001.ps2 / Mcd002.ps2) ---
+      // Real PCSX2 memcards live in the memcards/ folder. They can be either
+      // a FILE (8MB image) or a DIRECTORY (PCSX2 "folder memcard" — detected
+      // upstream via DirectoryExists on the .ps2 path). Both carry the same
+      // McdXXX.ps2 name. Only fall back to this if no per-game folder matched.
       if (result.isEmpty) {
         final memcardsDir =
             io.Directory(isEmuDeck ? root : p.join(root, 'memcards'));
         if (await memcardsDir.exists()) {
-          debugPrint('[PCSX2]   scanning shared memcards at: ${memcardsDir.path}');
+          debugPrint('[PCSX2]   scanning memcards at: ${memcardsDir.path}');
           await for (final entity in memcardsDir.list()) {
-            if (entity is! io.File) continue;
+            // Accept both files and folder-type (directory) memcards.
+            if (entity is! io.File && entity is! io.Directory) continue;
             final basename = p.basename(entity.path);
             if (!basename.toLowerCase().endsWith('.ps2')) continue;
             // Skip timestamped backup copies (e.g. "Mcd001 [2026-04-03_20-31-19].ps2")
@@ -243,8 +249,9 @@ class Pcsx2SaveStrategy extends SaveStrategy {
                 continue;
               }
             }
-            debugPrint('[PCSX2]   shared memcard added: ${entity.path}');
-            result.add(entity);
+            debugPrint('[PCSX2]   memcard added: ${entity.path} '
+                '(${entity is io.Directory ? "folder card" : "file card"})');
+            result.add(io.File(entity.path));
           }
         } else {
           debugPrint('[PCSX2]   memcards dir missing: ${memcardsDir.path}');

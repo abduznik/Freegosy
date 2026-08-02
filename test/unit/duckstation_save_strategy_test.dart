@@ -43,11 +43,12 @@ void main() {
       try {
         final memcardsDir = Directory(p.join(base.path, 'memcards'));
         await memcardsDir.create(recursive: true);
-        final gameSave = File(p.join(memcardsDir.path, 'Suikoden II.mcd'));
+        // Real DuckStation PerGameTitle naming: {title}_{slot}.mcd
+        final gameSave = File(p.join(memcardsDir.path, 'Suikoden II_1.mcd'));
         await gameSave.writeAsBytes(List.filled(150, 1));
 
         // Shared cards also exist but per-game card must win.
-        await File(p.join(memcardsDir.path, 'Mcd001.mcd')).writeAsBytes(List.filled(150, 2));
+        await File(p.join(memcardsDir.path, 'shared_card_1.mcd')).writeAsBytes(List.filled(150, 2));
 
         final ds = await _StubDirectoryService.create(
           exePath: null,
@@ -64,19 +65,20 @@ void main() {
         );
 
         expect(files, hasLength(1));
-        expect(p.basename(files.first.path), 'Suikoden II.mcd');
+        expect(p.basename(files.first.path), 'Suikoden II_1.mcd');
       } finally {
         await base.delete(recursive: true);
       }
     });
 
-    test('falls back to shared Mcd001/Mcd002.mcd when no per-game card matches', () async {
+    test('falls back to shared_card_N.mcd when no per-game card matches', () async {
       final base = await Directory.systemTemp.createTemp('duckstation_shared');
       try {
         final memcardsDir = Directory(p.join(base.path, 'memcards'));
         await memcardsDir.create(recursive: true);
-        await File(p.join(memcardsDir.path, 'Mcd001.mcd')).writeAsBytes(List.filled(150, 1));
-        await File(p.join(memcardsDir.path, 'Mcd002.mcd')).writeAsBytes(List.filled(150, 2));
+        // Real DuckStation shared card naming: shared_card_{N}.mcd
+        await File(p.join(memcardsDir.path, 'shared_card_1.mcd')).writeAsBytes(List.filled(150, 1));
+        await File(p.join(memcardsDir.path, 'shared_card_2.mcd')).writeAsBytes(List.filled(150, 2));
 
         // No .mcd matching the game name — only shared cards.
         final ds = await _StubDirectoryService.create(
@@ -95,7 +97,36 @@ void main() {
 
         expect(files, hasLength(2));
         expect(files.map((f) => p.basename(f.path)).toSet(),
-            containsAll(['Mcd001.mcd', 'Mcd002.mcd']));
+            containsAll(['shared_card_1.mcd', 'shared_card_2.mcd']));
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+
+    test('falls back to legacy Mcd001.mcd style cards too', () async {
+      final base = await Directory.systemTemp.createTemp('duckstation_legacy_shared');
+      try {
+        final memcardsDir = Directory(p.join(base.path, 'memcards'));
+        await memcardsDir.create(recursive: true);
+        // Old/forks may still use Mcd001.mcd naming.
+        await File(p.join(memcardsDir.path, 'Mcd001.mcd')).writeAsBytes(List.filled(150, 1));
+
+        final ds = await _StubDirectoryService.create(
+          exePath: null,
+          appSupport: base.path,
+        );
+        final strategy = DuckstationSaveStrategy(
+          ds,
+          platform: const PlatformInfo('linux', environment: {'HOME': ''}),
+        );
+
+        final files = await strategy.getSaveFiles(
+          Game(id: 'g4', name: 'Another Random Game.bin', platformSlug: 'ps1', fileSize: 0),
+          p.join(base.path, 'Another Random Game.bin'),
+        );
+
+        expect(files, hasLength(1));
+        expect(p.basename(files.first.path), 'Mcd001.mcd');
       } finally {
         await base.delete(recursive: true);
       }

@@ -248,22 +248,25 @@ Future<void> _runAllCases() async {
     return f.path;
   }
 
-  // PCSX2 (ps2): portable — memcards next to exe; folder save under saves/{Serial}.
+  // PCSX2 (ps2): portable — memcards next to exe. Real PCSX2 memcards are
+  // Mcd001.ps2/Mcd002.ps2 which can be a FILE (8MB) or a DIRECTORY (folder
+  // memcard). Include both to exercise both paths.
   await fakeExe('pcsx2', 'pcsx2/pcsx2-qt.exe');
   final pcsx2Mem = File(p.join(temp.path, 'pcsx2/memcards/Mcd001.ps2'));
   await pcsx2Mem.parent.create(recursive: true);
   await pcsx2Mem.writeAsBytes(List.filled(256, 0x41));
-  final pcsx2Folder = Directory(p.join(temp.path, 'pcsx2/saves/SCUS-97113'));
-  await pcsx2Folder.create(recursive: true);
-  await File(p.join(pcsx2Folder.path, 'savedata.bin')).writeAsBytes(List.filled(256, 0x42));
+  final pcsx2FolderCard = Directory(p.join(temp.path, 'pcsx2/memcards/Mcd002.ps2'));
+  await pcsx2FolderCard.create(recursive: true);
+  await File(p.join(pcsx2FolderCard.path, 'data.bin')).writeAsBytes(List.filled(256, 0x42));
 
   // DuckStation (psx): portable.txt + shared + per-game memcards.
+  // Real DuckStation names: shared_card_N.mcd (shared), {title}_N.mcd (per-game).
   final duckBase = await emuBase('DuckStation');
   await File(p.join(duckBase, 'portable.txt')).writeAsString('portable');
   final duckMem = Directory(p.join(duckBase, 'memcards'));
   await duckMem.create(recursive: true);
-  await File(p.join(duckMem.path, 'Mcd001.mcd')).writeAsBytes(List.filled(256, 0x43));
-  await File(p.join(duckMem.path, 'Suikoden II.mcd')).writeAsBytes(List.filled(256, 0x44));
+  await File(p.join(duckMem.path, 'shared_card_1.mcd')).writeAsBytes(List.filled(256, 0x43));
+  await File(p.join(duckMem.path, 'Suikoden II_1.mcd')).writeAsBytes(List.filled(256, 0x44));
 
   // Dolphin (wii/gc): portable User folder — needs a fake .app exe so
   // _getUserDir resolves exeDir (parent^4 of the mac .app) = temp/Dolphin

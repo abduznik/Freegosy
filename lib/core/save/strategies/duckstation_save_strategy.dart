@@ -72,15 +72,20 @@ class DuckstationSaveStrategy extends SaveStrategy {
 
     final memcardsDir = Directory(p.join(baseDir, 'memcards'));
     if (await memcardsDir.exists()) {
-      // Layer 1: per-game .mcd matching the ROM stem (DuckStation's
-      // "per-game memory cards" feature). Keep only the newest matching .mcd
-      // to avoid uploading multiple per-game saves.
+      // Layer 1: per-game .mcd. DuckStation's per-game cards are named
+      // `{title}_N.mcd` (PerGameTitle) or `{serial}_N.mcd` (PerGame) with a
+      // slot-number suffix. We match by stem as a substring, which covers both
+      // (e.g. "Suikoden II_1.mcd" contains "Suikoden II"). Keep only the
+      // newest matching card to avoid uploading multiple per-game saves.
       File? bestMcd;
       DateTime? bestMcdMtime;
       await for (final entity in memcardsDir.list()) {
         if (entity is! File) continue;
         if (!entity.path.toLowerCase().endsWith('.mcd')) continue;
         final base = p.basename(entity.path).toLowerCase();
+        // Shared cards (shared_card_N.mcd) are handled in Layer 2 — never
+        // treat them as a per-game match here.
+        if (base.startsWith('shared_card_')) continue;
         if (!base.contains(stem.toLowerCase())) {
           debugPrint('[DuckStation]   skipping (no stem match): ${entity.path}');
           continue;
@@ -98,16 +103,18 @@ class DuckstationSaveStrategy extends SaveStrategy {
         result.add(bestMcd);
       }
 
-      // Layer 2: fall back to shared memory cards (Mcd001.mcd / Mcd002.mcd).
-      // DuckStation's default is shared cards — per-game cards only exist
-      // when "Per-Game Memory Cards" is enabled. Upload both so the slot the
-      // game actually wrote to is covered.
+      // Layer 2: fall back to shared memory cards. DuckStation's real shared
+      // cards are `shared_card_1.mcd` / `shared_card_2.mcd`. We also accept the
+      // legacy `Mcd001.mcd` style used by older builds/forks. Upload all shared
+      // cards so the slot the game actually wrote to is covered.
       if (result.isEmpty) {
         final shared = <File>[];
         await for (final entity in memcardsDir.list()) {
           if (entity is! File) continue;
           final base = p.basename(entity.path).toLowerCase();
-          if (!base.startsWith('mcd') || !base.endsWith('.mcd')) continue;
+          final isRealShared = base.startsWith('shared_card_') && base.endsWith('.mcd');
+          final isLegacyShared = RegExp(r'^mcd\d+\.mcd$').hasMatch(base);
+          if (!isRealShared && !isLegacyShared) continue;
           if (sessionStart != null) {
             final stat = await entity.stat();
             if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;

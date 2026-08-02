@@ -162,5 +162,35 @@ void main() {
         await base.delete(recursive: true);
       }
     });
+
+    test('detects folder-type memcard (directory named McdXXX.ps2)', () async {
+      final base = await Directory.systemTemp.createTemp('pcsx2_folder_card');
+      try {
+        final exeDir = p.join(base.path, 'pcsx2');
+        // Real PCSX2 "folder memcard": a DIRECTORY named Mcd001.ps2 under memcards/.
+        final folderCard = Directory(p.join(exeDir, 'memcards', 'Mcd001.ps2'));
+        await folderCard.create(recursive: true);
+        await File(p.join(folderCard.path, 'data.bin')).writeAsBytes(List.filled(150, 1));
+
+        final fakeExe = p.join(exeDir, 'pcsx2-qt.exe');
+        await File(fakeExe).writeAsString('');
+
+        final ds = await _StubDirectoryService.create(exePath: fakeExe);
+        final strategy = Pcsx2SaveStrategy(
+          ds,
+          platform: const PlatformInfo('windows', environment: {}),
+        );
+
+        final files = await strategy.getSaveFiles(
+          Game(id: 'g5', name: 'FolderCard Game', platformSlug: 'ps2', fileSize: 0),
+          p.join(base.path, 'FolderCard Game.iso'),
+        );
+
+        expect(files, hasLength(1));
+        expect(files.first.path, folderCard.path);
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
   });
 }
