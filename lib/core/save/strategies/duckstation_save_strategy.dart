@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:io' as io;
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
@@ -64,19 +64,27 @@ class DuckstationSaveStrategy extends SaveStrategy {
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final baseDir = await _getBaseDir(platformSlug: game.platformSlug);
+    debugPrint('[DuckStation] Save base: $baseDir');
 
     final result = <File>[];
     final stem = getRomStem(game);
+    debugPrint('[DuckStation] ROM stem: $stem  sessionStart=$sessionStart');
 
     final memcardsDir = Directory(p.join(baseDir, 'memcards'));
     if (await memcardsDir.exists()) {
-      // Keep only the newest matching .mcd to avoid uploading multiple per-game saves.
+      // Layer 1: per-game .mcd matching the ROM stem (DuckStation's
+      // "per-game memory cards" feature). Keep only the newest matching .mcd
+      // to avoid uploading multiple per-game saves.
       File? bestMcd;
       DateTime? bestMcdMtime;
       await for (final entity in memcardsDir.list()) {
         if (entity is! File) continue;
         if (!entity.path.toLowerCase().endsWith('.mcd')) continue;
-        if (!p.basename(entity.path).toLowerCase().contains(stem.toLowerCase())) continue;
+        final base = p.basename(entity.path).toLowerCase();
+        if (!base.contains(stem.toLowerCase())) {
+          debugPrint('[DuckStation]   skipping (no stem match): ${entity.path}');
+          continue;
+        }
         final stat = await entity.stat();
         if (sessionStart != null &&
             stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
@@ -85,7 +93,34 @@ class DuckstationSaveStrategy extends SaveStrategy {
           bestMcdMtime = stat.modified;
         }
       }
-      if (bestMcd != null) result.add(bestMcd);
+      if (bestMcd != null) {
+        debugPrint('[DuckStation]   per-game memcard found: ${bestMcd.path}');
+        result.add(bestMcd);
+      }
+
+      // Layer 2: fall back to shared memory cards (Mcd001.mcd / Mcd002.mcd).
+      // DuckStation's default is shared cards — per-game cards only exist
+      // when "Per-Game Memory Cards" is enabled. Upload both so the slot the
+      // game actually wrote to is covered.
+      if (result.isEmpty) {
+        final shared = <File>[];
+        await for (final entity in memcardsDir.list()) {
+          if (entity is! File) continue;
+          final base = p.basename(entity.path).toLowerCase();
+          if (!base.startsWith('mcd') || !base.endsWith('.mcd')) continue;
+          if (sessionStart != null) {
+            final stat = await entity.stat();
+            if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
+          }
+          shared.add(entity);
+        }
+        if (shared.isNotEmpty) {
+          debugPrint('[DuckStation]   using shared memcards: ${shared.map((f) => f.path).toList()}');
+          result.addAll(shared);
+        }
+      }
+    } else {
+      debugPrint('[DuckStation]   memcards dir missing: ${memcardsDir.path}');
     }
 
     final statesDir = Directory(p.join(baseDir, 'savestates'));
