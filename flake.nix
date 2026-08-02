@@ -18,7 +18,7 @@
 
           src = pkgs.fetchurl {
             url = "https://github.com/abduznik/Freegosy/releases/download/v${version}/Freegosy-linux-x86_64.AppImage";
-            hash = "sha256-YomKxE9RaNvjdPa1FelvUAxXq11NBXgZjXbrkt3rMPI=";
+            hash = "sha256-80oLBtf1CeDsMesJ2OYVkyzFq4M5BOjSHjwpc1H4WQU=";
           };
 
           appimageContents = pkgs.appimageTools.extractType1 { inherit pname version src; };
