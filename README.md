@@ -10,6 +10,8 @@ A cross-platform Flutter app for browsing your RomM library, downloading ROMs, a
 
 [**Watch the Feature Walkthrough on YouTube**](https://youtu.be/SE5BoFoA700)
 
+**Join our [Discord community](https://discord.gg/PEBUzGNMaw)** to chat, get help, and be the first to test new releases!
+
 ![Main Menu](screenshots/screenshot1.png)
 *The main menu showcasing the intuitive game card interface.*
 
