@@ -231,4 +231,114 @@ void main() {
       }
     });
   });
+
+  group('EdenSaveStrategy profile resolution fallback', () {
+    test('falls back to flat profile layout when 0000000000000000 is missing', () async {
+      final base = await Directory.systemTemp.createTemp('eden_flat_profile');
+      try {
+        final exeDir = p.join(base.path, 'eden');
+        await Directory(exeDir).create(recursive: true);
+
+        // Flat layout: profile folder sits directly under the save base,
+        // without the 0000000000000000 intermediate folder.
+        final flatBase = p.join(exeDir, 'user', 'nand', 'user', 'save');
+        final profileDir = p.join(flatBase, 'a' * 32, '0100000000060000');
+        await Directory(profileDir).create(recursive: true);
+        await File(p.join(profileDir, 'data.bin')).writeAsBytes([0, 1, 2]);
+
+        final fakeExe = p.join(exeDir, 'eden.exe');
+        await File(fakeExe).writeAsString('');
+
+        final ds = await _StubDirectoryService.create(exePath: fakeExe);
+        final strategy = EdenSaveStrategy(
+          ds,
+          platform: const PlatformInfo('windows', environment: {'APPDATA': ''}),
+        );
+
+        final saveDir = await strategy.getSaveDir(
+          Game(id: 'g7', name: 'Flat Profile Game', platformSlug: 'switch', fileSize: 0),
+          p.join(exeDir, '0100000000060000.nsp'),
+        );
+
+        expect(saveDir, isNotNull);
+        expect(p.isWithin(flatBase, saveDir!), isTrue,
+            reason: 'Expected save under flat profile base');
+        expect(saveDir, contains('a' * 32),
+            reason: 'Expected the flat profile folder in the resolved path');
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+
+    test('throws descriptive error with resolved base path when no profiles exist', () async {
+      final base = await Directory.systemTemp.createTemp('eden_no_profiles');
+      try {
+        final exeDir = p.join(base.path, 'eden');
+        await Directory(exeDir).create(recursive: true);
+
+        // Save base exists but contains no 32-hex profile folders.
+        final saveBase = p.join(exeDir, 'user', 'nand', 'user', 'save');
+        await Directory(saveBase).create(recursive: true);
+        await Directory(p.join(saveBase, 'not_a_profile')).create();
+
+        final fakeExe = p.join(exeDir, 'eden.exe');
+        await File(fakeExe).writeAsString('');
+
+        final ds = await _StubDirectoryService.create(exePath: fakeExe);
+        final strategy = EdenSaveStrategy(
+          ds,
+          platform: const PlatformInfo('windows', environment: {'APPDATA': ''}),
+        );
+
+        await expectLater(
+          strategy.getSaveDir(
+            Game(id: 'g8', name: 'No Profile Game', platformSlug: 'switch', fileSize: 0),
+            p.join(exeDir, '0100000000070000.nsp'),
+          ),
+          throwsA(isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('No active Eden profiles found in $saveBase'),
+          )),
+        );
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+
+    test('ignores profiles that only contain hidden or .bak files', () async {
+      final base = await Directory.systemTemp.createTemp('eden_hidden_only');
+      try {
+        final exeDir = p.join(base.path, 'eden');
+        await Directory(exeDir).create(recursive: true);
+
+        final portableBase = p.join(exeDir, 'user');
+        final zeroDir = p.join(portableBase, 'nand', 'user', 'save', '0000000000000000');
+        final profileDir = p.join(zeroDir, 'b' * 32, '0100000000080000');
+        await Directory(profileDir).create(recursive: true);
+        // Only hidden/.bak files — should be treated as inactive.
+        await File(p.join(profileDir, '.hidden')).writeAsString('x');
+        await File(p.join(profileDir, 'main.bak')).writeAsString('x');
+
+        final fakeExe = p.join(exeDir, 'eden.exe');
+        await File(fakeExe).writeAsString('');
+
+        final ds = await _StubDirectoryService.create(exePath: fakeExe);
+        final strategy = EdenSaveStrategy(
+          ds,
+          platform: const PlatformInfo('windows', environment: {'APPDATA': ''}),
+        );
+
+        await expectLater(
+          strategy.getSaveDir(
+            Game(id: 'g9', name: 'Hidden Only Game', platformSlug: 'switch', fileSize: 0),
+            p.join(exeDir, '0100000000080000.nsp'),
+          ),
+          throwsA(isA<Exception>()),
+        );
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+  });
 }
