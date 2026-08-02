@@ -41,7 +41,11 @@ testing/
 
 ## What the harness verifies (blackbox)
 
-The harness talks to the **public RomM API only** (`/api/roms`, `/api/saves`,
+Two harnesses live here:
+
+### 1. HTTP round-trip (`save_sync_integration.dart`)
+
+Talks to the **public RomM API only** (`/api/roms`, `/api/saves`,
 `/api/saves/{id}/content`) and exercises the same endpoint sequence Freegosy
 uses on push/pull. Per platform it:
 
@@ -52,16 +56,42 @@ uses on push/pull. Per platform it:
 5. downloads the save again and byte-compares the round-trip,
 6. cleans up all test saves afterwards.
 
-So it validates **server-side store/list/download** independently of the
-Freegosy app, which lets us confirm a save written by our local strategies
-(emulator folder layout → file selection → push) actually lands and round-trips.
+### 2. Strategy blackbox (`strategy_blackbox_test.dart`)
+
+Drives Freegosy's **real save strategies** end-to-end against the live server,
+uploading every platform's selected saves to the fake `test_ps2_rom.iso`
+(rom id 6418) on the ps2 platform. It:
+
+1. builds a fake per-emulator save layout in a temp dir (portable exe + memcards,
+   folder saves, `PARAM.SFO`, Wii title dirs, GC `Card A`, `0000000000000000`,
+   `mlc01`, etc.),
+2. wires the real strategies through `SaveSyncService` + a real `RommService`
+   (API key from env), with a stub `DirectoryService`/`StrategyRegistry` so each
+   slug resolves to the strategy under test,
+3. calls `pushSaves()` (the full chain: `getSaveFiles()` → filter → bundle → upload),
+4. verifies a new save landed on the server for rom 6418,
+5. deletes all test saves afterwards.
+
+This confirms the whole pipeline — emulator folder layout → file selection →
+bundling → HTTP upload → server store — works for **every strategy**, not just
+the HTTP layer. Currently covers: ps2, psx (per-game + shared memcard),
+wii, gc, snes (RetroArch), gba (mGBA), psp (PPSSPP), ps3 (RPCS3), switch (Eden),
+wiiu (Cemu), 3ds (Azahar). Xenia (xbox360) is Windows-only and skipped on
+macOS/Linux.
 
 ## Running
 
-Full suite across all supported platforms:
+HTTP round-trip across all supported platforms:
 
 ```bash
 ROMM_URL=... ROMM_API_KEY=... dart run tool/integration_tests/save_sync_integration.dart
+```
+
+Strategy blackbox (drives the real save strategies; needs a Flutter test env):
+
+```bash
+ROMM_URL=... ROMM_API_KEY=... \
+  flutter test tool/integration_tests/strategy_blackbox_test.dart
 ```
 
 Or via the wrapper (reads `testing/config/.env`, writes a summary):

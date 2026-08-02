@@ -106,6 +106,10 @@ I am currently searching for testers on **macOS**, **Windows**, and **Linux (Ste
 - **Future Plans**: **Android** support is next for a truly unified app experience.
 - **Get Involved**: If you're interested in testing an early release, reach out via GitHub or join the community discussions.
 
+## Community Reviews
+
+![Community Reviews](screenshots/reviews.jpg)
+
 ## About RomM
 
 Freegosy is built to complement [RomM](https://github.com/rommapp/romm), a modern ROM manager. It connects to your RomM instance to provide a lightweight, portable way to access and play your games.
