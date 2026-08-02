@@ -70,3 +70,10 @@ test/_mock_romm_storage/
 *.env
 tool/integration_tests/
 
+# Private blackbox test harness — data, credentials, and exports only.
+# The README.md and scripts/ under testing/ are committed for reference;
+# everything under data/ and config/ is local-only so test creds and
+# exported dumps never leak to the public repo.
+testing/data/
+testing/config/
+
