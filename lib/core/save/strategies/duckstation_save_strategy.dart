@@ -26,7 +26,15 @@ class DuckstationSaveStrategy extends SaveStrategy {
   }
 
   Future<String> _getBaseDir({String? platformSlug}) async {
-    // 1. Check portable mode first (Windows)
+    // 1. Check portable mode first (all platforms)
+    //
+    // DuckStation treats the install as portable when EITHER portable.txt OR
+    // settings.ini exists next to the executable (upstream core.cpp):
+    //   if (FileExists("portable.txt") || FileExists("settings.ini"))
+    //     DataRoot = exe dir
+    // Scoop installs and some portable builds only have settings.ini (created
+    // on first run), so we must check both or we fall through to the wrong
+    // directory and report "no saves" (issue #28).
     final exePath = await _directoryService.findEmulatorExecutable(
         'duckstation', _getEmuExe());
     if (exePath != null) {
@@ -34,9 +42,16 @@ class DuckstationSaveStrategy extends SaveStrategy {
       if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
         emulatorDir = io.File(exePath).parent.parent.parent.parent.path;
       }
-      if (await File(p.join(emulatorDir, 'portable.txt')).exists()) {
+      final portableMarker = File(p.join(emulatorDir, 'portable.txt'));
+      final settingsMarker = File(p.join(emulatorDir, 'settings.ini'));
+      if (await portableMarker.exists() || await settingsMarker.exists()) {
+        debugPrint('[DuckStation] portable mode detected via '
+            '${await portableMarker.exists() ? "portable.txt" : "settings.ini"} → $emulatorDir');
         return emulatorDir;
       }
+      debugPrint('[DuckStation] exe found at $exePath but no portable.txt/settings.ini — not portable');
+    } else {
+      debugPrint('[DuckStation] no duckstation exe found via DirectoryService');
     }
 
     // 2. Dynamic path resolution for macOS/Windows/Linux
@@ -48,6 +63,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
       resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('DuckStation', platformSlug: platformSlug);
     }
 
+    debugPrint('[DuckStation] standard install base candidate: $resolvedPath');
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for DuckStation at $resolvedPath. Please launch DuckStation at least once to generate save data.');
     }

@@ -216,6 +216,46 @@ void main() {
     });
   });
 
+  group('DuckstationSaveStrategy portable mode via settings.ini (scoop)', () {
+    test('treats install as portable when settings.ini sits next to exe', () async {
+      final base = await Directory.systemTemp.createTemp('duckstation_scoop');
+      try {
+        final exeDir = p.join(base.path, 'duckstation');
+        await Directory(p.join(exeDir, 'memcards')).create(recursive: true);
+        await Directory(p.join(exeDir, 'savestates')).create(recursive: true);
+        // Scoop/portable builds have settings.ini but NOT portable.txt.
+        await File(p.join(exeDir, 'settings.ini')).writeAsString('[Core]\n');
+        await File(p.join(exeDir, 'memcards', 'shared_card_1.mcd')).writeAsBytes(List.filled(150, 1));
+        final fakeExe = p.join(exeDir, 'duckstation-qt-x64-ReleaseLTCG.exe');
+        await File(fakeExe).writeAsString('');
+
+        // LocalAppData is empty — only the exe-dir (portable) layout has saves.
+        final emptyLocal = p.join(base.path, 'empty');
+        final ds = await _StubDirectoryService.create(exePath: fakeExe, appSupport: '/nonexistent');
+        final strategy = DuckstationSaveStrategy(
+          ds,
+          platform: PlatformInfo('windows', environment: {'LOCALAPPDATA': emptyLocal}),
+        );
+
+        final saveDir = await strategy.getSaveDir(
+          Game(id: 'g_scoop', name: 'Suikoden II.bin', platformSlug: 'ps1', fileSize: 0),
+          '/roms/ps1/Suikoden II.bin',
+        );
+        expect(saveDir, p.join(exeDir, 'memcards'),
+            reason: 'settings.ini next to exe should trigger portable mode');
+
+        final files = await strategy.getSaveFiles(
+          Game(id: 'g_scoop', name: 'Suikoden II.bin', platformSlug: 'ps1', fileSize: 0),
+          '/roms/ps1/Suikoden II.bin',
+        );
+        expect(files, hasLength(1));
+        expect(p.basename(files.first.path), 'shared_card_1.mcd');
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+  });
+
   group('SaveStrategy.normalizeSaveMatchName', () {
     test('strips region/version tags and collapses whitespace', () async {
       final ds = await _StubDirectoryService.create(exePath: null, appSupport: '');
