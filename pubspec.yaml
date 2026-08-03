@@ -99,6 +99,7 @@ flutter_native_splash:
 
 inno_bundle:
   id: 4f7eeb80-0a89-11f1-8850-155185c17681
+  admin: false
   publisher: "abduznik"
   maintainer: "abduznik <https://github.com/abduznik>"
   image_path: "freegosy_logo.png"
