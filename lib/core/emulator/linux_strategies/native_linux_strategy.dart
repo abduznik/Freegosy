@@ -30,7 +30,8 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   @override
   String getEmulatorAppSupportDirectory(String home, String emulatorName, String? emudeckRoot, {String? platformSlug}) {
     // check common configuration directory for flatpak instalations
-    var flatpakPackage = kEmulatorFlatpakPackages[emulatorName];
+    var lowerCaseEmulatorName = emulatorName.toLowerCase();
+    var flatpakPackage = kEmulatorFlatpakPackages[lowerCaseEmulatorName];
     if(flatpakPackage != null) {
       var supportDirectoryParent = p.join(home, ".var", "app", flatpakPackage, "config");
       final dir = io.Directory(supportDirectoryParent);
@@ -38,14 +39,14 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
           for (final entity in dir.listSync()) {  
             if (entity is io.File) continue;
             final lowerFolderName = p.basename(entity.path).toLowerCase();
-            if (lowerFolderName == emulatorName.toLowerCase()) {
+            if (lowerFolderName == lowerCaseEmulatorName) {
               return entity.path;
             }
           }
       }
     }
     // check common configuration directory for app image instalations
-    var altSupportDirectoryPath =  p.join(home, '.local', 'share', emulatorName.toLowerCase());
+    var altSupportDirectoryPath =  p.join(home, '.local', 'share', lowerCaseEmulatorName);
     if(io.Directory(altSupportDirectoryPath).existsSync()) {
           return altSupportDirectoryPath;
     }
