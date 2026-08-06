@@ -1019,7 +1019,7 @@ const Map<String, GameAction> kDefaultMapping = {
   'l.rectangle.roundedbottom': GameAction.l1,
   'r.rectangle.roundedbottom': GameAction.r1,
 
-  // D-Pad
+  // D-Pad (SDL2 / Linux)
   'dpad_up': GameAction.up,
   'dpad_down': GameAction.down,
   'dpad_left': GameAction.left,
@@ -1029,9 +1029,17 @@ const Map<String, GameAction> kDefaultMapping = {
   'button_13': GameAction.left,
   'button_14': GameAction.right,
 
+  // D-Pad (GameInput / gamepads_windows 0.3+)
+  'dpadUp': GameAction.up,
+  'dpadDown': GameAction.down,
+  'dpadLeft': GameAction.left,
+  'dpadRight': GameAction.right,
+
   // Shoulders / Triggers
   'leftshoulder': GameAction.l1,
   'rightshoulder': GameAction.r1,
+  'leftShoulder': GameAction.l1,
+  'rightShoulder': GameAction.r1,
   'button_4': GameAction.l1,
   'button_5': GameAction.r1,
 
@@ -1044,10 +1052,16 @@ const Map<String, GameAction> kDefaultMapping = {
   'select': GameAction.select,
   'back': GameAction.select,
   'guide': GameAction.start,
+  // GameInput menu/view buttons (Xbox: menu=start, view=back/select)
+  'menu': GameAction.start,
+  'view': GameAction.select,
 
   // Analog Sticks (axis)
   'leftstick': GameAction.horizontalAxis,
   'rightstick': GameAction.verticalAxis,
   'l.joystick': GameAction.horizontalAxis,
   'r.joystick': GameAction.verticalAxis,
+  // GameInput stick click buttons (used as axis selectors in some contexts)
+  'leftThumbstick': GameAction.horizontalAxis,
+  'rightThumbstick': GameAction.verticalAxis,
 };

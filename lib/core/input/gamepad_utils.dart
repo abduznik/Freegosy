@@ -25,17 +25,19 @@ class GamepadUtils {
   /// can skip asking the user for those buttons.
   ///
   /// Detects:
-  /// - `dwpov` / `pov*`   — DirectInput / generic POV hat → all D-pad directions
-  /// - `hat*`             — Some Linux joydev hat keys (e.g. "hat0x", "hat0y")
-  /// - Numeric-only keys  — /dev/input/js* reports hat switches as bare numbers
-  ///                        (e.g. "6" and "7" for the DS4 emulation layer).
-  ///                        When we see a polarity-encoded variant ("6+" / "6-")
-  ///                        that maps to a D-pad action in the sniffed mapping,
-  ///                        we know the hat is being handled. We detect this by
-  ///                        checking whether the seen-keys contain ANY polarity
-  ///                        suffix on a numeric key — i.e. the wizard already
-  ///                        captured them.
-  /// - `dwxpos` / `dwypos` — DirectInput named axes → analog stick axes handled
+  /// - `dwpov` / `pov*`        — DirectInput / generic POV hat → all D-pad directions
+  /// - `hat*`                  — Some Linux joydev hat keys (e.g. "hat0x", "hat0y")
+  /// - `dpadup` / `dpaddown`   — GameInput digital d-pad buttons → all D-pad directions
+  /// - Numeric-only keys       — /dev/input/js* reports hat switches as bare numbers
+  ///                             (e.g. "6" and "7" for the DS4 emulation layer).
+  ///                             When we see a polarity-encoded variant ("6+" / "6-")
+  ///                             that maps to a D-pad action in the sniffed mapping,
+  ///                             we know the hat is being handled. We detect this by
+  ///                             checking whether the seen-keys contain ANY polarity
+  ///                             suffix on a numeric key — i.e. the wizard already
+  ///                             captured them.
+  /// - `dwxpos` / `dwypos`     — DirectInput named axes → analog stick axes handled
+  /// - `leftthumbstickx` etc.  — GameInput named axes → analog stick axes handled
   static Set<GameAction> backendHandledActions(Set<String> seenKeys) {
     final handled = <GameAction>{};
 
@@ -44,8 +46,18 @@ class GamepadUtils {
       handled.addAll([GameAction.up, GameAction.down, GameAction.left, GameAction.right]);
     }
 
+    // GameInput digital d-pad buttons
+    if (seenKeys.any((k) => k == 'dpadup' || k == 'dpaddown' || k == 'dpadleft' || k == 'dpadright')) {
+      handled.addAll([GameAction.up, GameAction.down, GameAction.left, GameAction.right]);
+    }
+
     // DirectInput named analog axes
     if (seenKeys.any((k) => k == 'dwxpos' || k == 'dwypos')) {
+      handled.addAll([GameAction.horizontalAxis, GameAction.verticalAxis]);
+    }
+
+    // GameInput named analog axes
+    if (seenKeys.any((k) => k == 'leftthumbstickx' || k == 'leftthumbsticky')) {
       handled.addAll([GameAction.horizontalAxis, GameAction.verticalAxis]);
     }
 
