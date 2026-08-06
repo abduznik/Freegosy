@@ -36,10 +36,11 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
       var supportDirectoryParent = p.join(home, ".var", "app", flatpakPackage, "config");
       final dir = io.Directory(supportDirectoryParent);
       if(dir.existsSync()) {
+          var lowerAppName = flatpakPackage.split('.').last.toLowerCase();
           for (final entity in dir.listSync()) {  
             if (entity is io.File) continue;
             final lowerFolderName = p.basename(entity.path).toLowerCase();
-            if (lowerFolderName == lowerCaseEmulatorName) {
+            if (lowerFolderName == lowerAppName) {
               return entity.path;
             }
           }
