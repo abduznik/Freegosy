@@ -5,9 +5,12 @@ import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import 'core/cli/cli_config.dart';
+import 'core/downloader/download_service.dart';
 import 'core/emulator/game_launch_service.dart';
 import 'core/emulator/strategy_registry.dart';
+import 'core/extraction/extraction_service.dart';
 import 'core/platform/platform_info.dart';
 import 'core/romm/romm_models.dart';
 import 'core/romm/romm_service.dart';
@@ -56,6 +59,9 @@ Future<void> runHeadless(List<String> args) async {
     case 'list':
       await _runList(rest);
       break;
+    case 'download':
+      await _runDownload(rest);
+      break;
     case 'interactive':
       await _runInteractive();
       break;
@@ -72,6 +78,7 @@ Freegosy headless mode — browse, search, and launch games without the UI.
 
 Usage:
   freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
+  freegosy.exe --headless download (--game-id=ID | --name=TERM) [--json]
   freegosy.exe --headless launch (--game-id=ID | --name=TERM) [options]
   freegosy.exe --headless interactive
   freegosy.exe --headless                 (same as interactive)
@@ -81,6 +88,12 @@ list options:
   --platform=SLUG_OR_ID    Filter by platform
   --limit=N                Max results (default 25)
   --json                   Emit a JSON array to stdout
+
+download options:
+  --game-id=ID            RomM game ID to download
+  --name=TERM              Download the best name match instead of an ID
+  --all-files              For multi-file games, download every file (e.g. all discs), not just the first
+  --json                   Emit machine-readable JSON to stdout
 
 launch options:
   --game-id=ID            RomM game ID to launch
@@ -416,6 +429,125 @@ Future<void> _runList(List<String> args) async {
     await session.close();
     exit(1);
   }
+}
+
+Future<void> _runDownload(List<String> args) async {
+  final flags = _parseFlags(args);
+  final gameId = flags['game-id'];
+  final name = flags['name'];
+  final asJson = flags['json'] == 'true';
+  final allFiles = flags['all-files'] == 'true';
+
+  if (gameId == null && name == null) {
+    stderr.writeln('Error: --game-id or --name is required\n');
+    _printUsage();
+    exit(2);
+  }
+
+  final session = await _HeadlessSession.start(asJson: asJson);
+  if (session == null) exit(2);
+
+  List<Game>? ambiguous;
+  final game = await _resolveGame(session.rommService, gameId: gameId, name: name, onAmbiguous: (c) => ambiguous = c);
+  if (game == null) {
+    if (ambiguous != null) {
+      final list = ambiguous!.map((g) => '  ${g.id}  ${g.name} (${g.platformDisplayName ?? g.platformSlug ?? ''})').join('\n');
+      stderr.writeln('Multiple games match "$name" — use --game-id instead:\n$list');
+    } else {
+      stderr.writeln('Game not found: ${gameId ?? name}');
+    }
+    await session.close();
+    exit(2);
+  }
+
+  final downloadService = DownloadService(
+    dio: Dio(),
+    directoryService: session.directoryService,
+    extractionService: ExtractionService(session.directoryService),
+  );
+  final headers = {'Authorization': session.rommService.authHeader};
+
+  final results = <Map<String, dynamic>>[];
+  bool allOk = true;
+
+  // Some games have multiple real files even when RomM reports
+  // has_multiple_files: false (e.g. GameCube multi-disc titles with a
+  // .m3u) — always check the actual file list under --all-files rather
+  // than trusting that flag, matching what GameLaunchService's own
+  // disc-scan fallback assumes.
+  final fileList = allFiles ? await session.launchService.launchableFilesFor(game) : null;
+  if (allFiles && fileList != null && fileList.files.length > 1) {
+    // Mirrors library_actions.dart's _downloadSelectedFiles: download each
+    // file individually via a synthetic per-file Game so DirectoryService
+    // resolves a distinct on-disk path for each one — this is what actually
+    // produces a multi-disc folder with all discs present (needed to
+    // reproduce/verify issue #54's .m3u picker).
+    final files = fileList.files.isNotEmpty ? fileList.files : fileList.launchableFiles;
+    if (files.isEmpty) {
+      stderr.writeln('[freegosy-headless] No files found for "${game.name}".');
+    }
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      final fileName = file['file_name']?.toString() ?? '';
+      if (fileName.isEmpty) continue;
+      final baseUrl = session.rommService.config.baseUrl;
+      final url = '$baseUrl/api/roms/${game.id}/content/${Uri.encodeComponent(fileName)}';
+      final tempGame = Game(
+        id: '${game.id}_$i',
+        name: fileName,
+        fileSize: (file['file_size_bytes'] as num?)?.toInt() ?? 0,
+        platformSlug: game.platformSlug,
+        hasMultipleFiles: false,
+      );
+      final result = await _downloadOne(downloadService, tempGame, url, headers);
+      results.add(result);
+      if (result['ok'] != true) allOk = false;
+    }
+  } else {
+    final url = session.rommService.getDownloadUrl(game);
+    final result = await _downloadOne(downloadService, game, url, headers);
+    results.add(result);
+    allOk = result['ok'] == true;
+  }
+
+  if (asJson) {
+    stdout.writeln(jsonEncode({'ok': allOk, 'gameId': game.id, 'gameName': game.name, 'files': results}));
+  } else {
+    stdout.writeln(allOk ? 'PASS' : 'FAIL');
+    stdout.writeln('  game: ${game.name} (${game.id})');
+    for (final r in results) {
+      stdout.writeln('  ${r['fileName']}: ${r['status']}${r['error'] != null ? ' (${r['error']})' : ''}');
+    }
+  }
+  await session.close();
+  exit(allOk ? 0 : 1);
+}
+
+Future<Map<String, dynamic>> _downloadOne(
+  DownloadService downloadService,
+  Game fileGame,
+  String url,
+  Map<String, String> headers,
+) async {
+  stderr.writeln('[freegosy-headless] Downloading "${fileGame.name}"...');
+  String? error;
+  String status = 'unknown';
+  var lastPercent = -1;
+  try {
+    await for (final progress in downloadService.download(fileGame, url, headers: headers)) {
+      status = progress.status;
+      if (progress.error != null) error = progress.error;
+      final pct = (progress.percent * 100).round();
+      if (pct != lastPercent && pct % 10 == 0) {
+        stderr.writeln('[freegosy-headless]   ${progress.status} $pct%');
+        lastPercent = pct;
+      }
+    }
+  } catch (e) {
+    error = e.toString();
+  }
+  final ok = error == null && status != 'error';
+  return {'ok': ok, 'fileName': fileGame.name, 'status': status, 'error': error};
 }
 
 void _printGameList(List<Game> games, int total, bool asJson) {
