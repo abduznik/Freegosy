@@ -162,7 +162,29 @@ class _HeadlessSession {
     } else {
       await Hive.initFlutter();
     }
-    final backupBox = await Hive.openBox<List>('freegosy_backups');
+
+    // Opening the backups box can race another Freegosy process (the GUI
+    // app, or a second concurrent headless invocation) also holding the
+    // Hive file lock — this threw an unhandled PathAccessException and hung
+    // the process instead of failing cleanly. Retry briefly (lock
+    // contention is normally transient — a few hundred ms) before giving up
+    // with a clear error.
+    Box<List>? backupBox;
+    Object? lastError;
+    for (var attempt = 0; attempt < 5; attempt++) {
+      try {
+        backupBox = await Hive.openBox<List>('freegosy_backups');
+        break;
+      } catch (e) {
+        lastError = e;
+        await Future.delayed(Duration(milliseconds: 200 * (attempt + 1)));
+      }
+    }
+    if (backupBox == null) {
+      _emitError('Could not open the local backups database — it may be locked by another '
+          'Freegosy process (the app, or another headless run). Close it and try again. ($lastError)', asJson);
+      return null;
+    }
 
     final sharedPrefs = await SharedPreferences.getInstance();
     final prefs = SharedPreferencesAppPreferences(sharedPrefs);
@@ -211,7 +233,17 @@ class _HeadlessSession {
     );
   }
 
-  Future<void> close() => backupBox.close();
+  /// Closing can fail if another Freegosy process (the app, or a concurrent
+  /// headless run) is simultaneously touching the same Hive lock file —
+  /// this must never crash the CLI on its way out, since by this point the
+  /// actual command's result has already been determined and reported.
+  Future<void> close() async {
+    try {
+      await backupBox.close();
+    } catch (e) {
+      stderr.writeln('[freegosy-headless] Warning: failed to close backups database cleanly: $e');
+    }
+  }
 }
 
 void _emitError(String message, bool asJson) => _emitResult(_LaunchReport.configError(message), asJson);
@@ -410,7 +442,14 @@ Future<_LaunchReport> _launchGame(
 Future<void> _runList(List<String> args) async {
   final flags = _parseFlags(args);
   final asJson = flags['json'] == 'true';
-  final limit = int.tryParse(flags['limit'] ?? '') ?? 25;
+  final parsedLimit = int.tryParse(flags['limit'] ?? '');
+  // RomM's API rejects limit <= 0 with a raw 422 — validate client-side so
+  // the error is clear instead of a bare DioException.
+  if (parsedLimit != null && parsedLimit <= 0) {
+    stderr.writeln('Error: --limit must be a positive number (got $parsedLimit)\n');
+    exit(2);
+  }
+  final limit = parsedLimit ?? 25;
 
   final session = await _HeadlessSession.start(asJson: asJson);
   if (session == null) exit(2);
