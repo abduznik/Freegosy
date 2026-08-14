@@ -199,7 +199,7 @@ class GameLaunchService {
 
     String? backupZipPath;
     try {
-      final postBackup = await backupService.createImmediate(game, romPath, saveSyncService);
+      final postBackup = await backupService.createImmediate(game, romPath, saveSyncService, emulatorId: session.emulatorId);
       if (postBackup != null) {
         await backupRepository.addEntry(
           game.id,
