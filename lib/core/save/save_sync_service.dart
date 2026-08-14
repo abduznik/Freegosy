@@ -2,7 +2,7 @@ import 'dart:io' as io;
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../storage/app_preferences.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
@@ -49,7 +49,7 @@ class SaveSyncService {
   final RommService _rommService;
   final DirectoryService _directoryService;
   final StrategyRegistry _strategyRegistry;
-  final SharedPreferences _prefs;
+  final AppPreferences _prefs;
 
   /// Minimum save file size in bytes to consider valid for upload.
   /// Files smaller than this are likely empty/blank saves created by an
@@ -970,5 +970,23 @@ class SaveSyncService {
 
   void loadCoreOverrides(Map<String, String> overrides) {
     _retroarch.loadCoreOverrides(overrides);
+  }
+
+  /// Applies the user's choice after a [SaveConflictException]: 'local' force-pushes
+  /// the local save, 'cloud' pulls and restores the cloud save. Returns the underlying
+  /// pushSaves/pullSave result, or false if [choice] is neither.
+  Future<bool> resolveConflict(
+    Game game,
+    String romPath,
+    SaveConflictException e, {
+    required String choice,
+    required String syncMode,
+  }) async {
+    if (choice == 'local') {
+      return pushSaves(game, romPath, syncMode: syncMode, force: true);
+    } else if (choice == 'cloud') {
+      return pullSave(game, romPath);
+    }
+    return false;
   }
 }

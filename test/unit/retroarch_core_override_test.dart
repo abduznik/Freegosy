@@ -2,16 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 
 void main() {
   group('StrategyRegistry - Core Override System', () {
     late StrategyRegistry registry;
-    late SharedPreferences prefs;
+    late SharedPreferences rawPrefs;
+    late SharedPreferencesAppPreferences prefs;
     late DirectoryService dirService;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      prefs = await SharedPreferences.getInstance();
+      rawPrefs = await SharedPreferences.getInstance();
+      prefs = SharedPreferencesAppPreferences(rawPrefs);
       dirService = DirectoryService(prefs);
       registry = StrategyRegistry(dirService, prefs);
     });
@@ -19,7 +22,7 @@ void main() {
     group('Core overrides', () {
       test('setCoreOverride persists to SharedPreferences', () async {
         await registry.setCoreOverride('gba', 'mgba_libretro');
-        final stored = prefs.getString('ra_core_gba');
+        final stored = rawPrefs.getString('ra_core_gba');
         expect(stored, 'mgba_libretro');
       });
 
@@ -36,7 +39,7 @@ void main() {
         await registry.setCoreOverride('gba', 'mgba_libretro');
         await registry.clearCoreOverride('gba');
         expect(registry.getCoreOverride('gba'), isNull);
-        expect(prefs.getString('ra_core_gba'), isNull);
+        expect(rawPrefs.getString('ra_core_gba'), isNull);
       });
 
       test('clearAllCoreOverrides removes all overrides', () async {
@@ -58,7 +61,7 @@ void main() {
     group('Per-game emulator preference', () {
       test('setGameEmulatorPreference persists', () async {
         await registry.setGameEmulatorPreference('game123', 'retroarch');
-        final stored = prefs.getString('game_emu_game123');
+        final stored = rawPrefs.getString('game_emu_game123');
         expect(stored, 'retroarch');
       });
 
@@ -81,7 +84,7 @@ void main() {
     group('Per-game RetroArch core preference', () {
       test('setGameCorePreference persists', () async {
         await registry.setGameCorePreference('game123', 'mgba_libretro');
-        final stored = prefs.getString('retroarch_core_game123');
+        final stored = rawPrefs.getString('retroarch_core_game123');
         expect(stored, 'mgba_libretro');
       });
 

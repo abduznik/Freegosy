@@ -1,9 +1,9 @@
 import 'dart:io' as io;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import '../platform/platform_info.dart';
+import 'app_preferences.dart';
 
 /// A wrapper around FlutterSecureStorage that falls back to SharedPreferences
 /// if the system keyring is unavailable (common on Linux/Steam Deck).
@@ -27,7 +27,7 @@ class SecureStorageService {
     _platform = platform ?? PlatformInfo.current;
   }
 
-  static Future<String?> read(String key, SharedPreferences prefs) async {
+  static Future<String?> read(String key, AppPreferences prefs) async {
     // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
     if (!kIsWeb && _platform.isMacOS) {
       return prefs.getString('macos_secure_$key');
@@ -50,7 +50,7 @@ class SecureStorageService {
     }
   }
 
-  static Future<void> write(String key, String value, SharedPreferences prefs) async {
+  static Future<void> write(String key, String value, AppPreferences prefs) async {
     // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
     if (!kIsWeb && _platform.isMacOS) {
       await prefs.setString('macos_secure_$key', value);
@@ -73,7 +73,7 @@ class SecureStorageService {
     }
   }
 
-  static Future<void> delete(String key, SharedPreferences prefs) async {
+  static Future<void> delete(String key, AppPreferences prefs) async {
     // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
     if (!kIsWeb && _platform.isMacOS) {
       await prefs.remove('macos_secure_$key');

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/storage/app_preferences.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/emulator/strategies/retroarch_strategy.dart';
@@ -28,7 +28,7 @@ import 'package:freegosy/core/emulator/strategies/custom_emulator_strategy.dart'
 
 class StrategyRegistry {
   final DirectoryService _directoryService;
-  final SharedPreferences _prefs;
+  final AppPreferences _prefs;
   final PlatformInfo _platform;
   late final List<EmulatorStrategy> _strategies;
   final List<CustomEmulatorConfig> _customEmulatorConfigs;
@@ -343,5 +343,21 @@ class StrategyRegistry {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Resolves the OS-appropriate executable name for an emulator [definition]
+  /// (as returned by [getDefinition]/[kEmulatorDefinitions]). Returns null if
+  /// no executable name is defined for the current platform.
+  static String? executableNameForDefinition(Map<String, dynamic> definition, {PlatformInfo? platform}) {
+    final current = platform ?? PlatformInfo.current;
+    final String exe;
+    if (current.isMacOS) {
+      exe = (definition['macos_executable'] as String?) ?? (definition['windows_executable'] as String? ?? '');
+    } else if (current.isLinux) {
+      exe = (definition['linux_executable'] as String?) ?? '';
+    } else {
+      exe = (definition['windows_executable'] as String?) ?? '';
+    }
+    return exe.isEmpty ? null : exe;
   }
 }

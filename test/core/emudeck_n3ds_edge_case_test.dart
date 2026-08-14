@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/rom_constants.dart';
 
@@ -23,7 +24,7 @@ void main() {
 
     group('DirectoryService.getRomDirectory', () {
       Future<DirectoryService> createService(String preset) async {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
         final service = DirectoryService(prefs);
         service.romsRootPath = tempDir.path;
         service.linuxSyncPreset = preset;
@@ -64,7 +65,7 @@ void main() {
 
     group('DirectoryService.findExistingRomPath on EmuDeck', () {
       test('finds 3ds game in n3ds folder on EmuDeck preset', () async {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
         final service = DirectoryService(prefs);
         service.romsRootPath = tempDir.path;
         service.linuxSyncPreset = 'emudeck';
@@ -89,7 +90,7 @@ void main() {
       });
 
       test('finds all 3DS slug variant games in n3ds folder on EmuDeck', () async {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
         final service = DirectoryService(prefs);
         service.romsRootPath = tempDir.path;
         service.linuxSyncPreset = 'emudeck';

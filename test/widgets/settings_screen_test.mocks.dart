@@ -14,11 +14,11 @@ import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strate
 import 'package:freegosy/core/emulator/strategy_registry.dart' as _i13;
 import 'package:freegosy/core/romm/romm_models.dart' as _i5;
 import 'package:freegosy/core/romm/romm_service.dart' as _i10;
+import 'package:freegosy/core/storage/app_preferences.dart' as _i11;
 import 'package:freegosy/core/storage/directory_service.dart' as _i6;
 import 'package:freegosy/core/storage/file_system_index.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i7;
-import 'package:shared_preferences/shared_preferences.dart' as _i11;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -663,7 +663,7 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
   );
 
   @override
-  _i8.Future<void> refreshToken(_i11.SharedPreferences? prefs) =>
+  _i8.Future<void> refreshToken(_i11.AppPreferences? prefs) =>
       (super.noSuchMethod(
             Invocation.method(#refreshToken, [prefs]),
             returnValue: _i8.Future<void>.value(),
@@ -934,7 +934,7 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
   @override
   _i8.Future<_i12.Uint8List?> downloadSave(
     String? saveUrl, {
-    _i11.SharedPreferences? prefs,
+    _i11.AppPreferences? prefs,
     String? deviceId,
   }) =>
       (super.noSuchMethod(
@@ -1003,7 +1003,7 @@ class MockRommService extends _i1.Mock implements _i10.RommService {
   @override
   _i8.Future<bool> updateRomProps(
     String? romId,
-    _i11.SharedPreferences? prefs, {
+    _i11.AppPreferences? prefs, {
     bool? backlogged,
     bool? nowPlaying,
     int? rating,

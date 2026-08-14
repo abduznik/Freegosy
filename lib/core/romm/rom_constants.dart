@@ -61,4 +61,15 @@ class RomConstants {
     if (allowed.isEmpty) return true; // If no list, allow all (risky but fallback)
     return allowed.contains(ext);
   }
+
+  /// Filters files to only show launchable ROM files (excludes metadata like .cue, .ccd, etc.).
+  /// .m3u playlists are included as they are valid input for multi-disc emulators (e.g. RetroArch).
+  static List<Map<String, dynamic>> filterLaunchableFiles(List<Map<String, dynamic>> files) {
+    const nonLaunchableExts = {'.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
+    return files.where((f) {
+      final name = (f['file_name'] ?? '').toLowerCase();
+      final ext = name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
+      return !nonLaunchableExts.contains(ext);
+    }).toList();
+  }
 }

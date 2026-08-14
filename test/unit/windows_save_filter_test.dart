@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/save/strategies/windows_save_strategy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 
 void main() {
   group('WindowsSaveStrategy filter parsing', () {
@@ -67,7 +68,7 @@ void main() {
         'win_filter_game1': '*.ini,*.bin',
         'win_filter_game2': 'eeprom.*',
       });
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = WindowsSaveStrategy(prefs);
 
       strategy.loadPersistedFilters();
@@ -79,7 +80,7 @@ void main() {
 
     test('setSaveFilter persists to SharedPreferences', () async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = WindowsSaveStrategy(prefs);
 
       await strategy.setSaveFilter('game1', '*.ini,save.bin');
@@ -113,7 +114,7 @@ void main() {
       await File('${saveDir.path}/readme.txt').writeAsBytes([10, 11, 12]);
 
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = WindowsSaveStrategy(prefs);
 
       // Set filter: only .bin and .ini files
@@ -141,7 +142,7 @@ void main() {
       await File('${saveDir.path}/save.bin').writeAsBytes([1, 2, 3]);
 
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = WindowsSaveStrategy(prefs);
 
       await strategy.setManualOverride('testgame', saveDir.path);

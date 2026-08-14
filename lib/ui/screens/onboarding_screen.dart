@@ -64,7 +64,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _loadExistingConfig() async {
-    final prefs = ref.read(sharedPreferencesProvider);
+    final prefs = ref.read(appPreferencesProvider);
     final baseUrl = prefs.getString('rommBaseUrl') ?? '';
     final apiKey = await SecureStorageService.read('rommApiKey', prefs) ?? '';
     final romsRoot = prefs.getString('romsRootPath');
@@ -190,7 +190,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _finishOnboarding() async {
-    final prefs = ref.read(sharedPreferencesProvider);
+    final prefs = ref.read(appPreferencesProvider);
     
     // Save RomM Config
     await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());

@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/save/strategies/ares_save_strategy.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 
@@ -177,7 +178,7 @@ void main() {
       // On Windows, _getAresDataDir requires findEmulatorExecutable to succeed.
       // With no ares installed, it returns null and restoreSave returns false.
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final dirService = DirectoryService(prefs);
       final platform = PlatformInfo('windows');
       final strategy = AresSaveStrategy(dirService, platform: platform);
@@ -201,7 +202,7 @@ void main() {
       await fakeExe.writeAsBytes([0]);
 
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final dirService = DirectoryService(prefs);
       await dirService.setEmulatorPathOverride('ares', fakeExe.path);
 

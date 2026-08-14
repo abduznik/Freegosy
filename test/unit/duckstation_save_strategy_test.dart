@@ -4,6 +4,7 @@ import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/save/strategies/duckstation_save_strategy.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,7 +26,7 @@ class _StubDirectoryService extends DirectoryService {
     String appSupport = '',
   }) async {
     SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
     return _StubDirectoryService._internal(prefs, exePath: exePath, appSupport: appSupport);
   }
 

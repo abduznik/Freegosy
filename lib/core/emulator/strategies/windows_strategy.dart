@@ -4,11 +4,11 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/windows/windows_game_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/storage/app_preferences.dart';
 
 class WindowsStrategy extends EmulatorStrategy {
   final DirectoryService _directoryService;
-  final SharedPreferences _prefs;
+  final AppPreferences _prefs;
 
   // Manual exe overrides per game id
   final Map<String, String> _exeOverrides = {};

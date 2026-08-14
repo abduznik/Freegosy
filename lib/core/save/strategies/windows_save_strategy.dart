@@ -2,16 +2,16 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
+import '../../storage/app_preferences.dart';
 import '../../windows/pcgamingwiki_service.dart';
 import '../save_strategy.dart';
 import 'package:dio/dio.dart';
 
 class WindowsSaveStrategy extends SaveStrategy {
   final PcGamingWikiService _wikiService;
-  final SharedPreferences _prefs;
+  final AppPreferences _prefs;
   // ignore: unused_field
   final PlatformInfo _platform;
 

@@ -810,7 +810,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             icon: Icons.save,
             label: 'Save Configuration',
             onTap: !_isEditingServer ? null : () async {
-              final prefs = ref.read(sharedPreferencesProvider);
+              final prefs = ref.read(appPreferencesProvider);
               await prefs.setString('rommBaseUrl', _baseUrlController.text.trim());
               await prefs.setBool('rommTrustSelfSigned', _trustSelfSigned);
               if (_isLegacyAuth) {

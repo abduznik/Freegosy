@@ -6,6 +6,7 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 
 /// Minimal mock that captures launchGame args for verification.
 class _MockDirectoryService extends DirectoryService {
@@ -85,7 +86,7 @@ void main() {
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       strategy = AresStrategy(_MockDirectoryService(prefs), platform: PlatformInfo('linux'));
     });
 
@@ -115,7 +116,7 @@ void main() {
   group('supportedSlugs', () {
     test('includes all kAresSystemNames keys', () async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = AresStrategy(_MockDirectoryService(prefs), platform: PlatformInfo('linux'));
       expect(strategy.supportedSlugs, containsAll(kAresSystemNames.keys));
       expect(strategy.supportedSlugs.length, kAresSystemNames.length);
@@ -128,7 +129,7 @@ void main() {
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       mockDir = _MockDirectoryService(prefs);
       strategy = AresStrategy(mockDir, platform: PlatformInfo('linux'));
     });
@@ -164,7 +165,7 @@ void main() {
   group('unsupported platform throws', () {
     test('launch throws for unknown platform slug', () async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = AresStrategy(_MockDirectoryService(prefs), platform: PlatformInfo('linux'));
       final game = _makeGame('Game.ps5', 'ps5');
 
@@ -180,7 +181,7 @@ void main() {
 
     test('launchWithHandle throws for unknown platform slug', () async {
       SharedPreferences.setMockInitialValues({});
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final strategy = AresStrategy(_MockDirectoryService(prefs), platform: PlatformInfo('linux'));
       final game = _makeGame('Game.switch', 'switch');
 

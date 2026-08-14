@@ -6,9 +6,9 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_constants.dart';
 import '../platform/platform_info.dart';
+import '../storage/app_preferences.dart';
 import '../storage/secure_storage_service.dart';
 import 'romm_models.dart';
 
@@ -183,7 +183,7 @@ class RommService {
     return Options(headers: headers);
   }
 
-  static Future<String> fetchToken(String baseUrl, String username, String password, SharedPreferences prefs) async {
+  static Future<String> fetchToken(String baseUrl, String username, String password, AppPreferences prefs) async {
     final normalizedUrl = _normalizeBaseUrl(baseUrl);
     final dio = Dio(BaseOptions(
       baseUrl: normalizedUrl,
@@ -249,7 +249,7 @@ class RommService {
     throw Exception('Pairing failed after $maxRetries retries');
   }
 
-  Future<void> refreshToken(SharedPreferences prefs) async {
+  Future<void> refreshToken(AppPreferences prefs) async {
     try {
       if (_config.username.isEmpty || _config.password.isEmpty) return;
       final newToken = await fetchToken(_config.baseUrl, _config.username, _config.password, prefs);
@@ -258,7 +258,7 @@ class RommService {
     } catch (_) {}
   }
 
-  Future<void> _ensureBearerToken(SharedPreferences prefs) async {
+  Future<void> _ensureBearerToken(AppPreferences prefs) async {
     final authHeader = _authOptions.headers?['Authorization']?.toString() ?? '';
     if (!authHeader.startsWith('Bearer ')) {
       await refreshToken(prefs);
@@ -694,7 +694,7 @@ class RommService {
   /// the server side (saves a separate /downloaded call).
   Future<Uint8List?> downloadSave(
     String saveUrl, {
-    SharedPreferences? prefs,
+    AppPreferences? prefs,
     String? deviceId,
   }) async {
     try {
@@ -784,7 +784,7 @@ class RommService {
     } catch (_) { return null; }
   }
 
-  Future<bool> updateRomProps(String romId, SharedPreferences prefs, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
+  Future<bool> updateRomProps(String romId, AppPreferences prefs, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
     try {
       await _ensureBearerToken(prefs);
       final data = <String, dynamic>{};

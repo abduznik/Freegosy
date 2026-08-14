@@ -10,9 +10,9 @@ import 'dart:typed_data' as _i9;
 import 'package:flutter/foundation.dart' as _i2;
 import 'package:freegosy/core/romm/romm_models.dart' as _i3;
 import 'package:freegosy/core/romm/romm_service.dart' as _i4;
+import 'package:freegosy/core/storage/app_preferences.dart' as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i5;
-import 'package:shared_preferences/shared_preferences.dart' as _i7;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -114,7 +114,7 @@ class MockRommService extends _i1.Mock implements _i4.RommService {
   );
 
   @override
-  _i6.Future<void> refreshToken(_i7.SharedPreferences? prefs) =>
+  _i6.Future<void> refreshToken(_i7.AppPreferences? prefs) =>
       (super.noSuchMethod(
             Invocation.method(#refreshToken, [prefs]),
             returnValue: _i6.Future<void>.value(),
@@ -385,7 +385,7 @@ class MockRommService extends _i1.Mock implements _i4.RommService {
   @override
   _i6.Future<_i9.Uint8List?> downloadSave(
     String? saveUrl, {
-    _i7.SharedPreferences? prefs,
+    _i7.AppPreferences? prefs,
     String? deviceId,
   }) =>
       (super.noSuchMethod(
@@ -454,7 +454,7 @@ class MockRommService extends _i1.Mock implements _i4.RommService {
   @override
   _i6.Future<bool> updateRomProps(
     String? romId,
-    _i7.SharedPreferences? prefs, {
+    _i7.AppPreferences? prefs, {
     bool? backlogged,
     bool? nowPlaying,
     int? rating,

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,7 +14,7 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       tempDir = await Directory.systemTemp.createTemp('dir_service_test');
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       directoryService = DirectoryService(prefs);
     });
 
@@ -65,13 +66,13 @@ void main() {
     });
 
     test('loadEmulatorPathOverride reads from SharedPreferences', () async {
-      final prefs = await SharedPreferences.getInstance();
+      final rawPrefs = await SharedPreferences.getInstance();
       final overridePath = p.join(tempDir.path, 'loaded_emu.exe');
       await File(overridePath).writeAsString('fake');
-      await prefs.setString('emu_path_my_emu', overridePath);
+      await rawPrefs.setString('emu_path_my_emu', overridePath);
 
       // Create new service and explicitly load overrides
-      final newService = DirectoryService(prefs);
+      final newService = DirectoryService(SharedPreferencesAppPreferences(rawPrefs));
       newService.loadEmulatorPathOverrides();
       final retrieved = newService.getEmulatorPathOverride('my_emu');
 
