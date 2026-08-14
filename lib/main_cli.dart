@@ -88,6 +88,8 @@ launch options:
   --emulator=ID             Force a specific emulator (e.g. "retroarch") instead of the configured preference, for this run only
   --core=ID                 Force a specific RetroArch core (e.g. "pcsx_rearmed_libretro") instead of the configured/default core, for this run only
   --timeout=SECONDS        Auto-terminate the emulator after N seconds instead of waiting for exit
+                             (no effect for emulators that block until exit internally, e.g. MelonDS —
+                             the timeout only applies once a process handle is available)
   --json                   Emit machine-readable JSON to stdout (default: human-readable)
 
 Credentials: reused from the account already configured in the Freegosy app
@@ -303,11 +305,37 @@ Future<_LaunchReport> _launchGame(
 
   stderr.writeln('[freegosy-headless] Launching "${game.name}" via ${strategy.name} ($romPath)...');
 
+  // Most EmulatorStrategy.launchWithHandle implementations (the base class,
+  // and every override except RetroArch's) await the process's exitCode
+  // internally before returning — e.g. MelonDS does this deliberately, to
+  // run SAV<->SRM save translation the moment the emulator closes. That
+  // means launchService.launch() itself can block for the entire play
+  // session, well before the CLI ever gets a Process handle to arm a kill
+  // timer against. So --timeout has to race the whole launch+exit call,
+  // not just a post-launch wait, and fall back to killing by executable
+  // path (found ahead of time) since no Process handle exists yet.
+  Timer? watchdogTimer;
+  bool timedOut = false;
+  if (timeoutSeconds != null) {
+    stderr.writeln('[freegosy-headless] Waiting up to ${timeoutSeconds}s for exit, then terminating...');
+    final exePath = await strategy.findExecutable();
+    watchdogTimer = Timer(Duration(seconds: timeoutSeconds), () async {
+      timedOut = true;
+      if (exePath != null) {
+        final exeName = Uri.file(exePath).pathSegments.last;
+        await Process.run('taskkill', ['/IM', exeName, '/F']);
+      }
+    });
+  } else {
+    stderr.writeln('[freegosy-headless] Waiting for game/emulator to exit...');
+  }
+
   try {
     final launched = await session.launchService.launch(game, romPath, strategy, overrideCoreId: overrideCoreId);
 
     if (launched.process == null) {
       // Fire-and-forget launch path — no process handle, no exit detection possible.
+      watchdogTimer?.cancel();
       final report = _LaunchReport.launchedNoHandle(game.id, game.name, strategy.emulatorId, romPath);
       _emitResult(report, asJson);
       if (!returnResult) {
@@ -317,23 +345,23 @@ Future<_LaunchReport> _launchGame(
       return report;
     }
 
-    bool timedOut = false;
-    Timer? killTimer;
-    if (timeoutSeconds != null) {
-      stderr.writeln('[freegosy-headless] Waiting up to ${timeoutSeconds}s for exit, then terminating...');
-      killTimer = Timer(Duration(seconds: timeoutSeconds), () {
+    // If launch() already blocked until exit (the common case), this
+    // resolves immediately. If it returned a live handle (e.g. RetroArch),
+    // arm a direct kill against the real Process now that we have one —
+    // more reliable than the watchdog's taskkill-by-name fallback.
+    if (timeoutSeconds != null && !timedOut) {
+      watchdogTimer?.cancel();
+      watchdogTimer = Timer(Duration(seconds: timeoutSeconds), () {
         timedOut = true;
-        launched.process!.kill();
+        // sigterm (kill()'s default) can be caught/ignored by GUI emulators
+        // (Qt/GLFW apps often intercept it for a "save before quit?"
+        // prompt); sigkill forces immediate termination.
+        launched.process!.kill(ProcessSignal.sigkill);
       });
-    } else {
-      stderr.writeln('[freegosy-headless] Waiting for game/emulator to exit...');
     }
 
-    // Killing the process (on timeout) makes process.exitCode resolve
-    // naturally, so awaitExitAndSync's internal `await process.exitCode`
-    // completes either way — no separate re-sync call needed.
     final result = await session.launchService.awaitExitAndSync(launched, game, romPath, syncMode: 'both', overrideCoreId: overrideCoreId);
-    killTimer?.cancel();
+    watchdogTimer?.cancel();
 
     final report = _LaunchReport(
       ok: result?.syncOk ?? false,
