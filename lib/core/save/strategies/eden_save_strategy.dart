@@ -25,7 +25,7 @@ class EdenSaveStrategy extends SaveStrategy {
       : _platform = platform ?? PlatformInfo.current;
 
   @override
-  String get strategyId => 'switch';
+  String get strategyId => 'eden';
   @override
   bool get supportsSaveSync => true;
 
