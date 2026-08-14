@@ -1,5 +1,26 @@
 # Changelog
 
+> **Windows Defender false positive notice (v0.5.10+):** Windows Defender may flag `freegosy.exe` as `Wacatac.B!ml`. This is a false positive affecting all unsigned Flutter apps. See the [README](README.md#other-platforms) for details.
+
+## [Unreleased]
+
+### Added
+- **Headless mode** (`--headless`): run Freegosy without a UI window — `list`/`search`, `download` (including multi-file/multi-disc), and `launch` (waits for exit, runs the same save-push/backup pipeline as the UI, reports pass/fail as JSON or plain text). Useful for scripting a launch/sync check or driving Freegosy from an agent/CI. See the README for usage.
+
+### Fixed
+- **Save sync used the wrong emulator's data (issues #79, #42, #28)**: pushing/pulling/backing up a save after launch always resolved the *platform's globally-configured default emulator*, even if you actually launched via a different one (e.g. through the per-game picker). Save sync now uses the emulator that actually launched the game.
+- **Eden save sync picked the wrong profile (issue #68)**: with multiple Eden user profiles, saves could resolve under the most globally-active profile instead of the one that actually holds the current game's save, reporting "no save files found" for a game with a real, valid save.
+- **Ares save sync didn't recognize PlayStation (and similar) saves**: Ares bundles the real memory card together with save-state files in a single per-game `.zip`; this is now correctly unpacked on push/pull instead of being invisible to sync entirely.
+- **Amstrad CPC games showed "no emulator configured" (issue #78)**: RomM's platform slug for Amstrad CPC (`acpc`, from IGDB) wasn't recognized by any registered core.
+- **Windows native games with custom launch arguments could crash/black-screen (issue #47)**: the game's folder path was being silently appended after your configured launch arguments, breaking shared multi-game launchers (e.g. OpenGOAL's `gk.exe --game jak1`).
+- **Downloaded ROM missing its file extension (issue #44)**: games stored in RomM as a per-game folder with a single file inside could download without the file's extension, especially via the simple "Download" button — the fix only reliably triggered when full file metadata had already been fetched separately.
+- **`strategyId` mismatches in debug logs**: Eden and Azahar's save strategies logged the wrong internal name (`switch`/`3ds` instead of `eden`/`azahar`), making `[SaveSync]` log output misleading when diagnosing which emulator actually resolved.
+- Fixed several correctness/reliability issues found while stress-testing headless mode: a concurrent-process race on the local backups database could hang the process indefinitely instead of failing cleanly; `--limit=0` (and negative) sent an invalid request to RomM instead of being rejected client-side; an empty `--name`/`--game-id` value silently searched for everything instead of being treated as missing.
+
+## [0.5.11] - 2026-07-29
+
+See [Releases](https://github.com/abduznik/Freegosy/releases/tag/v0.5.11) for full release notes.
+
 ## [0.5.10] - 2026-07-28
 
 ### Added

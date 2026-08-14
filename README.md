@@ -75,6 +75,24 @@ No pressure at all — the app is and will always be free.
     - **New**: Reset controller mapping button to clear a broken custom profile.
     - **New**: Save button disabled when sniff wizard produces an empty mapping.
 
+## Headless Mode (early preview)
+
+Freegosy can run without opening a window — useful for scripting a launch/sync check, or driving it from an agent/CI. This is a new, actively-tested feature; feedback welcome.
+
+```
+freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
+freegosy.exe --headless download (--game-id=ID | --name=TERM) [--all-files] [--json]
+freegosy.exe --headless launch (--game-id=ID | --name=TERM) [--emulator=ID] [--core=ID] [--timeout=SECONDS] [--json]
+freegosy.exe --headless interactive
+freegosy.exe --headless                 (same as interactive)
+```
+
+- `list`/`download`/`launch` accept `--game-id` (RomM game ID) or `--name` (best match by title; ambiguous matches are listed instead of guessing).
+- `launch` waits for the emulator to exit, then runs the same save-push/backup pipeline as launching from the UI, and reports the result (pass/fail, sync status, backup path) as JSON with `--json` or human-readable text otherwise.
+- `--timeout` force-terminates the emulator after N seconds instead of waiting for you to close it — handy for automated checks. Some emulators (e.g. MelonDS) manage the process internally until it exits, so the timeout only takes effect once a process handle becomes available.
+- Credentials are reused from the account already configured in the app (server URL, username, password/API key/token) — log in once via the normal UI first.
+- Exit codes: `0` success, `1` launch/sync failed, `2` invalid arguments or game/config not found.
+
 ## Platform / Emulator Status
 
 | Emulator | Status | Notes |
@@ -92,7 +110,7 @@ No pressure at all — the app is and will always be free.
 | **Azahar** | 🟢 Full | 3DS — confirmed working by [@Ramza2k](https://github.com/Ramza2k). |
 | **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
 | **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
-| **Ares** | 🔴 Untested | Multi-system (GBA, SNES, N64, Genesis, PS1, MSX, etc.). Launch and save sync implemented, needs real-world testing. Searching for testers! |
+| **Ares** | 🟡 Partial | Multi-system (GBA, SNES, N64, Genesis, PS1, MSX, etc.). PlayStation confirmed working on Windows — Ares bundles the memory card together with save-state files in a per-game `.zip`, now correctly unpacked/repacked on push and pull. Other systems still need real-world testing. |
 | **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
 
 **Per-OS Notes:**
@@ -148,3 +166,7 @@ Download the latest release for your platform from the [Releases page](https://g
 - **Windows**: `.exe` installer
 - **macOS**: `.dmg` disk image
 - **Linux**: AppImage (`.AppImage`) or tarball (`.tar.gz`)
+
+> **Windows Defender false positive (v0.5.10 and later)**
+>
+> Windows Defender may flag `freegosy.exe` as `Wacatac.B!ml`. **This is a false positive.** Freegosy is fully open source — you can audit every line of code in this repository. The warning is triggered because the executable is not code-signed and new release hashes start with zero download history, which causes Microsoft's ML model to flag them automatically. The detection clears on its own as more users download the release. If you want to verify the file before running it, check that the SHA-256 hash matches the one listed on the [Releases page](https://github.com/abduznik/Freegosy/releases).
