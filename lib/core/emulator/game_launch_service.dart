@@ -29,12 +29,16 @@ class RomResolution {
 }
 
 /// A launched game process plus the timestamp launch began, needed to scope
-/// which save files count as part of this play session.
+/// which save files count as part of this play session. [emulatorId]
+/// records which emulator actually launched the game, so the post-exit
+/// save sync uses the same emulator's strategy rather than whatever the
+/// platform's global preference happens to be (see issue #79).
 class GameSession {
   final io.Process? process;
   final DateTime sessionStart;
+  final String emulatorId;
 
-  const GameSession({required this.process, required this.sessionStart});
+  const GameSession({required this.process, required this.sessionStart, required this.emulatorId});
 }
 
 /// Outcome of awaiting a launched game's exit and running the post-exit
@@ -164,7 +168,7 @@ class GameLaunchService {
     if (process == null) {
       await strategy.launch(game, romPath);
     }
-    return GameSession(process: process, sessionStart: sessionStart);
+    return GameSession(process: process, sessionStart: sessionStart, emulatorId: strategy.emulatorId);
   }
 
   /// Awaits the launched process's exit (no-op if [session.process] is
@@ -190,6 +194,7 @@ class GameLaunchService {
       sessionStart: session.sessionStart,
       syncMode: syncMode,
       coreOverride: overrideCoreId,
+      emulatorId: session.emulatorId,
     );
 
     String? backupZipPath;

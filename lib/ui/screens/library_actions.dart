@@ -395,7 +395,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // The actual save sync happens post-exit in the unawaited block below.
     if (syncService != null) {
       debugPrint('[SaveSync] Auto-pulling save before launch: game="${game.displayName}"');
-      unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId).catchError((_) => false));
+      unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId, emulatorId: strategy.emulatorId).catchError((_) => false));
     }
 
     // Platform-specific checks (e.g. 3DS keys)
