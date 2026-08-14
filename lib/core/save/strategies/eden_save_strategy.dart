@@ -135,7 +135,15 @@ class EdenSaveStrategy extends SaveStrategy {
   /// Tries the standard `0000000000000000` layout first, then falls back to
   /// scanning the save base directly (some Eden installs keep profile folders
   /// flat). Throws a descriptive [Exception] if no usable profile is found.
-  Future<String> _resolveProfileDir(String baseSavePath) async {
+  ///
+  /// If [titleId] is given and more than one profile candidate exists, a
+  /// candidate that already contains a save folder for that title takes
+  /// priority over the "most recently modified profile overall" heuristic —
+  /// otherwise a user with multiple Eden profiles (e.g. one mostly used for
+  /// a different game) can have their save silently resolved under the
+  /// wrong profile, reporting "no save files found" for a game that does
+  /// have one, just under a different profile (issue #68).
+  Future<String> _resolveProfileDir(String baseSavePath, {String? titleId}) async {
     if (_activeProfileOverride != null && _activeProfileOverride!.isNotEmpty) {
       final dir = p.join(baseSavePath, '0000000000000000', _activeProfileOverride!);
       debugPrint('[Eden] Using active profile override: $dir');
@@ -156,6 +164,22 @@ class EdenSaveStrategy extends SaveStrategy {
     if (candidates.isEmpty) {
       throw Exception('No active Eden profiles found in $baseSavePath. Please launch Eden at least once and create a save.');
     }
+
+    if (titleId != null && candidates.length > 1) {
+      final withTitle = candidates.where((c) {
+        final titleDir = io.Directory(p.join(parentDir, c['id'] as String, titleId));
+        return titleDir.existsSync();
+      }).toList();
+      if (withTitle.length == 1) {
+        final dir = p.join(parentDir, withTitle.first['id'] as String);
+        debugPrint('[Eden] Selected profile dir (has save for titleId=$titleId): $dir');
+        return dir;
+      } else if (withTitle.length > 1) {
+        candidates = withTitle;
+        debugPrint('[Eden] Multiple profiles have saves for titleId=$titleId, falling back to newest-among-those');
+      }
+    }
+
     candidates.sort((a, b) => (b['newestFile'] as DateTime).compareTo(a['newestFile'] as DateTime));
     if (candidates.length == 1) {
       final dir = p.join(parentDir, candidates.first['id'] as String);
@@ -222,8 +246,8 @@ class EdenSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
-    final profileDir = await _resolveProfileDir(base);
     final titleId = await _resolveTitleId(romPath, game);
+    final profileDir = await _resolveProfileDir(base, titleId: titleId);
     return p.join(profileDir, titleId);
   }
 
