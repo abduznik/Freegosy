@@ -27,6 +27,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
   /// Used to resolve the correct save folder when a platform has multiple cores.
   String? _cachedActiveCore;
 
+  /// Cached EmuDeck-for-Windows RetroArch root, once detected.
+  String? _cachedEmuDeckWindowsRoot;
+
   // Test-only override to skip reading the real retroarch.cfg.
   @visibleForTesting
   bool skipConfigRead = false;
@@ -385,6 +388,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   /// Resolves the save root directory: retroarch.cfg first, then exe-relative.
   Future<String> _resolveSaveRoot() async {
+    if (_platform.isWindows) {
+      final emuDeckRoot = await _emuDeckWindowsRetroArchRoot();
+      if (emuDeckRoot != null) return p.join(emuDeckRoot, 'saves');
+    }
     final cfg = await _readConfigSaveRoot();
     if (cfg != null) return cfg;
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
@@ -393,6 +400,26 @@ class RetroArchSaveStrategy extends SaveStrategy {
         : io.File(exePath!).parent.path;
     if (await io.FileSystemEntity.isDirectory(exePath)) exeDir = exePath;
     return p.join(exeDir, 'saves');
+  }
+
+  /// Detects an EmuDeck-for-Windows install and returns its RetroArch root
+  /// (`%USERPROFILE%\emudeck\EmulationStation-DE\Emulators\RetroArch`) if present.
+  ///
+  /// EmuDeck for Windows installs RetroArch there directly and exposes a
+  /// `Emulation\saves\retroarch\...` junction pointing back to it. We resolve
+  /// to the real path instead of the junction to avoid Windows "untrusted
+  /// mount point" errors when traversing reparse points without admin rights.
+  Future<String?> _emuDeckWindowsRetroArchRoot() async {
+    if (_cachedEmuDeckWindowsRoot != null) return _cachedEmuDeckWindowsRoot;
+    final userProfile = _platform.environment['USERPROFILE'];
+    if (userProfile == null || userProfile.isEmpty) return null;
+    final candidate = p.join(userProfile, 'emudeck', 'EmulationStation-DE', 'Emulators', 'RetroArch');
+    if (await io.Directory(candidate).exists()) {
+      _cachedEmuDeckWindowsRoot = candidate;
+      debugPrint('[SaveSync] [retroarch] detected EmuDeck-for-Windows root=$candidate');
+      return candidate;
+    }
+    return null;
   }
 
   String _getRetroArchExe() {

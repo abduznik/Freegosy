@@ -246,4 +246,55 @@ void main() {
       await tempDir.delete(recursive: true);
     });
   });
+
+  group('RetroArch EmuDeck-for-Windows detection', () {
+    test('resolves saves under emudeck RetroArch root when detected', () async {
+      final tempDir = await Directory.systemTemp.createTemp('ra_emudeck_win_');
+      final retroArchRoot = p.join(
+          tempDir.path, 'emudeck', 'EmulationStation-DE', 'Emulators', 'RetroArch');
+      await Directory(p.join(retroArchRoot, 'saves', 'mGBA')).create(recursive: true);
+
+      final platform = PlatformInfo('windows', environment: {
+        'USERPROFILE': tempDir.path,
+        'APPDATA': p.join(tempDir.path, 'AppData', 'Roaming'),
+      });
+      final strategy = RetroArchSaveStrategy(mockDirService, platform: platform);
+
+      final game = Game(id: '1', name: 'Pokemon', platformSlug: 'gba', fileSize: 0);
+      final romPath = p.join(tempDir.path, 'roms', 'Pokemon.gba');
+      final result = await strategy.getSaveDir(game, romPath);
+
+      expect(result, isNotNull);
+      expect(result, equals(p.join(retroArchRoot, 'saves', 'mGBA')),
+          reason: 'Should resolve directly under the EmuDeck-for-Windows RetroArch root');
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('falls back to normal Windows resolution when emudeck root absent', () async {
+      final tempDir = await Directory.systemTemp.createTemp('ra_no_emudeck_win_');
+      final exeDir = p.join(tempDir.path, 'RetroArch-Win64');
+      await Directory(exeDir).create(recursive: true);
+      final exePath = p.join(exeDir, 'RetroArch.exe');
+      await File(exePath).writeAsString('');
+
+      when(mockDirService.findEmulatorExecutable('retroarch', 'RetroArch.exe'))
+          .thenAnswer((_) async => exePath);
+
+      final platform = PlatformInfo('windows', environment: {
+        'USERPROFILE': tempDir.path,
+        'APPDATA': p.join(tempDir.path, 'AppData', 'Roaming'),
+      });
+      final strategy = RetroArchSaveStrategy(mockDirService, platform: platform);
+
+      final game = Game(id: '1', name: 'Pokemon', platformSlug: 'gba', fileSize: 0);
+      final romPath = p.join(tempDir.path, 'roms', 'Pokemon.gba');
+      final result = await strategy.getSaveDir(game, romPath);
+
+      expect(result, equals(p.join(exeDir, 'saves', 'mGBA')),
+          reason: 'Without an emudeck folder present, should resolve relative to the exe as before');
+
+      await tempDir.delete(recursive: true);
+    });
+  });
 }
