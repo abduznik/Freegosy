@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -235,6 +236,99 @@ void main() {
       expect(await saveFile.exists(), isTrue);
       final contents = await saveFile.readAsBytes();
       expect(contents, [1, 2, 3]);
+    });
+  });
+
+  group('Zip save bundles (PlayStation and similar) — issue: Ares .zip saves invisible to sync', () {
+    // Ares bundles the real memory-card save together with transient
+    // .state.auto files inside a single per-game .zip (e.g.
+    // "Saves/PlayStation/<romStem>.zip"), instead of writing a loose save
+    // file. getSaveFiles() must open the zip and pull out only the
+    // recognized save entry (.mcd), not the whole zip.
+    late Directory aresDir;
+    late File fakeExe;
+    late Directory savesDir;
+    late AresSaveStrategy strategy;
+    late Game game;
+
+    setUp(() async {
+      aresDir = Directory(p.join(tempDir.path, 'ares_fake'));
+      await aresDir.create(recursive: true);
+      fakeExe = File(p.join(aresDir.path, 'ares.exe'));
+      await fakeExe.writeAsBytes([0]);
+      // Portable mode: settings.bml next to the exe.
+      await File(p.join(aresDir.path, 'settings.bml')).writeAsBytes([0]);
+
+      SharedPreferences.setMockInitialValues({});
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+      final dirService = DirectoryService(prefs);
+      await dirService.setEmulatorPathOverride('ares', fakeExe.path);
+
+      final platform = PlatformInfo('windows', environment: {});
+      strategy = AresSaveStrategy(dirService, platform: platform);
+      game = _makeGame('Ape Escape.chd', 'psx');
+
+      savesDir = Directory(p.join(aresDir.path, 'Saves', 'PlayStation'));
+      await savesDir.create(recursive: true);
+    });
+
+    Future<void> writeZipBundle(List<MapEntry<String, List<int>>> entries) async {
+      final archive = Archive();
+      for (final e in entries) {
+        archive.addFile(ArchiveFile(e.key, e.value.length, e.value));
+      }
+      final encoded = ZipEncoder().encode(archive);
+      await File(p.join(savesDir.path, 'ape escape.zip')).writeAsBytes(encoded);
+    }
+
+    test('getSaveFiles extracts only the .mcd entry, not .state.auto', () async {
+      final mcdBytes = List<int>.filled(100, 7);
+      await writeZipBundle([
+        MapEntry('Ape Escape (USA)_1.mcd', mcdBytes),
+        MapEntry('Ape Escape.state.auto', List<int>.filled(50, 9)),
+      ]);
+
+      final files = await strategy.getSaveFiles(game, p.join(tempDir.path, 'Ape Escape.chd'));
+
+      expect(files.length, 1, reason: 'Only the .mcd entry should be extracted, not .state.auto');
+      expect(p.extension(files.first.path), '.mcd');
+      expect(await files.first.readAsBytes(), mcdBytes);
+    });
+
+    test('getSaveFiles returns nothing for a zip with no recognized save entries', () async {
+      await writeZipBundle([
+        MapEntry('Ape Escape.state.auto', List<int>.filled(50, 9)),
+        MapEntry('Ape Escape.state.auto', List<int>.filled(50, 9)),
+      ]);
+
+      final files = await strategy.getSaveFiles(game, p.join(tempDir.path, 'Ape Escape.chd'));
+      expect(files, isEmpty);
+    });
+
+    test('restoreSave injects into the existing zip, preserving other entries', () async {
+      final originalMcd = List<int>.filled(100, 1);
+      final stateBytes = List<int>.filled(50, 9);
+      await writeZipBundle([
+        MapEntry('Ape Escape (USA)_1.mcd', originalMcd),
+        MapEntry('Ape Escape.state.auto', stateBytes),
+      ]);
+
+      final newMcd = Uint8List.fromList(List<int>.filled(100, 2));
+      final ok = await strategy.restoreSave(
+        game,
+        p.join(tempDir.path, 'Ape Escape.chd'),
+        newMcd,
+        'Ape Escape (USA)_1.mcd',
+      );
+      expect(ok, isTrue);
+
+      final zipBytes = await File(p.join(savesDir.path, 'ape escape.zip')).readAsBytes();
+      final archive = ZipDecoder().decodeBytes(zipBytes);
+      final mcdEntry = archive.files.firstWhere((f) => f.name == 'Ape Escape (USA)_1.mcd');
+      final stateEntry = archive.files.firstWhere((f) => f.name == 'Ape Escape.state.auto');
+
+      expect(mcdEntry.content, newMcd, reason: 'restoreSave should replace the .mcd entry with the new save data');
+      expect(stateEntry.content, stateBytes, reason: 'restoreSave must not touch unrelated entries like .state.auto');
     });
   });
 
