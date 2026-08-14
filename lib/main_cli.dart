@@ -130,6 +130,11 @@ Map<String, String> _parseFlags(List<String> args) {
   return flags;
 }
 
+/// Treats an empty flag value (e.g. `--name=`) the same as the flag being
+/// absent entirely — otherwise `--name=""` silently falls through to a
+/// server-side search for an empty string, matching everything.
+String? _nonEmpty(String? value) => (value == null || value.isEmpty) ? null : value;
+
 /// Bundles the services a headless command needs, built the same way the
 /// GUI app's providers wire them (see lib/providers/romm_provider.dart),
 /// just without Riverpod.
@@ -272,8 +277,8 @@ Future<Game?> _resolveGame(
 
 Future<void> _runLaunch(List<String> args) async {
   final flags = _parseFlags(args);
-  final gameId = flags['game-id'];
-  final name = flags['name'];
+  final gameId = _nonEmpty(flags['game-id']);
+  final name = _nonEmpty(flags['name']);
   final asJson = flags['json'] == 'true';
   final timeoutSeconds = flags['timeout'] != null ? int.tryParse(flags['timeout']!) : null;
   final emulatorOverride = flags['emulator'];
@@ -472,8 +477,8 @@ Future<void> _runList(List<String> args) async {
 
 Future<void> _runDownload(List<String> args) async {
   final flags = _parseFlags(args);
-  final gameId = flags['game-id'];
-  final name = flags['name'];
+  final gameId = _nonEmpty(flags['game-id']);
+  final name = _nonEmpty(flags['name']);
   final asJson = flags['json'] == 'true';
   final allFiles = flags['all-files'] == 'true';
 
