@@ -864,11 +864,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               currentValue: preset,
               currentValueLabel: preset == 'default'
                   ? 'Manual / Native'
-                  : (preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'),
+                  : (preset == 'emudeck' ? 'EmuDeck' : 'RetroDECK'),
               items: const [
                 {'value': 'default', 'label': 'Manual / Native'},
                 {'value': 'emudeck', 'label': 'EmuDeck'},
-                {'value': 'retrodeck', 'label': 'RetroDeck'},
+                {'value': 'retrodeck', 'label': 'RetroDECK'},
               ],
               onChanged: (val) async {
                 await directoryService.setLinuxSyncPreset(val);
@@ -881,7 +881,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           if (ref.read(platformInfoProvider).isLinux && (preset == 'emudeck' || preset == 'retrodeck')) ...[
             _buildPathRow(
               context,
-              label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
+              label: '${preset == 'emudeck' ? 'EmuDeck' : 'RetroDECK'} Installation Root',
               currentPath: directoryService.linuxPresetRootPath ?? 'Not set',
               onChanged: (p) async { 
                 if (p != null) { 

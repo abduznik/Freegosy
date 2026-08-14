@@ -578,7 +578,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             const SizedBox(height: 12),
             _buildPresetOption(
               id: 'retrodeck',
-              title: 'RetroDeck',
+              title: 'RetroDECK',
               subtitle: 'Flatpak-based all-in-one.',
               icon: Icons.grid_view,
             ),
@@ -587,7 +587,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
           if (ref.read(platformInfoProvider).isLinux && _linuxPreset != 'default') ...[
             _buildPathSelector(
-              label: '${_linuxPreset == 'emudeck' ? 'EmuDeck' : 'RetroDeck'} Installation Root',
+              label: '${_linuxPreset == 'emudeck' ? 'EmuDeck' : 'RetroDECK'} Installation Root',
               currentPath: _presetRoot ?? 'Select root directory...',
               onTap: () async {
                 final path = await FilePicker.platform.getDirectoryPath();

@@ -38,7 +38,7 @@ class MelonDSStrategy extends EmulatorStrategy {
 
   @override
   Future<void> launch(Game game, String romPath) async {
-    // On Linux the active linux strategy (EmuDeck/RetroDeck/Native) handles
+    // On Linux the active linux strategy (EmuDeck/RetroDECK/Native) handles
     // emu-launch.sh detection and correct launch — delegate to base class.
     if (platform.isLinux) {
       return super.launch(game, romPath);
