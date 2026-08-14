@@ -220,6 +220,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'amiga':     _CoreInfo('puae_libretro',            'PUAE',               'States/PUAE'),
     'zxspectrum': _CoreInfo('fuse_libretro',           'Fuse',               'States/Fuse'),
     'amstradcpc': _CoreInfo('cap32_libretro',          'Caprice32',          'States/Caprice32'),
+    'acpc':       _CoreInfo('cap32_libretro',          'Caprice32',          'States/Caprice32'), // IGDB slug, what RomM actually sends — see #78
     'sharp68000': _CoreInfo('px68k_libretro',          'PX-68K',             'States/PX-68K'),
     'pc98':      _CoreInfo('np2kai_libretro',          'Neko Project II',    'States/Neko Project II'),
     // Other

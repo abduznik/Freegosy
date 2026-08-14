@@ -66,6 +66,13 @@ void main() {
       expect(getDefaultCoreForSlug('gbc'), 'gambatte_libretro');
     });
 
+    test('acpc (RomM/IGDB slug for Amstrad CPC) resolves the same core as amstradcpc', () {
+      // Issue #78: RomM sends IGDB's platform slug ("acpc"), not the
+      // "amstradcpc"/"amstrad-cpc" aliases that were previously registered.
+      expect(getDefaultCoreForSlug('acpc'), isNotNull);
+      expect(getDefaultCoreForSlug('acpc'), getDefaultCoreForSlug('amstradcpc'));
+    });
+
     test('returns null for unknown platform', () {
       expect(getDefaultCoreForSlug('nonexistent_platform'), isNull);
     });
