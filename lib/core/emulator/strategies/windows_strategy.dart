@@ -192,6 +192,13 @@ class WindowsStrategy extends EmulatorStrategy {
 
   @override
   Future<Process?> launchWithHandle(Game game, String romPath) async {
+    // romPath for Windows games is the extracted game folder — unlike a
+    // real emulator, a native .exe doesn't take that as a CLI argument, so
+    // this must NOT go through DirectoryService.launchGameWithHandle
+    // (which appends romPath after args for every emulator strategy). Doing
+    // so broke executables that take their own complete argument list, e.g.
+    // OpenGOAL's shared "gk.exe --game jak1" launcher (issue #47) — the
+    // game folder path was tacked on as an unexpected trailing argument.
     String? exePath = _resolveExePath(game, romPath);
 
     if (exePath == null) {
@@ -202,7 +209,17 @@ class WindowsStrategy extends EmulatorStrategy {
     }
 
     final args = getLaunchArgs(game.id);
-    return await directoryService.launchGameWithHandle(game, romPath, emulatorId, exePath, args: args);
+    final process = await Process.start(
+      exePath,
+      args,
+      mode: ProcessStartMode.normal,
+      workingDirectory: File(exePath).parent.path,
+    );
+    // Drain stdout/stderr to avoid pipe-buffer deadlock — same reasoning as
+    // DirectoryService.launchGameWithHandle's drain() calls.
+    process.stdout.drain();
+    process.stderr.drain();
+    return process;
   }
 
   @override
