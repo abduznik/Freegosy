@@ -555,6 +555,66 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
     ],
   ),
 
+  // ── Amiga (PUAE via RetroArch) ───────────────────────────────────
+  'puae_libretro': EmulatorBiosSpec(
+    files: [
+      BiosFileSpec(
+        fileName: 'kick34005.A500',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 500 Kickstart 1.2',
+      ),
+      BiosFileSpec(
+        fileName: 'kick37175.A500',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 500 Kickstart 2.04',
+      ),
+      BiosFileSpec(
+        fileName: 'kick40063.A600',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 600 Kickstart 3.1',
+      ),
+      BiosFileSpec(
+        fileName: 'kick40068.A1200',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 1200 Kickstart 3.1',
+      ),
+      BiosFileSpec(
+        fileName: 'kick40068.A4000',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 4000 Kickstart 3.1',
+      ),
+    ],
+  ),
+  'puae2021_libretro': EmulatorBiosSpec(
+    files: [
+      BiosFileSpec(
+        fileName: 'kick34005.A500',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 500 Kickstart 1.2',
+      ),
+      BiosFileSpec(
+        fileName: 'kick37175.A500',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 500 Kickstart 2.04',
+      ),
+      BiosFileSpec(
+        fileName: 'kick40063.A600',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 600 Kickstart 3.1',
+      ),
+      BiosFileSpec(
+        fileName: 'kick40068.A1200',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 1200 Kickstart 3.1',
+      ),
+      BiosFileSpec(
+        fileName: 'kick40068.A4000',
+        requirement: BiosRequirement.optional,
+        description: 'Amiga 4000 Kickstart 3.1',
+      ),
+    ],
+  ),
+
   // ── MSX (blueMSX via RetroArch) ─────────────────────────────────
   'bluemsx': EmulatorBiosSpec(
     files: [
