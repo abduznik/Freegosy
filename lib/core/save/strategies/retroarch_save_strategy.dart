@@ -463,8 +463,8 @@ class RetroArchSaveStrategy extends SaveStrategy {
         debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $baseDir');
         return baseDir;
       }
-      // EmuDeck mapping returns the folder containing the actual saves
-      final result = p.join(baseDir, coreInfo.saveFolder);
+      // Non-EmuDeck Linux: mapping returns the folder containing the actual saves
+      final result = p.join(baseDir, 'saves', coreInfo.saveFolder);
       debugPrint('[SaveSync] [retroarch] getSaveDir linux sorted → $result');
       return result;
     }
