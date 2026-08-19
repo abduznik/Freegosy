@@ -460,8 +460,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
       // Non-EmuDeck Linux: respect sort_savefiles_enable config flag
       if (!_sortSavefiles) {
         // sort_savefiles_enable=false: saves go flat into baseDir, no core subfolder
+        final result = p.join(baseDir, 'saves');
         debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $baseDir');
-        return baseDir;
+        return result;
       }
       // Non-EmuDeck Linux: mapping returns the folder containing the actual saves
       final result = p.join(baseDir, 'saves', coreInfo.saveFolder);
