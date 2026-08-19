@@ -74,11 +74,12 @@ void main() {
       final game = Game(id: '1', name: 'Pokemon', platformSlug: 'gba', fileSize: 0);
       final romPath = p.join(tempDir.path, 'roms', 'Pokemon.gba');
       final result = await strategy.getSaveDir(game, romPath);
+      final expected = p.join(configDir, 'saves');
 
       expect(result, isNotNull);
       expect(result, isNot(endsWith('mGBA')),
           reason: 'sort_savefiles_enable=false must NOT append core subfolder');
-      expect(result, equals(configDir),
+      expect(result, equals(expected),
           reason: 'Should return the base dir without core subfolder');
 
       await tempDir.delete(recursive: true);
