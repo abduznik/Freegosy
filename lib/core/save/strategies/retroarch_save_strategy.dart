@@ -145,7 +145,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   /// Save file extensions recognized by RetroArch cores.
   /// N64 cores use .sra/.eep/.fla/.mpk; most others use .srm/.sav/.mcd.
-  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk'};
+  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk', '.ps2'};
 
   static bool _isSaveFile(String filename) {
     final ext = p.extension(filename).toLowerCase();
