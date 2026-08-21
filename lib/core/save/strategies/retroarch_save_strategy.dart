@@ -145,7 +145,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   /// Save file extensions recognized by RetroArch cores.
   /// N64 cores use .sra/.eep/.fla/.mpk; most others use .srm/.sav/.mcd.
-  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk'};
+  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk', '.ps2'};
 
   static bool _isSaveFile(String filename) {
     final ext = p.extension(filename).toLowerCase();
@@ -457,16 +457,49 @@ class RetroArchSaveStrategy extends SaveStrategy {
         return result;
       }
 
+      // Non-EmuDeck Linux: prefer the parsed savefile_directory from retroarch.cfg
+      // (honors custom save locations); fall back to baseDir/saves otherwise.
+      final saveRoot = (_cachedSaveRoot != null && await io.Directory(_cachedSaveRoot!).exists())
+          ? _cachedSaveRoot!
+          : p.join(baseDir, 'saves');
+      debugPrint('[SaveSync] [retroarch] getSaveDir linux saveRoot=$saveRoot');
+
       // Non-EmuDeck Linux: respect sort_savefiles_enable config flag
       if (!_sortSavefiles) {
-        // sort_savefiles_enable=false: saves go flat into baseDir, no core subfolder
-        debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $baseDir');
-        return baseDir;
+        // sort_savefiles_enable=false: saves go flat into saveRoot, no core subfolder
+        debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $saveRoot');
+        return saveRoot;
       }
-      // EmuDeck mapping returns the folder containing the actual saves
-      final result = p.join(baseDir, coreInfo.saveFolder);
-      debugPrint('[SaveSync] [retroarch] getSaveDir linux sorted → $result');
-      return result;
+
+      // Try the expected core subfolder first
+      final expectedDir = p.join(saveRoot, coreInfo.saveFolder);
+      if (await io.Directory(expectedDir).exists()) {
+        debugPrint('[SaveSync] [retroarch] getSaveDir linux expectedDir exists → $expectedDir');
+        return expectedDir;
+      }
+
+      // Fallback: scan saveRoot subdirectories for the ROM's save file, since
+      // RetroArch core folder names are unpredictable (e.g. "ParaLLEl N64"
+      // vs "Parallel N64" vs "N64").
+      final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
+      final rootDir = io.Directory(saveRoot);
+      if (await rootDir.exists()) {
+        await for (final entity in rootDir.list()) {
+          if (entity is! io.Directory) continue;
+          final subdir = entity.path;
+          await for (final f in io.Directory(subdir).list()) {
+            if (f is! io.File) continue;
+            final fname = p.basename(f.path).toLowerCase();
+            if (fname.startsWith(romStem) && _isSaveFile(fname)) {
+              debugPrint('[SaveSync] [retroarch] getSaveDir linux fallback scan matched → $subdir');
+              return subdir;
+            }
+          }
+        }
+      }
+
+      debugPrint('[SaveSync] [retroarch] getSaveDir linux fallback expectedDir → $expectedDir');
+      return expectedDir;
     }
 
     // macOS / Windows: respect sort_savefiles_enable config flag

@@ -78,8 +78,8 @@ void main() {
       expect(result, isNotNull);
       expect(result, isNot(endsWith('mGBA')),
           reason: 'sort_savefiles_enable=false must NOT append core subfolder');
-      expect(result, equals(configDir),
-          reason: 'Should return the base dir without core subfolder');
+      expect(result, equals(p.join(tempDir.path, 'saves')),
+          reason: 'Should return the configured savefile_directory without core subfolder');
 
       await tempDir.delete(recursive: true);
     });
@@ -109,6 +109,28 @@ void main() {
       expect(result, isNotNull);
       expect(result, endsWith('mGBA'),
           reason: 'Default should be true (append core subfolder)');
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('no retroarch.cfg falls back to baseDir/saves/CoreName (Linux)', () async {
+      final tempDir = await Directory.systemTemp.createTemp('ra_no_cfg_');
+      final configDir = p.join(tempDir.path, '.config', 'retroarch');
+      await Directory(p.join(configDir, 'saves', 'mGBA')).create(recursive: true);
+
+      when(mockDirService.getEmulatorAppSupportDirectory('retroarch', platformSlug: anyNamed('platformSlug')))
+          .thenAnswer((_) async => configDir);
+
+      final platform = PlatformInfo('linux', environment: {'HOME': tempDir.path});
+      final strategy = RetroArchSaveStrategy(mockDirService, platform: platform);
+
+      final game = Game(id: '1', name: 'Pokemon', platformSlug: 'gba', fileSize: 0);
+      final romPath = p.join(tempDir.path, 'roms', 'Pokemon.gba');
+      final result = await strategy.getSaveDir(game, romPath);
+
+      expect(result, isNotNull);
+      expect(result, equals(p.join(configDir, 'saves', 'mGBA')),
+          reason: 'Without a custom savefile_directory, saves live under baseDir/saves/CoreName');
 
       await tempDir.delete(recursive: true);
     });
