@@ -1,6 +1,7 @@
 import 'dart:io' as io;
 import 'dart:developer' as dev;
 import 'dart:typed_data';
+import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
@@ -191,6 +192,45 @@ class AresSaveStrategy extends SaveStrategy {
     return null;
   }
 
+  /// Extensions recognized as real save data when found inside an Ares
+  /// per-game .zip bundle (e.g. PlayStation memory cards). Ares packages
+  /// these together with transient `.state.auto`/`.bs*` entries in a
+  /// single `<romStem>.zip`, so the zip itself can't be uploaded as-is —
+  /// see [_extractZipSaveEntries].
+  static const _zipSaveEntryExtensions = {'.mcd', '.mcr', '.srm', '.sav'};
+
+  /// Extracts confirmed save entries (not state/RTC entries) from an Ares
+  /// .zip save bundle into a stable temp path, so they can be synced as
+  /// normal files. Returns the extracted files, or an empty list if the
+  /// zip contains no recognized save entries.
+  Future<List<io.File>> _extractZipSaveEntries(io.File zipFile) async {
+    try {
+      final bytes = await zipFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final extractDir = io.Directory(p.join(p.dirname(zipFile.path), '.freegosy_ares_extract'));
+      await extractDir.create(recursive: true);
+
+      final extracted = <io.File>[];
+      for (final entry in archive) {
+        if (!entry.isFile) continue;
+        final entryExt = p.extension(entry.name).toLowerCase();
+        if (!_zipSaveEntryExtensions.contains(entryExt)) continue;
+
+        final outFile = io.File(p.join(extractDir.path, p.basename(entry.name)));
+        await outFile.writeAsBytes(entry.content as List<int>);
+        // Match the zip's own mtime so the sessionStart filter (applied by
+        // the caller against these extracted files) behaves the same as it
+        // would for a loose save file.
+        await outFile.setLastModified((await zipFile.stat()).modified);
+        extracted.add(outFile);
+      }
+      return extracted;
+    } catch (e) {
+      dev.log('[Ares Save] Failed to extract zip save bundle ${zipFile.path}: $e');
+      return [];
+    }
+  }
+
   @override
   Future<List<io.File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
@@ -212,11 +252,26 @@ class AresSaveStrategy extends SaveStrategy {
       final ext = p.extension(fname).toLowerCase();
       final fileStem = p.basenameWithoutExtension(fname).toLowerCase();
 
-      // Exclude state files and RTC
-      if (_isStateExtension(ext)) continue;
-
       // Stem-prefix match: file must start with the ROM stem
       if (!fileStem.startsWith(romStem)) continue;
+
+      // Ares bundles the real save together with transient state files in
+      // a single per-game .zip (e.g. PlayStation memory cards) — open it
+      // and pull out just the recognized save entries.
+      if (ext == '.zip') {
+        final zipEntries = await _extractZipSaveEntries(entity);
+        for (final f in zipEntries) {
+          if (sessionStart != null) {
+            final stat = await f.stat();
+            if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
+          }
+          result.add(f);
+        }
+        continue;
+      }
+
+      // Exclude state files and RTC
+      if (_isStateExtension(ext)) continue;
 
       // Check if extension is a known battery-save type
       if (platformExtensions.contains(ext)) {
@@ -260,13 +315,56 @@ class AresSaveStrategy extends SaveStrategy {
       final savesDir = p.join(dataDir, 'Saves', folderName);
       final romStem = p.basenameWithoutExtension(destPath).toLowerCase();
       final ext = p.extension(filename).isNotEmpty ? p.extension(filename) : '.ram';
-      final targetPath = p.normalize(p.join(savesDir, '$romStem$ext'));
 
+      // If Ares stores this game's save as a .zip bundle (memory card +
+      // state files together, e.g. PlayStation), the incoming save must be
+      // injected into that zip — Ares never reads a loose .mcd/.mcr file.
+      if (_zipSaveEntryExtensions.contains(ext.toLowerCase())) {
+        final zipPath = p.normalize(p.join(savesDir, '$romStem.zip'));
+        final zipFile = io.File(zipPath);
+        if (await zipFile.exists()) {
+          return await _injectIntoZipSaveBundle(zipFile, filename, data);
+        }
+      }
+
+      final targetPath = p.normalize(p.join(savesDir, '$romStem$ext'));
       await io.Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);
       return true;
     } catch (e) {
+      return false;
+    }
+  }
+
+  /// Replaces (or adds) the entry named [entryName] inside [zipFile] with
+  /// [data], preserving every other entry (e.g. `.state.auto`) untouched.
+  Future<bool> _injectIntoZipSaveBundle(io.File zipFile, String entryName, Uint8List data) async {
+    try {
+      final bytes = await zipFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+
+      final newArchive = Archive();
+      var replaced = false;
+      for (final entry in archive) {
+        if (!entry.isFile) continue;
+        if (p.basename(entry.name) == entryName) {
+          newArchive.addFile(ArchiveFile(entry.name, data.length, data));
+          replaced = true;
+        } else {
+          newArchive.addFile(ArchiveFile(entry.name, entry.size, entry.content));
+        }
+      }
+      if (!replaced) {
+        newArchive.addFile(ArchiveFile(entryName, data.length, data));
+      }
+
+      await backupSave(zipFile.path);
+      final encoded = ZipEncoder().encode(newArchive);
+      await zipFile.writeAsBytes(encoded);
+      return true;
+    } catch (e) {
+      dev.log('[Ares Save] Failed to inject save into zip bundle ${zipFile.path}: $e');
       return false;
     }
   }

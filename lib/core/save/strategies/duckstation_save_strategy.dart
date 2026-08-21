@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:io' as io;
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
@@ -26,7 +26,15 @@ class DuckstationSaveStrategy extends SaveStrategy {
   }
 
   Future<String> _getBaseDir({String? platformSlug}) async {
-    // 1. Check portable mode first (Windows)
+    // 1. Check portable mode first (all platforms)
+    //
+    // DuckStation treats the install as portable when EITHER portable.txt OR
+    // settings.ini exists next to the executable (upstream core.cpp):
+    //   if (FileExists("portable.txt") || FileExists("settings.ini"))
+    //     DataRoot = exe dir
+    // Scoop installs and some portable builds only have settings.ini (created
+    // on first run), so we must check both or we fall through to the wrong
+    // directory and report "no saves" (issue #28).
     final exePath = await _directoryService.findEmulatorExecutable(
         'duckstation', _getEmuExe());
     if (exePath != null) {
@@ -34,9 +42,16 @@ class DuckstationSaveStrategy extends SaveStrategy {
       if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
         emulatorDir = io.File(exePath).parent.parent.parent.parent.path;
       }
-      if (await File(p.join(emulatorDir, 'portable.txt')).exists()) {
+      final portableMarker = File(p.join(emulatorDir, 'portable.txt'));
+      final settingsMarker = File(p.join(emulatorDir, 'settings.ini'));
+      if (await portableMarker.exists() || await settingsMarker.exists()) {
+        debugPrint('[DuckStation] portable mode detected via '
+            '${await portableMarker.exists() ? "portable.txt" : "settings.ini"} → $emulatorDir');
         return emulatorDir;
       }
+      debugPrint('[DuckStation] exe found at $exePath but no portable.txt/settings.ini — not portable');
+    } else {
+      debugPrint('[DuckStation] no duckstation exe found via DirectoryService');
     }
 
     // 2. Dynamic path resolution for macOS/Windows/Linux
@@ -48,6 +63,7 @@ class DuckstationSaveStrategy extends SaveStrategy {
       resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('DuckStation', platformSlug: platformSlug);
     }
 
+    debugPrint('[DuckStation] standard install base candidate: $resolvedPath');
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for DuckStation at $resolvedPath. Please launch DuckStation at least once to generate save data.');
     }
@@ -64,19 +80,58 @@ class DuckstationSaveStrategy extends SaveStrategy {
   Future<List<File>> getSaveFiles(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final baseDir = await _getBaseDir(platformSlug: game.platformSlug);
+    debugPrint('[DuckStation] Save base: $baseDir');
 
     final result = <File>[];
     final stem = getRomStem(game);
+    // Normalize the stem so multi-disc .m3u filenames like
+    // "Final Fantasy VII (USA).m3u" match the bare save title card
+    // "Final Fantasy VII_1.mcd" (issue #62).
+    final cleanStem = normalizeSaveMatchName(stem).toLowerCase();
+    debugPrint('[DuckStation] ROM stem: $stem  cleanStem: $cleanStem  sessionStart=$sessionStart');
 
     final memcardsDir = Directory(p.join(baseDir, 'memcards'));
     if (await memcardsDir.exists()) {
-      // Keep only the newest matching .mcd to avoid uploading multiple per-game saves.
+      // Layer 1: per-game .mcd. DuckStation's per-game cards are named
+      // `{title}_N.mcd` (PerGameTitle) or `{serial}_N.mcd` (PerGame) with a
+      // slot-number suffix. We match by normalized stem as a substring, which
+      // covers both (e.g. "Suikoden II_1.mcd" contains "Suikoden II"). Keep
+      // only the newest matching card to avoid uploading multiple saves.
       File? bestMcd;
       DateTime? bestMcdMtime;
       await for (final entity in memcardsDir.list()) {
         if (entity is! File) continue;
         if (!entity.path.toLowerCase().endsWith('.mcd')) continue;
-        if (!p.basename(entity.path).toLowerCase().contains(stem.toLowerCase())) continue;
+        final base = p.basename(entity.path).toLowerCase();
+        // Shared cards (shared_card_N.mcd) are handled in Layer 2 — never
+        // treat them as a per-game match here.
+        if (base.startsWith('shared_card_')) continue;
+        // Strip the `_N` slot suffix and any tags from the card name before
+        // comparing, so "suikoden ii_1" matches cleanStem "suikoden ii".
+        final cardName = base.substring(0, base.length - 4); // drop ".mcd"
+        final cleanCard = normalizeSaveMatchName(
+                cardName.replaceAll(RegExp(r'_\d+$'), ''))
+            .toLowerCase();
+
+        // Word-token match: split the stem into tokens (>=3 chars) and require
+        // every token to appear in the card. This avoids substring false
+        // positives like "final fantasy vii" matching "final fantasy viii".
+        final stemTokens = cleanStem
+            .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+            .split(' ')
+            .where((w) => w.length >= 3)
+            .toList();
+        final cardTokens = cleanCard
+            .replaceAll(RegExp(r'[^a-z0-9]'), ' ')
+            .split(' ')
+            .where((w) => w.isNotEmpty)
+            .toList();
+        final matches = stemTokens.isNotEmpty &&
+            stemTokens.every((w) => cardTokens.contains(w));
+        if (!matches) {
+          debugPrint('[DuckStation]   skipping (no stem match): ${entity.path}');
+          continue;
+        }
         final stat = await entity.stat();
         if (sessionStart != null &&
             stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
@@ -85,7 +140,36 @@ class DuckstationSaveStrategy extends SaveStrategy {
           bestMcdMtime = stat.modified;
         }
       }
-      if (bestMcd != null) result.add(bestMcd);
+      if (bestMcd != null) {
+        debugPrint('[DuckStation]   per-game memcard found: ${bestMcd.path}');
+        result.add(bestMcd);
+      }
+
+      // Layer 2: fall back to shared memory cards. DuckStation's real shared
+      // cards are `shared_card_1.mcd` / `shared_card_2.mcd`. We also accept the
+      // legacy `Mcd001.mcd` style used by older builds/forks. Upload all shared
+      // cards so the slot the game actually wrote to is covered.
+      if (result.isEmpty) {
+        final shared = <File>[];
+        await for (final entity in memcardsDir.list()) {
+          if (entity is! File) continue;
+          final base = p.basename(entity.path).toLowerCase();
+          final isRealShared = base.startsWith('shared_card_') && base.endsWith('.mcd');
+          final isLegacyShared = RegExp(r'^mcd\d+\.mcd$').hasMatch(base);
+          if (!isRealShared && !isLegacyShared) continue;
+          if (sessionStart != null) {
+            final stat = await entity.stat();
+            if (stat.modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) continue;
+          }
+          shared.add(entity);
+        }
+        if (shared.isNotEmpty) {
+          debugPrint('[DuckStation]   using shared memcards: ${shared.map((f) => f.path).toList()}');
+          result.addAll(shared);
+        }
+      }
+    } else {
+      debugPrint('[DuckStation]   memcards dir missing: ${memcardsDir.path}');
     }
 
     final statesDir = Directory(p.join(baseDir, 'savestates'));

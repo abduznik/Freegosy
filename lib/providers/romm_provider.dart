@@ -5,6 +5,7 @@ import 'package:freegosy/core/storage/file_system_index.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
+import 'package:freegosy/core/emulator/game_launch_service.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/save/backup_repository.dart';
 import 'package:freegosy/core/save/backup_service.dart';
@@ -28,16 +29,8 @@ final emulatorStatusProvider = FutureProvider<Map<String, bool>>((ref) async {
   final states = <String, bool>{};
   for (final def in kEmulatorDefinitions) {
     final id = def['id'] as String;
-    final String exe;
-    final platform = PlatformInfo.current;
-    if (platform.isMacOS) {
-      exe = (def['macos_executable'] as String?) ?? (def['windows_executable'] as String? ?? '');
-    } else if (platform.isLinux) {
-      exe = (def['linux_executable'] as String?) ?? '';
-    } else {
-      exe = (def['windows_executable'] as String?) ?? '';
-    }
-    if (exe.isEmpty) {
+    final exe = StrategyRegistry.executableNameForDefinition(def);
+    if (exe == null) {
       states[id] = true;
       continue;
     }
@@ -64,8 +57,8 @@ final downloadCacheServiceProvider = Provider<DownloadCacheService>((ref) {
 
 // Provider for loading RomMConfig (including stored Bearer token)
 final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  
+  final prefs = ref.watch(appPreferencesProvider);
+
   String baseUrl = prefs.getString('rommBaseUrl') ?? '';
   // Removed default example.com URL to avoid first-start error screens
   
@@ -94,7 +87,7 @@ final rommConfigProvider = FutureProvider<RomMConfig>((ref) async {
 // Exposes a login function that fetches a Bearer token and refreshes the config/service providers.
 final loginProvider = Provider<Future<void> Function(String baseUrl, String username, String password)>((ref) {
   return (baseUrl, username, password) async {
-    final prefs = ref.read(sharedPreferencesProvider);
+    final prefs = ref.read(appPreferencesProvider);
     await RommService.fetchToken(baseUrl, username, password, prefs);
     ref.invalidate(rommConfigProvider);
     ref.invalidate(rommServiceProvider);
@@ -104,13 +97,13 @@ final loginProvider = Provider<Future<void> Function(String baseUrl, String user
 // Simplified DirectoryService provider
 final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
   try {
-    final prefs = ref.watch(sharedPreferencesProvider);
+    final prefs = ref.watch(appPreferencesProvider);
     final service = DirectoryService(prefs);
     await service.initialize();
     return service;
   } catch (e) {
     // Return service even on error so UI can access service.status
-    final prefs = ref.watch(sharedPreferencesProvider);
+    final prefs = ref.watch(appPreferencesProvider);
     final service = DirectoryService(prefs);
     service.status = StorageStatus(error: StorageError.unknown, message: e.toString());
     return service;
@@ -121,8 +114,8 @@ final directoryServiceProvider = FutureProvider<DirectoryService?>((ref) async {
 final strategyRegistryProvider = FutureProvider<StrategyRegistry?>((ref) async {
   final directoryService = ref.watch(directoryServiceProvider).value;
   final customEmulators = ref.watch(customEmulatorsProvider);
-  final prefs = ref.watch(sharedPreferencesProvider);
-  
+  final prefs = ref.watch(appPreferencesProvider);
+
   if (directoryService != null) {
     try {
       final registry = StrategyRegistry(directoryService, prefs, customEmulators: customEmulators);
@@ -145,12 +138,30 @@ final saveSyncServiceProvider = FutureProvider<SaveSyncService?>((ref) async {
   ref.watch(isOfflineProvider);
   final directoryService = ref.watch(directoryServiceProvider).asData?.value;
   final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
-  final prefs = ref.watch(sharedPreferencesProvider);
+  final prefs = ref.watch(appPreferencesProvider);
   if (rommService == null || directoryService == null || strategyRegistry == null) return null;
   final service = SaveSyncService(rommService, directoryService, strategyRegistry, prefs);
   service.windowsSaveStrategy.loadPersistedOverrides();
   service.windowsSaveStrategy.loadPersistedFilters();
   return service;
+});
+
+// GameLaunchService provider — orchestrates ROM resolution, process launch,
+// and the post-exit save-sync/backup/play-session pipeline.
+final gameLaunchServiceProvider = FutureProvider<GameLaunchService?>((ref) async {
+  final directoryService = await ref.watch(directoryServiceProvider.future);
+  final strategyRegistry = await ref.watch(strategyRegistryProvider.future);
+  final saveSyncService = await ref.watch(saveSyncServiceProvider.future);
+  if (directoryService == null || strategyRegistry == null || saveSyncService == null) return null;
+  return GameLaunchService(
+    directoryService: directoryService,
+    strategyRegistry: strategyRegistry,
+    saveSyncService: saveSyncService,
+    backupService: ref.watch(backupServiceProvider),
+    backupRepository: ref.watch(backupRepositoryProvider),
+    prefs: ref.watch(appPreferencesProvider),
+    rommService: ref.watch(rommServiceProvider),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -170,7 +181,7 @@ final deviceIdProvider = FutureProvider<String?>((ref) async {
   final caps = await ref.watch(rommCapabilitiesProvider.future);
   if (!caps.hasDeviceSaveSync) return null;
 
-  final prefs = ref.watch(sharedPreferencesProvider);
+  final prefs = ref.watch(appPreferencesProvider);
   final existing = prefs.getString('romm_device_id');
   if (existing != null && existing.isNotEmpty) return existing;
 
@@ -211,7 +222,7 @@ final rommServiceProvider = Provider<RommService?>((ref) {
       // Refresh token on startup to ensure latest scopes
       if (config.username.isNotEmpty && config.password.isNotEmpty) {
         debugPrint('[RomM-Init] Triggering background token refresh...');
-        final prefs = ref.read(sharedPreferencesProvider);
+        final prefs = ref.read(appPreferencesProvider);
         service.refreshToken(prefs);
       }
       service.startHeartbeat();

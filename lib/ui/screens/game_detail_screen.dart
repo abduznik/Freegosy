@@ -431,7 +431,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   Future<void> _saveProps(BuildContext context) async {
     if (widget.rommService == null) return;
     setState(() => _isSaving = true);
-    final prefs = ref.read(sharedPreferencesProvider);
+    final prefs = ref.read(appPreferencesProvider);
     final success = await widget.rommService!.updateRomProps(
       _currentGame.id, prefs, backlogged: _backlogged, nowPlaying: _nowPlaying,
       rating: _rating, status: _status, completion: _completion,

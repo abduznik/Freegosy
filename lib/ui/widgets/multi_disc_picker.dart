@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/romm/rom_constants.dart';
 
 class MultiDiscPicker extends StatelessWidget {
   final Game game;
@@ -15,14 +16,8 @@ class MultiDiscPicker extends StatelessWidget {
 
   /// Filters files to only show launchable ROM files (excludes metadata like .cue, .ccd, etc.).
   /// .m3u playlists are included as they are valid input for multi-disc emulators (e.g. RetroArch).
-  static List<Map<String, dynamic>> filterLaunchableFiles(List<Map<String, dynamic>> files) {
-    const nonLaunchableExts = {'.cue', '.ccd', '.mds', '.toc', '.xml', '.json', '.txt', '.srt', '.sub'};
-    return files.where((f) {
-      final name = (f['file_name'] ?? '').toLowerCase();
-      final ext = name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
-      return !nonLaunchableExts.contains(ext);
-    }).toList();
-  }
+  static List<Map<String, dynamic>> filterLaunchableFiles(List<Map<String, dynamic>> files) =>
+      RomConstants.filterLaunchableFiles(files);
 
   static Future<void> show(
     BuildContext context, {

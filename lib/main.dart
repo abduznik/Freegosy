@@ -9,12 +9,21 @@ import 'core/constants/app_constants.dart';
 import 'core/platform/platform_info.dart';
 import 'core/save/backup_entry.dart';
 import 'providers/shared_prefs_provider.dart';
+import 'main_cli.dart' as headless;
 
 import 'core/storage/logger_service.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
-void main() async {
+void main(List<String> args) async {
+  // Headless mode — game launch + save sync verification without the UI.
+  // Dispatched before any GUI init (Hive/license registry/runApp) so
+  // headless mode does its own minimal setup instead. See main_cli.dart.
+  if (args.isNotEmpty && args.first == '--headless') {
+    await headless.runHeadless(args.skip(1).toList());
+    return;
+  }
+
   WidgetsFlutterBinding.ensureInitialized();
   LoggerService.init();
   await AppConstants.init(); // Read version from pubspec.yaml

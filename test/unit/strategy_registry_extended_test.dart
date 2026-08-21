@@ -2,15 +2,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 
 void main() {
   group('StrategyRegistry extended', () {
     late StrategyRegistry registry;
-    late SharedPreferences prefs;
+    late SharedPreferences rawPrefs;
+    late SharedPreferencesAppPreferences prefs;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      prefs = await SharedPreferences.getInstance();
+      rawPrefs = await SharedPreferences.getInstance();
+      prefs = SharedPreferencesAppPreferences(rawPrefs);
       // Create a minimal DirectoryService for the registry
       final dirService = DirectoryService(prefs);
       registry = StrategyRegistry(dirService, prefs);
@@ -96,7 +99,7 @@ void main() {
 
       test('preference persists in SharedPreferences', () async {
         await registry.setPreference('test_slug', 'test_emu');
-        final stored = prefs.getString('emulator_pref_test_slug');
+        final stored = rawPrefs.getString('emulator_pref_test_slug');
         expect(stored, 'test_emu');
       });
     });

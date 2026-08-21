@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io' as io;
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
@@ -38,7 +38,9 @@ class Pcsx2SaveStrategy extends SaveStrategy {
         RegExp(r'\b(S[A-Z]{3,4}[-_]\d{3}[\._]?\d{2})\b', caseSensitive: false)
             .firstMatch(base);
     if (filenameMatch != null) {
-      return _normalizeSerial(filenameMatch.group(1)!);
+      final serial = _normalizeSerial(filenameMatch.group(1)!);
+      debugPrint('[PCSX2] serial from filename: $serial');
+      return serial;
     }
 
     // 2. Read SYSTEM.CNF from inside the ISO
@@ -60,11 +62,14 @@ class Pcsx2SaveStrategy extends SaveStrategy {
                 caseSensitive: false)
             .firstMatch(text);
         if (cnfMatch != null) {
-          return _normalizeSerial(cnfMatch.group(1)!);
+          final serial = _normalizeSerial(cnfMatch.group(1)!);
+          debugPrint('[PCSX2] serial from SYSTEM.CNF: $serial');
+          return serial;
         }
       } catch (_) {}
     }
 
+    debugPrint('[PCSX2] serial could not be determined for: $romPath');
     return null;
   }
 
@@ -107,9 +112,14 @@ class Pcsx2SaveStrategy extends SaveStrategy {
         exeDir = exePath;
       }
       final portableMemcards = p.join(exeDir, 'memcards');
+      debugPrint('[PCSX2] exe=$exePath → checking portable memcards at: $portableMemcards');
       if (await io.Directory(portableMemcards).exists()) {
+        debugPrint('[PCSX2] portable save root found: $exeDir');
         return exeDir;
       }
+      debugPrint('[PCSX2] portable memcards missing at: $portableMemcards');
+    } else {
+      debugPrint('[PCSX2] no pcsx2 executable found via DirectoryService');
     }
 
     // 2. Linux integration (EmuDeck / RetroDECK)
@@ -149,6 +159,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
 
     // 4. Fall back to app support directory
     final resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('pcsx2');
+    debugPrint('[PCSX2] app support save root candidate: $resolvedPath');
     if (!await io.Directory(resolvedPath).exists() && !resolvedPath.contains('Emulation/saves')) {
       throw Exception('Save directory not found for PCSX2 at $resolvedPath. Please launch PCSX2 at least once to generate save data.');
     }
@@ -167,13 +178,17 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final root = await _getSaveRoot();
     final bool isEmuDeck = p.basename(root) == 'saves';
+    debugPrint('[PCSX2] getSaveFiles root=$root  isEmuDeck=$isEmuDeck  syncMode=$syncMode  sessionStart=$sessionStart');
 
     final result = <io.File>[];
 
     if (syncMode == 'saves' || syncMode == 'both') {
-      // --- Layer 1: PCSX2 Qt per-game folder saves (saves/{Serial}/) ---
-      // PCSX2 1.7+ stores saves in a per-game folder named after the serial.
-      // This takes priority over shared memcard files when present.
+      // --- Layer 1: per-game folder saves (saves/{Serial}/) ---
+      // NOTE: PCSX2 itself does NOT create this layout — verified against
+      // upstream source. Its memcards live in the memcards/ folder as
+      // Mcd001.ps2/Mcd002.ps2 (file OR folder type). This `saves/{Serial}`
+      // check is kept as a best-effort for user-created structures and some
+      // third-party setups; it only fires if the folder actually exists.
       final serial = await _extractSerial(romPath);
       if (serial != null) {
         final perGameDir = io.Directory(isEmuDeck
@@ -191,6 +206,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
         }
 
         if (foundDir != null) {
+          debugPrint('[PCSX2]   per-game folder save found: ${foundDir.path}');
           final hasChanges = sessionStart == null ||
               foundDir
                   .listSync(recursive: true)
@@ -199,19 +215,29 @@ class Pcsx2SaveStrategy extends SaveStrategy {
                       sessionStart.subtract(const Duration(seconds: 2))));
           if (hasChanges) {
             result.add(io.File(foundDir.path));
+          } else {
+            debugPrint('[PCSX2]   per-game folder has no changes since sessionStart — skipping');
           }
+        } else {
+          debugPrint('[PCSX2]   no per-game folder for $serial (checked ${perGameDir.path} and ${perGameDirAlt.path})');
         }
+      } else {
+        debugPrint('[PCSX2]   serial null — skipping per-game folder layer');
       }
 
-      // --- Layer 2: Shared memcard files (Mcd001.ps2 / Mcd002.ps2) ---
-      // Used by PCSX2 1.6 and earlier, and still common in portable setups.
-      // Only fall back to this if no per-game folder was found.
+      // --- Layer 2: memcards (Mcd001.ps2 / Mcd002.ps2) ---
+      // Real PCSX2 memcards live in the memcards/ folder. They can be either
+      // a FILE (8MB image) or a DIRECTORY (PCSX2 "folder memcard" — detected
+      // upstream via DirectoryExists on the .ps2 path). Both carry the same
+      // McdXXX.ps2 name. Only fall back to this if no per-game folder matched.
       if (result.isEmpty) {
         final memcardsDir =
             io.Directory(isEmuDeck ? root : p.join(root, 'memcards'));
         if (await memcardsDir.exists()) {
+          debugPrint('[PCSX2]   scanning memcards at: ${memcardsDir.path}');
           await for (final entity in memcardsDir.list()) {
-            if (entity is! io.File) continue;
+            // Accept both files and folder-type (directory) memcards.
+            if (entity is! io.File && entity is! io.Directory) continue;
             final basename = p.basename(entity.path);
             if (!basename.toLowerCase().endsWith('.ps2')) continue;
             // Skip timestamped backup copies (e.g. "Mcd001 [2026-04-03_20-31-19].ps2")
@@ -223,8 +249,12 @@ class Pcsx2SaveStrategy extends SaveStrategy {
                 continue;
               }
             }
-            result.add(entity);
+            debugPrint('[PCSX2]   memcard added: ${entity.path} '
+                '(${entity is io.Directory ? "folder card" : "file card"})');
+            result.add(io.File(entity.path));
           }
+        } else {
+          debugPrint('[PCSX2]   memcards dir missing: ${memcardsDir.path}');
         }
       }
     }
@@ -235,6 +265,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       final statesDir = io.Directory(
           isEmuDeck ? p.join(p.dirname(root), 'states') : p.join(root, 'sstates'));
       if (await statesDir.exists()) {
+        debugPrint('[PCSX2]   scanning save states at: ${statesDir.path} (stem=$stem)');
         await for (final entity in statesDir.list()) {
           if (entity is! io.File) continue;
           if (!p.basename(entity.path).contains(stem)) continue;
@@ -250,6 +281,7 @@ class Pcsx2SaveStrategy extends SaveStrategy {
       }
     }
 
+    debugPrint('[PCSX2]   → ${result.length} save file(s) returned');
     return result;
   }
 

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:io' as io;
-import 'dart:developer' as dev;
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
@@ -18,8 +17,6 @@ import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/save/save_strategy.dart';
-import '../../core/save/backup_entry.dart';
-import '../../core/save/backup_service.dart';
 import '../../core/save/strategies/eden_save_strategy.dart';
 import '../../core/save/strategies/ryujinx_save_strategy.dart';
 import '../../core/save/strategies/azahar_save_strategy.dart';
@@ -298,6 +295,12 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       return;
     }
 
+    final launchService = await ref.read(gameLaunchServiceProvider.future);
+    if (!context.mounted || launchService == null) {
+      ErrorHandler.showInfo(context, 'Not Available', message: 'Launch service not available');
+      return;
+    }
+
     final existingRomPath = await dir.findExistingRomPath(game);
     final expectedRomPath = await dir.getRomFilePath(game);
     if (!context.mounted) return;
@@ -317,33 +320,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // (e.g. GameCube multidisc with .m3u).
     if (!game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
       debugPrint('[Launch] romPath is a directory: $existingRomPath');
-      final dir = io.Directory(existingRomPath);
-      final discFiles = <Map<String, dynamic>>[];
-      await for (final entity in dir.list()) {
-        if (entity is! io.File) continue;
-        final name = p.basename(entity.path).toLowerCase();
-        // Match .m3u playlists (valid multi-disc input for RetroArch)
-        if (name.endsWith('.m3u')) {
-          final stat = await entity.stat();
-          discFiles.add({
-            'file_name': p.basename(entity.path),
-            'file_size_bytes': stat.size,
-          });
-          debugPrint('[Launch] Found .m3u playlist: ${p.basename(entity.path)} (${stat.size} bytes)');
-        }
-        // Match common disc image formats (GC/Wii + PS1/PS2 + PSP)
-        else if (name.endsWith('.rvz') || name.endsWith('.gcm') || name.endsWith('.iso') ||
-            name.endsWith('.cso') || name.endsWith('.wbfs') ||
-            name.endsWith('.bin') || name.endsWith('.img') ||
-            name.endsWith('.chd') || name.endsWith('.pbp') || name.endsWith('.ccd')) {
-          final stat = await entity.stat();
-          discFiles.add({
-            'file_name': p.basename(entity.path),
-            'file_size_bytes': stat.size,
-          });
-          debugPrint('[Launch] Found disc file: ${p.basename(entity.path)} (${stat.size} bytes)');
-        }
-      }
+      final discFiles = await launchService.scanForDiscFiles(existingRomPath);
       debugPrint('[Launch] Scan complete: ${discFiles.length} disc files');
       // Show picker if multiple launchable files found (including .m3u playlists)
       if (discFiles.length > 1) {
@@ -360,30 +337,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
 
     if (game.hasMultipleFiles) {
-      // If files array is empty (paginated API doesn't include it), fetch full details
-      List<Map<String, dynamic>> files = game.files;
-      if (files.isEmpty) {
-        debugPrint('[Launch] Multi-file game but files array empty, fetching full details...');
-        try {
-          final service = ref.read(rommServiceProvider);
-          if (service != null) {
-            final response = await service.getGame(game.id);
-            if (response != null) {
-              files = response.files;
-              debugPrint('[Launch] Fetched ${files.length} files from API');
-            }
-          }
-        } catch (e) {
-          debugPrint('[Launch] Failed to fetch game details: $e');
-        }
-      }
-      
+      debugPrint('[Launch] Multi-file game detected, fetching/filtering launchable files...');
+      final result = await launchService.launchableFilesFor(game);
+      final files = result.files;
+      final launchableFiles = result.launchableFiles;
+      debugPrint('[Launch] Launchable files: ${launchableFiles.length} (from ${files.length} total)');
+
       if (files.isNotEmpty) {
-        debugPrint('[Launch] Multi-file game detected, filtering launchable files...');
-        // Filter to only launchable files (exclude .m3u, .cue, etc.)
-        final launchableFiles = MultiDiscPicker.filterLaunchableFiles(files);
-        debugPrint('[Launch] Launchable files: ${launchableFiles.length} (from ${files.length} total)');
-        
         if (launchableFiles.isEmpty) {
           // All files are non-launchable, try using the ROM path directly
           debugPrint('[Launch] All files non-launchable, using romPath: $romPath');
@@ -413,6 +373,14 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       }
     }
 
+    // If romPath points to a directory try to find the actual rom inside it, unless platform is windows (folder based games)
+    if (await io.Directory(romPath).exists()) {
+      debugPrint('[Launch] Searching for a valid rom in: $romPath');
+      romPath = await launchService.resolveRomFileInDirectory(romPath, game.platformSlug);
+      debugPrint('[Launch] Resolved: $romPath');
+    }
+
+
     if (!await io.File(romPath).exists() && !await io.Directory(romPath).exists()) {
        if (context.mounted) ErrorHandler.showInfo(context, 'File Not Found', message: 'The ROM was not found at the expected location.');
        return;
@@ -427,19 +395,15 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // The actual save sync happens post-exit in the unawaited block below.
     if (syncService != null) {
       debugPrint('[SaveSync] Auto-pulling save before launch: game="${game.displayName}"');
-      unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId).catchError((_) => false));
+      unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId, emulatorId: strategy.emulatorId).catchError((_) => false));
     }
 
     // Platform-specific checks (e.g. 3DS keys)
-    if (['3ds', 'n3ds', 'nintendo-3ds', 'nintendo3ds', 'new-nintendo-3ds', 'new-nintendo-3ds-xl'].contains(game.platformSlug?.toLowerCase())) {
-      final systemDir = await dir.getEmulatorSystemDirectory(strategy.emulatorId);
-      final keysPath = '$systemDir/${strategy.emulatorId == 'retroarch' ? 'citra/sysdata/aes_keys.txt' : 'sysdata/aes_keys.txt'}';
-      if (!await File(keysPath).exists()) {
-        final prefs = ref.read(sharedPreferencesProvider);
-        if (!(prefs.getBool('shown_3ds_keys_warning') ?? false) && context.mounted) {
-          await showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('Missing 3DS Keys'), content: const Text('Note: Decrypted 3DS ROMs require aes_keys.txt in your emulator system folder.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))]));
-          await prefs.setBool('shown_3ds_keys_warning', true);
-        }
+    if (await launchService.needs3dsKeysWarning(game, strategy)) {
+      final prefs = ref.read(sharedPreferencesProvider);
+      if (!(prefs.getBool('shown_3ds_keys_warning') ?? false) && context.mounted) {
+        await showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('Missing 3DS Keys'), content: const Text('Note: Decrypted 3DS ROMs require aes_keys.txt in your emulator system folder.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))]));
+        await prefs.setBool('shown_3ds_keys_warning', true);
       }
     }
 
@@ -448,61 +412,21 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       debugPrint('[Launch] Strategy: ${strategy.name}, ROM: $romPath');
       ErrorHandler.showInfo(context, 'Launching', message: 'Launching ${game.name}...');
 
-      final sessionStart = DateTime.now();
-
-      Process? process;
-      if (strategy is RetroArchStrategy && overrideCoreId != null) {
-        process = await strategy.launchWithHandle(game, romPath, coreName: overrideCoreId);
-      } else {
-        process = await strategy.launchWithHandle(game, romPath);
-      }
+      final session = await launchService.launch(game, romPath, strategy, overrideCoreId: overrideCoreId);
       if (!context.mounted) return;
-      if (process == null) await strategy.launch(game, romPath);
-      else {
-        final proc = process;
+      if (session.process != null && syncService != null) {
+        final syncMode = ref.read(retroarchSyncModeProvider);
         unawaited(Future.delayed(Duration.zero, () async {
           try {
-            await proc.exitCode;
-            final sessionEnd = DateTime.now();
-
-            if (!context.mounted) return;
-            if (syncService != null) {
-              final syncMode = ref.read(retroarchSyncModeProvider);
-              debugPrint('[SaveSync] Auto-pushing saves after exit: game="${game.displayName}" syncMode=$syncMode');
-              final ok = await syncService.pushSaves(
-                game, romPath,
-                sessionStart: sessionStart,
-                syncMode: syncMode,
-                coreOverride: overrideCoreId,
-              );
-              try {
-                final backupService = ref.read(backupServiceProvider);
-                final postBackup = await backupService.createImmediate(game, romPath, syncService);
-                if (postBackup != null) {
-                  await ref.read(backupRepositoryProvider).addEntry(game.id, BackupEntry(timestamp: DateTime.now(), md5Hash: postBackup.md5, localZipPath: postBackup.zipPath));
-                }
-              } catch (e) { dev.log('Post-exit backup failed', error: e); }
-
-              // Report play session to RomM 4.9+ (best-effort, non-blocking).
-              try {
-                final rommService = ref.read(rommServiceProvider);
-                final caps = await rommService?.fetchCapabilities();
-                final deviceId = ref.read(sharedPreferencesProvider).getString('romm_device_id');
-                if (rommService != null && (caps?.hasPlaySessionTracking ?? false) && deviceId != null) {
-                  await rommService.recordPlaySession(
-                    romId: game.id,
-                    deviceId: deviceId,
-                    startTime: sessionStart,
-                    endTime: sessionEnd,
-                  );
-                }
-              } catch (e) { dev.log('Play session record failed (non-fatal)', error: e); }
-
-              if (context.mounted) {
-                if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
-                else ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
-              }
-            }
+            debugPrint('[SaveSync] Auto-pushing saves after exit: game="${game.displayName}" syncMode=$syncMode');
+            final result = await launchService.awaitExitAndSync(
+              session, game, romPath,
+              syncMode: syncMode,
+              overrideCoreId: overrideCoreId,
+            );
+            if (!context.mounted || result == null) return;
+            if (result.syncOk) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
+            else ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
           } catch (_) {}
         }));
       }
@@ -670,10 +594,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     } else if (e is SaveConflictException) {
       final choice = await LibraryDialogService.showSaveConflictDialog(context, e);
       if (choice == 'local' && context.mounted) {
-        await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+        await syncService.resolveConflict(game, romPath, e, choice: choice!, syncMode: syncMode);
         if (context.mounted) ErrorHandler.showSuccess(context, 'Sync Resolved', message: 'Local save uploaded');
       } else if (choice == 'cloud' && context.mounted) {
-        await syncService.pullSave(game, romPath);
+        await syncService.resolveConflict(game, romPath, e, choice: choice!, syncMode: syncMode);
         if (context.mounted) ErrorHandler.showSuccess(context, 'Sync Resolved', message: 'Cloud save restored');
       }
     } else if (!push) {

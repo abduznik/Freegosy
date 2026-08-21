@@ -716,7 +716,8 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'cap32_libretro',
     displayName: 'Caprice32',
-    platforms: ['amstradcpc', 'amstrad-cpc'],
+    // 'acpc' is IGDB's platform slug (what RomM actually sends) — see #78.
+    platforms: ['amstradcpc', 'amstrad-cpc', 'acpc'],
     category: CoreCategory.computer,
     isRecommended: true,
   ),
@@ -917,7 +918,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'crocods_libretro',
     displayName: 'CrocoDS',
-    platforms: ['amstrad-cpc', 'amstradcpc'],
+    platforms: ['amstrad-cpc', 'amstradcpc', 'acpc'],
     category: CoreCategory.computer,
   ),
 

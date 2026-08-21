@@ -2,7 +2,7 @@ import 'dart:io' as io;
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../storage/app_preferences.dart';
 import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
@@ -49,7 +49,7 @@ class SaveSyncService {
   final RommService _rommService;
   final DirectoryService _directoryService;
   final StrategyRegistry _strategyRegistry;
-  final SharedPreferences _prefs;
+  final AppPreferences _prefs;
 
   /// Minimum save file size in bytes to consider valid for upload.
   /// Files smaller than this are likely empty/blank saves created by an
@@ -112,8 +112,20 @@ class SaveSyncService {
   }
 
   /// Returns the appropriate save strategy for [platformSlug], or null if unsupported.
-  SaveStrategy? getStrategyForSlug(String? platformSlug) {
-    debugPrint('[SaveSync] Resolving strategy for slug="$platformSlug"');
+  ///
+  /// If [emulatorId] is given, resolves the strategy for that specific
+  /// emulator instead of the platform's globally-configured preference.
+  /// Callers that know which emulator actually launched the game (e.g. via
+  /// the per-game emulator picker) must pass it here — otherwise sync can
+  /// silently read/write the wrong emulator's save folder when the launch
+  /// emulator differs from the platform-wide default (issue #79).
+  SaveStrategy? getStrategyForSlug(String? platformSlug, {String? emulatorId}) {
+    debugPrint('[SaveSync] Resolving strategy for slug="$platformSlug" emulatorId=$emulatorId');
+    if (emulatorId != null) {
+      final strategy = _saveStrategyForEmulatorId(emulatorId);
+      debugPrint('[SaveSync]   → explicit emulator="$emulatorId" → strategy=${strategy?.strategyId ?? "none"}');
+      if (strategy != null) return strategy;
+    }
     if (platformSlug != null) {
       final preferredId = _strategyRegistry.getPreferredEmulatorId(platformSlug);
       if (preferredId != null) {
@@ -278,20 +290,26 @@ class SaveSyncService {
   /// Uploads local save files for [game] to RomM.
   ///
   /// Routes to [_devicePushSaves] on RomM 4.9+ or [_legacyPushSaves] on older.
+  ///
+  /// [emulatorId] should be the emulator that actually launched the game
+  /// this session (e.g. from the per-game emulator picker), if known. When
+  /// omitted, the strategy falls back to the platform's globally-configured
+  /// preferred emulator, which may differ from what was actually used
+  /// (issue #79).
   Future<bool> pushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride, String? emulatorId}) async {
     debugPrint('[SaveSync] ─── PUSH START ─── game="${game.displayName}" slug=${game.platformSlug}');
     debugPrint('[SaveSync]   romPath: $romPath');
-    debugPrint('[SaveSync]   syncMode=$syncMode  force=$force  coreOverride=$coreOverride  sessionStart=$sessionStart');
+    debugPrint('[SaveSync]   syncMode=$syncMode  force=$force  coreOverride=$coreOverride  emulatorId=$emulatorId  sessionStart=$sessionStart');
     final caps = await _rommService.fetchCapabilities();
     final useDevice = caps.hasDeviceSaveSync;
     debugPrint('[SaveSync]   RomM version: ${useDevice ? "4.9+ (device sync)" : "legacy (<4.9)"}');
     if (useDevice) {
       return _devicePushSaves(game, romPath,
-          sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride);
+          sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride, emulatorId: emulatorId);
     }
     return _legacyPushSaves(game, romPath,
-        sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride);
+        sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride, emulatorId: emulatorId);
   }
 
   /// In-memory cache of the last pull-check timestamp per game.
@@ -308,7 +326,7 @@ class SaveSyncService {
   /// Skips network requests if the last check was within [_pullCheckCooldown].
   /// This is called before emulator launch — the save is usually already on
   /// disk from the last session, so the pull is non-blocking (fire-and-forget).
-  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride}) async {
+  Future<bool> pullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride, String? emulatorId}) async {
     final now = DateTime.now();
     final lastCheck = _lastPullCheck[game.id];
     if (saveData == null && lastCheck != null && now.difference(lastCheck) < _pullCheckCooldown) {
@@ -318,14 +336,14 @@ class SaveSyncService {
     _lastPullCheck[game.id] = now;
 
     debugPrint('[SaveSync] ─── PULL START ─── game="${game.displayName}" slug=${game.platformSlug}');
-    debugPrint('[SaveSync]   romPath: $romPath  coreOverride=$coreOverride  saveData=${saveData != null ? "manual" : "auto"}');
+    debugPrint('[SaveSync]   romPath: $romPath  coreOverride=$coreOverride  emulatorId=$emulatorId  saveData=${saveData != null ? "manual" : "auto"}');
     final caps = await _rommService.fetchCapabilities();
     final useDevice = caps.hasDeviceSaveSync;
     debugPrint('[SaveSync]   RomM version: ${useDevice ? "4.9+ (device sync)" : "legacy (<4.9)"}');
     if (useDevice) {
-      return _devicePullSave(game, romPath, saveData: saveData, coreOverride: coreOverride);
+      return _devicePullSave(game, romPath, saveData: saveData, coreOverride: coreOverride, emulatorId: emulatorId);
     }
-    return _legacyPullSave(game, romPath, saveData: saveData, coreOverride: coreOverride);
+    return _legacyPullSave(game, romPath, saveData: saveData, coreOverride: coreOverride, emulatorId: emulatorId);
   }
 
   // ---------------------------------------------------------------------------
@@ -398,9 +416,9 @@ class SaveSyncService {
   // ---------------------------------------------------------------------------
 
   Future<bool> _devicePushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug);
+      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [push] No save strategy for slug="${game.platformSlug}" — game "${game.displayName}" not supported');
         return false;
@@ -554,9 +572,9 @@ class SaveSyncService {
   }
 
   Future<bool> _devicePullSave(Game game, String romPath,
-      {Map<String, dynamic>? saveData, String? coreOverride}) async {
+      {Map<String, dynamic>? saveData, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug);
+      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [pull] No save strategy for slug="${game.platformSlug}"');
         return false;
@@ -641,9 +659,9 @@ class SaveSyncService {
   /// Legacy upload path for RomM versions prior to 4.9.
   /// Uses timestamp-based conflict detection and manual save pruning.
   Future<bool> _legacyPushSaves(Game game, String romPath,
-      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride}) async {
+      {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug);
+      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [push] No save strategy for slug="${game.platformSlug}"');
         return false;
@@ -878,9 +896,9 @@ class SaveSyncService {
 
   /// Legacy pull path for RomM versions prior to 4.9.
   /// Uses stored last-pull timestamps for freshness checks.
-  Future<bool> _legacyPullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride}) async {
+  Future<bool> _legacyPullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug);
+      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [pull] No save strategy for slug="${game.platformSlug}"');
         return false;
@@ -970,5 +988,23 @@ class SaveSyncService {
 
   void loadCoreOverrides(Map<String, String> overrides) {
     _retroarch.loadCoreOverrides(overrides);
+  }
+
+  /// Applies the user's choice after a [SaveConflictException]: 'local' force-pushes
+  /// the local save, 'cloud' pulls and restores the cloud save. Returns the underlying
+  /// pushSaves/pullSave result, or false if [choice] is neither.
+  Future<bool> resolveConflict(
+    Game game,
+    String romPath,
+    SaveConflictException e, {
+    required String choice,
+    required String syncMode,
+  }) async {
+    if (choice == 'local') {
+      return pushSaves(game, romPath, syncMode: syncMode, force: true);
+    } else if (choice == 'cloud') {
+      return pullSave(game, romPath);
+    }
+    return false;
   }
 }

@@ -4,6 +4,7 @@ import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/rom_constants.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Tests that verify critical logic works correctly when simulated
@@ -120,7 +121,7 @@ void main() {
       });
 
       test('initializes on simulated Windows', () async {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
         final platform = PlatformInfo('windows');
         final ds = DirectoryService(prefs, platform: platform);
         final registry = StrategyRegistry(ds, prefs, platform: platform);
@@ -129,7 +130,7 @@ void main() {
       });
 
       test('initializes on simulated Linux', () async {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
         final platform = PlatformInfo('linux');
         final ds = DirectoryService(prefs, platform: platform);
         final registry = StrategyRegistry(ds, prefs, platform: platform);
@@ -139,7 +140,7 @@ void main() {
       });
 
       test('initializes on simulated macOS', () async {
-        final prefs = await SharedPreferences.getInstance();
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
         final platform = PlatformInfo('macos');
         final ds = DirectoryService(prefs, platform: platform);
         final registry = StrategyRegistry(ds, prefs, platform: platform);
@@ -148,7 +149,7 @@ void main() {
 
       test('getStrategyForSlug returns consistent results across platforms', () async {
         for (final os in ['windows', 'macos', 'linux']) {
-          final prefs = await SharedPreferences.getInstance();
+          final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
           final platform = PlatformInfo(os);
           final ds = DirectoryService(prefs, platform: platform);
           final registry = StrategyRegistry(ds, prefs, platform: platform);

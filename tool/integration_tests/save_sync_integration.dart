@@ -49,7 +49,7 @@ Map<String, String> get _headers => {
 
 Future<List<dynamic>> _getList(String path) async {
   final resp = await http.get(Uri.parse('$_baseUrl$path'), headers: _headers)
-      .timeout(const Duration(seconds: 15));
+      .timeout(const Duration(seconds: 60));
   if (resp.statusCode >= 400) {
     stderr.writeln('HTTP ${resp.statusCode} on GET $path');
     return [];
@@ -143,6 +143,15 @@ const testPlatforms = [
 // ── Test runner ────────────────────────────────────────────────────────
 
 Future<void> main() async {
+  // Optional filter: --platform=<slug> (or PLATFORM env var) to run one.
+  var filter = (Platform.environment['PLATFORM'] ?? '').toLowerCase();
+  for (final arg in Platform.executableArguments) {
+    if (arg.startsWith('--platform=')) {
+      filter = arg.substring('--platform='.length).toLowerCase();
+      break;
+    }
+  }
+
   print('=== Save Sync Integration Test Suite ===');
   print('Server: $_baseUrl\n');
 
@@ -170,6 +179,12 @@ Future<void> main() async {
   final createdSaveIds = <String>[];
 
   for (final (slug, ext, emulator) in testPlatforms) {
+    if (filter.isNotEmpty && slug != filter) {
+      print('--- $slug ($emulator) ---');
+      print('  SKIP: filtered out');
+      skipped++;
+      continue;
+    }
     print('--- $slug ($emulator) ---');
 
     // Find platform

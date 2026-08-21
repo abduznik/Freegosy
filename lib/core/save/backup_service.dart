@@ -23,13 +23,20 @@ class BackupService {
   ///
   /// Returns a [BackupResult] with the path to the written ZIP and its MD5
   /// hash, or `null` if no save files are found (nothing to back up).
+  ///
+  /// [emulatorId] should be the emulator that actually launched the game
+  /// this session, if known — otherwise this can silently back up a
+  /// different emulator's (stale, unrelated) save file when the platform's
+  /// globally-configured preference differs from what was actually used
+  /// (same root cause as issue #79, but for the post-exit backup step).
   Future<BackupResult?> createImmediate(
     Game game,
     String romPath,
-    SaveSyncService syncService,
-  ) async {
+    SaveSyncService syncService, {
+    String? emulatorId,
+  }) async {
     try {
-      final strategy = syncService.getStrategyForSlug(game.platformSlug);
+      final strategy = syncService.getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
       if (strategy == null) return null;
 
       // Gather current save files using the same strategy already used for cloud sync

@@ -6,6 +6,7 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,7 +35,7 @@ void main() {
     when(mockDirectoryService.getEmulatorDirectory('temp'))
         .thenAnswer((_) async => Directory.systemTemp.path);
 
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
     when(mockRommService.getLatestSave(any, deviceId: anyNamed('deviceId')))
         .thenAnswer((_) async => null);
     when(mockRommService.fetchCapabilities())

@@ -25,7 +25,7 @@ class EdenSaveStrategy extends SaveStrategy {
       : _platform = platform ?? PlatformInfo.current;
 
   @override
-  String get strategyId => 'switch';
+  String get strategyId => 'eden';
   @override
   bool get supportsSaveSync => true;
 
@@ -88,16 +88,26 @@ class EdenSaveStrategy extends SaveStrategy {
     return upper.length == 16 ? '${upper.substring(0, 13)}000' : upper;
   }
 
-  Future<String> _resolveProfileId(String baseSavePath) async {
-    if (_activeProfileOverride != null && _activeProfileOverride!.isNotEmpty) return _activeProfileOverride!;
-    final zeroDir = io.Directory(p.join(baseSavePath, '0000000000000000'));
-    if (!zeroDir.existsSync()) throw Exception('Eden save base does not exist: ${zeroDir.path}');
+  /// Scans [parentPath] for Switch profile folders (32-hex names) that contain
+  /// at least one save file, logging each folder it evaluates.
+  ///
+  /// Folders that do not match the profile pattern, or that only contain
+  /// hidden/`.bak` files, are skipped.
+  List<Map<String, dynamic>> _scanProfileDirectories(String parentPath) {
+    final parent = io.Directory(parentPath);
+    if (!parent.existsSync()) {
+      debugPrint('[Eden]   profile scan: parent missing: $parentPath');
+      return const [];
+    }
 
     final candidates = <Map<String, dynamic>>[];
-    for (final entity in zeroDir.listSync()) {
+    for (final entity in parent.listSync()) {
       if (entity is! io.Directory) continue;
       final name = p.basename(entity.path);
-      if (!_profileRegex.hasMatch(name)) continue;
+      if (!_profileRegex.hasMatch(name)) {
+        debugPrint('[Eden]   skipping non-profile folder: $name');
+        continue;
+      }
 
       DateTime? newestFileTime;
       int saveFileCount = 0;
@@ -112,21 +122,110 @@ class EdenSaveStrategy extends SaveStrategy {
           }
         } catch (_) {}
       }
-      if (newestFileTime != null && saveFileCount > 0) candidates.add({'id': name, 'newestFile': newestFileTime, 'fileCount': saveFileCount});
+      debugPrint('[Eden]   profile=$name files=$saveFileCount newest=$newestFileTime');
+      if (newestFileTime != null && saveFileCount > 0) {
+        candidates.add({'id': name, 'newestFile': newestFileTime, 'fileCount': saveFileCount});
+      }
+    }
+    return candidates;
+  }
+
+  /// Resolves the active profile directory (parent + profile folder) for Eden saves.
+  ///
+  /// Tries the standard `0000000000000000` layout first, then falls back to
+  /// scanning the save base directly (some Eden installs keep profile folders
+  /// flat). Throws a descriptive [Exception] if no usable profile is found.
+  ///
+  /// If [titleId] is given and more than one profile candidate exists, a
+  /// candidate that already contains a save folder for that title takes
+  /// priority over the "most recently modified profile overall" heuristic —
+  /// otherwise a user with multiple Eden profiles (e.g. one mostly used for
+  /// a different game) can have their save silently resolved under the
+  /// wrong profile, reporting "no save files found" for a game that does
+  /// have one, just under a different profile (issue #68).
+  Future<String> _resolveProfileDir(String baseSavePath, {String? titleId}) async {
+    if (_activeProfileOverride != null && _activeProfileOverride!.isNotEmpty) {
+      final dir = p.join(baseSavePath, '0000000000000000', _activeProfileOverride!);
+      debugPrint('[Eden] Using active profile override: $dir');
+      return dir;
     }
 
-    if (candidates.isEmpty) throw Exception('No active Eden profiles found.');
+    final zeroDir = p.join(baseSavePath, '0000000000000000');
+    debugPrint('[Eden] Profile scan base: $baseSavePath (zeroDir exists: ${io.Directory(zeroDir).existsSync()})');
+    var candidates = _scanProfileDirectories(zeroDir);
+    String parentDir = zeroDir;
+    if (candidates.isEmpty) {
+      // Some layouts store profile folders directly under the save base.
+      debugPrint('[Eden] No profiles under 0000000000000000, scanning base directly...');
+      candidates = _scanProfileDirectories(baseSavePath);
+      parentDir = baseSavePath;
+    }
+
+    if (candidates.isEmpty) {
+      throw Exception('No active Eden profiles found in $baseSavePath. Please launch Eden at least once and create a save.');
+    }
+
+    if (titleId != null && candidates.length > 1) {
+      final withTitle = candidates.where((c) {
+        final titleDir = io.Directory(p.join(parentDir, c['id'] as String, titleId));
+        return titleDir.existsSync();
+      }).toList();
+      if (withTitle.length == 1) {
+        final dir = p.join(parentDir, withTitle.first['id'] as String);
+        debugPrint('[Eden] Selected profile dir (has save for titleId=$titleId): $dir');
+        return dir;
+      } else if (withTitle.length > 1) {
+        candidates = withTitle;
+        debugPrint('[Eden] Multiple profiles have saves for titleId=$titleId, falling back to newest-among-those');
+      }
+    }
+
     candidates.sort((a, b) => (b['newestFile'] as DateTime).compareTo(a['newestFile'] as DateTime));
-    if (candidates.length == 1) return candidates.first['id'] as String;
+    if (candidates.length == 1) {
+      final dir = p.join(parentDir, candidates.first['id'] as String);
+      debugPrint('[Eden] Selected profile dir: $dir');
+      return dir;
+    }
 
     final winner = candidates[0];
     final runnerUp = candidates[1];
     final gap = (winner['newestFile'] as DateTime).difference(runnerUp['newestFile'] as DateTime);
-    if (gap.inHours >= 1 || (runnerUp['fileCount'] as int) <= 1) return winner['id'] as String;
+    if (gap.inHours >= 1 || (runnerUp['fileCount'] as int) <= 1) {
+      final dir = p.join(parentDir, winner['id'] as String);
+      debugPrint('[Eden] Selected newest profile dir: $dir');
+      return dir;
+    }
     throw ProfileConflictException(candidates);
   }
 
+  String _getEdenExe() {
+    if (_platform.isWindows) return 'eden.exe';
+    if (_platform.isMacOS) return 'Eden.app/Contents/MacOS/Eden';
+    return 'eden';
+  }
+
   Future<String> _getEdenSaveBase({String? platformSlug}) async {
+    // 1. Check portable mode first — 'user' folder next to the executable
+    final exePath = await _directoryService.findEmulatorExecutable('eden', _getEdenExe());
+    if (exePath != null) {
+      String exeDir = io.File(exePath).parent.path;
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        exeDir = io.File(exePath).parent.parent.parent.parent.path;
+      } else if (await io.FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
+      final portableSave = p.join(exeDir, 'user', 'nand', 'user', 'save');
+      debugPrint('[Eden] exe=$exePath → checking portable save at: $portableSave');
+      if (await io.Directory(portableSave).exists()) {
+        debugPrint('[Eden] portable save base found: $portableSave');
+        return portableSave;
+      }
+      debugPrint('[Eden] portable save missing at: $portableSave');
+    } else {
+      debugPrint('[Eden] no eden executable found via DirectoryService');
+    }
+
+    // 2. Standard install paths
     final String resolvedPath;
     if (_platform.isMacOS || _platform.isLinux) {
       resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('eden', platformSlug: platformSlug);
@@ -136,16 +235,20 @@ class EdenSaveStrategy extends SaveStrategy {
       throw UnsupportedError('Platform not supported');
     }
     final finalPath = p.join(resolvedPath, 'nand', 'user', 'save');
-    if (!await io.Directory(finalPath).exists()) throw Exception('Save directory not found for Eden.');
+    debugPrint('[Eden] standard save base candidate: $finalPath');
+    if (!await io.Directory(finalPath).exists()) {
+      throw Exception('Save directory not found for Eden at: $finalPath');
+    }
+    debugPrint('[Eden] standard save base found: $finalPath');
     return finalPath;
   }
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
-    final profileId = await _resolveProfileId(base);
     final titleId = await _resolveTitleId(romPath, game);
-    return p.join(base, '0000000000000000', profileId, titleId);
+    final profileDir = await _resolveProfileDir(base, titleId: titleId);
+    return p.join(profileDir, titleId);
   }
 
   @override
@@ -169,7 +272,7 @@ class EdenSaveStrategy extends SaveStrategy {
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
-    final profileId = await _resolveProfileId(base);
+    final profileDir = await _resolveProfileDir(base);
     String? titleId;
     final (headerId, resolvedPath) = await extractTitleIdFromHeader(destPath);
     titleId = headerId ?? _extractTitleIdFromFilename(resolvedPath ?? destPath, game);
@@ -185,7 +288,7 @@ class EdenSaveStrategy extends SaveStrategy {
     titleId ??= _manualMapping;
     if (titleId == null) throw SaveMappingRequiredException();
 
-    final targetPath = p.normalize(p.join(base, '0000000000000000', profileId, titleId));
+    final targetPath = p.normalize(p.join(profileDir, titleId));
     io.Directory(targetPath).createSync(recursive: true);
 
     if (filename.toLowerCase().endsWith('.zip')) {
@@ -201,12 +304,12 @@ class EdenSaveStrategy extends SaveStrategy {
 
   Future<List<Map<String, dynamic>>> getAvailableSaveFolders() async {
     final base = await _getEdenSaveBase();
-    final profileId = await _resolveProfileId(base);
-    final profileDir = io.Directory(p.join(base, '0000000000000000', profileId));
-    if (!profileDir.existsSync()) return [];
+    final profileDir = await _resolveProfileDir(base);
+    final profileDirObj = io.Directory(profileDir);
+    if (!profileDirObj.existsSync()) return [];
 
     final folders = <Map<String, dynamic>>[];
-    for (final entity in profileDir.listSync()) {
+    for (final entity in profileDirObj.listSync()) {
       if (entity is! io.Directory || !RegExp(r'^01[0-9A-Fa-f]{14}$').hasMatch(p.basename(entity.path))) continue;
       DateTime? newest;
       int count = 0;

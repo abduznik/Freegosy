@@ -5,6 +5,7 @@ import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -23,12 +24,12 @@ void main() {
     });
 
     test('DirectoryService initializes without throwing', () async {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       expect(() => DirectoryService(prefs), returnsNormally);
     });
 
     test('StrategyRegistry registers all strategies and detects conflicts', () async {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final platform = PlatformInfo.current;
       final ds = DirectoryService(prefs, platform: platform);
       final registry = StrategyRegistry(ds, prefs, platform: platform);
@@ -76,7 +77,7 @@ void main() {
     });
 
     test('SaveSyncService initializes without throwing', () async {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final ds = DirectoryService(prefs);
       final rs = RommService(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
       final reg = StrategyRegistry(ds, prefs);
@@ -84,7 +85,7 @@ void main() {
     });
 
     test('All Save strategies can be instantiated', () async {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final ds = DirectoryService(prefs);
       final rs = RommService(RomMConfig(baseUrl: 'https://test.com', username: 'u', password: 'p'));
       final reg = StrategyRegistry(ds, prefs);

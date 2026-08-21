@@ -8,6 +8,7 @@ import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/emulator/bios_registry.dart';
+import 'package:freegosy/core/emulator/retroarch_core_list.dart';
 
 typedef FirmwareProgressCallback = void Function(String fileName, int received, int total);
 
@@ -44,6 +45,31 @@ class FirmwareService {
 
   FirmwareService(this._rommService, this._directoryService, this._strategyRegistry);
 
+  /// Resolves the BIOS spec for an emulator + platform combination.
+  ///
+  /// For standalone emulators (Flycast, DuckStation, PCSX2, etc.) the registry
+  /// key matches the emulatorId directly. For RetroArch, the key is the
+  /// libretro core name without the `_libretro` suffix (e.g. `flycast` for
+  /// `flycast_libretro`), so we resolve via the default core for the platform.
+  EmulatorBiosSpec? _resolveBiosSpec(String emulatorId, String platformSlug) {
+    // 1. Try the emulatorId directly (works for standalone emulators)
+    final direct = getBiosSpecForEmulator(emulatorId);
+    if (direct != null) return direct;
+
+    // 2. For RetroArch, resolve via the default core for this platform
+    if (emulatorId == 'retroarch') {
+      final coreId = getDefaultCoreForSlug(platformSlug);
+      if (coreId != null) {
+        // Registry keys use the core name without _libretro suffix
+        final registryKey = coreId.replaceAll('_libretro', '');
+        final coreSpec = getBiosSpecForEmulator(registryKey);
+        if (coreSpec != null) return coreSpec;
+      }
+    }
+
+    return null;
+  }
+
   /// Downloads all available firmware for all platforms and places them in the appropriate emulator BIOS directories.
   Future<void> syncAllFirmware({FirmwareProgressCallback? onProgress}) async {
     try {
@@ -58,8 +84,8 @@ class FirmwareService {
         }
 
         final biosDir = await _directoryService.getEmulatorBiosDirectory(strategy.emulatorId);
-        final biosSpec = getBiosSpecForEmulator(strategy.emulatorId);
-        
+        final biosSpec = _resolveBiosSpec(strategy.emulatorId, platform.slug);
+
         for (final firmware in platform.firmware) {
           await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: strategy.emulatorId, biosSpec: biosSpec, onProgress: onProgress);
         }
@@ -74,7 +100,7 @@ class FirmwareService {
     try {
       final platforms = await _rommService.getPlatforms();
       final platform = platforms.firstWhere((p) => p.slug == platformSlug, orElse: () => throw Exception('Platform not found: $platformSlug'));
-      
+
       if (platform.firmware.isEmpty) return;
 
       final strategy = _strategyRegistry.getStrategyForSlug(platform.slug);
@@ -84,8 +110,8 @@ class FirmwareService {
       }
 
       final biosDir = await _directoryService.getEmulatorBiosDirectory(strategy.emulatorId);
-      final biosSpec = getBiosSpecForEmulator(strategy.emulatorId);
-      
+      final biosSpec = _resolveBiosSpec(strategy.emulatorId, platform.slug);
+
       for (final firmware in platform.firmware) {
         await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: strategy.emulatorId, biosSpec: biosSpec, onProgress: onProgress);
       }
@@ -99,12 +125,12 @@ class FirmwareService {
     try {
       final platforms = await _rommService.getPlatforms();
       final biosDir = await _directoryService.getEmulatorBiosDirectory(emulatorId);
-      final biosSpec = getBiosSpecForEmulator(emulatorId);
 
       for (final platform in platforms) {
         final strategy = _strategyRegistry.getStrategyForSlug(platform.slug);
         if (strategy?.emulatorId == emulatorId) {
           if (platform.firmware.isEmpty) continue;
+          final biosSpec = _resolveBiosSpec(emulatorId, platform.slug);
           for (final firmware in platform.firmware) {
             await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: emulatorId, biosSpec: biosSpec, onProgress: onProgress);
           }
@@ -170,13 +196,18 @@ class FirmwareService {
   }) async {
     debugPrint('[Firmware] firmware.fileName=${firmware.fileName}, firmware.filePath=${firmware.filePath}');
 
-    // Use filePath from RomM to preserve subdirectory structure (e.g. "dc/dc_boot.bin").
-    // Some cores like Flycast expect BIOS files in subdirectories, not flat.
-    // Real RomM servers return filePath as the directory path and fileName separately,
-    // so we join them to get the full relative path (e.g. "dc" + "dc_boot.bin" = "dc/dc_boot.bin").
-    final relativePath = firmware.filePath?.isNotEmpty == true
-        ? p.join(firmware.filePath!, firmware.fileName)
-        : firmware.fileName;
+    // Determine the correct subdirectory from the BIOS registry, NOT from
+    // RomM's filePath (which is just its internal storage path like "ps2/bios").
+    // The registry knows where each emulator actually expects its BIOS files:
+    //   - Flycast: subdirectory "dc" → system/dc/dc_boot.bin
+    //   - Most others: null → system/SCPH1001.BIN (flat, at root)
+    final matchingSpecForPath = _findMatchingSpec(firmware.fileName, biosSpec);
+    final String relativePath;
+    if (matchingSpecForPath?.subdirectory != null) {
+      relativePath = p.join(matchingSpecForPath!.subdirectory!, firmware.fileName);
+    } else {
+      relativePath = firmware.fileName;
+    }
     final destPath = p.join(biosDir, relativePath);
     final destFile = File(destPath);
     debugPrint('[Firmware] relativePath=$relativePath, destPath=$destPath');

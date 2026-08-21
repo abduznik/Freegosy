@@ -40,7 +40,6 @@ class AxisState {
 class GamepadService extends WidgetsBindingObserver {
   final Ref _ref;
   StreamSubscription<GamepadEvent>? _subscription;
-  Timer? _scanTimer;
   final Map<String, String> _controllerNames = {};
   final Map<String, AxisState> _axisStates = {};
   final _rawEventController = StreamController<GamepadEvent>.broadcast();
@@ -75,9 +74,9 @@ class GamepadService extends WidgetsBindingObserver {
 
     WidgetsBinding.instance.addObserver(this);
 
+    // Do one initial scan to pick up already-connected controllers, then rely
+    // on the GameInput event callbacks in the native plugin for connect/disconnect.
     _scan();
-    _scanTimer = Timer.periodic(const Duration(seconds: 3), (_) => _scan());
-    debugPrint('[Controller] scan timer started (3s interval)');
 
     _subscription = Gamepads.events.listen(
       (event) {
@@ -307,8 +306,20 @@ class GamepadService extends WidgetsBindingObserver {
       }
     }
 
-    // DirectInput legacy axis fallback: dwXPos/dwYPos → analog stick axes
+    // GameInput axis fallback: leftThumbstickX/Y, rightThumbstickX/Y → analog stick axes
+    // (gamepads_windows 0.3.0+ via GameInput API, already normalized to -1.0..1.0)
     final key = event.key.toLowerCase();
+    if (key == 'leftthumbstickx' || key == 'leftthumbsticky' ||
+        key == 'rightthumbstickx' || key == 'rightthumbsticky') {
+      final isX = key == 'leftthumbstickx' || key == 'rightthumbstickx';
+      debugPrint('[Controller] normalize: GameInput axis "$key" → ${isX ? "horizontal" : "vertical"}');
+      return NormalizedInput(
+        action: isX ? GameAction.horizontalAxis : GameAction.verticalAxis,
+        value: event.value,
+      );
+    }
+
+    // DirectInput legacy axis fallback: dwXPos/dwYPos → analog stick axes
     if (key == 'dwxpos' || key == 'dwypos' ||
         key == 'dwrpos' || key == 'dwupos' || key == 'dwvpos') {
       // Normalize raw DirectInput axis (0–65535) to -1.0..1.0
@@ -402,11 +413,13 @@ class GamepadService extends WidgetsBindingObserver {
       // Apply per-controller deadzone
       final controllerName = _controllerNames[event.gamepadId] ?? '';
       final deadzone = getDeadzoneForController(controllerName);
-      // DirectInput axes (dwXpos/dwYpos) are already normalized to -1.0..1.0
-      // with deadzone applied in _normalize(). Only apply deadzone here for
-      // standard axes that come in as -1.0..1.0 raw values.
-      final bool isDirectInput = event.key.toLowerCase().startsWith('dw');
-      final double adjustedValue = isDirectInput
+      // DirectInput axes (dwXpos/dwYpos) and GameInput axes (leftThumbstickX/Y etc.)
+      // are already normalized to -1.0..1.0 with deadzone applied in _normalize().
+      // Only apply deadzone here for standard axes that come in as -1.0..1.0 raw.
+      final keyLc = event.key.toLowerCase();
+      final bool isPreNormalized = keyLc.startsWith('dw') ||
+          keyLc.startsWith('leftthumbstick') || keyLc.startsWith('rightthumbstick');
+      final double adjustedValue = isPreNormalized
           ? normalized.value
           : applyDeadzone(rawAdjusted, deadzone);
 
@@ -594,7 +607,6 @@ class GamepadService extends WidgetsBindingObserver {
 
   void dispose() {
     _subscription?.cancel();
-    _scanTimer?.cancel();
     for (final state in _axisStates.values) {
       _cancelAxisTimers(state);
     }

@@ -24,7 +24,7 @@ class AzaharSaveStrategy extends SaveStrategy {
       : _platform = platform ?? PlatformInfo.current;
 
   @override
-  String get strategyId => '3ds';
+  String get strategyId => 'azahar';
 
   @override
   bool get supportsSaveSync => true;

@@ -79,25 +79,34 @@ class DownloadService {
     }
 
 
-    bool isSingleFileFoldered = game.files.length == 1 && game.fsExtension == '';
+    // `fsExtension` is empty/null for "single-file-foldered" games — RomM
+    // stores these as a per-game folder containing one file, rather than a
+    // flat "<name>.<ext>" at the platform root. `game.files` (the per-file
+    // metadata array) is often empty here too: it's only populated when the
+    // full game details were fetched (e.g. via getGame()), not on the
+    // paginated list response the simple "Download" button normally acts
+    // on — so this can't gate on `game.files.length == 1` alone, or the
+    // fix silently never triggers for that common path (issue #44).
+    final noFsExtension = game.fsExtension == null || game.fsExtension!.isEmpty;
+    final singleFileMeta = game.files.length == 1 ? game.files[0]['file_name']?.toString() : null;
+    // Fall back to the game's own top-level filename fields (always present,
+    // unlike the files[] array) when per-file metadata isn't available.
+    final fallbackFileName = singleFileMeta ?? game.fsName ?? game.fileName;
+    final bool isSingleFileFoldered = noFsExtension && fallbackFileName != null && fallbackFileName.isNotEmpty;
 
     String finalPath = await directoryService.getRomFilePath(game);
     if (isSingleFileFoldered) {
-      final fileName = game.files[0]["file_name"]?.toString();
-      if (fileName != null && fileName.isNotEmpty) {
-        finalPath = '$finalPath/$fileName';
-      }
+      finalPath = '$finalPath/$fallbackFileName';
     }
 
     // Ensure the final path has a file extension.
     // For single-file-foldered games where fsExtension was empty, the
     // path from getRomFilePath() may lack an extension (e.g. "Gamename"
-    // instead of "Gamename.chd").  Pull the extension from the files
-    // metadata when the path has none.
+    // instead of "Gamename.chd"). Pull the extension from the resolved
+    // filename when the path has none.
     final currentExt = p.extension(finalPath).toLowerCase();
-    if (currentExt.isEmpty && isSingleFileFoldered && game.files.isNotEmpty) {
-      final metaFileName = game.files[0]["file_name"]?.toString() ?? '';
-      final metaExt = p.extension(metaFileName).toLowerCase();
+    if (currentExt.isEmpty && isSingleFileFoldered) {
+      final metaExt = p.extension(fallbackFileName).toLowerCase();
       if (metaExt.isNotEmpty) {
         finalPath = '$finalPath$metaExt';
       }

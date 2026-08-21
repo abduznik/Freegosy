@@ -27,6 +27,9 @@ class RetroArchSaveStrategy extends SaveStrategy {
   /// Used to resolve the correct save folder when a platform has multiple cores.
   String? _cachedActiveCore;
 
+  /// Cached EmuDeck-for-Windows RetroArch root, once detected.
+  String? _cachedEmuDeckWindowsRoot;
+
   // Test-only override to skip reading the real retroarch.cfg.
   @visibleForTesting
   bool skipConfigRead = false;
@@ -142,7 +145,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   /// Save file extensions recognized by RetroArch cores.
   /// N64 cores use .sra/.eep/.fla/.mpk; most others use .srm/.sav/.mcd.
-  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk'};
+  static const _saveExtensions = {'.srm', '.sav', '.mcd', '.sra', '.eep', '.fla', '.mpk', '.ps2'};
 
   static bool _isSaveFile(String filename) {
     final ext = p.extension(filename).toLowerCase();
@@ -220,6 +223,7 @@ class RetroArchSaveStrategy extends SaveStrategy {
     'amiga':     _CoreInfo('puae_libretro',            'PUAE',               'States/PUAE'),
     'zxspectrum': _CoreInfo('fuse_libretro',           'Fuse',               'States/Fuse'),
     'amstradcpc': _CoreInfo('cap32_libretro',          'Caprice32',          'States/Caprice32'),
+    'acpc':       _CoreInfo('cap32_libretro',          'Caprice32',          'States/Caprice32'), // IGDB slug, what RomM actually sends — see #78
     'sharp68000': _CoreInfo('px68k_libretro',          'PX-68K',             'States/PX-68K'),
     'pc98':      _CoreInfo('np2kai_libretro',          'Neko Project II',    'States/Neko Project II'),
     // Other
@@ -384,6 +388,10 @@ class RetroArchSaveStrategy extends SaveStrategy {
 
   /// Resolves the save root directory: retroarch.cfg first, then exe-relative.
   Future<String> _resolveSaveRoot() async {
+    if (_platform.isWindows) {
+      final emuDeckRoot = await _emuDeckWindowsRetroArchRoot();
+      if (emuDeckRoot != null) return p.join(emuDeckRoot, 'saves');
+    }
     final cfg = await _readConfigSaveRoot();
     if (cfg != null) return cfg;
     final exePath = await _directoryService.findEmulatorExecutable('retroarch', _getRetroArchExe());
@@ -392,6 +400,26 @@ class RetroArchSaveStrategy extends SaveStrategy {
         : io.File(exePath!).parent.path;
     if (await io.FileSystemEntity.isDirectory(exePath)) exeDir = exePath;
     return p.join(exeDir, 'saves');
+  }
+
+  /// Detects an EmuDeck-for-Windows install and returns its RetroArch root
+  /// (`%USERPROFILE%\emudeck\EmulationStation-DE\Emulators\RetroArch`) if present.
+  ///
+  /// EmuDeck for Windows installs RetroArch there directly and exposes a
+  /// `Emulation\saves\retroarch\...` junction pointing back to it. We resolve
+  /// to the real path instead of the junction to avoid Windows "untrusted
+  /// mount point" errors when traversing reparse points without admin rights.
+  Future<String?> _emuDeckWindowsRetroArchRoot() async {
+    if (_cachedEmuDeckWindowsRoot != null) return _cachedEmuDeckWindowsRoot;
+    final userProfile = _platform.environment['USERPROFILE'];
+    if (userProfile == null || userProfile.isEmpty) return null;
+    final candidate = p.join(userProfile, 'emudeck', 'EmulationStation-DE', 'Emulators', 'RetroArch');
+    if (await io.Directory(candidate).exists()) {
+      _cachedEmuDeckWindowsRoot = candidate;
+      debugPrint('[SaveSync] [retroarch] detected EmuDeck-for-Windows root=$candidate');
+      return candidate;
+    }
+    return null;
   }
 
   String _getRetroArchExe() {
@@ -429,16 +457,49 @@ class RetroArchSaveStrategy extends SaveStrategy {
         return result;
       }
 
+      // Non-EmuDeck Linux: prefer the parsed savefile_directory from retroarch.cfg
+      // (honors custom save locations); fall back to baseDir/saves otherwise.
+      final saveRoot = (_cachedSaveRoot != null && await io.Directory(_cachedSaveRoot!).exists())
+          ? _cachedSaveRoot!
+          : p.join(baseDir, 'saves');
+      debugPrint('[SaveSync] [retroarch] getSaveDir linux saveRoot=$saveRoot');
+
       // Non-EmuDeck Linux: respect sort_savefiles_enable config flag
       if (!_sortSavefiles) {
-        // sort_savefiles_enable=false: saves go flat into baseDir, no core subfolder
-        debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $baseDir');
-        return baseDir;
+        // sort_savefiles_enable=false: saves go flat into saveRoot, no core subfolder
+        debugPrint('[SaveSync] [retroarch] getSaveDir linux no-sort → $saveRoot');
+        return saveRoot;
       }
-      // EmuDeck mapping returns the folder containing the actual saves
-      final result = p.join(baseDir, coreInfo.saveFolder);
-      debugPrint('[SaveSync] [retroarch] getSaveDir linux sorted → $result');
-      return result;
+
+      // Try the expected core subfolder first
+      final expectedDir = p.join(saveRoot, coreInfo.saveFolder);
+      if (await io.Directory(expectedDir).exists()) {
+        debugPrint('[SaveSync] [retroarch] getSaveDir linux expectedDir exists → $expectedDir');
+        return expectedDir;
+      }
+
+      // Fallback: scan saveRoot subdirectories for the ROM's save file, since
+      // RetroArch core folder names are unpredictable (e.g. "ParaLLEl N64"
+      // vs "Parallel N64" vs "N64").
+      final romStem = p.basenameWithoutExtension(romPath).toLowerCase();
+      final rootDir = io.Directory(saveRoot);
+      if (await rootDir.exists()) {
+        await for (final entity in rootDir.list()) {
+          if (entity is! io.Directory) continue;
+          final subdir = entity.path;
+          await for (final f in io.Directory(subdir).list()) {
+            if (f is! io.File) continue;
+            final fname = p.basename(f.path).toLowerCase();
+            if (fname.startsWith(romStem) && _isSaveFile(fname)) {
+              debugPrint('[SaveSync] [retroarch] getSaveDir linux fallback scan matched → $subdir');
+              return subdir;
+            }
+          }
+        }
+      }
+
+      debugPrint('[SaveSync] [retroarch] getSaveDir linux fallback expectedDir → $expectedDir');
+      return expectedDir;
     }
 
     // macOS / Windows: respect sort_savefiles_enable config flag

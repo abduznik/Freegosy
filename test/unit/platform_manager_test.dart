@@ -2,16 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 
 void main() {
   group('StrategyRegistry - Platform Manager', () {
     late StrategyRegistry registry;
-    late SharedPreferences prefs;
+    late SharedPreferencesAppPreferences prefs;
     late DirectoryService dirService;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      prefs = await SharedPreferences.getInstance();
+      prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       dirService = DirectoryService(prefs);
       registry = StrategyRegistry(dirService, prefs);
     });

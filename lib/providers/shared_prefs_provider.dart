@@ -1,10 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:freegosy/core/storage/app_preferences.dart';
+import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 
 /// Provider that exposes the [SharedPreferences] instance.
 /// It must be overridden in the [ProviderScope] during app initialization.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('sharedPreferencesProvider must be overridden');
+});
+
+/// [AppPreferences] view of [sharedPreferencesProvider] — pass this (not the
+/// raw [SharedPreferences]) into core services under lib/core, so they stay
+/// usable from a pure-Dart entry point (e.g. the CLI) that supplies its own
+/// [AppPreferences] implementation instead.
+final appPreferencesProvider = Provider<AppPreferences>((ref) {
+  return SharedPreferencesAppPreferences(ref.watch(sharedPreferencesProvider));
 });
 
 /// A StateNotifier that automatically persists its state to SharedPreferences.

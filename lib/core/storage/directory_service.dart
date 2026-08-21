@@ -1,10 +1,10 @@
 import 'dart:io' as io;
 import 'dart:io' show Directory, File, Process;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'app_path_resolver.dart';
+import 'app_preferences.dart';
+import 'flutter_app_path_resolver.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/rom_constants.dart';
 import 'package:freegosy/core/storage/file_system_index.dart';
@@ -57,8 +57,9 @@ class DirectoryService {
   static const String _linuxPresetRootKey = 'emudeckRootPath';
   static const String _useFlatEmulatorLayoutKey = 'useFlatEmulatorLayout';
 
-  final SharedPreferences _prefs;
+  final AppPreferences _prefs;
   final PlatformInfo _platform;
+  final AppPathResolver _pathResolver;
   late String romsRootPath;
   late String emulatorsRootPath;
   String linuxSyncPreset = 'default';
@@ -70,8 +71,9 @@ class DirectoryService {
   
   LinuxEnvironmentStrategy? _linuxStrategy;
 
-  DirectoryService(this._prefs, {PlatformInfo? platform})
-      : _platform = platform ?? PlatformInfo.current;
+  DirectoryService(this._prefs, {PlatformInfo? platform, AppPathResolver? pathResolver})
+      : _platform = platform ?? PlatformInfo.current,
+        _pathResolver = pathResolver ?? const FlutterAppPathResolver();
 
   bool get isSteamDeck {
     if (!_platform.isLinux) return false;
@@ -163,19 +165,21 @@ class DirectoryService {
   }
 
   Future<String> getDefaultBase() async {
-    final appSupport = await getApplicationSupportDirectory();
-    return appSupport.path;
+    return _pathResolver.getApplicationSupportPath();
   }
 
   Future<String?> resolveSevenZipPath() async {
-    final tempDir = await getTemporaryDirectory();
+    final tempPath = await _pathResolver.getTemporaryPath();
     final String exeName = _platform.isWindows ? '7zr.exe' : _platform.isLinux ? '7zz-linux' : '7zz';
-    final exeFile = io.File(p.join(tempDir.path, exeName));
+    final exeFile = io.File(p.join(tempPath, exeName));
 
     if (!await exeFile.exists()) {
       try {
-        final data = await rootBundle.load('thirdparty/$exeName');
-        final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        final bytes = await _pathResolver.loadAsset('thirdparty/$exeName');
+        if (bytes == null) {
+          debugPrint('[DirectoryService] No asset bundle available to resolve 7zip');
+          return null;
+        }
         await exeFile.writeAsBytes(bytes);
         if (!_platform.isWindows) {
           await Process.run('chmod', ['+x', exeFile.path]);
@@ -421,8 +425,8 @@ class DirectoryService {
 
   Future<String> getEmulatorAppSupportDirectory(String emulatorName, {String? platformSlug}) async {
     if (_platform.isMacOS) {
-      final appSupport = await getApplicationSupportDirectory();
-      return p.join(appSupport.parent.parent.path, 'Application Support', emulatorName);
+      final appSupport = await _pathResolver.getApplicationSupportPath();
+      return p.join(p.dirname(p.dirname(appSupport)), 'Application Support', emulatorName);
     } else if (_platform.isWindows) {
       final appData = _platform.environment['APPDATA'] ?? '';
       return p.join(appData, emulatorName);
