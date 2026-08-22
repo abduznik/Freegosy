@@ -43,8 +43,11 @@ class EmulatorBiosSpec {
 
   /// If true, the emulator has built-in HLE BIOS and can run without any files.
   final bool hasHleBios;
+  
+  // Optionally provides a fallback folder if the BIOS file name does not match
+  final String? fallbackSubdirectory;
 
-  const EmulatorBiosSpec({required this.files, this.hasHleBios = false});
+  const EmulatorBiosSpec({required this.files, this.hasHleBios = false, this.fallbackSubdirectory});
 
   int get requiredCount => files.where((f) => f.requirement == BiosRequirement.required).length;
   int get optionalCount => files.where((f) => f.requirement == BiosRequirement.optional).length;
@@ -105,6 +108,7 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
   // ── DuckStation (standalone PS1) ─────────────────────────────────
   'duckstation': EmulatorBiosSpec(
     hasHleBios: true,
+    fallbackSubdirectory: 'bios',
     files: [
       BiosFileSpec(
         fileName: 'scph1001.bin',

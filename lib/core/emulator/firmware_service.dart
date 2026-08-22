@@ -204,9 +204,12 @@ class FirmwareService {
     final String relativePath;
     if (matchingSpecForPath?.subdirectory != null) {
       relativePath = p.join(matchingSpecForPath!.subdirectory!, firmware.fileName);
+    } else if (biosSpec?.fallbackSubdirectory != null) {
+      relativePath = p.join(biosSpec!.fallbackSubdirectory!, firmware.fileName);
     } else {
       relativePath = firmware.fileName;
     }
+
     final destPath = p.join(biosDir, relativePath);
     final destFile = File(destPath);
     debugPrint('[Firmware] relativePath=$relativePath, destPath=$destPath');
