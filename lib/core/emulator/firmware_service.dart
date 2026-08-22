@@ -122,19 +122,18 @@ class FirmwareService {
 
   /// Downloads firmware for a specific emulator and places it in its BIOS directory.
   Future<void> syncFirmwareForEmulator(String emulatorId, {FirmwareProgressCallback? onProgress}) async {
+      debugPrint("[Firmware] Started individual emulator BIOS sync for $emulatorId");
     try {
       final platforms = await _rommService.getPlatforms();
       final biosDir = await _directoryService.getEmulatorBiosDirectory(emulatorId);
+      final emuSupportedSlugs = _strategyRegistry.getStrategyById(emulatorId)?.supportedSlugs;
 
       for (final platform in platforms) {
-        final strategy = _strategyRegistry.getStrategyForSlug(platform.slug);
-        if (strategy?.emulatorId == emulatorId) {
-          if (platform.firmware.isEmpty) continue;
+          if (!emuSupportedSlugs!.contains(platform.slug) | platform.firmware.isEmpty) continue;
           final biosSpec = _resolveBiosSpec(emulatorId, platform.slug);
           for (final firmware in platform.firmware) {
             await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: emulatorId, biosSpec: biosSpec, onProgress: onProgress);
           }
-        }
       }
     } catch (e) {
       debugPrint('[FirmwareService] Error syncing firmware for emulator $emulatorId: $e');
