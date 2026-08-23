@@ -1,4 +1,6 @@
 import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
@@ -39,5 +41,19 @@ class DolphinStrategy extends EmulatorStrategy {
   @override
   String resolveSavePath(Game game) {
     return ''; // Placeholder
+  }
+
+  @override
+  Future<void> postInstall(String installDir) async {
+    // Dolphin requires a portable.txt file in the SAME directory as the executable to run in portable mode.
+    // This ensures saves and settings are stored in the emulator directory.
+    final exePath = await _directoryService.findEmulatorExecutable(emulatorId, windowsExecutable);
+    final targetDir = exePath != null ? io.File(exePath).parent.path : installDir;
+    
+    final portableTxt = io.File(p.join(targetDir, 'portable.txt'));
+    if (!await portableTxt.exists()) {
+      await portableTxt.create();
+      debugPrint('[Dolphin] Created portable.txt at $targetDir to enable portable mode.');
+    }
   }
 }
