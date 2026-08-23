@@ -202,10 +202,17 @@ class FirmwareService {
     //   - Most others: null → system/SCPH1001.BIN (flat, at root)
     final matchingSpecForPath = _findMatchingSpec(firmware.fileName, biosSpec);
     final String relativePath;
-    if (matchingSpecForPath?.subdirectory != null) {
+
+    // 1. First check, are we syncing BIOS for RetroArch? If yes, we use the Libretro fallback subfolder for this core, if it exists in the registry.
+    if (emulatorId == 'retroarch' && biosSpec?.fallbackSubdirectoryLibretro != null) {
+      relativePath = p.join(biosSpec!.fallbackSubdirectoryLibretro!, firmware.fileName);
+    // 2. Else, let's check if we recognize the filename of this Firmware. If there's a subfolder in the registry for this specific firmware, let's use it.
+    } else if (matchingSpecForPath?.subdirectory != null) {
       relativePath = p.join(matchingSpecForPath!.subdirectory!, firmware.fileName);
+    // 3. Else, we check if the registry contains a fallback subfolder for this standalone emulator.
     } else if (biosSpec?.fallbackSubdirectory != null) {
       relativePath = p.join(biosSpec!.fallbackSubdirectory!, firmware.fileName);
+    // 4. If all else fails, simply put the firmware in the emulator's root folder.
     } else {
       relativePath = firmware.fileName;
     }
