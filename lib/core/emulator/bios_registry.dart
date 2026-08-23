@@ -47,7 +47,10 @@ class EmulatorBiosSpec {
   // Optionally provides a fallback folder if the BIOS file name does not match
   final String? fallbackSubdirectory;
 
-  const EmulatorBiosSpec({required this.files, this.hasHleBios = false, this.fallbackSubdirectory});
+  // Some Libretro/RetroArch Cores uses a different subfolder than their standalone counterparts.
+  final String? fallbackSubdirectoryLibretro;
+
+  const EmulatorBiosSpec({required this.files, this.hasHleBios = false, this.fallbackSubdirectory, this.fallbackSubdirectoryLibretro});
 
   int get requiredCount => files.where((f) => f.requirement == BiosRequirement.required).length;
   int get optionalCount => files.where((f) => f.requirement == BiosRequirement.optional).length;
@@ -149,6 +152,7 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
   // ── PlayStation 2 (LRPS2) ───────────────────────────────────────
   'pcsx2': EmulatorBiosSpec(
     fallbackSubdirectory: 'bios',
+    fallbackSubdirectoryLibretro: 'pcsx2/bios',
     files: [
       // Any PS2 BIOS .bin works — no specific filename required.
       // Users must dump from their own console.
@@ -289,9 +293,10 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
     ],
   ),
 
-  // ── Dreamcast / NAOMI (Flycast) ─────────────────────────────────
+  // ── Dreamcast / NAOMI (Flycast Standalone) ─────────────────────────────────
   'flycast': EmulatorBiosSpec(
     hasHleBios: true,
+    fallbackSubdirectoryLibretro: 'dc',
     files: [
       BiosFileSpec(
         fileName: 'dc_boot.bin',
