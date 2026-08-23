@@ -43,8 +43,14 @@ class EmulatorBiosSpec {
 
   /// If true, the emulator has built-in HLE BIOS and can run without any files.
   final bool hasHleBios;
+  
+  // Optionally provides a fallback folder if the BIOS file name does not match
+  final String? fallbackSubdirectory;
 
-  const EmulatorBiosSpec({required this.files, this.hasHleBios = false});
+  // Some Libretro/RetroArch Cores uses a different subfolder than their standalone counterparts.
+  final String? fallbackSubdirectoryLibretro;
+
+  const EmulatorBiosSpec({required this.files, this.hasHleBios = false, this.fallbackSubdirectory, this.fallbackSubdirectoryLibretro});
 
   int get requiredCount => files.where((f) => f.requirement == BiosRequirement.required).length;
   int get optionalCount => files.where((f) => f.requirement == BiosRequirement.optional).length;
@@ -105,6 +111,7 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
   // ── DuckStation (standalone PS1) ─────────────────────────────────
   'duckstation': EmulatorBiosSpec(
     hasHleBios: true,
+    fallbackSubdirectory: 'bios',
     files: [
       BiosFileSpec(
         fileName: 'scph1001.bin',
@@ -144,6 +151,8 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
 
   // ── PlayStation 2 (LRPS2) ───────────────────────────────────────
   'pcsx2': EmulatorBiosSpec(
+    fallbackSubdirectory: 'bios',
+    fallbackSubdirectoryLibretro: 'pcsx2/bios',
     files: [
       // Any PS2 BIOS .bin works — no specific filename required.
       // Users must dump from their own console.
@@ -151,19 +160,19 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
         fileName: 'SCPH-70000_BIOS_V12_USA_200.BIN',
         requirement: BiosRequirement.required,
         description: 'PS2 US BIOS (example — any valid PS2 BIOS dump works)',
-        subdirectory: 'pcsx2/bios',
+        subdirectory: 'bios',
       ),
       BiosFileSpec(
         fileName: 'SCPH-70004_BIOS_V12_EUR_200.BIN',
         requirement: BiosRequirement.required,
         description: 'PS2 EU BIOS (example)',
-        subdirectory: 'pcsx2/bios',
+        subdirectory: 'bios',
       ),
       BiosFileSpec(
         fileName: 'SCPH-70001_BIOS_V12_JAP_200.BIN',
         requirement: BiosRequirement.required,
         description: 'PS2 JP BIOS (example)',
-        subdirectory: 'pcsx2/bios',
+        subdirectory: 'bios',
       ),
     ],
   ),
@@ -284,64 +293,57 @@ const Map<String, EmulatorBiosSpec> kBiosRegistry = {
     ],
   ),
 
-  // ── Dreamcast / NAOMI (Flycast) ─────────────────────────────────
+  // ── Dreamcast / NAOMI (Flycast Standalone) ─────────────────────────────────
   'flycast': EmulatorBiosSpec(
     hasHleBios: true,
+    fallbackSubdirectoryLibretro: 'dc',
     files: [
       BiosFileSpec(
         fileName: 'dc_boot.bin',
         requirement: BiosRequirement.optional,
         description: 'Dreamcast BIOS',
         md5Hash: 'e10c53c2f8b90bab96ead2d368858623',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'naomi.zip',
         requirement: BiosRequirement.optional,
         description: 'NAOMI BIOS (from MAME)',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'awbios.zip',
         requirement: BiosRequirement.optional,
         description: 'Atomiswave BIOS (from MAME)',
-        subdirectory: 'dc',
+
       ),
       BiosFileSpec(
         fileName: 'naomi2.zip',
         requirement: BiosRequirement.optional,
         description: 'NAOMI 2 BIOS (from MAME)',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'hod2bios.zip',
         requirement: BiosRequirement.optional,
         description: 'NAOMI The House of the Dead 2 BIOS',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'f355dlx.zip',
         requirement: BiosRequirement.optional,
         description: 'NAOMI Ferrari F355 Challenge (deluxe) BIOS',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'f355bios.zip',
         requirement: BiosRequirement.optional,
         description: 'NAOMI Ferrari F355 Challenge (twin/deluxe) BIOS',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'airlbios.zip',
         requirement: BiosRequirement.optional,
         description: 'NAOMI Airline Pilots (deluxe) BIOS',
-        subdirectory: 'dc',
       ),
       BiosFileSpec(
         fileName: 'segasp.zip',
         requirement: BiosRequirement.optional,
         description: 'System SP BIOS (from MAME)',
-        subdirectory: 'dc',
       ),
     ],
   ),

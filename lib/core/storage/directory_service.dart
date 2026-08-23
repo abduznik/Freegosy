@@ -456,9 +456,8 @@ class DirectoryService {
       }
     }
     
-    final dirPath = p.join(emuDir, 'BIOS');
-    await _ensureDirectoryExists(dirPath);
-    return dirPath;
+    await _ensureDirectoryExists(emuDir);
+    return emuDir;
   }
 
   Future<String> getEmulatorSystemDirectory(String emulatorId, {String? platformSlug}) async => getEmulatorBiosDirectory(emulatorId, platformSlug: platformSlug);
