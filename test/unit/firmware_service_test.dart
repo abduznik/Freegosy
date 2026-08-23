@@ -107,7 +107,7 @@ void main() {
   });
 
   group('Firmware BIOS placement via registry subdirectory', () {
-    test('Flycast BIOS placed in dc/ subdirectory per registry spec', () async {
+    test('Flycast Libretro BIOS placed in dc/ subdirectory per registry spec', () async {
       final tempDir = await Directory.systemTemp.createTemp('firmware_subdir_test');
       final biosDir = p.join(tempDir.path, 'system');
       await Directory(biosDir).create();
@@ -129,11 +129,11 @@ void main() {
       );
 
       // Use 'flycast' emulatorId so the BIOS registry lookup works
-      final mockStrategy = MockEmulatorStrategy('flycast');
+      final mockStrategy = MockEmulatorStrategy('retroarch');
 
       when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
       when(mockStrategyRegistry.getStrategyForSlug('dc')).thenReturn(mockStrategy);
-      when(mockDirectoryService.getEmulatorBiosDirectory('flycast')).thenAnswer((_) async => biosDir);
+      when(mockDirectoryService.getEmulatorBiosDirectory('retroarch')).thenAnswer((_) async => biosDir);
       when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
           .thenAnswer((_) async => Uint8List.fromList([1, 2, 3]));
 
