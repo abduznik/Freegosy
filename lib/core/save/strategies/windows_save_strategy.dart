@@ -134,7 +134,7 @@ class WindowsSaveStrategy extends SaveStrategy {
           debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
         }
         final resolved = locations.first['path'];
-        final resolvedFileFilter = locations.first['raw']?.split('\\').last;
+        final resolvedFileFilter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(locations.first['raw']!) ? locations.first['raw']?.split('\\').last : '';
 
         if (resolved != null) {
           final dir = Directory(resolved);
