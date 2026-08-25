@@ -454,12 +454,17 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     if (!context.mounted) return;
     final currentArgs = windowsStrategy?.getLaunchArgs(game.id).join(' ') ?? '';
     final currentFilter = syncService?.windowsSaveStrategy.getSaveFilter(game.id) ?? '';
-    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id), currentLaunchArgs: currentArgs, currentSaveFilter: currentFilter));
+    final currentWikiFilter = syncService?.windowsSaveStrategy.getWikiSaveFilter(game.id) ?? '';
+    final currentWikiSavePath = syncService?.windowsSaveStrategy.getPcGamingWikiSavePath(game.id) ?? '';
+    final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, directoryService: ref.read(directoryServiceProvider).value, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id), currentWikiSavePath: currentWikiSavePath, currentLaunchArgs: currentArgs, currentSaveFilter: currentFilter, currentWikiFileFilter: currentWikiFilter));
     if (result == null) return;
     if (result['exe']?.isNotEmpty ?? false) await windowsStrategy?.setExeOverride(game.id, result['exe']!);
     if (result['save']?.isNotEmpty ?? false) await syncService?.windowsSaveStrategy.setManualOverride(game.id, result['save']!);
+    await syncService?.windowsSaveStrategy.setPcGamingWikiSavePath(game.id, result['wikiSavePath']!);
     final filter = result['filter'] ?? '';
+    final wikiFilter = result['wikiFilter'] ?? '';
     await syncService?.windowsSaveStrategy.setSaveFilter(game.id, filter);
+    await syncService?.windowsSaveStrategy.setWikiSaveFilter(game.id, wikiFilter);
     final argsStr = result['args'] ?? '';
     final argsList = argsStr.isNotEmpty ? argsStr.split(RegExp(r'\s+')) : <String>[];
     await windowsStrategy?.setLaunchArgs(game.id, argsList);

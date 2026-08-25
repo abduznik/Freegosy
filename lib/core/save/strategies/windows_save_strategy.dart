@@ -17,8 +17,13 @@ class WindowsSaveStrategy extends SaveStrategy {
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
+  // Saved PCGW path
+  final Map<String, String> _pcGamingWikiSavePath = {};
+
   // Save file filter patterns per game id (comma-separated: "*.ini, *.bin, eeprom.*")
   final Map<String, String> _saveFilters = {};
+  // Same, but for file filters retrieved from PCGamingWiki
+  final Map<String, String> _wikiSaveFilters = {};
 
   WindowsSaveStrategy(this._prefs, {PlatformInfo? platform})
       : _wikiService = PcGamingWikiService(Dio()),
@@ -29,6 +34,8 @@ class WindowsSaveStrategy extends SaveStrategy {
 
   /// Allows the user to manually set a save path for a game.
   static const String _prefsPrefix = 'win_save_';
+  /// Allows PCGamingWiki offline serialization for the save path for a game.
+  static const String _pcGamingWikiPrefsPrefix = 'win_pcGamingWikiSavePath_';
 
   void loadPersistedOverrides() {
     final keys = _prefs.getKeys().where((k) => k.startsWith(_prefsPrefix));
@@ -39,15 +46,32 @@ class WindowsSaveStrategy extends SaveStrategy {
     }
   }
 
+  void loadPersistedPcGamingWikiSavePath() {
+    final keys = _prefs.getKeys().where((k) => k.startsWith(_pcGamingWikiPrefsPrefix));
+    for (final key in keys) {
+      final gameId = key.substring(_pcGamingWikiPrefsPrefix.length);
+      final path = _prefs.getString(key);
+      if (path != null && path.isNotEmpty) _pcGamingWikiSavePath[gameId] = path;
+    }
+  }
+
   /// Allows the user to manually set a save path for a game.
   Future<void> setManualOverride(String gameId, String path) async {
     _manualOverrides[gameId] = path;
     await _prefs.setString('$_prefsPrefix$gameId', path);
   }
 
+ // Enables saving the resolved Save Path initially retrieved with PCGW 
+  Future<void> setPcGamingWikiSavePath(String gameId, String path) async {
+    _pcGamingWikiSavePath[gameId] = path;
+    await _prefs.setString('$_pcGamingWikiPrefsPrefix$gameId', path);
+  }
+
   String? getManualOverride(String gameId) => _manualOverrides[gameId];
+  String? getPcGamingWikiSavePath(String gameId) => _pcGamingWikiSavePath[gameId];
 
   static const String _filterPrefix = 'win_filter_';
+  static const String _wikiFilterPrefix = 'win_wikiFilter_';
 
   void loadPersistedFilters() {
     final keys = _prefs.getKeys().where((k) => k.startsWith(_filterPrefix));
@@ -58,12 +82,27 @@ class WindowsSaveStrategy extends SaveStrategy {
     }
   }
 
+  void loadPersistedWikiFilters() {
+  final keys = _prefs.getKeys().where((k) => k.startsWith(_wikiFilterPrefix));
+  for (final key in keys) {
+    final gameId = key.substring(_wikiFilterPrefix.length);
+    final filter = _prefs.getString(key);
+    if (filter != null) _wikiSaveFilters[gameId] = filter;
+  }
+}
+
   Future<void> setSaveFilter(String gameId, String filter) async {
     _saveFilters[gameId] = filter;
     await _prefs.setString('$_filterPrefix$gameId', filter);
   }
 
+  Future<void> setWikiSaveFilter(String gameId, String filter) async {
+    _wikiSaveFilters[gameId] = filter;
+    await _prefs.setString('$_wikiFilterPrefix$gameId', filter);
+  }
+
   String? getSaveFilter(String gameId) => _saveFilters[gameId];
+  String? getWikiSaveFilter(String gameId) => _wikiSaveFilters[gameId];
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
@@ -78,7 +117,14 @@ class WindowsSaveStrategy extends SaveStrategy {
     final isDir = await Directory(romPath).exists();
     final gameDir = isDir ? romPath : File(romPath).parent.path;
 
-    // Try PCGamingWiki
+    // Check if prefs already have the PCGamingWiki save path registered
+    final pcgw = _pcGamingWikiSavePath[game.id];
+    if (pcgw != null && pcgw.isNotEmpty) {
+      debugPrint('[WindowsSave] Using cached PCGamingWiki save path for ${game.name}: $pcgw');
+      return pcgw;
+    }
+
+    // Try Searching PCGamingWiki
     try {
       debugPrint('[WindowsSave] Querying PCGamingWiki for ${game.name}...');
       final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir);
@@ -88,12 +134,16 @@ class WindowsSaveStrategy extends SaveStrategy {
           debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
         }
         final resolved = locations.first['path'];
+        final resolvedFileFilter = locations.first['raw']?.split('\\').last;
+
         if (resolved != null) {
           final dir = Directory(resolved);
           if (await dir.exists()) {
             // Check if this directory actually has save files
             if (await _hasSaveFiles(dir)) {
               debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
+              setPcGamingWikiSavePath(game.id, resolved);
+              if (resolvedFileFilter != null || resolvedFileFilter!.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
               return resolved;
             }
             debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');
@@ -218,7 +268,12 @@ class WindowsSaveStrategy extends SaveStrategy {
     final dir = Directory(saveDir);
     if (!await dir.exists()) return [];
 
-    final filter = _saveFilters[game.id];
+    // Priority is given to the user's file filter manual override
+    String? filter = _saveFilters[game.id];
+
+    // Else, we fallback to the PCGW file filter, if there's any
+    if (filter == null || filter.isEmpty) filter = _wikiSaveFilters[game.id];
+
     final includePatterns = _parseFilterPatterns(filter);
 
     // When a filter is active, return individual matching files
