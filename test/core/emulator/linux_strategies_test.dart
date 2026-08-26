@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/linux_strategies/emudeck_strategy.dart';
+import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart';
 import 'package:freegosy/core/emulator/linux_strategies/retrodeck_strategy.dart';
 
 void main() {
@@ -131,6 +132,27 @@ void main() {
         final result = retrodeckStrategy.getBiosPath(tempHome.path, sdCardRoot);
         expect(result, p.join(sdCardRoot, 'bios'));
       });
+    });
+  });
+
+  group('LinuxEnvironmentStrategy.splitCommand', () {
+    test('splits flatpak run commands into executable + arguments', () {
+      final (exe, args) = LinuxEnvironmentStrategy.splitCommand('flatpak run org.libretro.RetroArch');
+      expect(exe, 'flatpak');
+      expect(args, ['run', 'org.libretro.RetroArch']);
+    });
+
+    test('returns plain paths unchanged so spaces are preserved', () {
+      final path = '/home/user/Emulation/tools/launchers/retroarch.sh';
+      final (exe, args) = LinuxEnvironmentStrategy.splitCommand(path);
+      expect(exe, path);
+      expect(args, isEmpty);
+    });
+
+    test('handles flatpak with extra runtime arguments', () {
+      final (exe, args) = LinuxEnvironmentStrategy.splitCommand('flatpak run --branch=stable org.DolphinEmu.dolphin-emu');
+      expect(exe, 'flatpak');
+      expect(args, ['run', '--branch=stable', 'org.DolphinEmu.dolphin-emu']);
     });
   });
 }

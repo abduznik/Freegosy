@@ -24,6 +24,20 @@ abstract class LinuxEnvironmentStrategy {
   String get name;
   String get id;
 
+  /// Splits an [exePath] into `(executable, leadingArguments)`.
+  ///
+  /// Multi-word commands like `flatpak run org.libretro.RetroArch` must be
+  /// split into separate argv entries before being handed to Process.start —
+  /// passing the whole string as the executable name fails with ENOENT.
+  /// Plain file paths are returned unchanged so spaces inside them are safe.
+  static (String, List<String>) splitCommand(String exePath) {
+    if (exePath.startsWith('flatpak ')) {
+      final parts = exePath.split(' ');
+      return (parts.first, parts.sublist(1));
+    }
+    return (exePath, const []);
+  }
+
   /// Returns the root ROMs directory for this environment.
   String getRomsRoot(String home, String? customPath, String? emudeckRoot);
 

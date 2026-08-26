@@ -121,14 +121,9 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<void> launch(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    if (exePath.startsWith('flatpak ')) {
-      // Flatpak launch: split command, append romPath
-      final parts = exePath.split(' ');
-      await io.Process.start(
-        parts.first,
-        [...parts.sublist(1), ...args, romPath],
-        mode: io.ProcessStartMode.detached,
-      );
+    final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+    if (cmdArgs.isNotEmpty) {
+      await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.detached);
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.detached);
     } else {
@@ -138,13 +133,9 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<io.Process?> launchWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
-    if (exePath.startsWith('flatpak ')) {
-      final parts = exePath.split(' ');
-      return await io.Process.start(
-        parts.first,
-        [...parts.sublist(1), ...args, romPath],
-        mode: io.ProcessStartMode.normal,
-      );
+    final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+    if (cmdArgs.isNotEmpty) {
+      return await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.normal);
     } else if (exePath.endsWith('.sh')) {
       return await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.normal);
     } else {
@@ -154,10 +145,9 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
 
   @override
   Future<void> launchStandalone(String emulatorId, String exePath, {List<String> args = const []}) async {
-    if (exePath.startsWith('flatpak ')) {
-      final parts = exePath.split(' ');
-      await io.Process.start(parts.first, [...parts.sublist(1), ...args],
-        mode: io.ProcessStartMode.detached);
+    final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+    if (cmdArgs.isNotEmpty) {
+      await io.Process.start(exe, [...cmdArgs, ...args], mode: io.ProcessStartMode.detached);
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args], mode: io.ProcessStartMode.detached);
     } else {
