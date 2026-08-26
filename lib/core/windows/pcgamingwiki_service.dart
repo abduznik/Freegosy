@@ -46,7 +46,23 @@ class PcGamingWikiService {
       if (searchResponse.statusCode == 200) {
         final results = searchResponse.data['query']['search'] as List;
         if (results.isNotEmpty) {
-          final title = results.first['title'] as String;
+          String title = '';
+
+          // PCGW have empty redirects pages for some games, let's check if this is the case here
+          bool needRedirect = results.first['snippet'].toString().contains('#REDIRECT') ? true : false;
+          if (needRedirect) {
+            debugPrint('[PcGamingWiki] Found redirect page for "${results.first['title']}", resolving...');
+            final redirectReponse = await _dio.get(_apiUrl, queryParameters: {
+              'action': 'opensearch',
+              'search': gameTitle,
+              'format': 'json',
+              'redirects': 'resolve',
+            });
+
+            title = redirectReponse.data[1][0];
+
+          } else {title = results.first['title'];}
+
           debugPrint('[PcGamingWiki] Search found: $title');
           return title;
         }
@@ -68,7 +84,9 @@ class PcGamingWikiService {
         'prop': 'wikitext',
         'format': 'json',
       });
+
       if (response.statusCode == 200) {
+        debugPrint('[PcGamingWiki] Starting parse for url: ${response.realUri}');
         final wikitext = response.data['parse']['wikitext']['*'] as String?;
         debugPrint('[PcGamingWiki] Got wikitext (${wikitext?.length ?? 0} chars)');
         return wikitext;
@@ -111,7 +129,6 @@ class PcGamingWikiService {
     for (final line in wikitext.split('\n')) {
       if (!line.contains('Game data/saves')) continue;
       if (!line.contains('|Windows|')) continue;
-
       try {
         final after = line.split('|Windows|').last;
         final cleaned = after.endsWith('}}') ? after.substring(0, after.length - 2) : after;
@@ -122,8 +139,11 @@ class PcGamingWikiService {
           if (trimmed.isEmpty) continue;
 
           final lower = trimmed.toLowerCase();
-          if (_shouldSkipPath(lower)) continue;
-
+          if (_shouldSkipPath(lower)) {
+            debugPrint ('[PcGamingWiki] Unhandled path type: $lower, skipping...');
+            continue;
+          }
+          debugPrint("[PcGamingWiki] Raw path found: $lower");
           final expanded = _expandWikiPath(trimmed, gameTitle, gameDir);
           if (expanded == null) continue;
 
@@ -147,7 +167,6 @@ class PcGamingWikiService {
     return lower.contains('steam') ||
         lower.contains('linux') ||
         lower.contains('wine') ||
-        lower.contains('{{p|uid}}') ||
         lower.contains('{{p|hkcu}}') ||
         lower.contains('{{p|osxhome}}') ||
         lower.contains('{{p|xdg') ||
@@ -213,6 +232,9 @@ class PcGamingWikiService {
         entry.value,
       );
     }
+
+    // In case of a "User ID" folder, we consider the entirety of the parent save folder
+    if (expanded.toLowerCase().contains('{{p|uid}}')) expanded = File(expanded).parent.path;
 
     // If any unresolved templates remain, skip
     if (expanded.toLowerCase().contains('{{p|')) return null;
