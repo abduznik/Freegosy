@@ -279,7 +279,7 @@ class WindowsSaveStrategy extends SaveStrategy {
 
     final includePatterns = _parseFilterPatterns(filter);
 
-    // When a filter is active, return individual matching files
+    // When a filter (manual or PCGW) is active, return individual matching files
     // so the sync service zips only those files (not the whole directory).
     if (includePatterns.isNotEmpty) {
       final matchedFiles = <File>[];
@@ -329,7 +329,8 @@ class WindowsSaveStrategy extends SaveStrategy {
         for (final entry in archive) {
           if (entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
           
-          final entryPath = p.normalize(p.join(saveDir, entry.name));
+          final destDir = Directory(saveDir).parent.path;
+          final entryPath = p.normalize(p.join(destDir, entry.name));
           if (entry.isFile) {
             await backupSave(entryPath);
             final outFile = File(entryPath);
