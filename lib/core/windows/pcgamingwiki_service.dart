@@ -147,7 +147,6 @@ class PcGamingWikiService {
     return lower.contains('steam') ||
         lower.contains('linux') ||
         lower.contains('wine') ||
-        lower.contains('{{p|uid}}') ||
         lower.contains('{{p|hkcu}}') ||
         lower.contains('{{p|osxhome}}') ||
         lower.contains('{{p|xdg') ||
@@ -213,6 +212,9 @@ class PcGamingWikiService {
         entry.value,
       );
     }
+
+    // In case of a "User ID" folder, we consider the entirety of the parent save folder
+    if (expanded.toLowerCase().contains('{{p|uid}}')) expanded = File(expanded).parent.path;
 
     // If any unresolved templates remain, skip
     if (expanded.toLowerCase().contains('{{p|')) return null;
