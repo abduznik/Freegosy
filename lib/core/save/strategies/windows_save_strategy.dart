@@ -134,7 +134,10 @@ class WindowsSaveStrategy extends SaveStrategy {
           debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
         }
         final resolved = locations.first['path'];
-        final resolvedFileFilter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(locations.first['raw']!) ? locations.first['raw']?.split('\\').last : '';
+        var resolvedFileFilter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(locations.first['raw']!) ? locations.first['raw']?.split('\\').last : '';
+        debugPrint("File Filter PCGW => $resolvedFileFilter");
+        // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
+        if (resolvedFileFilter!.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
 
         if (resolved != null) {
           final dir = Directory(resolved);
@@ -143,7 +146,7 @@ class WindowsSaveStrategy extends SaveStrategy {
             if (await _hasSaveFiles(dir)) {
               debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
               setPcGamingWikiSavePath(game.id, resolved);
-              if (resolvedFileFilter != null || resolvedFileFilter!.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
+              if (resolvedFileFilter!.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
               return resolved;
             }
             debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');

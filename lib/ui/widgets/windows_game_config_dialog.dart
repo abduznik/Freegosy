@@ -265,7 +265,9 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
                         debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
                       }
                       final resolved = locations.first['path'];
-                      final resolvedFileFilter = locations.first['raw']!.split('\\').last;
+                      var resolvedFileFilter = locations.first['raw']!.split('\\').last;
+                              // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
+                      if (resolvedFileFilter.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
                       if (resolved != null) {
                         final names = resolved;
                         setState(() {
