@@ -146,7 +146,7 @@ class WindowsSaveStrategy extends SaveStrategy {
             if (await _hasSaveFiles(dir)) {
               debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
               setPcGamingWikiSavePath(game.id, resolved);
-              if (resolvedFileFilter!.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
+              if (resolvedFileFilter.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
               return resolved;
             }
             debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');
