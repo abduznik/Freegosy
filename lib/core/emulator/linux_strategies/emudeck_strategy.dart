@@ -183,7 +183,8 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args, absRomPath], mode: io.ProcessStartMode.detached);
     } else {
-      await io.Process.start(exePath, [...args, absRomPath], mode: io.ProcessStartMode.detached);
+      final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+      await io.Process.start(exe, [...cmdArgs, ...args, absRomPath], mode: io.ProcessStartMode.detached);
     }
   }
 
@@ -210,7 +211,8 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
     } else if (exePath.endsWith('.sh')) {
       return await io.Process.start('bash', [exePath, ...args, absRomPath], mode: io.ProcessStartMode.normal);
     } else {
-      return await io.Process.start(exePath, [...args, absRomPath], mode: io.ProcessStartMode.normal);
+      final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+      return await io.Process.start(exe, [...cmdArgs, ...args, absRomPath], mode: io.ProcessStartMode.normal);
     }
   }
 
@@ -234,8 +236,13 @@ class EmuDeckStrategy extends LinuxEnvironmentStrategy {
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args], mode: io.ProcessStartMode.detached);
     } else {
-      final exeDir = io.File(exePath).parent.path;
-      await io.Process.start(exePath, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
+      final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+      if (cmdArgs.isNotEmpty) {
+        await io.Process.start(exe, [...cmdArgs, ...args], mode: io.ProcessStartMode.detached);
+      } else {
+        final exeDir = io.File(exe).parent.path;
+        await io.Process.start(exe, args, mode: io.ProcessStartMode.detached, workingDirectory: exeDir);
+      }
     }
   }
 
