@@ -875,4 +875,37 @@ void main() {
       expect(mapping[key], GameAction.up);
     });
   });
+
+  // =========================================================================
+  // 18. normalizeAxisValue (raw Linux joydev magnitudes vs normalized ranges)
+  // =========================================================================
+  group('normalizeAxisValue', () {
+    test('values already within -1.0..1.0 pass through unchanged', () {
+      expect(GamepadUtils.normalizeAxisValue(0.0), 0.0);
+      expect(GamepadUtils.normalizeAxisValue(1.0), 1.0);
+      expect(GamepadUtils.normalizeAxisValue(-1.0), -1.0);
+      expect(GamepadUtils.normalizeAxisValue(0.42), 0.42);
+    });
+
+    test('raw positive int16 magnitude rescales toward 1.0', () {
+      expect(GamepadUtils.normalizeAxisValue(32767.0), closeTo(1.0, 0.001));
+    });
+
+    test('raw negative int16 magnitude rescales toward -1.0', () {
+      expect(GamepadUtils.normalizeAxisValue(-32767.0), closeTo(-1.0, 0.001));
+    });
+
+    test('small raw jitter no longer reads as fully pressed', () {
+      // A few dozen units of int16 sensor noise on an idle axis used to
+      // trivially satisfy the wizard's isPressed threshold (abs >= 0.5)
+      // because it was compared against the raw magnitude directly.
+      final normalized = GamepadUtils.normalizeAxisValue(50.0);
+      expect(normalized.abs(), lessThan(0.5));
+    });
+
+    test('out-of-range magnitude clamps to -1.0..1.0', () {
+      expect(GamepadUtils.normalizeAxisValue(40000.0), 1.0);
+      expect(GamepadUtils.normalizeAxisValue(-40000.0), -1.0);
+    });
+  });
 }
