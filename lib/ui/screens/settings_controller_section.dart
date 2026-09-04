@@ -702,6 +702,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
   int _latchedPolarity = 0; // +1 or -1
   String? _pendingKey;
   int _pendingPolarity = 0;
+  KeyType? _pendingType;
 
   @override
   void initState() {
@@ -766,6 +767,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
         setState(() {
           _pendingKey = event.key;
           _pendingPolarity = polarity;
+          _pendingType = event.type;
         });
         _chargeController.forward();
       }
@@ -778,6 +780,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
         setState(() {
           _pendingKey = null;
           _pendingPolarity = 0;
+          _pendingType = null;
         });
       }
     }
@@ -787,6 +790,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
     if (_pendingKey == null) return;
     final rawKey = _pendingKey!;
     final polarity = _pendingPolarity;
+    final eventType = _pendingType;
     final action = widget.manualActions[_currentActionIndex];
 
     // Encode polarity into the storage key for any input that isn't a clean
@@ -800,10 +804,18 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
     // (letters/underscores only).  Numeric keys (e.g. "6", "7" from Linux
     // /dev/input/js* hat switches) always get the suffix so Up and Down on
     // the same hat axis are stored as distinct entries.
+    //
+    // Numeric keys are also tagged by event type first (see
+    // GamepadUtils.disambiguateKey): on Linux a button and an axis can share
+    // the same raw index (Xbox 360 pad: button 6 = Back, axis 6 = D-pad X),
+    // so without the tag, sniffing one would silently overwrite the other.
     final bool isNamedButton = RegExp(r'^[a-zA-Z_][a-zA-Z0-9_ ./-]*$').hasMatch(rawKey);
-    final String storageKey = (isNamedButton && polarity >= 0)
+    final String disambiguatedKey = isNamedButton
         ? rawKey
-        : GamepadUtils.encodeKey(rawKey, polarity);
+        : GamepadUtils.disambiguateKey(rawKey, isButton: eventType == KeyType.button);
+    final String storageKey = (isNamedButton && polarity >= 0)
+        ? disambiguatedKey
+        : GamepadUtils.encodeKey(disambiguatedKey, polarity);
 
     setState(() {
       _sniffedMapping[storageKey] = action;
@@ -812,6 +824,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
       _latchedPolarity = polarity;
       _pendingKey = null;
       _pendingPolarity = 0;
+      _pendingType = null;
       if (_currentActionIndex >= widget.manualActions.length) _complete = true;
     });
     _chargeController.reset();
@@ -823,6 +836,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
     setState(() {
       _pendingKey = null;
       _pendingPolarity = 0;
+      _pendingType = null;
       _latchedKey = null;
       _latchedPolarity = 0;
       _currentActionIndex++;

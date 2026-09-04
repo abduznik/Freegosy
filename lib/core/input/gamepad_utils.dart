@@ -77,6 +77,20 @@ class GamepadUtils {
     return '$rawKey${polarity >= 0 ? '+' : '-'}';
   }
 
+  /// Tags a bare numeric raw key with its event type before any polarity
+  /// suffix is applied.
+  ///
+  /// On Linux (/dev/input/js*), a button and an axis can share the same raw
+  /// index — e.g. the Xbox 360 pad reports Back as button 6 and the D-pad's
+  /// horizontal axis as axis 6, both arriving as `key: "6"`. Left un-tagged,
+  /// mapping either one stomps the other. Named keys (letters/underscores,
+  /// e.g. `dpad_up`, `button_0`) are already unambiguous on every other
+  /// backend and are returned unchanged.
+  static String disambiguateKey(String rawKey, {required bool isButton}) {
+    if (!RegExp(r'^\d+$').hasMatch(rawKey)) return rawKey;
+    return (isButton ? 'btn' : 'ax') + rawKey;
+  }
+
   /// Whether a stored key has a polarity suffix (i.e. it came from an axis).
   static bool hasPolaritySuffix(String key) {
     return key.endsWith('+') || key.endsWith('-');

@@ -285,8 +285,19 @@ class GamepadService extends WidgetsBindingObserver {
   NormalizedInput? _normalize(GamepadEvent event) {
     final mapping = _getMappingFor(event.gamepadId);
 
+    // Numeric raw keys are ambiguous on Linux (/dev/input/js*), where a
+    // button and an axis can report the same index (e.g. Xbox 360 pad:
+    // button 6 = Back, axis 6 = D-pad X). Tag them by event type before
+    // lookup; named keys pass through unchanged, so this only affects the
+    // Linux numeric case.
+    final disambiguatedKey = GamepadUtils.disambiguateKey(
+      event.key,
+      isButton: event.type == KeyType.button,
+    );
+
     // First try a plain key lookup (digital buttons, named keys like dpad_up).
-    final directAction = mapping[event.key];
+    // Falls back to the bare raw key for mappings saved before disambiguation.
+    final directAction = mapping[disambiguatedKey] ?? mapping[event.key];
     if (directAction != null) {
       debugPrint('[Controller] normalize: key "${event.key}" → ${directAction.name}');
       return NormalizedInput(action: directAction, value: event.value);
@@ -298,8 +309,10 @@ class GamepadService extends WidgetsBindingObserver {
     //   value < 0  → look up "key-"
     //   value == 0 → axis centered, no action (will be cleared by axis state machine)
     if (event.value != 0) {
-      final polarityKey = GamepadUtils.encodeKey(event.key, event.value >= 0 ? 1 : -1);
-      final polarAction = mapping[polarityKey];
+      final polarity = event.value >= 0 ? 1 : -1;
+      final polarityKey = GamepadUtils.encodeKey(disambiguatedKey, polarity);
+      final polarAction = mapping[polarityKey] ??
+          mapping[GamepadUtils.encodeKey(event.key, polarity)];
       if (polarAction != null) {
         debugPrint('[Controller] normalize: polarity key "$polarityKey" → ${polarAction.name}');
         return NormalizedInput(action: polarAction, value: event.value);

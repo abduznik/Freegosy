@@ -786,4 +786,93 @@ void main() {
       expect(t, isNot(contains('controller')));
     });
   });
+
+  // =========================================================================
+  // 16. disambiguateKey (numeric button/axis raw-index collisions)
+  // =========================================================================
+  group('disambiguateKey', () {
+    test('numeric key tagged as button', () {
+      expect(GamepadUtils.disambiguateKey('6', isButton: true), 'btn6');
+    });
+
+    test('numeric key tagged as axis', () {
+      expect(GamepadUtils.disambiguateKey('6', isButton: false), 'ax6');
+    });
+
+    test('named key passes through unchanged regardless of type', () {
+      expect(GamepadUtils.disambiguateKey('dpad_up', isButton: true), 'dpad_up');
+      expect(GamepadUtils.disambiguateKey('button_0', isButton: false), 'button_0');
+    });
+
+    test('Xbox 360 pad on Linux: button 6 (Back) and axis 6 (D-pad X) no longer collide', () {
+      // Raw joydev indices before disambiguation: both arrive as key "6".
+      final backKey = GamepadUtils.disambiguateKey('6', isButton: true);
+      final dpadXKey = GamepadUtils.disambiguateKey('6', isButton: false);
+      expect(backKey, isNot(dpadXKey));
+    });
+
+    test('Xbox 360 pad on Linux: button 7 (Start) and axis 7 (D-pad Y) no longer collide', () {
+      final startKey = GamepadUtils.disambiguateKey('7', isButton: true);
+      final dpadYKey = GamepadUtils.disambiguateKey('7', isButton: false);
+      expect(startKey, isNot(dpadYKey));
+    });
+
+    test('composes with encodeKey: button key and both axis polarity keys stay distinct', () {
+      final backKey = GamepadUtils.disambiguateKey('6', isButton: true);
+      final rightKey = GamepadUtils.encodeKey(
+          GamepadUtils.disambiguateKey('6', isButton: false), 1);
+      final leftKey = GamepadUtils.encodeKey(
+          GamepadUtils.disambiguateKey('6', isButton: false), -1);
+      expect({backKey, rightKey, leftKey}, hasLength(3));
+    });
+  });
+
+  // =========================================================================
+  // 17. Linux numeric-key collision regression (Xbox 360 pad)
+  // =========================================================================
+  group('Linux numeric-key collision regression (Xbox 360 pad)', () {
+    // Mirrors the storage keys _registerCurrent() now produces for a
+    // Microsoft Xbox 360 pad's raw /dev/input/js* events, where Back/Start
+    // are buttons 6/7 and the D-pad's X/Y axes are also indices 6/7.
+    final mapping = {
+      GamepadUtils.disambiguateKey('6', isButton: true): GameAction.select,
+      GamepadUtils.disambiguateKey('7', isButton: true): GameAction.start,
+      GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('6', isButton: false), 1):
+          GameAction.right,
+      GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('6', isButton: false), -1):
+          GameAction.left,
+      GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('7', isButton: false), 1):
+          GameAction.down,
+      GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('7', isButton: false), -1):
+          GameAction.up,
+    };
+
+    test('button 6 (Back) resolves to select, not a D-pad direction', () {
+      expect(mapping[GamepadUtils.disambiguateKey('6', isButton: true)], GameAction.select);
+    });
+
+    test('axis 6 positive (D-pad right) resolves to right, not select', () {
+      final key = GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('6', isButton: false), 1);
+      expect(mapping[key], GameAction.right);
+    });
+
+    test('axis 6 negative (D-pad left) resolves to left, not select', () {
+      final key = GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('6', isButton: false), -1);
+      expect(mapping[key], GameAction.left);
+    });
+
+    test('button 7 (Start) resolves to start, not a D-pad direction', () {
+      expect(mapping[GamepadUtils.disambiguateKey('7', isButton: true)], GameAction.start);
+    });
+
+    test('axis 7 positive (D-pad down) resolves to down, not start', () {
+      final key = GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('7', isButton: false), 1);
+      expect(mapping[key], GameAction.down);
+    });
+
+    test('axis 7 negative (D-pad up) resolves to up, not start', () {
+      final key = GamepadUtils.encodeKey(GamepadUtils.disambiguateKey('7', isButton: false), -1);
+      expect(mapping[key], GameAction.up);
+    });
+  });
 }
