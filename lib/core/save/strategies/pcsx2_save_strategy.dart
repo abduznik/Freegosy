@@ -299,12 +299,19 @@ class Pcsx2SaveStrategy extends SaveStrategy {
         // entries will have a leading path component matching a PS2 serial
         // (e.g. "SLUS-12345/filename.p2s").
         final serialPattern = RegExp(r'^(S[A-Z]{3,4}-\d{5})[/\\]', caseSensitive: false);
+        // Folder-type memcard bundle: "Mcd001.ps2/<serial>/<file>". This is
+        // how the push side packs folder-type memcards (see
+        // encoder.addDirectory(...) on the push path) — the McdNNN.ps2
+        // directory itself contains the per-game serial folders.
+        final memcardFolderPattern =
+            RegExp(r'^(Mcd\d+\.ps2)[/\\]', caseSensitive: false);
         for (final entry in archive) {
           if (!entry.isFile) continue;
           if (entry.name == 'freegosy_sync.txt') continue;
 
           final entryLower = entry.name.toLowerCase();
           final serialMatch = serialPattern.firstMatch(entry.name);
+          final memcardFolderMatch = memcardFolderPattern.firstMatch(entry.name);
 
           String targetPath;
           if (serialMatch != null) {
@@ -313,6 +320,14 @@ class Pcsx2SaveStrategy extends SaveStrategy {
             final savesDir = isEmuDeck ? root : p.join(root, 'saves');
             final relativePath = entry.name.substring(serialMatch.group(0)!.length);
             targetPath = p.normalize(p.join(savesDir, serial, relativePath));
+          } else if (memcardFolderMatch != null) {
+            // Folder-type memcard bundle — restore to memcards/{McdNNN.ps2}/
+            final memcardFolderName = memcardFolderMatch.group(1)!;
+            final memcardsDir = isEmuDeck ? root : p.join(root, 'memcards');
+            final relativePath =
+                entry.name.substring(memcardFolderMatch.group(0)!.length);
+            targetPath = p.normalize(
+                p.join(memcardsDir, memcardFolderName, relativePath));
           } else if (entryLower.endsWith('.ps2')) {
             // Shared memcard — restore to memcards/ with normalized name
             final memcardsDir = isEmuDeck ? root : p.join(root, 'memcards');
