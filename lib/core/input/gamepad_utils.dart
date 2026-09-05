@@ -98,6 +98,37 @@ class GamepadUtils {
     return (value / 32767.0).clamp(-1.0, 1.0);
   }
 
+  /// Named DirectInput axis keys that report unsigned 0..65535 magnitudes
+  /// (center ~32767) instead of the signed int16 range Linux joydev axes use.
+  static const Set<String> _directInputUnsignedAxisKeys = {
+    'dwxpos', 'dwypos', 'dwrpos', 'dwupos', 'dwvpos',
+  };
+
+  /// Rescales a raw axis value to -1.0..1.0, choosing the correct convention
+  /// for the reporting backend based on the raw key name.
+  ///
+  /// On Windows, "generic"/DirectInput controllers report named axes
+  /// (dwXpos/dwYpos/dwRpos/dwUpos/dwVpos) as UNSIGNED magnitudes in
+  /// 0..65535 with the centered/idle position at ~32767 — this is a
+  /// completely different convention from the signed ~-32767..32767 range
+  /// [normalizeAxisValue] handles for Linux /dev/input/js*. Feeding a
+  /// DirectInput value straight into [normalizeAxisValue] misreads it: e.g.
+  /// a lightly-deflected axis sitting at ~40000 gets divided by 32767 and
+  /// clamped to 1.0, i.e. it reads as fully pressed in every direction —
+  /// this is what made the manual controller-mapping wizard bind every
+  /// action to "both analog sticks" for Windows DirectInput ("generic
+  /// Windows controller") pads.
+  ///
+  /// This mirrors the same `(value - 32767.0) / 32767.0` conversion already
+  /// used as the reference implementation in GamepadService._normalize()
+  /// for the main input pipeline.
+  static double normalizeAxisValueForKey(String rawKey, double value) {
+    if (_directInputUnsignedAxisKeys.contains(rawKey.toLowerCase())) {
+      return ((value - 32767.0) / 32767.0).clamp(-1.0, 1.0);
+    }
+    return normalizeAxisValue(value);
+  }
+
   /// Tags a bare numeric raw key with its event type before any polarity
   /// suffix is applied.
   ///

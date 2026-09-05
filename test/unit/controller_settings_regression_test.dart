@@ -908,4 +908,82 @@ void main() {
       expect(GamepadUtils.normalizeAxisValue(-40000.0), -1.0);
     });
   });
+
+  // =========================================================================
+  // 19. normalizeAxisValueForKey (Windows DirectInput unsigned 0..65535 axes)
+  // =========================================================================
+  group('normalizeAxisValueForKey — DirectInput unsigned axis convention', () {
+    // Regression for issue #50 (Windows-specific part): a "generic Windows
+    // controller" reports dwXpos/dwYpos (and dwRpos/dwUpos/dwVpos) as
+    // UNSIGNED magnitudes in 0..65535 with center at ~32767 — NOT the signed
+    // ~-32767..32767 Linux joydev convention. Feeding that straight into the
+    // Linux-oriented normalizeAxisValue() misreads any nonzero raw value as
+    // "fully pressed", so the manual mapping wizard latched every direction
+    // of both analog sticks simultaneously.
+
+    test('idle/centered dwxpos (~32767) normalizes to ~0.0, not ~0.5', () {
+      final v = GamepadUtils.normalizeAxisValueForKey('dwxpos', 32767.0);
+      expect(v.abs(), lessThan(0.01));
+    });
+
+    test('idle/centered dwypos (~32768) normalizes to ~0.0', () {
+      final v = GamepadUtils.normalizeAxisValueForKey('dwypos', 32768.0);
+      expect(v.abs(), lessThan(0.01));
+    });
+
+    test('full positive deflection (65535) normalizes to ~1.0', () {
+      final v = GamepadUtils.normalizeAxisValueForKey('dwxpos', 65535.0);
+      expect(v, closeTo(1.0, 0.001));
+    });
+
+    test('full negative deflection (0) normalizes to ~-1.0', () {
+      final v = GamepadUtils.normalizeAxisValueForKey('dwxpos', 0.0);
+      expect(v, closeTo(-1.0, 0.001));
+    });
+
+    test('light deflection (40000) does not trivially satisfy isPressed (abs >= 0.5)', () {
+      // This is the exact bug: normalizeAxisValue(40000) clamps to 1.0
+      // (reads as fully pressed) whereas the correct DirectInput reading is
+      // a light ~22% deflection.
+      final v = GamepadUtils.normalizeAxisValueForKey('dwxpos', 40000.0);
+      expect(v.abs(), lessThan(0.5));
+      expect(v, closeTo((40000.0 - 32767.0) / 32767.0, 0.001));
+    });
+
+    test('dwrpos/dwupos/dwvpos also use the unsigned convention', () {
+      for (final key in ['dwrpos', 'dwupos', 'dwvpos']) {
+        final v = GamepadUtils.normalizeAxisValueForKey(key, 32767.0);
+        expect(v.abs(), lessThan(0.01), reason: '$key should read as centered');
+      }
+    });
+
+    test('key match is case-insensitive', () {
+      final v = GamepadUtils.normalizeAxisValueForKey('DWXPOS', 32767.0);
+      expect(v.abs(), lessThan(0.01));
+    });
+
+    test('non-DirectInput keys still fall back to the Linux signed convention', () {
+      // A bare numeric Linux joydev axis key should be unaffected by the
+      // new DirectInput branch.
+      final v = GamepadUtils.normalizeAxisValueForKey('3', 32767.0);
+      expect(v, closeTo(1.0, 0.001));
+    });
+
+    test('out-of-range DirectInput value still clamps to -1.0..1.0', () {
+      expect(GamepadUtils.normalizeAxisValueForKey('dwxpos', 999999.0), 1.0);
+      expect(GamepadUtils.normalizeAxisValueForKey('dwxpos', -999999.0), -1.0);
+    });
+
+    test('matches the reference DirectInput formula used in GamepadService._normalize()', () {
+      // GamepadService._normalize() uses (event.value - 32767.0) / 32767.0
+      // for dwXpos/dwYpos before applying deadzone. normalizeAxisValueForKey
+      // must agree with that pre-deadzone conversion for the sniff wizard's
+      // press/release thresholds to make sense against the same raw stream.
+      for (final raw in [0.0, 16000.0, 32767.0, 50000.0, 65535.0]) {
+        final expected = ((raw - 32767.0) / 32767.0).clamp(-1.0, 1.0);
+        expect(GamepadUtils.normalizeAxisValueForKey('dwypos', raw),
+            closeTo(expected, 0.0001));
+      }
+    });
+  });
 }

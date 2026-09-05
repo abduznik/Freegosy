@@ -735,7 +735,7 @@ class _ButtonSniffDialogState extends State<_ButtonSniffDialog>
     if (event.gamepadId != widget.controllerId) return;
     if (_complete) return;
 
-    final v = GamepadUtils.normalizeAxisValue(event.value);
+    final v = GamepadUtils.normalizeAxisValueForKey(event.key, event.value);
     final abs = v.abs();
     final polarity = v >= 0 ? 1 : -1;
     final isPressed = abs >= 0.5;
