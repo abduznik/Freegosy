@@ -5,6 +5,7 @@ import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/storage/file_system_index.dart';
 import 'package:freegosy/providers/romm_provider.dart';
+import 'package:freegosy/providers/retroachievements_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/settings_screen.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
@@ -59,6 +60,9 @@ void main() {
           username: 'olduser',
           password: 'oldpassword',
         ))),
+        // Avoid hitting SecureStorageService/the network for an unrelated
+        // section — no RetroAchievements account is connected in these tests.
+        retroAchievementsCredentialsProvider.overrideWith((ref) => Future.value(null)),
       ],
       child: const MaterialApp(
         home: SettingsScreen(),
