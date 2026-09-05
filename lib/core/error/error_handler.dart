@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import '../emulator/linux_strategies/linux_environment_strategy.dart';
 
 enum ErrorSeverity { info, warning, error, success }
 
@@ -85,6 +86,20 @@ class ErrorHandler {
             technical: error.toString(),
           );
       }
+    }
+
+    // Flatpak sandbox confinement (issue #75): the ROM lives outside the
+    // Flatpak's default filesystem access, so launching it fails no matter
+    // what the filename looks like. Surface the exact override command.
+    if (error is FlatpakSandboxAccessException) {
+      return AppError(
+        title: 'Flatpak Cannot Access ROM',
+        message: 'This ROM is outside "${error.flatpakPackageId}"\'s sandbox access. '
+            'Run this in a terminal, then try launching again:\n'
+            'flatpak override --user --filesystem=${error.romPath} ${error.flatpakPackageId}',
+        severity: ErrorSeverity.warning,
+        technical: error.toString(),
+      );
     }
 
     // File system errors

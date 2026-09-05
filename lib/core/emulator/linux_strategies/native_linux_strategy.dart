@@ -122,8 +122,16 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   @override
   Future<void> launch(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
     final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+    _checkFlatpakSandboxAccessIfNeeded(exe, cmdArgs, romPath);
     if (cmdArgs.isNotEmpty) {
-      await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.detached);
+      // Flatpak commands (e.g. "flatpak run org.DolphinEmu.dolphin-emu") are
+      // resolved via a raw PATH lookup by Process.start, which uses the app's
+      // inherited environment rather than a shell-resolved one. On some
+      // desktop/session setups (e.g. Steam Deck gamescope sessions) that PATH
+      // doesn't include `flatpak`, causing a ProcessException even though
+      // `flatpak` works fine from an interactive shell. Force shell resolution
+      // for this case specifically — see issue #84.
+      await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.detached, runInShell: exe == 'flatpak');
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.detached);
     } else {
@@ -134,8 +142,10 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   @override
   Future<io.Process?> launchWithHandle(Game game, String romPath, String emulatorId, String exePath, {List<String> args = const []}) async {
     final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
+    _checkFlatpakSandboxAccessIfNeeded(exe, cmdArgs, romPath);
     if (cmdArgs.isNotEmpty) {
-      return await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.normal);
+      // See comment in launch() above regarding runInShell for flatpak commands.
+      return await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.normal, runInShell: exe == 'flatpak');
     } else if (exePath.endsWith('.sh')) {
       return await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.normal);
     } else {
@@ -147,7 +157,8 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   Future<void> launchStandalone(String emulatorId, String exePath, {List<String> args = const []}) async {
     final (exe, cmdArgs) = LinuxEnvironmentStrategy.splitCommand(exePath);
     if (cmdArgs.isNotEmpty) {
-      await io.Process.start(exe, [...cmdArgs, ...args], mode: io.ProcessStartMode.detached);
+      // See comment in launch() above regarding runInShell for flatpak commands.
+      await io.Process.start(exe, [...cmdArgs, ...args], mode: io.ProcessStartMode.detached, runInShell: exe == 'flatpak');
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args], mode: io.ProcessStartMode.detached);
     } else {
@@ -160,5 +171,23 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   Future<String?> _flatpakPackageFor(String emulatorId) async {
     _flatpakCache ??= await detectFlatpakEmulators();
     return _flatpakCache![emulatorId];
+  }
+
+  /// Additive pre-launch check (issue #75): if [exe]/[cmdArgs] represent a
+  /// `flatpak run <package-id>` invocation, verify [romPath] is within the
+  /// Flatpak's default sandbox access before handing off to Process.start.
+  /// Flatpak confines its filesystem access to `$HOME`, `/run/media`, and
+  /// `/media` by default — a ROM stored elsewhere (e.g. `/mnt/qvo/...`)
+  /// fails to launch regardless of filename, which was previously
+  /// misdiagnosed as a "spaces in filename" bug. Throws
+  /// [FlatpakSandboxAccessException] with an actionable
+  /// `flatpak override --user --filesystem=...` command; does nothing for
+  /// non-Flatpak launches or paths already inside the default allowlist.
+  void _checkFlatpakSandboxAccessIfNeeded(String exe, List<String> cmdArgs, String romPath) {
+    if (exe != 'flatpak' || cmdArgs.length < 2 || cmdArgs.first != 'run') return;
+    final flatpakPackageId = cmdArgs[1];
+    final home = _platform.environment['HOME'] ?? '';
+    if (home.isEmpty) return; // Can't determine default access without $HOME; skip rather than false-positive.
+    LinuxEnvironmentStrategy.checkFlatpakSandboxAccess(flatpakPackageId, romPath, home: home);
   }
 }

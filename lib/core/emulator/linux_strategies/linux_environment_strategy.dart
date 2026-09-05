@@ -1,5 +1,26 @@
 import 'dart:io' as io;
+import 'package:path/path.dart' as p;
 import 'package:freegosy/core/romm/romm_models.dart';
+
+/// Thrown when a ROM path falls outside a Flatpak's default sandbox
+/// filesystem access, so launching it would fail (or silently show an
+/// empty/broken game list) without any indication of why. See issue #75:
+/// "Dolphin games with spaces in filename fail to launch" — the real
+/// cause was Flatpak confinement, not argv/quoting, for paths outside the
+/// default-accessible directories.
+class FlatpakSandboxAccessException implements Exception {
+  final String flatpakPackageId;
+  final String romPath;
+
+  const FlatpakSandboxAccessException(this.flatpakPackageId, this.romPath);
+
+  @override
+  String toString() =>
+      'FlatpakSandboxAccessException: "$romPath" is outside the default '
+      'Flatpak sandbox for $flatpakPackageId. Run:\n'
+      '  flatpak override --user --filesystem=$romPath $flatpakPackageId\n'
+      '(or grant access to a parent directory) and try again.';
+}
 
 /// Common Flatpak package IDs mapped to Freegosy emulator IDs.
 /// Used by [detectFlatpakEmulators] so we can match installed Flatpaks
@@ -96,6 +117,60 @@ abstract class LinuxEnvironmentStrategy {
   /// Returns the Flatpak package ID for a given emulator ID, or null.
   String? getFlatpakPackageForEmulator(String emulatorId) {
     return kEmulatorFlatpakPackages[emulatorId];
+  }
+
+  /// Returns true if [romPath] falls outside the directories a Flatpak app
+  /// can access by default (`$HOME` and its subdirectories, `/run/media`,
+  /// `/media`) — i.e. paths like `/mnt/...` or other custom mount points
+  /// that require an explicit `flatpak override --filesystem=...` grant.
+  ///
+  /// This is a pure, unit-testable check with no process/IO dependency —
+  /// it does not itself run `flatpak override` or query the sandbox; it
+  /// only reasons about path prefixes. Callers (e.g. [NativeLinuxStrategy]
+  /// via [checkFlatpakSandboxAccess]) use it to fail fast with an
+  /// actionable message instead of a cryptic ProcessException or a game
+  /// that silently won't launch.
+  static bool isOutsideFlatpakDefaultAccess(String romPath, {required String home}) {
+    // Flatpak/Linux paths are always POSIX-style regardless of the
+    // development/CI host OS this analysis code happens to run on, so use
+    // the posix path context explicitly rather than package:path's
+    // platform-default context (which would use Windows semantics if this
+    // were ever exercised on a Windows dev machine).
+    final posix = p.posix;
+    final normalizedPath = posix.normalize(posix.absolute(romPath));
+    final normalizedHome = posix.normalize(posix.absolute(home));
+
+    const defaultAccessibleRoots = <String>[
+      '/run/media',
+      '/media',
+    ];
+
+    bool isWithin(String root) {
+      final normalizedRoot = posix.normalize(root);
+      return normalizedPath == normalizedRoot ||
+          posix.isWithin(normalizedRoot, normalizedPath);
+    }
+
+    if (normalizedHome.isNotEmpty && (normalizedPath == normalizedHome || isWithin(normalizedHome))) {
+      return false;
+    }
+    for (final root in defaultAccessibleRoots) {
+      if (isWithin(root)) return false;
+    }
+    return true;
+  }
+
+  /// Pre-launch check for [romPath] against [flatpakPackageId]'s default
+  /// sandbox access. Throws [FlatpakSandboxAccessException] (which the UI
+  /// layer's existing error handling already catches and displays) if the
+  /// path would be inaccessible to the Flatpak, rather than letting the
+  /// launch fail with a cryptic error later. No-op (returns normally) when
+  /// access looks fine, so it's safe to call unconditionally before any
+  /// Flatpak-based launch.
+  static void checkFlatpakSandboxAccess(String flatpakPackageId, String romPath, {required String home}) {
+    if (isOutsideFlatpakDefaultAccess(romPath, home: home)) {
+      throw FlatpakSandboxAccessException(flatpakPackageId, romPath);
+    }
   }
 
   /// Checks whether the `flatpak` command is available on the system.
