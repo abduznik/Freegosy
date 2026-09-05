@@ -664,21 +664,19 @@ class RetroArchSaveStrategy extends SaveStrategy {
             }
           }
           if (!found) {
-            // Last resort: scan directory for ANY .srm/.sav file
-            await for (final entity in savesDirObj.list()) {
-              if (entity is! io.File) continue;
-              final fname = p.basename(entity.path).toLowerCase();
-              if (_isSaveFile(fname)) {
-                filesToCheck.add(entity);
-                found = true;
-                debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots any-match: $fname');
-                break;
-              }
-            }
-            if (!found) {
-              debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots no saves found, defaulting to $stem.srm');
-              filesToCheck.add(io.File(p.join(rootSaveDir, '$stem.srm')));
-            }
+            // No save file matches this game by name (exact stem or fuzzy word
+            // overlap). Do NOT fall back to "any .srm/.sav file in the directory" —
+            // that previously caused an unrelated game's save (e.g. a different
+            // ROM's leftover .srm sitting in the same core folder) to be picked up
+            // and uploaded under the current game's RomM entry (see issue #95).
+            // It is much safer to find nothing than to grab the wrong file.
+            //
+            // We still probe for the exact expected filename ($stem.srm); if it
+            // doesn't exist, the existence check below drops it and no save is
+            // reported — which is correct for save-state-only platforms/cores
+            // (e.g. Atari 2600/Stella) that have no battery-backed save file.
+            debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots no name-matching save found, probing for $stem.srm only');
+            filesToCheck.add(io.File(p.join(rootSaveDir, '$stem.srm')));
           }
         } else {
           debugPrint('[SaveSync] [retroarch] getSaveFilesWithScreenshots rootSaveDir does not exist');

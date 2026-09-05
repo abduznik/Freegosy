@@ -319,4 +319,76 @@ void main() {
       await tempDir.delete(recursive: true);
     });
   });
+
+  group('RetroArch save file matching (regression for #95)', () {
+    test('does NOT return an unrelated game\'s save file when nothing matches by name', () async {
+      // Reproduces the reported bug: playing "Bank Heist" (Atari 2600/Stella,
+      // no battery-backed save, only savestates) while a leftover .srm from a
+      // completely unrelated game ("Dragon Ball - Advanced Adventure") sits in
+      // the same core save folder. Previously, the "last resort: any file"
+      // fallback would pick up and return that unrelated file, causing it to
+      // be uploaded to RomM under Bank Heist's entry.
+      final tempDir = await Directory.systemTemp.createTemp('ra_wrong_save_');
+      final configDir = p.join(tempDir.path, '.config', 'retroarch');
+      await Directory(configDir).create(recursive: true);
+
+      await File(p.join(configDir, 'retroarch.cfg')).writeAsString([
+        'savefile_directory = "${p.join(tempDir.path, 'saves')}"',
+        'sort_savefiles_enable = "true"',
+      ].join('\n'));
+
+      final saveDir = p.join(tempDir.path, 'saves', 'Atari 2600');
+      await Directory(saveDir).create(recursive: true);
+      // Unrelated leftover save from a completely different game.
+      await File(p.join(saveDir, 'Dragon Ball - Advanced Adventure.srm'))
+          .writeAsBytes([1, 2, 3]);
+
+      when(mockDirService.getEmulatorAppSupportDirectory('retroarch', platformSlug: anyNamed('platformSlug')))
+          .thenAnswer((_) async => configDir);
+
+      final platform = PlatformInfo('linux', environment: {'HOME': tempDir.path});
+      final strategy = RetroArchSaveStrategy(mockDirService, platform: platform);
+
+      final game = Game(id: '1', name: 'Bank Heist', platformSlug: 'atari2600', fileSize: 0);
+      final romPath = p.join(tempDir.path, 'roms', 'Bank Heist.a26');
+
+      final files = await strategy.getSaveFiles(game, romPath, syncMode: 'saves');
+
+      expect(files, isEmpty,
+          reason: 'Must not fall back to an unrelated save file just because it exists in the directory');
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('still returns the correctly name-matched save file', () async {
+      final tempDir = await Directory.systemTemp.createTemp('ra_right_save_');
+      final configDir = p.join(tempDir.path, '.config', 'retroarch');
+      await Directory(configDir).create(recursive: true);
+
+      await File(p.join(configDir, 'retroarch.cfg')).writeAsString([
+        'savefile_directory = "${p.join(tempDir.path, 'saves')}"',
+        'sort_savefiles_enable = "true"',
+      ].join('\n'));
+
+      final saveDir = p.join(tempDir.path, 'saves', 'mGBA');
+      await Directory(saveDir).create(recursive: true);
+      await File(p.join(saveDir, 'Pokemon.srm')).writeAsBytes([1, 2, 3]);
+
+      when(mockDirService.getEmulatorAppSupportDirectory('retroarch', platformSlug: anyNamed('platformSlug')))
+          .thenAnswer((_) async => configDir);
+
+      final platform = PlatformInfo('linux', environment: {'HOME': tempDir.path});
+      final strategy = RetroArchSaveStrategy(mockDirService, platform: platform);
+
+      final game = Game(id: '1', name: 'Pokemon', platformSlug: 'gba', fileSize: 0);
+      final romPath = p.join(tempDir.path, 'roms', 'Pokemon.gba');
+
+      final files = await strategy.getSaveFiles(game, romPath, syncMode: 'saves');
+
+      expect(files.length, 1);
+      expect(files.first.path, equals(p.join(saveDir, 'Pokemon.srm')));
+
+      await tempDir.delete(recursive: true);
+    });
+  });
 }
