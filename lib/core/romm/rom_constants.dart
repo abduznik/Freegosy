@@ -17,9 +17,12 @@ class RomConstants {
     'ps2': ['.iso', '.bin', '.chd'],
     'ps3': ['.pkg', '.iso', '.bin', '.edat'],
     'psp': ['.iso', '.cso', '.pbp'],
-    'gc': ['.iso', '.gcm', '.rvz', '.wbfs'],
-    'gamecube': ['.iso', '.gcm', '.rvz', '.wbfs'],
-    'wii': ['.iso', '.wbfs', '.rvz'],
+    // .m3u playlists are included so multi-disc GameCube/Wii games can be
+    // preferred over picking "largest file" (see findMainRomInFolder and
+    // issue #54 — random disc selection on multi-disc GC games).
+    'gc': ['.iso', '.gcm', '.rvz', '.wbfs', '.m3u'],
+    'gamecube': ['.iso', '.gcm', '.rvz', '.wbfs', '.m3u'],
+    'wii': ['.iso', '.wbfs', '.rvz', '.m3u'],
     'dreamcast': ['.chd', '.gdi', '.cdi', '.iso'],
     'megadrive': ['.md', '.bin', '.gen', '.zip', '.7z'],
     'genesis': ['.md', '.bin', '.gen', '.zip', '.7z'],

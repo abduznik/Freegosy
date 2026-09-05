@@ -167,7 +167,19 @@ class RomLookupService {
     }
     
     final extensions = RomConstants.platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
-    
+
+    // Prefer an .m3u playlist over any individual disc image, if present.
+    // Multi-disc GameCube/Wii/PSX games are ambiguous when resolved by
+    // "largest file" alone (see issue #54: a folder with several disc
+    // images doesn't necessarily have disc 1 as the largest file). An
+    // .m3u playlist, when the source provides one, already encodes the
+    // correct disc order/selection, so prefer it before falling back to
+    // the largest-file heuristic below.
+    final m3uPath = await _findM3uInFolder(folderPath);
+    if (m3uPath != null) {
+      return p.absolute(m3uPath);
+    }
+
     io.File? largestFile;
     int largestSize = 0;
 
@@ -189,7 +201,21 @@ class RomLookupService {
     if (largestFile != null) {
       return p.absolute(largestFile.path);
     }
-    
+
+    return null;
+  }
+
+  /// Returns the path of the first `.m3u` playlist file found directly
+  /// inside [folderPath] (non-recursive — playlists live alongside their
+  /// discs), or null if none exists.
+  static Future<String?> _findM3uInFolder(String folderPath) async {
+    try {
+      await for (final entity in io.Directory(folderPath).list()) {
+        if (entity is io.File && p.extension(entity.path).toLowerCase() == '.m3u') {
+          return entity.path;
+        }
+      }
+    } catch (_) {}
     return null;
   }
 

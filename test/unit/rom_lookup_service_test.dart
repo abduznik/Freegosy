@@ -223,6 +223,44 @@ void main() {
         );
         expect(result, isNull);
       });
+
+      // Regression test for issue #54: GameCube multi-disc games loading a
+      // random disc. Before the fix, findMainRomInFolder always picked the
+      // largest matching file, ignoring any .m3u playlist that correctly
+      // encodes the intended disc/order. This asserts the .m3u is now
+      // preferred even when a same- or larger-sized .iso is present.
+      test('prefers .m3u playlist over largest .iso for multi-disc GC folder', () async {
+        final folder = Directory(p.join(tempDir.path, 'GCMultiDisc'));
+        await folder.create();
+        await File(p.join(folder.path, 'disc1.iso')).writeAsString('x' * 100);
+        // Deliberately larger than disc1 so the old "largest file" logic
+        // would have picked this one instead of disc 1.
+        await File(p.join(folder.path, 'disc2.iso')).writeAsString('x' * 1000);
+        await File(p.join(folder.path, 'game.m3u')).writeAsString('disc1.iso\ndisc2.iso\n');
+
+        final game = makeGame(platformSlug: 'gc');
+        final result = await RomLookupService.findMainRomInFolder(
+          game,
+          folder.path,
+        );
+        expect(result, isNotNull);
+        expect(p.basename(result!), 'game.m3u');
+      });
+
+      test('falls back to largest file when no .m3u present (gc)', () async {
+        final folder = Directory(p.join(tempDir.path, 'GCNoM3u'));
+        await folder.create();
+        await File(p.join(folder.path, 'disc1.iso')).writeAsString('x' * 100);
+        await File(p.join(folder.path, 'disc2.iso')).writeAsString('x' * 1000);
+
+        final game = makeGame(platformSlug: 'gc');
+        final result = await RomLookupService.findMainRomInFolder(
+          game,
+          folder.path,
+        );
+        expect(result, isNotNull);
+        expect(p.basename(result!), 'disc2.iso');
+      });
     });
 
     group('resolveFuzzyRomFile', () {
