@@ -36,8 +36,48 @@ class AzaharSaveStrategy extends SaveStrategy {
     _manualMapping = mapping;
   }
 
-  Future<String> _getAzaharSystemBase({String? platformSlug}) async {
-    final resolvedPath = await _directoryService.getEmulatorSystemDirectory('azahar', platformSlug: platformSlug);
+  String _getAzaharExe() {
+    if (_platform.isWindows) return 'azahar.exe';
+    if (_platform.isMacOS) return 'azahar.app/Contents/MacOS/azahar';
+    return 'azahar';
+  }
+
+  /// Resolves Azahar's data root (the folder that directly contains 'sdmc').
+  ///
+  /// Follows the Eden pattern: portable installs keep their data in a 'user'
+  /// folder next to the executable, so that is checked first. Only falls
+  /// back to the OS-standard config location (NOT the shared BIOS/system
+  /// directory, which is unrelated to per-emulator save data) if no
+  /// portable 'user' folder exists.
+  Future<String> _getAzaharSaveBase({String? platformSlug}) async {
+    final exePath = await _directoryService.findEmulatorExecutable('azahar', _getAzaharExe());
+    if (exePath != null) {
+      String exeDir = io.File(exePath).parent.path;
+      if (_platform.isMacOS && exePath.contains('.app/Contents/MacOS/')) {
+        exeDir = io.File(exePath).parent.parent.parent.parent.path;
+      } else if (await io.FileSystemEntity.isDirectory(exePath)) {
+        exeDir = exePath;
+      }
+      final portableBase = p.join(exeDir, 'user');
+      debugPrint('[Azahar] exe=$exePath -> checking portable data at: $portableBase');
+      if (await io.Directory(portableBase).exists()) {
+        debugPrint('[Azahar] portable data base found: $portableBase');
+        return portableBase;
+      }
+      debugPrint('[Azahar] portable data missing at: $portableBase');
+    } else {
+      debugPrint('[Azahar] no azahar executable found via DirectoryService');
+    }
+
+    final String resolvedPath;
+    if (_platform.isMacOS || _platform.isLinux) {
+      resolvedPath = await _directoryService.getEmulatorAppSupportDirectory('azahar', platformSlug: platformSlug);
+    } else if (_platform.isWindows) {
+      resolvedPath = p.join(_platform.environment['APPDATA'] ?? '', 'azahar');
+    } else {
+      throw UnsupportedError('Platform not supported');
+    }
+    debugPrint('[Azahar] standard data base candidate: $resolvedPath');
     if (!await io.Directory(resolvedPath).exists()) {
       throw Exception('Save directory not found for Azahar at $resolvedPath. Please launch Azahar at least once to generate save data.');
     }
@@ -53,7 +93,7 @@ class AzaharSaveStrategy extends SaveStrategy {
           'Please select the save folder manually from the sdmc directory.');
     }
 
-    final base = await _getAzaharSystemBase(platformSlug: game.platformSlug);
+    final base = await _getAzaharSaveBase(platformSlug: game.platformSlug);
 
     // _manualMapping is expected to be the relative path from sdmc
     final finalPath = p.join(base, 'sdmc', _manualMapping!);
@@ -175,7 +215,7 @@ class AzaharSaveStrategy extends SaveStrategy {
   /// Scans the 'sdmc' directory for available save data folders.
   /// Looks for '00000001' folders which are typical for 3DS saves.
   Future<List<Map<String, dynamic>>> getAvailableSaveFolders() async {
-    final base = await _getAzaharSystemBase();
+    final base = await _getAzaharSaveBase();
 
     final sdmcDir = io.Directory(p.join(base, 'sdmc'));
     if (!sdmcDir.existsSync()) {
