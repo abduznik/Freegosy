@@ -77,6 +77,41 @@ class GamepadUtils {
     return '$rawKey${polarity >= 0 ? '+' : '-'}';
   }
 
+  /// Rescales a raw axis value to the -1.0..1.0 range press/release
+  /// thresholds are written against.
+  ///
+  /// Linux (/dev/input/js*) reports raw int16 magnitudes for axes (roughly
+  /// -32767..32767) instead of the normalized range other backends deliver.
+  /// Left as-is, any nonzero jitter on an idle axis reads as fully "pressed"
+  /// and almost never "released". Values already within -1.0..1.0 are
+  /// returned unchanged.
+  ///
+  /// This only fixes the *threshold miscalibration* — it rescales magnitude,
+  /// nothing more. It does not arbitrate between multiple axes/buttons that
+  /// report real, simultaneous activity (e.g. a controller whose D-pad
+  /// physically drives more than one raw axis at once). On marginal or
+  /// noisy pads the wizard's charge can still occasionally get preempted by
+  /// a second input; this reduces how often that happens, it doesn't
+  /// guarantee it can't.
+  static double normalizeAxisValue(double value) {
+    if (value.abs() <= 1.0) return value;
+    return (value / 32767.0).clamp(-1.0, 1.0);
+  }
+
+  /// Tags a bare numeric raw key with its event type before any polarity
+  /// suffix is applied.
+  ///
+  /// On Linux (/dev/input/js*), a button and an axis can share the same raw
+  /// index — e.g. the Xbox 360 pad reports Back as button 6 and the D-pad's
+  /// horizontal axis as axis 6, both arriving as `key: "6"`. Left un-tagged,
+  /// mapping either one stomps the other. Named keys (letters/underscores,
+  /// e.g. `dpad_up`, `button_0`) are already unambiguous on every other
+  /// backend and are returned unchanged.
+  static String disambiguateKey(String rawKey, {required bool isButton}) {
+    if (!RegExp(r'^\d+$').hasMatch(rawKey)) return rawKey;
+    return (isButton ? 'btn' : 'ax') + rawKey;
+  }
+
   /// Whether a stored key has a polarity suffix (i.e. it came from an axis).
   static bool hasPolaritySuffix(String key) {
     return key.endsWith('+') || key.endsWith('-');
