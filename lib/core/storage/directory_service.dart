@@ -399,7 +399,16 @@ class DirectoryService {
 
   Future<String> getRomFilePath(Game game) async {
     final romDir = await getRomDirectory(game);
-    final fileName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?!]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final baseName = game.fsName ?? game.fileName ?? game.name.replaceAll(RegExp(r'[<>:"/\\|?]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    // RomM's `fs_name` is the bare filename without its extension; `fs_extension`
+    // is reported separately and must be appended, or the file lands on disk
+    // with no extension (e.g. PS2 .iso, NDS .nds) even though fs_extension is
+    // populated fine (issue #96 — distinct from the empty-fs_extension case
+    // already handled in DownloadService for single-file-foldered games).
+    final ext = game.fsExtension;
+    final fileName = (ext != null && ext.isNotEmpty && p.extension(baseName).toLowerCase() != '.${ext.toLowerCase()}')
+        ? '$baseName.$ext'
+        : baseName;
     return p.join(romDir, fileName);
   }
 
