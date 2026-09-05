@@ -431,6 +431,11 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         }));
       }
     } catch (e) {
+      // Log unconditionally before the mounted check — otherwise a widget
+      // unmounted by the time the exception surfaces (e.g. window/focus
+      // lifecycle quirks on Steam Deck) silently drops the failure with no
+      // toast and no debug log entry. See issue #84.
+      debugPrint('[Launch] Launch failed: $e');
       if (!context.mounted) return;
       if (e is MissingRetroArchCoreException) {
         final shouldInstall = await _showMissingCoreDialog(context, e.coreName);
