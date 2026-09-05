@@ -71,7 +71,7 @@ void main() {
 
       test('falls back to sanitized game.name', () async {
         final sanitizedName = 'Game (USA) [!]'
-            .replaceAll(RegExp(r'[<>:"/\\|?!]'), ' ')
+            .replaceAll(RegExp(r'[<>:"/\\|?]'), ' ')
             .replaceAll(RegExp(r'\s+'), ' ')
             .trim();
         final file = File(p.join(tempDir.path, sanitizedName));
