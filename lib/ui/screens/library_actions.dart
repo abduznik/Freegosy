@@ -468,12 +468,16 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final argsStr = result['args'] ?? '';
     final argsList = argsStr.isNotEmpty ? argsStr.split(RegExp(r'\s+')) : <String>[];
     await windowsStrategy?.setLaunchArgs(game.id, argsList);
-    // Only re-launch if the user actually set an exe path
-    if (result['exe']?.isNotEmpty ?? false) {
-      if (context.mounted) await handleLaunch(context, ref, game);
-    } else if (fromError) {
-      // User clicked Save without setting an exe — can't auto-detect
-      if (context.mounted) ErrorHandler.showInfo(context, 'No Executable Set', message: 'Please set the game executable path to launch it.');
+    // Only auto-relaunch if this Configure dialog was opened as part of the
+    // error-recovery flow (a failed launch) and the user actually set an exe path.
+    // A deliberate Configure button press should just save settings, not launch the game.
+    if (fromError) {
+      if (result['exe']?.isNotEmpty ?? false) {
+        if (context.mounted) await handleLaunch(context, ref, game);
+      } else {
+        // User clicked Save without setting an exe — can't auto-detect
+        if (context.mounted) ErrorHandler.showInfo(context, 'No Executable Set', message: 'Please set the game executable path to launch it.');
+      }
     }
   }
 
