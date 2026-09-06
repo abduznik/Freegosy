@@ -77,3 +77,8 @@ tool/integration_tests/
 testing/data/
 testing/config/
 
+# Widget Preview related
+.widget_preview/
+
+# VS Code related
+.vscode/
