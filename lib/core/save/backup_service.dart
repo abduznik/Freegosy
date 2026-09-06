@@ -36,7 +36,7 @@ class BackupService {
     String? emulatorId,
   }) async {
     try {
-      final strategy = syncService.getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
+      final strategy = syncService.getStrategyForGame(game, emulatorId: emulatorId);
       if (strategy == null) return null;
 
       // Gather current save files using the same strategy already used for cloud sync
@@ -94,7 +94,7 @@ class BackupService {
     SaveSyncService syncService,
   ) async {
     try {
-      final strategy = syncService.getStrategyForSlug(game.platformSlug);
+      final strategy = syncService.getStrategyForGame(game);
       if (strategy == null) return false;
 
       final saveDir = await strategy.getSaveDir(game, romPath);

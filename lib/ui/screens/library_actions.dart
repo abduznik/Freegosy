@@ -593,7 +593,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
   Future<dynamic> _handleSyncError(BuildContext context, dynamic e, Game game, String romPath, SaveSyncService syncService, String syncMode, {required bool push}) async {
     if (e is SaveMappingRequiredException) {
-      final strategy = syncService.getStrategyForSlug(game.platformSlug);
+      final strategy = syncService.getStrategyForGame(game);
       final selectedFolder = await LibraryDialogService.showFolderMappingDialog(context, strategy);
       if (selectedFolder != null) {
         await syncService.saveMappedFolder(game.id, selectedFolder);
