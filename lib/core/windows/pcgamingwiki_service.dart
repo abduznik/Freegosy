@@ -36,43 +36,52 @@ class PcGamingWikiService {
 
       // Fall back to search
       debugPrint('[PcGamingWiki] No exact match, trying search...');
-      final searchResponse = await _dio.get(_apiUrl, queryParameters: {
-        'action': 'query',
-        'list': 'search',
-        'srsearch': gameTitle,
-        'format': 'json',
-      });
-
-      if (searchResponse.statusCode == 200) {
-        final results = searchResponse.data['query']['search'] as List;
-        if (results.isNotEmpty) {
-          String title = '';
-
-          // PCGW have empty redirects pages for some games, let's check if this is the case here
-          bool needRedirect = results.first['snippet'].toString().contains('#REDIRECT') ? true : false;
-          if (needRedirect) {
-            debugPrint('[PcGamingWiki] Found redirect page for "${results.first['title']}", resolving...');
-            final redirectReponse = await _dio.get(_apiUrl, queryParameters: {
-              'action': 'opensearch',
-              'search': gameTitle,
-              'format': 'json',
-              'redirects': 'resolve',
-            });
-
-            title = redirectReponse.data[1][0];
-
-          } else {title = results.first['title'];}
-
-          debugPrint('[PcGamingWiki] Search found: $title');
-          return title;
-        }
-      }
+      final searchResult = await searchGamePage(gameTitle);
+      return searchResult?.first;
+     
     } catch (e) {
       debugPrint('[PcGamingWiki] Page lookup failed: $e');
     }
     debugPrint('[PcGamingWiki] No page found for: $gameTitle');
     return null;
   }
+
+    Future<List<String>?> searchGamePage(String gameTitle) async 
+    {
+         final searchResponse = await _dio.get(_apiUrl, queryParameters: {
+        'action': 'query',
+        'list': 'search',
+        'srsearch': gameTitle,
+        'format': 'json',
+        });
+
+        final List<String> titles = List.empty(growable: true);
+
+        if (searchResponse.statusCode == 200) {
+          final results = searchResponse.data['query']['search'] as List;
+
+        if (results.isNotEmpty) {
+          for (final element in results) {
+            // PCGW have empty redirects pages for some games, let's check if this is the case here
+            bool needRedirect = element['snippet'].toString().contains('#REDIRECT') ? true : false;
+            if (needRedirect) {
+              debugPrint('[PcGamingWiki] Found redirect page for "${element['title']}", resolving...');
+              final redirectReponse = await _dio.get(_apiUrl, queryParameters: {
+                'action': 'opensearch',
+                'search': gameTitle,
+                'format': 'json',
+                'redirects': 'resolve',
+              });
+
+              titles.add(redirectReponse.data[1][0]);
+
+            } else {titles.add(element['title']);}
+          }
+          debugPrint('[PcGamingWiki] Search found:');
+        }
+      }
+        return titles;
+    }
 
   /// Fetches the wikitext for [pageTitle].
   Future<String?> getWikitext(String pageTitle) async {

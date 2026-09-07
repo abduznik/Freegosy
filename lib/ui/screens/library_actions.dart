@@ -464,7 +464,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsGameConfigDialog(game: game, directoryService: ref.read(directoryServiceProvider).value, currentExePath: windowsStrategy?.getExeOverride(game.id), currentSavePath: syncService?.windowsSaveStrategy.getManualOverride(game.id), currentWikiSavePath: currentWikiSavePath, currentLaunchArgs: currentArgs, currentSaveFilter: currentFilter, currentWikiFileFilter: currentWikiFilter));
     if (result == null) return;
     if (result['exe']?.isNotEmpty ?? false) await windowsStrategy?.setExeOverride(game.id, result['exe']!);
-    if (result['save']?.isNotEmpty ?? false) await syncService?.windowsSaveStrategy.setManualOverride(game.id, result['save']!);
+    await syncService?.windowsSaveStrategy.setManualOverride(game.id, result['save']!);
     await syncService?.windowsSaveStrategy.setPcGamingWikiSavePath(game.id, result['wikiSavePath']!);
     final filter = result['filter'] ?? '';
     final wikiFilter = result['wikiFilter'] ?? '';
@@ -562,7 +562,9 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (!context.mounted || syncService == null) { ErrorHandler.showInfo(context, 'Sync Unavailable', message: 'Save sync not available'); return; }
     final dir = ref.read(directoryServiceProvider).asData?.value;
-    final romPath = dir != null ? await dir.getRomFilePath(game) : '';
+    //Changed : For Win Games, this used to return the game ZIP path. 
+    //Added a check for Win games to make sure it returns the current install folder.
+    final String romPath = dir != null ? (game.platformSlug != 'win' ? await dir.getRomFilePath(game) : await dir.findExistingRomPath(game) ?? '') : '';
     if (!context.mounted) return;
     debugPrint('[SaveSync] handlePullSaves: game="${game.displayName}" romPath=$romPath');
     try {

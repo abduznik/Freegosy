@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -105,17 +106,25 @@ class WindowsSaveStrategy extends SaveStrategy {
   String? getWikiSaveFilter(String gameId) => _wikiSaveFilters[gameId];
 
   @override
-  Future<String?> getSaveDir(Game game, String romPath) async {
+  Future<String?> getSaveDir(Game game, String romPath, {String? metadataSavePath}) async {
     // Manual override takes priority
     final manual = _manualOverrides[game.id];
     if (manual != null && manual.isNotEmpty) {
       debugPrint('[WindowsSave] Using manual override for ${game.name}: $manual');
       return manual;
-    }
+    }    
 
     // Determine the game directory
     final isDir = await Directory(romPath).exists();
     final gameDir = isDir ? romPath : File(romPath).parent.path;
+
+    //If a "freegosy_sync.txt" file has been found AND 
+    //contains a cached save path with env vars, let's retrieve it
+    if (metadataSavePath != null)
+    {
+      debugPrint('[WindowsSave] Using save path found in freegosy_sync.txt for ${game.name}: $metadataSavePath');
+      return metadataSavePath;
+    }
 
     // Check if prefs already have the PCGamingWiki save path registered
     final pcgw = _pcGamingWikiSavePath[game.id];
@@ -135,10 +144,8 @@ class WindowsSaveStrategy extends SaveStrategy {
         }
         final resolved = locations.first['path'];
         var resolvedFileFilter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(locations.first['raw']!) ? locations.first['raw']?.split('\\').last : '';
-        debugPrint("File Filter PCGW => $resolvedFileFilter");
         // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
         if (resolvedFileFilter!.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
-
         if (resolved != null) {
           final dir = Directory(resolved);
           if (await dir.exists()) {
@@ -314,18 +321,45 @@ class WindowsSaveStrategy extends SaveStrategy {
 
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
+    
+    Archive? archive;
+    String? envDestPath;
+    if (filename.toLowerCase().endsWith('.zip')) {
+      archive = ZipDecoder().decodeBytes(data);
+      final metaFile = archive.find('freegosy_sync.txt');
+      if (metaFile != null) {             
+            String relativeEnvPath = metaFile.rawContent?.getStream().readString() ?? '';
+            if (relativeEnvPath.isNotEmpty) relativeEnvPath = jsonDecode(relativeEnvPath)['savePath'];
+            envDestPath = relativeEnvPath;
+      }
+    }
+
+    if (envDestPath != null)
+    {
+          final winLocalAbsolutepath = <String, String>{
+            "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
+            "['LOCALAPPDATA']": PlatformInfo.current.environment['LOCALAPPDATA'] ?? '',
+            "['USERPROFILE']": PlatformInfo.current.environment['USERPROFILE'] ?? '',
+            "['PROGRAMDATA']": PlatformInfo.current.environment['PROGRAMDATA'] ?? '',
+            "['PUBLIC']": PlatformInfo.current.environment['PUBLIC'] ?? '',
+            "[GAMEDIR]": destPath,
+          };
+
+          for (final entry in winLocalAbsolutepath.entries) {
+            if (envDestPath!.contains(entry.key)) envDestPath = envDestPath.replaceFirst(entry.key, entry.value); else continue;
+          }
+    }
+
     try {
-      final saveDir = await getSaveDir(game, destPath);
+      final saveDir = await getSaveDir(game, destPath, metadataSavePath: envDestPath!);
       if (saveDir == null) {
         throw Exception('No save location found for ${game.name}. Set one manually in game settings.');
       }
 
       final dir = Directory(saveDir);
       if (!await dir.exists()) await dir.create(recursive: true);
-
       // Always extract zip into the save directory
-      if (filename.toLowerCase().endsWith('.zip')) {
-        final archive = ZipDecoder().decodeBytes(data);
+      if (archive!.isNotEmpty) {
         for (final entry in archive) {
           if (entry.name == 'freegosy_sync.txt' || entry.name.contains('.bak')) continue;
           
