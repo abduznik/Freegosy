@@ -547,10 +547,17 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     
     if (!context.mounted) return;
     final syncMode = ref.read(retroarchSyncModeProvider);
-    debugPrint('[SaveSync] handlePushSaves: game="${game.displayName}" romPath=$romPath syncMode=$syncMode');
+    // Resolve the emulator actually configured for this game/platform (which
+    // may differ from the registry's first-registered default) so manual
+    // push uses the same save strategy the game is actually configured to
+    // use, instead of silently falling back to whichever emulator happens
+    // to be registered first for this platform.
+    final registry = ref.read(strategyRegistryProvider).asData?.value;
+    final resolvedStrategy = registry?.getStrategyForSlug(game.platformSlug ?? '', gameId: game.id);
+    debugPrint('[SaveSync] handlePushSaves: game="${game.displayName}" romPath=$romPath syncMode=$syncMode resolvedEmulator=${resolvedStrategy?.emulatorId}');
     try {
       ErrorHandler.showInfo(context, 'Syncing', message: 'Uploading saves for ${game.name}...');
-      final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+      final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true, emulatorId: resolvedStrategy?.emulatorId);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves uploaded');
         else ErrorHandler.showInfo(context, 'No Saves Found', message: 'No save files found for ${game.name}. Have you played the game first?');
@@ -573,14 +580,21 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       final selectedSave = await LibraryDialogService.showSaveSelectionDialog(context, saves);
       if (selectedSave == null || !context.mounted) return;
       ErrorHandler.showInfo(context, 'Syncing', message: 'Downloading selected save...');
-      final ok = await syncService.pullSave(game, romPath, saveData: selectedSave);
+      // Resolve the emulator actually configured for this game/platform so
+      // manual pull uses the same save strategy the game is configured to
+      // use, instead of silently falling back to the registry's
+      // first-registered default for the platform.
+      final registry = ref.read(strategyRegistryProvider).asData?.value;
+      final resolvedStrategy = registry?.getStrategyForSlug(game.platformSlug ?? '', gameId: game.id);
+      debugPrint('[SaveSync] handlePullSaves: resolvedEmulator=${resolvedStrategy?.emulatorId}');
+      final ok = await syncService.pullSave(game, romPath, saveData: selectedSave, emulatorId: resolvedStrategy?.emulatorId);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
         else {
           ErrorHandler.showInfo(context, 'Retry Sync', message: 'Save unchanged. Retrying with force...');
           await ref.read(sharedPreferencesProvider).remove('last_pull_${game.id}');
           if (context.mounted) {
-            final retryOk = await syncService.pullSave(game, romPath, saveData: selectedSave);
+            final retryOk = await syncService.pullSave(game, romPath, saveData: selectedSave, emulatorId: resolvedStrategy?.emulatorId);
             if (context.mounted) {
               if (retryOk) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
               else ErrorHandler.showInfo(context, 'Sync Incomplete', message: 'Save applied but strategy failed.');
