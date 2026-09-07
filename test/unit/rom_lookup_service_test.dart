@@ -261,6 +261,40 @@ void main() {
         expect(result, isNotNull);
         expect(p.basename(result!), 'disc2.iso');
       });
+
+      // Regression test for issue #44: a single-file-foldered game whose
+      // file landed on disk with no extension (e.g. from a download that
+      // predates the fs_name/file_name extension fixes) was never detected
+      // as downloaded at all, since it matched none of the platform's known
+      // extensions. With exactly one file in the folder there's no
+      // ambiguity, so it should still be picked up.
+      test('accepts a single extensionless file as a safety net', () async {
+        final folder = Directory(p.join(tempDir.path, 'PS2SingleNoExt'));
+        await folder.create();
+        await File(p.join(folder.path, '007 - Everything or Nothing')).writeAsString('x' * 100);
+
+        final game = makeGame(platformSlug: 'ps2');
+        final result = await RomLookupService.findMainRomInFolder(
+          game,
+          folder.path,
+        );
+        expect(result, isNotNull);
+        expect(p.basename(result!), '007 - Everything or Nothing');
+      });
+
+      test('does not apply the single-file safety net when multiple non-matching files exist', () async {
+        final folder = Directory(p.join(tempDir.path, 'PS2MultiNoExt'));
+        await folder.create();
+        await File(p.join(folder.path, 'readme')).writeAsString('info');
+        await File(p.join(folder.path, 'notes')).writeAsString('more info');
+
+        final game = makeGame(platformSlug: 'ps2');
+        final result = await RomLookupService.findMainRomInFolder(
+          game,
+          folder.path,
+        );
+        expect(result, isNull);
+      });
     });
 
     group('resolveFuzzyRomFile', () {
