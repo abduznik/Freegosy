@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -25,6 +26,7 @@ import 'strategies/ppsspp_save_strategy.dart';
 import 'strategies/cemu_save_strategy.dart';
 import 'strategies/azahar_save_strategy.dart';
 import '../emulator/strategy_registry.dart';
+import '../platform/platform_info.dart';
 
 class SaveConflictException implements Exception {
   final Game game;
@@ -493,7 +495,31 @@ class SaveSyncService {
         final encoder = ZipFileEncoder();
         encoder.create(bundleZipPath);
         final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
-        await metaFile.writeAsString(DateTime.now().toIso8601String());
+        final timeStamp = DateTime.now().toIso8601String();
+
+        if (strategy.strategyId != 'windows') {
+          await metaFile.writeAsString(jsonEncode({'timeStamp': timeStamp}));
+        }
+        else {
+          final saveAbsolutePath = await strategy.getSaveDir(game, romPath);
+          final winLocalAbsolutepath = <String, String>{
+            "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
+            "['LOCALAPPDATA']": PlatformInfo.current.environment['LOCALAPPDATA'] ?? '',
+            "['USERPROFILE']": PlatformInfo.current.environment['USERPROFILE'] ?? '',
+            "['PROGRAMDATA']": PlatformInfo.current.environment['PROGRAMDATA'] ?? '',
+            "['PUBLIC']": PlatformInfo.current.environment['PUBLIC'] ?? '',
+            "[GAMEDIR]": romPath,
+          };
+
+          String envPath = '';
+          for (final entry in winLocalAbsolutepath.entries) {
+            if (saveAbsolutePath!.contains(entry.value)) {
+              envPath = saveAbsolutePath.replaceFirst(entry.value, entry.key);
+              break;
+            }
+          }
+          await metaFile.writeAsString(jsonEncode({'timeStamp': timeStamp, 'savePath': envPath}));
+        }
         await encoder.addFile(metaFile);
         for (final entry in filesMap.entries) {
           final file = entry.key;
