@@ -20,7 +20,10 @@ String resolveDownloadPath({
 }) {
   final noFsExtension = fsExtension == null || fsExtension.isEmpty;
   final singleFileMeta = files.length == 1 ? files[0]['file_name']?.toString() : null;
-  final fallbackFileName = singleFileMeta ?? fsName ?? fileName;
+  // fs_name is the game's FOLDER name for single-file-foldered games and
+  // isn't guaranteed to carry the real file extension, whereas file_name
+  // does — so file_name is preferred here (issue #44 follow-up).
+  final fallbackFileName = singleFileMeta ?? fileName ?? fsName;
   final isSingleFileFoldered = noFsExtension && fallbackFileName != null && fallbackFileName.isNotEmpty;
 
   String finalPath = romFilePath;
@@ -147,6 +150,21 @@ void main() {
       );
       // Both path and file_name have no extension — no extension added
       expect(result, '/roms/ps2/Game/GameData');
+    });
+
+    // Regression test for the #44 follow-up report: fsName is the game's
+    // FOLDER name (extensionless) while fileName is the actual filename
+    // (with extension) — when both are present, fileName must win or the
+    // downloaded file lands on disk with no extension at all.
+    test('prefers fileName extension over an extensionless fsName when both are present', () {
+      final result = resolveDownloadPath(
+        romFilePath: '/roms/ps2/007 - Everything or Nothing',
+        files: [],
+        fsExtension: '',
+        fsName: '007 - Everything or Nothing',
+        fileName: '007 - Everything or Nothing.chd',
+      );
+      expect(result, '/roms/ps2/007 - Everything or Nothing/007 - Everything or Nothing.chd');
     });
 
     test('nested folder structure with .pbp extension', () {

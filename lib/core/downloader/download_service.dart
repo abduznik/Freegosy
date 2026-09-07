@@ -91,7 +91,11 @@ class DownloadService {
     final singleFileMeta = game.files.length == 1 ? game.files[0]['file_name']?.toString() : null;
     // Fall back to the game's own top-level filename fields (always present,
     // unlike the files[] array) when per-file metadata isn't available.
-    final fallbackFileName = singleFileMeta ?? game.fsName ?? game.fileName;
+    // `fs_name` is the game's FOLDER name for single-file-foldered games and
+    // is not guaranteed to carry the real file extension, whereas `file_name`
+    // does — so prefer it here (fsName is still the right choice everywhere
+    // else that needs the folder name itself, e.g. getRomDirectory/getRomFilePath).
+    final fallbackFileName = singleFileMeta ?? game.fileName ?? game.fsName;
     final bool isSingleFileFoldered = noFsExtension && fallbackFileName != null && fallbackFileName.isNotEmpty;
 
     String finalPath = await directoryService.getRomFilePath(game);

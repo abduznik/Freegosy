@@ -202,6 +202,21 @@ class RomLookupService {
       return p.absolute(largestFile.path);
     }
 
+    // Safety net: if nothing matched the platform's known extensions, but
+    // the folder contains exactly one file, accept it anyway. This covers
+    // legacy downloads saved before extension-handling fixes (e.g. a
+    // single-file-foldered game whose file landed on disk with no
+    // extension) and any other case where the platform's extension list
+    // doesn't match what's actually on disk — with only one file present
+    // there's no ambiguity about which one is the ROM.
+    try {
+      final entries = await io.Directory(folderPath).list(recursive: true).toList();
+      final files = entries.whereType<io.File>().toList();
+      if (files.length == 1) {
+        return p.absolute(files.first.path);
+      }
+    } catch (_) {}
+
     return null;
   }
 

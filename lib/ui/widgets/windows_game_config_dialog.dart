@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freegosy/providers/romm_provider.dart';
+import 'package:freegosy/ui/widgets/windows_pcgw_search_dialog.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/windows/pcgamingwiki_service.dart';
 import 'package:dio/dio.dart';
@@ -46,7 +47,7 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
   late TextEditingController _wikiSavePathController;
   late TextEditingController _wikiFileFilterController;
 
-  late bool _triedAutoDetect;
+  late bool _autodetectFailed;
 
   @override
   void initState() {
@@ -59,7 +60,7 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
     _wikiSavePathController = TextEditingController(text: widget.currentWikiSavePath ?? '');
     _wikiFileFilterController = TextEditingController(text: widget.currentWikiFileFilter ?? '');
 
-    _triedAutoDetect = false;
+    _autodetectFailed = false;
   }
 
   @override
@@ -241,64 +242,21 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
               style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _manualWikiSearchController,
-                    decoration: InputDecoration(
-                      hintText: widget.game.name,
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    style: const TextStyle(fontSize: 12),
-                  )
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () async {
-                    final PcGamingWikiService wikiService = PcGamingWikiService(Dio());
-                    final existingGameDir = await widget.directoryService!.findExistingRomPath(widget.game);
-                    final locations = await wikiService.getSaveLocations(_manualWikiSearchController.text.isEmpty ? widget.game.name : _manualWikiSearchController.text, gameDir: existingGameDir!);
-                    if (locations.isNotEmpty) {
-                      for (final loc in locations) {
-                        debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
-                      }
-                      final resolved = locations.first['path'];
-                      var resolvedFileFilter = locations.first['raw']!.split('\\').last;
-                              // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
-                      if (resolvedFileFilter.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
-                      if (resolved != null) {
-                        final names = resolved;
-                        setState(() {
-                          _triedAutoDetect = true;
-                          _wikiSavePathController.text = names;
-                          if (resolvedFileFilter.isNotEmpty) _wikiFileFilterController.text = resolvedFileFilter;
-                        });
-                      }
-                    } else if (_wikiSavePathController.text.isEmpty) {
-                      setState(() {
-                        _triedAutoDetect = true;
-                      });
-                    }
-                  },
-                  child: const Text('Search'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_triedAutoDetect && _wikiSavePathController.text.isEmpty) RichText (
+            RichText (
               text: TextSpan(
                 style: const TextStyle(
                   fontSize: 11,
                   color: Colors.grey,
-                ),
-                children: <TextSpan>[
-                  TextSpan(text: 'Nothing found.', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  TextSpan(text: '\nTry a different wording, or enter directly the PCGW Page Title.'),
-                ],
+                 ),
+                 children: <TextSpan>[
+                  TextSpan(text: _wikiSavePathController.text.isNotEmpty ? 'Path Found :' : 'No PCGW path set', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: _wikiSavePathController.text.isNotEmpty ? '\n"${_wikiSavePathController.text}"' : ''),
+                  TextSpan(text: _wikiFileFilterController.text.isNotEmpty ? '\nFile Filter (Include):' : '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: _wikiFileFilterController.text.isNotEmpty ? '\n${_wikiFileFilterController.text}' : ''),
+                 ],
               ),
             ),
+            if (_wikiSavePathController.text.isNotEmpty) SizedBox(height: 8),
             Row(
               children: [
                 if (_wikiSavePathController.text.isNotEmpty) ElevatedButton(
@@ -319,21 +277,72 @@ class _WindowsGameConfigDialogState extends State<WindowsGameConfigDialog> {
                 ),
               ]
             ),
-            const SizedBox (height: 8),
-            if (_wikiSavePathController.text.isNotEmpty) RichText (
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _manualWikiSearchController,
+                    decoration: InputDecoration(
+                      hintText: widget.game.name,
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    style: const TextStyle(fontSize: 12),
+                  )
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () async {
+                    final PcGamingWikiService wikiService = PcGamingWikiService(Dio());
+                    final pagesTitles = await wikiService.searchGamePage(_manualWikiSearchController.text != '' ? _manualWikiSearchController.text : widget.game.name);
+                    if (pagesTitles!.isEmpty) {
+                      setState(() {
+                        _autodetectFailed = true;
+                      }); //Enables displaying the "Nothing found" text below the search field.
+                    } else {
+                      final result = await showDialog<Map<String, String>>(context: context, builder: (ctx) => WindowsPcgwDialog(results: pagesTitles));
+                      final List<Map<String,String>> locations = result != null ? await wikiService.getSaveLocations(result['results'] as String) : List.empty();
+                      
+                      if (locations.isNotEmpty) {
+                        for (final loc in locations) {debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');}
+                        final resolved = locations.first['path'];
+                        var resolvedFileFilter = locations.first['raw']!.split('\\').last;
+                        // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
+                        if (resolvedFileFilter.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
+                        if (resolved != null) {
+                          final names = resolved;
+                          setState(() {
+                            _autodetectFailed = false;
+                            _wikiSavePathController.text = names;
+                            if (resolvedFileFilter.isNotEmpty) _wikiFileFilterController.text = resolvedFileFilter;
+                          });
+                        }
+                      } else if (_wikiSavePathController.text.isEmpty) {
+                        setState(() {
+                          _autodetectFailed = true;
+                        });
+                      }
+                    }
+                  },
+                  child: const Text('Search'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_autodetectFailed) RichText (
               text: TextSpan(
                 style: const TextStyle(
                   fontSize: 11,
                   color: Colors.grey,
-                 ),
-                 children: <TextSpan>[
-                  TextSpan(text:'Path Found :', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  TextSpan(text:'\n"${_wikiSavePathController.text}"\n'),
-                  TextSpan(text: _wikiFileFilterController.text.isNotEmpty ? '\nFile Filter (Include):' : '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  TextSpan(text: _wikiFileFilterController.text.isNotEmpty ? '\n${_wikiFileFilterController.text}' : ''),
-                 ],
+                ),
+                children: <TextSpan>[
+                  TextSpan(text: 'No page found for this title.', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  TextSpan(text: '\nTry a different wording, or enter directly the PCGW Page Title.'),
+                ],
               ),
             ),
+            const SizedBox (height: 8),
           ],
         ),
       ),
