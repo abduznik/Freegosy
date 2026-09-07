@@ -29,6 +29,7 @@ void main() {
     // Default preferred emulator is null to use built-in fallbacks
     when(mockStrategyRegistry.getPreferredEmulatorId(any)).thenReturn(null);
     when(mockStrategyRegistry.getStrategyForSlug(any)).thenReturn(null);
+    when(mockStrategyRegistry.getGameEmulatorPreference(any)).thenReturn(null);
     
     // Ensure that on Linux tests we don't accidentally pick up a real system directory or a mock that returns empty string
     when(mockDirectoryService.getEmulatorAppSupportDirectory(any))

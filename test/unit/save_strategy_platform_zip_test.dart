@@ -29,6 +29,7 @@ void main() {
     
     when(mockStrategyRegistry.getPreferredEmulatorId(any)).thenReturn(null);
     when(mockStrategyRegistry.getStrategyForSlug(any)).thenReturn(null);
+    when(mockStrategyRegistry.getGameEmulatorPreference(any)).thenReturn(null);
     
     when(mockDirectoryService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
         .thenAnswer((_) async => '/nonexistent_directory_for_testing');

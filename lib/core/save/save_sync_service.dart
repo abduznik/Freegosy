@@ -219,6 +219,20 @@ class SaveSyncService {
     }
   }
 
+  /// Returns the appropriate save strategy for [game], honoring its
+  /// per-game emulator preference before falling back to [getStrategyForSlug]'s
+  /// platform-wide resolution.
+  ///
+  /// [emulatorId], if passed, still wins over any stored preference (it's the
+  /// emulator that actually launched this session, e.g. from the per-game
+  /// picker) — this only fills in the per-game preference for callers that
+  /// don't already know which emulator launched the game (see issue #79).
+  SaveStrategy? getStrategyForGame(Game game, {String? emulatorId}) {
+    final resolvedEmulatorId =
+        emulatorId ?? _strategyRegistry.getGameEmulatorPreference(game.id);
+    return getStrategyForSlug(game.platformSlug, emulatorId: resolvedEmulatorId);
+  }
+
   /// Maps an emulator strategy ID to the corresponding save strategy.
   SaveStrategy? _saveStrategyForEmulatorId(String emulatorId) {
     final id = emulatorId.toLowerCase();
@@ -418,7 +432,7 @@ class SaveSyncService {
   Future<bool> _devicePushSaves(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
+      final strategy = getStrategyForGame(game, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [push] No save strategy for slug="${game.platformSlug}" — game "${game.displayName}" not supported');
         return false;
@@ -574,7 +588,7 @@ class SaveSyncService {
   Future<bool> _devicePullSave(Game game, String romPath,
       {Map<String, dynamic>? saveData, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
+      final strategy = getStrategyForGame(game, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [pull] No save strategy for slug="${game.platformSlug}"');
         return false;
@@ -661,7 +675,7 @@ class SaveSyncService {
   Future<bool> _legacyPushSaves(Game game, String romPath,
       {DateTime? sessionStart, String syncMode = 'both', bool force = false, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
+      final strategy = getStrategyForGame(game, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [push] No save strategy for slug="${game.platformSlug}"');
         return false;
@@ -898,7 +912,7 @@ class SaveSyncService {
   /// Uses stored last-pull timestamps for freshness checks.
   Future<bool> _legacyPullSave(Game game, String romPath, {Map<String, dynamic>? saveData, String? coreOverride, String? emulatorId}) async {
     try {
-      final strategy = getStrategyForSlug(game.platformSlug, emulatorId: emulatorId);
+      final strategy = getStrategyForGame(game, emulatorId: emulatorId);
       if (strategy == null) {
         debugPrint('[SaveSync] [pull] No save strategy for slug="${game.platformSlug}"');
         return false;
