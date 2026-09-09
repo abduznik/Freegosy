@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/romm/romm_service.dart';
@@ -348,7 +351,146 @@ void main() {
         service.pushSaves(game, romPath),
         throwsA(isA<SaveConflictException>()),
       );
-      
+
+      await tempDir.delete(recursive: true);
+    });
+  });
+
+  group('SaveSyncService PCSX2 content-hash dedup (device sync)', () {
+    Future<Directory> setUpPcsx2Fixture(String saveContent) async {
+      final tempDir = await Directory.systemTemp.createTemp('pcsx2_hash_test');
+      final exeDir = Directory(p.join(tempDir.path, 'pcsx2'));
+      await Directory(p.join(exeDir.path, 'memcards')).create(recursive: true);
+      final perGameDir = Directory(p.join(exeDir.path, 'saves', 'SLUS-12345'));
+      await perGameDir.create(recursive: true);
+      await File(p.join(perGameDir.path, 'save.bin')).writeAsString(saveContent);
+      final fakeExe = File(p.join(exeDir.path, 'pcsx2-qt.exe'));
+      await fakeExe.writeAsString('');
+      when(mockDirectoryService.findEmulatorExecutable(any, any))
+          .thenAnswer((_) async => fakeExe.path);
+      return tempDir;
+    }
+
+    Game pcsx2Game() =>
+        Game(id: 'pcsx2game', name: 'Ico (SLUS-12345)', platformSlug: 'ps2', fileSize: 0);
+
+    Future<String> localSaveFilePath(Directory tempDir) async =>
+        p.join(tempDir.path, 'pcsx2', 'saves', 'SLUS-12345', 'save.bin');
+
+    setUp(() {
+      when(mockRommService.fetchCapabilities())
+          .thenAnswer((_) async => RommCapabilities(version: '4.9.0'));
+    });
+
+    void stubUpload(Future<Uint8List> Function(File) captureBytes) {
+      when(mockRommService.uploadSave(
+        any, any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
+      )).thenAnswer((invocation) async {
+        await captureBytes(invocation.positionalArguments[1] as File);
+        return (ok: true, conflict: null);
+      });
+    }
+
+    test('bundle metadata contains a contentHash, not a timeStamp', () async {
+      final tempDir = await setUpPcsx2Fixture('SAVE_DATA_V1');
+      final romPath = p.join(tempDir.path, 'Ico (SLUS-12345).iso');
+      Uint8List? uploadedBytes;
+      stubUpload((file) async => uploadedBytes = await file.readAsBytes());
+
+      final ok = await service.pushSaves(pcsx2Game(), romPath);
+
+      expect(ok, isTrue);
+      expect(uploadedBytes, isNotNull);
+      final archive = ZipDecoder().decodeBytes(uploadedBytes!);
+      final metaEntry = archive.files.firstWhere((f) => f.name == 'freegosy_sync.txt');
+      final meta = jsonDecode(utf8.decode(metaEntry.content as List<int>)) as Map<String, dynamic>;
+      expect(meta.containsKey('contentHash'), isTrue);
+      expect(meta.containsKey('timeStamp'), isFalse);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('pushing an unchanged PCSX2 bundle a second time does not re-upload', () async {
+      final tempDir = await setUpPcsx2Fixture('SAVE_DATA_V1');
+      final romPath = p.join(tempDir.path, 'Ico (SLUS-12345).iso');
+      stubUpload((_) async => Uint8List(0));
+
+      await service.pushSaves(pcsx2Game(), romPath);
+      await service.pushSaves(pcsx2Game(), romPath);
+
+      verify(mockRommService.uploadSave(
+        any, any,
+        slot: anyNamed('slot'),
+        deviceId: anyNamed('deviceId'),
+        autocleanup: anyNamed('autocleanup'),
+        autocleanupLimit: anyNamed('autocleanupLimit'),
+        overwrite: anyNamed('overwrite'),
+        screenshotFile: anyNamed('screenshotFile'),
+        overrideFilename: anyNamed('overrideFilename'),
+      )).called(1);
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('pull skips restoreSave when the cloud bundle content hash matches local', () async {
+      final tempDir = await setUpPcsx2Fixture('LOCAL_UNCHANGED');
+      final romPath = p.join(tempDir.path, 'Ico (SLUS-12345).iso');
+      Uint8List? uploadedBytes;
+      stubUpload((file) async => uploadedBytes = await file.readAsBytes());
+      await service.pushSaves(pcsx2Game(), romPath);
+      expect(uploadedBytes, isNotNull);
+
+      when(mockRommService.getLatestSave(any, deviceId: anyNamed('deviceId')))
+          .thenAnswer((_) async => {
+                'download_path': 'https://example.test/save.zip',
+                'file_name': 'Ico (SLUS-12345).zip',
+                'device_syncs': <dynamic>[],
+              });
+      when(mockRommService.downloadSave(any, deviceId: anyNamed('deviceId')))
+          .thenAnswer((_) async => uploadedBytes);
+
+      final ok = await service.pullSave(pcsx2Game(), romPath);
+
+      expect(ok, isFalse, reason: 'content already matches — should be a no-op');
+      expect(
+        await File(await localSaveFilePath(tempDir)).readAsString(),
+        'LOCAL_UNCHANGED',
+        reason: 'local save should be untouched since content already matched',
+      );
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('pull restores when the cloud bundle content hash does not match local', () async {
+      final tempDir = await setUpPcsx2Fixture('LOCAL_OLD');
+      final romPath = p.join(tempDir.path, 'Ico (SLUS-12345).iso');
+
+      final archive = Archive();
+      archive.addFile(ArchiveFile.string('freegosy_sync.txt', jsonEncode({'contentHash': 'deadbeef'})));
+      archive.addFile(ArchiveFile.string('SLUS-12345/save.bin', 'CLOUD_NEW'));
+      final cloudZipBytes = Uint8List.fromList(ZipEncoder().encode(archive));
+
+      when(mockRommService.getLatestSave(any, deviceId: anyNamed('deviceId')))
+          .thenAnswer((_) async => {
+                'download_path': 'https://example.test/save.zip',
+                'file_name': 'Ico (SLUS-12345).zip',
+                'device_syncs': <dynamic>[],
+              });
+      when(mockRommService.downloadSave(any, deviceId: anyNamed('deviceId')))
+          .thenAnswer((_) async => cloudZipBytes);
+
+      final ok = await service.pullSave(pcsx2Game(), romPath);
+
+      expect(ok, isTrue);
+      expect(await File(await localSaveFilePath(tempDir)).readAsString(), 'CLOUD_NEW');
+
       await tempDir.delete(recursive: true);
     });
   });

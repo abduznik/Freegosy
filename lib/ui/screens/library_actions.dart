@@ -395,7 +395,20 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // The actual save sync happens post-exit in the unawaited block below.
     if (syncService != null) {
       debugPrint('[SaveSync] Auto-pulling save before launch: game="${game.displayName}"');
-      unawaited(syncService.pullSave(game, romPath, coreOverride: overrideCoreId, emulatorId: strategy.emulatorId).catchError((_) => false));
+      // Snapshot the current local save before overwriting it — the pull
+      // path used to rely on Pcsx2SaveStrategy's per-file .bak rotation for
+      // this, but that was removed because leaving .bak files inside a
+      // PCSX2 folder-type memcard made PCSX2 itself refuse to save (issue
+      // discovered testing #98). This restores a safety net without
+      // reintroducing files inside the emulator-managed folder.
+      final backupService = ref.read(backupServiceProvider);
+      final resolvedEmulatorId = strategy.emulatorId;
+      unawaited(
+        backupService
+            .createImmediate(game, romPath, syncService, emulatorId: resolvedEmulatorId)
+            .then((_) => syncService.pullSave(game, romPath, coreOverride: overrideCoreId, emulatorId: resolvedEmulatorId))
+            .catchError((_) => false),
+      );
     }
 
     // Platform-specific checks (e.g. 3DS keys)
@@ -575,6 +588,9 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       final selectedSave = await LibraryDialogService.showSaveSelectionDialog(context, saves);
       if (selectedSave == null || !context.mounted) return;
       ErrorHandler.showInfo(context, 'Syncing', message: 'Downloading selected save...');
+      // Snapshot the current local save before overwriting it with the
+      // chosen cloud save, same as the auto-pull-before-launch path.
+      await ref.read(backupServiceProvider).createImmediate(game, romPath, syncService);
       final ok = await syncService.pullSave(game, romPath, saveData: selectedSave);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
