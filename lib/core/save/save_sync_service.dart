@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -81,7 +82,7 @@ class SaveSyncService {
     _eden = EdenSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
     _ryujinx = RyujinxSaveStrategy(onMappingResolved: saveMappedFolder);
     _windows = WindowsSaveStrategy(_prefs);
-    _pcsx2 = Pcsx2SaveStrategy(_directoryService);
+    _pcsx2 = Pcsx2SaveStrategy(_directoryService, _prefs);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
     _xenia = XeniaSaveStrategy(_directoryService);
     _duckstation = DuckstationSaveStrategy(_directoryService);
@@ -281,6 +282,56 @@ class SaveSyncService {
   Future<String> _hashFile(io.File file) async {
     final bytes = await file.readAsBytes();
     return md5.convert(bytes).toString();
+  }
+
+  /// Hashes the logical content of [filesMap]'s keys (files and/or
+  /// directories, recursing into any directory) — the exact same set of
+  /// entries a bundle push zips up. Unlike hashing the assembled zip file
+  /// itself, this depends only on each entry's relative path and raw bytes,
+  /// never on filesystem metadata (mtimes) or container-format details, so
+  /// it's identical whenever the underlying save content is identical —
+  /// letting a push/pull compare it against a value recorded at another
+  /// time (or read back from another push) to detect "nothing changed".
+  Future<String> _hashSaveContent(Map<io.File, io.File?> filesMap) async {
+    final entries = <MapEntry<String, io.File>>[];
+    for (final file in filesMap.keys) {
+      if (await io.FileSystemEntity.isDirectory(file.path)) {
+        final dirName = p.basename(file.path);
+        await for (final child in io.Directory(file.path).list(recursive: true)) {
+          if (child is io.File) {
+            final relative = p.join(dirName, p.relative(child.path, from: file.path));
+            entries.add(MapEntry(relative.replaceAll('\\', '/'), child));
+          }
+        }
+      } else {
+        entries.add(MapEntry(p.basename(file.path), file));
+      }
+    }
+    entries.sort((a, b) => a.key.compareTo(b.key));
+
+    final buffer = BytesBuilder(copy: false);
+    for (final entry in entries) {
+      buffer.add(utf8.encode(entry.key));
+      buffer.add(await entry.value.readAsBytes());
+    }
+    return md5.convert(buffer.takeBytes()).toString();
+  }
+
+  /// Reads the `contentHash` field out of a downloaded bundle's
+  /// `freegosy_sync.txt`, if [bytes] is a zip and that entry/field exists.
+  /// Returns null for anything else (not a zip, no metadata entry, or a
+  /// legacy timeStamp-only metadata format) so callers can fall through to
+  /// an unconditional restore.
+  String? _readBundleContentHash(Uint8List bytes) {
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes);
+      for (final entry in archive) {
+        if (!entry.isFile || p.basename(entry.name) != 'freegosy_sync.txt') continue;
+        final meta = jsonDecode(utf8.decode(entry.content as List<int>)) as Map<String, dynamic>;
+        return meta['contentHash'] as String?;
+      }
+    } catch (_) {}
+    return null;
   }
 
   String _pullKey(String gameId) =>
@@ -495,12 +546,22 @@ class SaveSyncService {
         final encoder = ZipFileEncoder();
         encoder.create(bundleZipPath);
         final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
-        final timeStamp = DateTime.now().toIso8601String();
 
-        if (strategy.strategyId != 'windows') {
+        if (strategy.strategyId == 'pcsx2') {
+          // Unlike a timestamp, a content hash is identical across repeated
+          // pushes of the same save data, so the bundle's bytes become
+          // deterministic when nothing actually changed — which lets the
+          // hash-based dedup check below (and a later pull-side check)
+          // correctly recognize "no real change" instead of re-uploading
+          // (or re-restoring) on every call.
+          final contentHash = await _hashSaveContent(filesMap);
+          await metaFile.writeAsString(jsonEncode({'contentHash': contentHash}));
+        } else if (strategy.strategyId != 'windows') {
+          final timeStamp = DateTime.now().toIso8601String();
           await metaFile.writeAsString(jsonEncode({'timeStamp': timeStamp}));
         }
         else {
+          final timeStamp = DateTime.now().toIso8601String();
           final saveAbsolutePath = await strategy.getSaveDir(game, romPath);
           final winLocalAbsolutepath = <String, String>{
             "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
@@ -673,6 +734,26 @@ class SaveSyncService {
 
       final adjustedFilename = _adjustFilenameForFormat(bytes, normalizeSaveFilename(filename));
       debugPrint('[SaveSync] [pull] Downloaded ${bytes.length} bytes → restoring as "$adjustedFilename"');
+
+      // Skip the restore entirely when the cloud bundle's freegosy_sync.txt
+      // carries a contentHash (written by strategies that opt into it, e.g.
+      // PCSX2 — see _devicePushSaves) that already matches what's on disk.
+      // Generic to any strategy's metadata format: a legacy timeStamp-only
+      // bundle has no contentHash key, so this simply falls through to an
+      // unconditional restore exactly as before.
+      if (adjustedFilename.toLowerCase().endsWith('.zip')) {
+        final cloudContentHash = _readBundleContentHash(bytes);
+        if (cloudContentHash != null) {
+          final localFilesMap = await strategy.getSaveFilesWithScreenshots(game, romPath, syncMode: 'both');
+          if (localFilesMap.isNotEmpty) {
+            final localContentHash = await _hashSaveContent(localFilesMap);
+            if (localContentHash == cloudContentHash) {
+              debugPrint('[SaveSync] [pull] Local save content already matches cloud — skipping restore');
+              return false;
+            }
+          }
+        }
+      }
 
       final ok = await strategy.restoreSave(game, romPath, bytes, adjustedFilename);
       if (!ok) {
