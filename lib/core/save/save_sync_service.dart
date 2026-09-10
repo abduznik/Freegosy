@@ -540,12 +540,14 @@ class SaveSyncService {
       } else {
         isBundle = true;
         debugPrint('[SyncService] [4.9] _devicePushSaves: mode=bundle');
-        final bundleZipPath = p.join(
-            tempDir,
-            '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
+        final bundleToken = DateTime.now().millisecondsSinceEpoch;
+        final bundleZipPath = p.join(tempDir, '$displayStem.bundle.$bundleToken.zip');
         final encoder = ZipFileEncoder();
         encoder.create(bundleZipPath);
-        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
+        // Scoped to this call's bundleToken — a shared literal filename here
+        // would race with any other concurrent push/pull writing/deleting
+        // the same path in the same temp directory.
+        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.$bundleToken.txt'));
 
         if (strategy.strategyId == 'pcsx2') {
           // Unlike a timestamp, a content hash is identical across repeated
@@ -581,7 +583,8 @@ class SaveSyncService {
           }
           await metaFile.writeAsString(jsonEncode({'timeStamp': timeStamp, 'savePath': envPath}));
         }
-        await encoder.addFile(metaFile);
+        await encoder.addFile(metaFile, 'freegosy_sync.txt');
+        await metaFile.delete();
         for (final entry in filesMap.entries) {
           final file = entry.key;
           if (await io.FileSystemEntity.isDirectory(file.path)) {
@@ -660,8 +663,6 @@ class SaveSyncService {
       }
 
       if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
-      final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
-      if (await metaFile.exists()) await metaFile.delete();
       debugPrint('[SaveSync] ─── PUSH END ─── ok=${result.ok}');
       return result.ok;
     } on SaveConflictException {
@@ -886,14 +887,19 @@ class SaveSyncService {
         isBundle = true;
         debugPrint('[SaveSync] [push] Mode: bundle (${filesMap.length} files)');
         // --- Prepare unique bundle ZIP to bypass server-side deduplication ---
-        final bundleZipPath = p.join(tempDir, '$displayStem.bundle.${DateTime.now().millisecondsSinceEpoch}.zip');
+        final bundleToken = DateTime.now().millisecondsSinceEpoch;
+        final bundleZipPath = p.join(tempDir, '$displayStem.bundle.$bundleToken.zip');
         final encoder = ZipFileEncoder();
         encoder.create(bundleZipPath);
 
-        // 1. Write sync metadata (only for bundles to help with multi-file coherence)
-        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
+        // 1. Write sync metadata (only for bundles to help with multi-file coherence).
+        // Scoped to this call's bundleToken — a shared literal filename here
+        // would race with any other concurrent push/pull writing/deleting
+        // the same path in the same temp directory.
+        final metaFile = io.File(p.join(tempDir, 'freegosy_sync.$bundleToken.txt'));
         await metaFile.writeAsString(DateTime.now().toIso8601String());
-        await encoder.addFile(metaFile);
+        await encoder.addFile(metaFile, 'freegosy_sync.txt');
+        await metaFile.delete();
 
         // 2. Add all files/folders from the map
         for (final entry in filesMap.entries) {
@@ -953,8 +959,6 @@ class SaveSyncService {
       }
 
       if (isBundle && await finalUploadFile.exists()) await finalUploadFile.delete();
-      final metaFile = io.File(p.join(tempDir, 'freegosy_sync.txt'));
-      if (await metaFile.exists()) await metaFile.delete();
 
       debugPrint('[SaveSync] ─── PUSH END ─── ok=${uploaded > 0}');
       return uploaded > 0;
