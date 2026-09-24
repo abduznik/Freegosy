@@ -476,7 +476,14 @@ class StateSyncService {
       );
     }
 
-    final hash = await _hashFile(file);
+    // Validated like a download: a state the emulator failed to write (cut
+    // off, zero-filled) must never replace a good copy on RomM.
+    final bytes = await file.readAsBytes();
+    if (!ctx.strategy.looksLikeValidState(bytes)) {
+      debugPrint('[StateSync] skipped $name: not a valid state (${bytes.length} bytes)');
+      return none;
+    }
+    final hash = _hashBytes(bytes);
     if (record != null && record.hasSynced && record.lastSyncedHash == hash) {
       debugPrint('[StateSync] unchanged $name');
       return none; // unchanged since the last sync
@@ -563,7 +570,9 @@ class StateSyncService {
           debugPrint('[StateSync] local copy of ${conflict.fileName} no longer exists');
           return false;
         }
-        // Read once: the same bytes are validated, uploaded and hashed.
+        // Validated and hashed from these bytes. The upload reads the file
+        // again (the API takes a file), so if it changed in between, its hash
+        // no longer matches the record and the next push uploads it again.
         final bytes = await file.readAsBytes();
         if (bytes.length < minValidStateBytes ||
             !ctx.strategy.looksLikeValidState(Uint8List.fromList(bytes))) {
