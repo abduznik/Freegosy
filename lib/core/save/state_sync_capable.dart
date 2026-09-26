@@ -24,7 +24,8 @@ mixin StateSyncCapable on SaveStrategy {
       Game game, String romPath);
 
   /// Sanity check applied to bytes downloaded from RomM before they replace a
-  /// local state. The default only rejects empty content.
+  /// local state, and to a local state before it is uploaded. The default only
+  /// rejects empty content.
   bool looksLikeValidState(Uint8List bytes) => bytes.isNotEmpty;
 
   /// Which slot [fileName] is. Works on names only (RomM-only states too).

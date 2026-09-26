@@ -57,6 +57,14 @@ class RomConstants {
     'win': ['.exe', '.bat', '.cmd'],
   };
 
+  /// Platforms whose games are a folder of data files started as a whole
+  /// (ScummVM): the game folder is launched as is, with no file
+  /// or disc picker.
+  static const Set<String> folderGamePlatforms = {'scummvm'};
+
+  static bool isFolderGamePlatform(String? platformSlug) =>
+      folderGamePlatforms.contains(platformSlug?.toLowerCase());
+
   static bool isRomFile(String platformSlug, String path) {
     final ext = p.extension(path).toLowerCase();
     if (ext.isEmpty) return false;

@@ -59,11 +59,12 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/emulator/retroarch_core_list.dart` — 197 libretro cores with searchable platform browser. Per-platform default core selection. Categories: recommended/official/alternative/community.
 - `lib/core/emulator/emulator_download_service.dart` — Downloads emulators from direct URLs or GitHub.
 - `lib/core/emulator/github_release_service.dart` — Resolves latest GitHub release assets.
-- `lib/core/emulator/strategies/` — Specific implementations for each emulator (RetroArch, Dolphin, Eden, Ryujinx, RPCS3, PCSX2, Azahar, Cemu, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME, Xemu, Xenia, Windows, Ares).
+- `lib/core/emulator/strategies/` — Specific implementations for each emulator (RetroArch, Dolphin, Eden, Ryujinx, RPCS3, PCSX2, Azahar, Cemu, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME, Xemu, Xenia, ScummVM, Windows, Ares).
 - `lib/core/emulator/strategies/ares_strategy.dart` — Ares emulator strategy. 30 platform slugs mapped to system names (`kAresSystemNames`). Build CLI args `['--system', systemName]` only (no `--fullscreen`/`--no-file-prompt`). Launch throws for unsupported platforms.
+- `lib/core/emulator/strategies/scummvm_strategy.dart` — ScummVM strategy. Games are folders: launched with `--auto-detect --path=<game folder>` and NO trailing ROM path (ScummVM rejects it), so it starts the process itself instead of going through `DirectoryService.launchGame`. Also finds distro installs (`/usr/bin`, `/usr/games`) on Linux. `scummvm` is in `RomConstants.folderGamePlatforms` (no file/disc picker).
 - `lib/core/emulator/strategies/windows_strategy.dart` — Windows native game strategy. `_resolveExePath()` shared by `launch()` and `launchWithHandle()`. `shouldSkipExe()` static filter. Launch args stored per game. `.bat`/`.cmd` launched via `cmd.exe /c`.
 - `lib/core/emulator/linux_strategies/` — SteamOS/Linux environment strategies.
-  - `linux_environment_strategy.dart` — Interface for ROM/Save/Tool path resolution on Linux.
+  - `linux_environment_strategy.dart` — Interface for ROM/Save/Tool path resolution on Linux. `splitCommand()` resolves `flatpak` to its absolute path (`resolveFlatpakExecutable()`); compare with `isFlatpakExecutable()`, never `== 'flatpak'`.
   - `emudeck_strategy.dart` — EmuDeck-specific resolution (SD card detection, symlink saves).
   - `retrodeck_strategy.dart` — RetroDECK Flatpak resolution.
   - `native_linux_strategy.dart` — Default Linux directory structure.
@@ -85,6 +86,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 
 ### Core — Platform
 - `lib/core/platform/platform_info.dart` — PlatformInfo abstraction for cross-platform testability. Accepts platform name and optional environment map. Used instead of `dart:io Platform` in all services.
+- `lib/core/platform/window_service.dart` — Desktop window control via `window_manager`: `init(fullscreen:)` from main(), `toggleFullScreen()` (F11 in app.dart), `--fullscreen` flag, `launch_fullscreen` pref. No-op off desktop, never throws.
 
 ### Core — Storage
 - `lib/core/storage/directory_service.dart` — Manages paths. Linux Sync Presets (Default/EmuDeck) and EmuDeck root path management. Emulator path overrides via `setEmulatorPathOverride()`/`getEmulatorPathOverride()`. ROM name sanitization includes `!` in regex.
@@ -121,6 +123,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/widgets/multi_disc_picker.dart` — Bottom sheet for selecting discs in multi-file games. Filters `.m3u`/`.cue`/`.ccd`/`.mds`/`.toc`/`.sub`.
 - `lib/ui/widgets/retroarch_core_picker_dialog.dart` — Per-game RetroArch core selection dialog. Searchable platform browser.
 - `lib/ui/widgets/gamepad_slider.dart` — GamepadSlider widget (Select to enter, D-pad to adjust deadzone).
+- `lib/ui/widgets/cover_size_button.dart` — Library app-bar button + dialog with a cover-size slider. Drives `columnCountProvider` inversely within `kMinColumnCount..kMaxColumnCount` (2..12).
 - `lib/ui/widgets/screenshot_gallery_dialog.dart` — Fullscreen swipeable screenshot gallery with zoom support.
 - `lib/ui/widgets/backup_history_sheet.dart` — Bottom sheet listing up to 8 local backup checkpoints per game. Includes Restore button with pre-restore safety snapshot.
 

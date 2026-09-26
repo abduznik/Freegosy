@@ -129,8 +129,9 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
       // inherited environment rather than a shell-resolved one. On some
       // desktop/session setups (e.g. Steam Deck gamescope sessions) that PATH
       // doesn't include `flatpak`, causing a ProcessException even though
-      // `flatpak` works fine from an interactive shell. Force shell resolution
-      // for this case specifically — see issue #84.
+      // `flatpak` works fine from an interactive shell. splitCommand resolves
+      // `flatpak` to its absolute path; if it couldn't be found, fall back to
+      // shell resolution.
       await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.detached, runInShell: exe == 'flatpak');
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.detached);
@@ -184,7 +185,7 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
   /// `flatpak override --user --filesystem=...` command; does nothing for
   /// non-Flatpak launches or paths already inside the default allowlist.
   void _checkFlatpakSandboxAccessIfNeeded(String exe, List<String> cmdArgs, String romPath) {
-    if (exe != 'flatpak' || cmdArgs.length < 2 || cmdArgs.first != 'run') return;
+    if (!LinuxEnvironmentStrategy.isFlatpakExecutable(exe) || cmdArgs.length < 2 || cmdArgs.first != 'run') return;
     final flatpakPackageId = cmdArgs[1];
     final home = _platform.environment['HOME'] ?? '';
     if (home.isEmpty) return; // Can't determine default access without $HOME; skip rather than false-positive.

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/romm/romm_models.dart';
 import '../core/save/state_sync_service.dart';
+import '../core/platform/window_service.dart';
 import 'romm_provider.dart';
 import 'shared_prefs_provider.dart';
 
@@ -43,9 +44,17 @@ final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
 // Display Settings Providers using PersistentStateNotifier
 final cardAspectRatioProvider = createPersistentProvider<double>('card_aspect_ratio', 0.75);
 final columnCountProvider = createPersistentProvider<int>('column_count', 6);
+
+/// Range of games per row offered in Settings → Display and by the library's
+/// cover-size slider. Up to 12 so covers can be made small on big screens.
+const int kMinColumnCount = 2;
+const int kMaxColumnCount = 12;
 final cardSpacingProvider = createPersistentProvider<double>('card_spacing', 12.0);
 final showTitleProvider = createPersistentProvider<bool>('show_title', true);
 final activePresetProvider = createPersistentProvider<String>('active_preset', 'windows_best');
+/// "Start in fullscreen"; read directly from SharedPreferences
+/// in main() before the first frame, so the key lives in [WindowService].
+final launchFullscreenProvider = createPersistentProvider<bool>(WindowService.launchFullscreenPrefKey, false);
 final libraryHeaderTitleModeProvider = createPersistentProvider<String>('library_header_title_mode', 'daily');
 
 // Legacy compatibility - redirects for loaders (no longer needed but kept for minimal breaking changes)

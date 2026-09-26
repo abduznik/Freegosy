@@ -116,6 +116,13 @@ class DirectoryService {
   }
 
   Future<StorageStatus> initialize() async {
+    // A browser has no file system: the web build only browses the library,
+    // it never downloads ROMs or runs emulators.
+    if (_platform.isWeb) {
+      romsRootPath = '';
+      emulatorsRootPath = '';
+      return status = const StorageStatus();
+    }
     try {
       linuxSyncPreset = _prefs.getString(_linuxSyncPresetKey) ?? 'default';
       linuxPresetRootPath = _prefs.getString(_linuxPresetRootKey);
@@ -420,6 +427,7 @@ class DirectoryService {
   }
 
   Future<String?> findExistingRomPath(Game game, {FileSystemIndex? index}) async {
+    if (_platform.isWeb) return null; // Nothing is ever downloaded in a browser.
     final romDir = await getRomDirectory(game);
     return RomLookupService.findExistingRomPath(game, romDir, index: index);
   }

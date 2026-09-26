@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'dart:math' as math;
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -95,10 +96,25 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
     };
   }
 
-  /// `.p2s` files are zip archives.
+  /// `.p2s` files are zip archives: they start with a local file header
+  /// (`PK\x03\x04`) and end with an end-of-central-directory record
+  /// (`PK\x05\x06`, 22 bytes plus a comment of up to 64 KiB). Checking both
+  /// ends also rejects a write that was cut off partway.
   @override
-  bool looksLikeValidState(Uint8List bytes) =>
-      bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+  bool looksLikeValidState(Uint8List bytes) {
+    if (bytes.length < 26 ||
+        bytes[0] != 0x50 || bytes[1] != 0x4B || bytes[2] != 0x03 || bytes[3] != 0x04) {
+      return false;
+    }
+    final earliest = math.max(4, bytes.length - 22 - 0xFFFF);
+    for (var i = bytes.length - 22; i >= earliest; i--) {
+      if (bytes[i] == 0x50 && bytes[i + 1] == 0x4B &&
+          bytes[i + 2] == 0x05 && bytes[i + 3] == 0x06) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   static final _slotPattern = RegExp(r'\.(\d{2}|resume)\.p2s$');
 

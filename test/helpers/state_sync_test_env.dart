@@ -9,9 +9,11 @@ import 'pcsx2_test_env.dart';
 const stateFileA = 'SCUS-97113 (A1B2C3D4).01.p2s';
 const stateFileB = 'SCUS-97113 (A1B2C3D4).resume.p2s';
 
-/// Bytes that pass PCSX2's state validation: zip header plus a payload larger
-/// than StateSyncService.minValidStateBytes. Different [seed]s differ.
-List<int> stateBytes(int seed) => [0x50, 0x4B, 3, 4, ...List.filled(200, seed)];
+/// Bytes that pass PCSX2's state validation: a zip header, a payload larger
+/// than StateSyncService.minValidStateBytes and a zip end record. Different
+/// [seed]s differ. For real zip-shaped states see test/fixtures/pcsx2_states.
+List<int> stateBytes(int seed) =>
+    [0x50, 0x4B, 3, 4, ...List.filled(200, seed), 0x50, 0x4B, 5, 6, ...List.filled(18, 0)];
 
 /// A portable PCSX2 install, a fake RomM states API and a StateSyncService
 /// wired to both, for the game "Ico (SCUS-97113)" (RomM rom id `42`).

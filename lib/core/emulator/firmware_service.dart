@@ -71,28 +71,54 @@ class FirmwareService {
   }
 
   /// Downloads all available firmware for all platforms and places them in the appropriate emulator BIOS directories.
-  Future<void> syncAllFirmware({FirmwareProgressCallback? onProgress}) async {
+  ///
+  /// With [installedEmulatorIds], every installed emulator that supports a
+  /// platform gets that platform's firmware, not only the platform's default
+  /// emulator: a game can be sent to a second emulator through
+  /// the per-game launch picker, and that emulator needs its BIOS too.
+  /// Without it, only the platform's default emulator is synced.
+  Future<void> syncAllFirmware({FirmwareProgressCallback? onProgress, Set<String>? installedEmulatorIds}) async {
     try {
       final platforms = await _rommService.getPlatforms();
       for (final platform in platforms) {
         if (platform.firmware.isEmpty) continue;
 
-        final strategy = _strategyRegistry.getStrategyForSlug(platform.slug);
-        if (strategy == null) {
+        final emulatorIds = emulatorIdsForFirmwareSync(platform.slug, installedEmulatorIds);
+        if (emulatorIds.isEmpty) {
           debugPrint('[FirmwareService] No emulator found for platform: ${platform.slug}');
           continue;
         }
 
-        final biosDir = await _directoryService.getEmulatorBiosDirectory(strategy.emulatorId);
-        final biosSpec = _resolveBiosSpec(strategy.emulatorId, platform.slug);
+        for (final emulatorId in emulatorIds) {
+          final biosDir = await _directoryService.getEmulatorBiosDirectory(emulatorId);
+          final biosSpec = _resolveBiosSpec(emulatorId, platform.slug);
 
-        for (final firmware in platform.firmware) {
-          await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: strategy.emulatorId, biosSpec: biosSpec, onProgress: onProgress);
+          for (final firmware in platform.firmware) {
+            await _downloadAndPlaceFirmware(firmware, biosDir, emulatorId: emulatorId, biosSpec: biosSpec, onProgress: onProgress);
+          }
         }
       }
     } catch (e) {
       debugPrint('[FirmwareService] Error syncing firmware: $e');
     }
+  }
+
+  /// The emulators whose BIOS directories receive [platformSlug]'s firmware
+  /// in [syncAllFirmware]: every installed emulator supporting the platform
+  /// when [installedEmulatorIds] is given, else the platform's default one.
+  @visibleForTesting
+  List<String> emulatorIdsForFirmwareSync(String platformSlug, Set<String>? installedEmulatorIds) {
+    if (installedEmulatorIds == null) {
+      final strategy = _strategyRegistry.getStrategyForSlug(platformSlug);
+      return strategy == null ? const [] : [strategy.emulatorId];
+    }
+    final ids = <String>[];
+    for (final strategy in _strategyRegistry.getAllStrategiesForSlug(platformSlug)) {
+      if (installedEmulatorIds.contains(strategy.emulatorId) && !ids.contains(strategy.emulatorId)) {
+        ids.add(strategy.emulatorId);
+      }
+    }
+    return ids;
   }
 
   /// Downloads firmware for a specific platform and places it in the emulator's BIOS directory.

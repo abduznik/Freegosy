@@ -47,7 +47,7 @@ void main() {
       final strategyIds = [
         'retroarch', 'dolphin', 'eden', 'rpcs3', 'pcsx2', 'azahar', 
         'cemu', 'duckstation', 'flycast', 'melonds', 'ppsspp', 'mgba', 
-        'mame', 'xemu', 'xenia_canary', 'windows_native'
+        'mame', 'xemu', 'xenia_canary', 'scummvm', 'windows_native'
       ];
       
       for (final id in strategyIds) {

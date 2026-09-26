@@ -158,7 +158,8 @@ class RomLookupService {
   /// For other platforms, finds the largest file matching the platform's extensions.
   static Future<String?> findMainRomInFolder(Game game, String folderPath) async {
     final platform = game.platformSlug?.toLowerCase() ?? '';
-    final isFolderBased = ['windows', 'pc', 'win', 'ps3', 'switch', 'nintendo-switch'].contains(platform);
+    final isFolderBased = ['windows', 'pc', 'win', 'ps3', 'switch', 'nintendo-switch'].contains(platform) ||
+        RomConstants.isFolderGamePlatform(platform);
     
     // Folder-based platforms: return folder directly. The emulator strategy
     // (e.g., WindowsStrategy, EdenStrategy) finds the executable inside.

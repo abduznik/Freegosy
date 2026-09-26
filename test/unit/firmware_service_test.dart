@@ -70,6 +70,40 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
+    test('syncAllFirmware() with installed emulators syncs every installed emulator for the platform', () async {
+      final tempDir = await Directory.systemTemp.createTemp('firmware_test_installed');
+      final dirA = p.join(tempDir.path, 'A');
+      final dirB = p.join(tempDir.path, 'B');
+
+      final firmware = Firmware(id: 3, fileName: 'shared_bios.bin', fileSizeBytes: 3);
+      final platform = Platform(id: 1, name: 'Test Platform', slug: 'test_platform', firmware: [firmware]);
+
+      when(mockRommService.getPlatforms()).thenAnswer((_) async => [platform]);
+      when(mockStrategyRegistry.getAllStrategiesForSlug('test_platform')).thenReturn([
+        MockEmulatorStrategy('emu_a'),
+        MockEmulatorStrategy('emu_b'),
+        MockEmulatorStrategy('emu_not_installed'),
+      ]);
+      when(mockDirectoryService.getEmulatorBiosDirectory('emu_a')).thenAnswer((_) async => dirA);
+      when(mockDirectoryService.getEmulatorBiosDirectory('emu_b')).thenAnswer((_) async => dirB);
+      when(mockRommService.downloadFirmware(firmware, onProgress: anyNamed('onProgress')))
+          .thenAnswer((_) async => Uint8List.fromList([1, 2, 3]));
+
+      await service.syncAllFirmware(installedEmulatorIds: {'emu_a', 'emu_b'});
+
+      expect(await File(p.join(dirA, 'shared_bios.bin')).exists(), isTrue);
+      expect(await File(p.join(dirB, 'shared_bios.bin')).exists(), isTrue);
+      verifyNever(mockDirectoryService.getEmulatorBiosDirectory('emu_not_installed'));
+      verifyNever(mockStrategyRegistry.getStrategyForSlug(any));
+
+      await tempDir.delete(recursive: true);
+    });
+
+    test('emulatorIdsForFirmwareSync() returns nothing when no installed emulator supports the platform', () {
+      when(mockStrategyRegistry.getAllStrategiesForSlug('test_platform')).thenReturn([MockEmulatorStrategy('emu_a')]);
+      expect(service.emulatorIdsForFirmwareSync('test_platform', {'emu_other'}), isEmpty);
+    });
+
     test('syncFirmwareForPlatform() syncs specifically for one platform', () async {
        final tempDir = await Directory.systemTemp.createTemp('firmware_test_single');
       final biosDir = p.join(tempDir.path, 'BIOS');

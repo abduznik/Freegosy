@@ -276,6 +276,20 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'supported_platforms': ['windows', 'linux', 'macos'],
   },
   {
+    // No download source: ScummVM publishes its builds on scummvm.org, not
+    // as GitHub release assets. Install it yourself (or set a download URL
+    // override) and Freegosy finds it like any other emulator, including the
+    // Flatpak and distribution packages on Linux.
+    'id': 'scummvm',
+    'name': 'ScummVM',
+    'type': 'direct',
+    'windows_executable': 'scummvm.exe',
+    'linux_executable': 'scummvm',
+    'macos_executable': 'ScummVM.app/Contents/MacOS/scummvm',
+    'platform_slugs': ['scummvm'],
+    'supported_platforms': ['windows', 'linux', 'macos'],
+  },
+  {
     'id': 'windows_native',
     'name': 'Windows (Native)',
     'type': 'none',

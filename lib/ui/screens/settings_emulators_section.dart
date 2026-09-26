@@ -152,7 +152,7 @@ Widget buildEmulatorsSection(
               _buildActionButton(
                 context,
                 icon: Icons.sync,
-                label: 'Sync BIOS',
+                label: 'Sync BIOS (All Installed)',
                 onTap: () => _syncAllBios(context, ref),
                 isPrimary: true,
               ),
@@ -914,6 +914,8 @@ void _showCorePickerForPlatform(
 void _syncAllBios(BuildContext context, WidgetRef ref) async {
   final firmwareService = await ref.read(firmwareServiceProvider.future);
   if (firmwareService == null) return;
+  final statuses = await ref.read(emulatorStatusProvider.future);
+  final installed = {for (final e in statuses.entries) if (e.value) e.key};
 
   if (!context.mounted) return;
 
@@ -921,8 +923,8 @@ void _syncAllBios(BuildContext context, WidgetRef ref) async {
     context: context,
     barrierDismissible: false,
     builder: (context) => _FirmwareProgressDialog(
-      title: 'Syncing All BIOS',
-      onSync: (onProgress) => firmwareService.syncAllFirmware(onProgress: onProgress),
+      title: 'Syncing BIOS for All Installed Emulators',
+      onSync: (onProgress) => firmwareService.syncAllFirmware(onProgress: onProgress, installedEmulatorIds: installed),
     ),
   );
 }

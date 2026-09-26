@@ -25,6 +25,7 @@ import '../../core/input/gamepad_service.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/ui_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/cover_size_button.dart';
 import '../widgets/controller_hints_bar.dart';
 
 final isHomeSelectedProvider = StateProvider<bool>((ref) => true);
@@ -345,6 +346,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     );
                   },
                 ),
+                const CoverSizeButton(),
                 FocusEffectWrapper(borderRadius: 24, scaleFactor: 1.1, onTap: _handleRandomGame, child: IconButton(icon: const Icon(Icons.shuffle), tooltip: 'Random game', onPressed: _handleRandomGame)),
                 const SizedBox(width: 8),
               ],

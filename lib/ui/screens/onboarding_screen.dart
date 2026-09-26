@@ -542,7 +542,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
+  /// The browser has no disk for games or emulators, so there is nothing to
+  /// set up: explain what the web version does instead.
+  Widget _buildWebStorageStep() {
+    return const SingleChildScrollView(
+      padding: EdgeInsets.all(40.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Storage Setup', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Text(
+            'Nothing to set up in the browser. The web version browses your RomM library; '
+            'downloading and playing games needs the Windows, Linux or macOS app.',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStorageStep() {
+    if (ref.read(platformInfoProvider).isWeb) return _buildWebStorageStep();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(40.0),
       child: Column(
