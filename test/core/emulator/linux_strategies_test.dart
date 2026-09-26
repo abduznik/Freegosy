@@ -138,7 +138,7 @@ void main() {
   group('LinuxEnvironmentStrategy.splitCommand', () {
     test('splits flatpak run commands into executable + arguments', () {
       final (exe, args) = LinuxEnvironmentStrategy.splitCommand('flatpak run org.libretro.RetroArch');
-      expect(exe, 'flatpak');
+      expect(LinuxEnvironmentStrategy.isFlatpakExecutable(exe), isTrue);
       expect(args, ['run', 'org.libretro.RetroArch']);
     });
 
@@ -151,8 +151,37 @@ void main() {
 
     test('handles flatpak with extra runtime arguments', () {
       final (exe, args) = LinuxEnvironmentStrategy.splitCommand('flatpak run --branch=stable org.DolphinEmu.dolphin-emu');
-      expect(exe, 'flatpak');
+      expect(LinuxEnvironmentStrategy.isFlatpakExecutable(exe), isTrue);
       expect(args, ['run', '--branch=stable', 'org.DolphinEmu.dolphin-emu']);
+    });
+  });
+
+  group('LinuxEnvironmentStrategy.resolveFlatpakExecutable (issue #84)', () {
+    test('finds flatpak in a PATH entry', () {
+      final exe = LinuxEnvironmentStrategy.resolveFlatpakExecutable(
+        pathEnv: '/opt/bin:/usr/bin',
+        fileExists: (path) => path == '/usr/bin/flatpak',
+      );
+      expect(exe, '/usr/bin/flatpak');
+    });
+
+    test('falls back to the standard locations when PATH lacks /usr/bin', () {
+      final exe = LinuxEnvironmentStrategy.resolveFlatpakExecutable(
+        pathEnv: '/home/deck/.local/bin',
+        fileExists: (path) => path == '/usr/bin/flatpak',
+      );
+      expect(exe, '/usr/bin/flatpak');
+    });
+
+    test('returns the bare command when flatpak is nowhere to be found', () {
+      final exe = LinuxEnvironmentStrategy.resolveFlatpakExecutable(pathEnv: '', fileExists: (_) => false);
+      expect(exe, 'flatpak');
+    });
+
+    test('isFlatpakExecutable accepts bare and absolute forms only', () {
+      expect(LinuxEnvironmentStrategy.isFlatpakExecutable('flatpak'), isTrue);
+      expect(LinuxEnvironmentStrategy.isFlatpakExecutable('/usr/bin/flatpak'), isTrue);
+      expect(LinuxEnvironmentStrategy.isFlatpakExecutable('/usr/bin/retroarch'), isFalse);
     });
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 import 'package:path/path.dart' as p;
+import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 
 /// Thrown when a ROM path falls outside a Flatpak's default sandbox
@@ -51,12 +52,43 @@ abstract class LinuxEnvironmentStrategy {
   /// split into separate argv entries before being handed to Process.start —
   /// passing the whole string as the executable name fails with ENOENT.
   /// Plain file paths are returned unchanged so spaces inside them are safe.
+  ///
+  /// `flatpak` is resolved to its absolute path (see
+  /// [resolveFlatpakExecutable]) so the launch doesn't depend on the PATH
+  /// Freegosy inherited (issue #84).
   static (String, List<String>) splitCommand(String exePath) {
     if (exePath.startsWith('flatpak ')) {
       final parts = exePath.split(' ');
-      return (parts.first, parts.sublist(1));
+      return (resolveFlatpakExecutable(), parts.sublist(1));
     }
     return (exePath, const []);
+  }
+
+  /// Where `flatpak` is installed on the distros we know of, checked after
+  /// the entries of `PATH`.
+  static const flatpakFallbackLocations = ['/usr/bin/flatpak', '/usr/local/bin/flatpak', '/bin/flatpak'];
+
+  /// True when [exe] is the `flatpak` command, bare or resolved to a path.
+  static bool isFlatpakExecutable(String exe) => p.basename(exe) == 'flatpak';
+
+  /// The absolute path of the `flatpak` binary, or the bare `flatpak` when it
+  /// can't be found. Process.start looks a bare name up in the PATH Freegosy
+  /// inherited, which on some sessions (Steam Deck game mode, launched as an
+  /// AppImage or from Steam) doesn't hold `/usr/bin`, so the launch failed
+  /// with "ProcessException: No such file or directory" although `flatpak`
+  /// runs fine from a terminal (issue #84).
+  static String resolveFlatpakExecutable({String? pathEnv, bool Function(String path)? fileExists}) {
+    final exists = fileExists ?? (String path) => io.File(path).existsSync();
+    final path = pathEnv ?? PlatformInfo.current.environment['PATH'] ?? '';
+    final candidates = [
+      for (final dir in path.split(':'))
+        if (dir.isNotEmpty) p.join(dir, 'flatpak'),
+      ...flatpakFallbackLocations,
+    ];
+    for (final candidate in candidates) {
+      if (exists(candidate)) return candidate;
+    }
+    return 'flatpak';
   }
 
   /// Returns the root ROMs directory for this environment.
