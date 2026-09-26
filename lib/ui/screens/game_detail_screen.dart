@@ -16,6 +16,7 @@ import '../../providers/shared_prefs_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
 import '../widgets/download_progress_indicator.dart';
 import '../widgets/backup_history_sheet.dart';
+import '../widgets/game_detail/game_achievements_section.dart';
 import '../widgets/game_detail/game_action_button.dart';
 import '../widgets/game_detail/game_metadata_chip.dart';
 import '../widgets/game_detail/game_details_grid.dart';
@@ -600,6 +601,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   const SizedBox(height: 24),
                   GameNotesSection(notes: _currentGame.notes, onAddNote: _addNote, onViewNote: _viewNote),
                   const SizedBox(height: 24),
+                  GameAchievementsSection(game: _currentGame),
                   _buildScreenshotsSection(theme),
                   GamePersonalSection(
                     status: _status,

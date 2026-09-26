@@ -100,6 +100,11 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Core — Error
 - `lib/core/error/error_handler.dart` — Centralized error handling and snackbar notifications.
 
+### Core — RetroAchievements
+- `lib/core/retroachievements/retroachievements_service.dart` — Read-only RA Web API client (`u`/`y` query auth). `fetchProfile()` (API_GetUserSummary), `fetchGameProgress(gameId)` (API_GetGameInfoAndUserProgress). Freegosy never awards achievements — emulators do that via rcheevos.
+- `lib/core/retroachievements/retroachievements_models.dart` — Credentials, profile, `RetroAchievementsAuthException`.
+- `lib/core/retroachievements/retroachievements_game_models.dart` — `RetroAchievement` (parses both RA Web API and RomM `merged_ra_metadata` shapes), `RetroAchievementsGameProgress`, `RetroAchievementsAward`. `Game.raId`/`Game.raAchievements` come from RomM's `ra_id`/`merged_ra_metadata`.
+
 ### Providers
 - `lib/providers/romm_provider.dart` — Riverpod providers for RomM services. Added downloadCacheServiceProvider.
 - `lib/providers/library_provider.dart` — Platform and display setting providers.
@@ -116,6 +121,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions. Now a StatefulWidget for managing personal game properties (rating, status, completion).
 
 ### UI — Widgets
+- `lib/ui/widgets/game_detail/game_achievements_section.dart` — Game detail Achievements section. Hidden unless `game.raId` is set; live unlocks via `retroAchievementsGameProgressProvider` when an RA account is connected, else RomM's stored set.
 - `lib/ui/widgets/game_card.dart` — Grid item for games.
 - `lib/ui/widgets/filter_bottom_sheet.dart` — Library filtering UI. Updated to use status lists.
 - `lib/ui/widgets/platform_filter_bar.dart` — Horizontal platform selector.

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freegosy/core/retroachievements/retroachievements_game_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_service.dart';
 import 'package:freegosy/core/storage/secure_storage_service.dart';
@@ -30,6 +31,17 @@ final retroAchievementsProfileProvider = FutureProvider<RetroAchievementsProfile
   if (credentials == null) return null;
   final service = ref.watch(retroAchievementsServiceProvider);
   return service.fetchProfile(credentials);
+});
+
+/// Fetches the connected user's progress through one RetroAchievements game,
+/// keyed by RA game ID (RomM's `ra_id`). Resolves to null when no account is
+/// connected. Auto-disposed so reopening a game shows fresh unlocks.
+final retroAchievementsGameProgressProvider =
+    FutureProvider.autoDispose.family<RetroAchievementsGameProgress?, int>((ref, gameId) async {
+  final credentials = await ref.watch(retroAchievementsCredentialsProvider.future);
+  if (credentials == null) return null;
+  final service = ref.watch(retroAchievementsServiceProvider);
+  return service.fetchGameProgress(credentials, gameId);
 });
 
 /// Saves credentials and refreshes dependent providers. Throws

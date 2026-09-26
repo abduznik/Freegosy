@@ -1,3 +1,5 @@
+import '../retroachievements/retroachievements_game_models.dart';
+
 class Game {
   final String id;
   final String name;
@@ -36,6 +38,8 @@ class Game {
   final bool backlogged; // from rom_user.backlogged, default false
   final bool nowPlaying; // from rom_user.now_playing, default false
   final List<RomNote> notes; // from all_user_notes
+  final int? raId; // RetroAchievements game ID, set once RomM's RA provider matched the ROM
+  final List<RetroAchievement> raAchievements; // from merged_ra_metadata.achievements (no user progress)
 
   bool get isMultiFile => hasMultipleFiles;
 
@@ -96,6 +100,8 @@ class Game {
     this.backlogged = false,
     this.nowPlaying = false,
     this.notes = const [],
+    this.raId,
+    this.raAchievements = const [],
   });
 
   factory Game.fromJson(Map<String, dynamic> json) {
@@ -135,6 +141,12 @@ class Game {
       backlogged: json['rom_user']?['backlogged'] as bool? ?? false,
       nowPlaying: json['rom_user']?['now_playing'] as bool? ?? false,
       notes: (json['all_user_notes'] as List<dynamic>?)?.map((e) => RomNote.fromJson(e)).toList() ?? [],
+      raId: json['ra_id'] is int ? json['ra_id'] as int : int.tryParse(json['ra_id']?.toString() ?? ''),
+      raAchievements: sortAchievements(
+        (json['merged_ra_metadata']?['achievements'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(RetroAchievement.fromRommJson),
+      ),
     );
   }
 
@@ -186,6 +198,10 @@ class Game {
         'created_at': n.createdAt?.toIso8601String(),
         'updated_at': n.updatedAt?.toIso8601String(),
       }).toList(),
+      'ra_id': raId,
+      'merged_ra_metadata': {
+        'achievements': raAchievements.map((a) => a.toRommJson()).toList(),
+      },
     };
   }
 }

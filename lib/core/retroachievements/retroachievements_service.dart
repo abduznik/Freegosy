@@ -1,11 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
+import 'retroachievements_game_models.dart';
 import 'retroachievements_models.dart';
 
 /// Thin HTTP client for the read-only parts of the RetroAchievements Web API
 /// (https://api-docs.retroachievements.org/) that Freegosy needs: verifying
-/// a username/API-key pair and fetching that user's profile summary.
+/// a username/API-key pair, fetching that user's profile summary, and
+/// fetching their progress through a single game.
 ///
 /// This deliberately does NOT attempt to award/unlock achievements during
 /// play — that requires the rcheevos client library watching live emulator
@@ -65,6 +67,41 @@ class RetroAchievementsService {
         throw const RetroAchievementsAuthException('Invalid username or Web API key.');
       }
       debugPrint('[RetroAchievements] fetchProfile network error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetches [gameId]'s achievement set along with the connected user's
+  /// unlock dates (API_GetGameInfoAndUserProgress.php).
+  ///
+  /// [gameId] is the RetroAchievements game ID, which RomM exposes as a
+  /// ROM's `ra_id`. Throws [RetroAchievementsAuthException] on rejected
+  /// credentials; other failures propagate as [DioException].
+  Future<RetroAchievementsGameProgress> fetchGameProgress(
+    RetroAchievementsCredentials credentials,
+    int gameId,
+  ) async {
+    if (credentials.isEmpty) {
+      throw const RetroAchievementsAuthException('Username and Web API key are required.');
+    }
+
+    try {
+      final response = await _dio.get('/API_GetGameInfoAndUserProgress.php', queryParameters: {
+        'u': credentials.username,
+        'y': credentials.webApiKey,
+        'g': gameId,
+      });
+
+      final data = response.data;
+      if (data is! Map<String, dynamic> || data.isEmpty) {
+        throw const RetroAchievementsAuthException('Invalid username or Web API key.');
+      }
+      return RetroAchievementsGameProgress.fromJson(data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        throw const RetroAchievementsAuthException('Invalid username or Web API key.');
+      }
+      debugPrint('[RetroAchievements] fetchGameProgress($gameId) network error: $e');
       rethrow;
     }
   }
