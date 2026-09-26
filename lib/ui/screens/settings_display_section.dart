@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/platform/platform_info.dart';
+import '../../core/platform/window_service.dart';
 import '../../providers/library_provider.dart';
+import '../../providers/platform_info_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/dialog_back_bridge.dart';
 import '../widgets/gamepad_slider.dart';
+
+bool _isDesktop(PlatformInfo platform) => platform.isWindows || platform.isLinux || platform.isMacOS;
 
 Widget _buildCustomDropdown<T>({
   required BuildContext context,
@@ -332,6 +337,19 @@ Widget buildDisplaySection(
           ref.read(showTitleProvider.notifier).update(value);
         },
       ),
+      if (_isDesktop(ref.watch(platformInfoProvider))) ...[
+        const SizedBox(height: 8),
+        _buildCustomToggleRow(
+          context,
+          title: 'Start in fullscreen',
+          subtitle: 'Open Freegosy fullscreen. Press F11 to toggle at any time, or launch with --fullscreen',
+          value: ref.watch(launchFullscreenProvider),
+          onChanged: (value) {
+            ref.read(launchFullscreenProvider.notifier).update(value);
+            WindowService.setFullScreen(value);
+          },
+        ),
+      ],
     ],
   );
 }

@@ -18,6 +18,7 @@ import 'core/input/gamepad_service.dart';
 import 'core/input/input_action_bus.dart';
 import 'package:flutter/services.dart';
 import 'providers/theme_provider.dart';
+import 'core/platform/window_service.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -45,6 +46,11 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
     
     // Global Keyboard Listener - Maps physical keys to Action Bus commands
     HardwareKeyboard.instance.addHandler((event) {
+      // F11 toggles fullscreen everywhere, even while typing (issue #74).
+      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f11) {
+        WindowService.toggleFullScreen();
+        return true;
+      }
       if (event is KeyDownEvent) {
         // Protection: Ignore if typing in a text field
         final focusNode = FocusManager.instance.primaryFocus;

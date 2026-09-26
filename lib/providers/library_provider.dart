@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/romm/romm_models.dart';
 import '../core/save/state_sync_service.dart';
+import '../core/platform/window_service.dart';
 import 'romm_provider.dart';
 import 'shared_prefs_provider.dart';
 
@@ -51,6 +52,9 @@ const int kMaxColumnCount = 12;
 final cardSpacingProvider = createPersistentProvider<double>('card_spacing', 12.0);
 final showTitleProvider = createPersistentProvider<bool>('show_title', true);
 final activePresetProvider = createPersistentProvider<String>('active_preset', 'windows_best');
+/// "Start in fullscreen" (issue #74); read directly from SharedPreferences
+/// in main() before the first frame, so the key lives in [WindowService].
+final launchFullscreenProvider = createPersistentProvider<bool>(WindowService.launchFullscreenPrefKey, false);
 final libraryHeaderTitleModeProvider = createPersistentProvider<String>('library_header_title_mode', 'daily');
 
 // Legacy compatibility - redirects for loaders (no longer needed but kept for minimal breaking changes)

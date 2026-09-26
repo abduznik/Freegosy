@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/constants/app_constants.dart';
 import 'core/platform/platform_info.dart';
+import 'core/platform/window_service.dart';
 import 'core/save/backup_entry.dart';
 import 'providers/shared_prefs_provider.dart';
 import 'main_cli.dart' as headless;
@@ -69,6 +70,9 @@ SOFTWARE.
   await Hive.openBox<List>('freegosy_backups');
   
   final prefs = await SharedPreferences.getInstance();
+  await WindowService.init(
+    fullscreen: WindowService.shouldStartFullscreen(args, prefs.getBool(WindowService.launchFullscreenPrefKey)),
+  );
   
   runApp(
     ProviderScope(
