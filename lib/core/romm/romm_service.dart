@@ -354,6 +354,23 @@ class RommService implements RommStatesApi {
     } catch (_) { return null; }
   }
 
+  /// The current user's RetroAchievements progress as synced by RomM
+  /// (`ra_progression` on /api/users/me), keyed by RA game ID. Empty when the
+  /// server has no RA key or the user hasn't linked an RA username in RomM.
+  Future<Map<int, Map<String, dynamic>>> getRetroAchievementsProgression() async {
+    try {
+      final response = await _dio.get('/api/users/me', options: _authOptions);
+      final data = response.data;
+      final progression = data is Map ? data['ra_progression'] : null;
+      final results = progression is Map ? progression['results'] : null;
+      if (results is! List) return {};
+      return {
+        for (final r in results.whereType<Map<String, dynamic>>())
+          if (r['rom_ra_id'] is int) r['rom_ra_id'] as int: r,
+      };
+    } catch (_) { return {}; }
+  }
+
   Future<List<Platform>> getPlatforms() async {
     final response = await _dio.get('/api/platforms', options: _authOptions);
     if (response.statusCode == 200) {

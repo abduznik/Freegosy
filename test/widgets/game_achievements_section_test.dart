@@ -18,6 +18,7 @@ Widget _wrap(Widget child, List<Override> overrides) => ProviderScope(
 void main() {
   testWidgets('renders nothing for games RomM did not match to RetroAchievements', (tester) async {
     await tester.pumpWidget(_wrap(GameAchievementsSection(game: Game(id: '1', name: 'x', fileSize: 0)), [
+      rommRetroAchievementsProgressionProvider.overrideWith((ref) => Future.value({})),
       retroAchievementsCredentialsProvider.overrideWith((ref) => Future.value(null)),
     ]));
     expect(find.text('Achievements'), findsNothing);
@@ -27,6 +28,7 @@ void main() {
     final game = Game(id: '1', name: 'x', fileSize: 0, raId: 7, raAchievements: const [_a1, _a2]);
     await tester.pumpWidget(_wrap(GameAchievementsSection(game: game), [
       retroAchievementsCredentialsProvider.overrideWith((ref) => Future.value(null)),
+      rommRetroAchievementsProgressionProvider.overrideWith((ref) => Future.value({})),
     ]));
     await tester.pump();
 
@@ -62,5 +64,29 @@ void main() {
     expect(find.text('Mastered'), findsOneWidget);
     expect(find.text('1 / 2 unlocked · 5 / 15 points · 1 hardcore'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('without a Web API key uses the progress RomM synced', (tester) async {
+    final game = Game(id: '1', name: 'x', fileSize: 0, raId: 7, raAchievements: const [_a1, _a2]);
+    await tester.pumpWidget(_wrap(GameAchievementsSection(game: game), [
+      retroAchievementsCredentialsProvider.overrideWith(
+        (ref) => Future.value(const RetroAchievementsCredentials(username: 'u', webApiKey: '')),
+      ),
+      rommRetroAchievementsProgressionProvider.overrideWith((ref) => Future.value({
+            7: {
+              'rom_ra_id': 7,
+              'highest_award_kind': 'beaten-softcore',
+              'earned_achievements': [
+                {'id': '2', 'date': '2024-05-01 10:00:00'},
+              ],
+            },
+          })),
+    ]));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Beaten (softcore)'), findsOneWidget);
+    expect(find.text('1 / 2 unlocked · 10 / 15 points'), findsOneWidget);
+    expect(find.text('Progress as last synced by RomM.'), findsOneWidget);
   });
 }

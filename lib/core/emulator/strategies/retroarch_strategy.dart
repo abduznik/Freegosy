@@ -70,6 +70,9 @@ class RetroArchStrategy extends EmulatorStrategy {
   @override
   bool get supportsSaveSync => true;
 
+  @override
+  bool get supportsRetroAchievementsLogin => true;
+
   // ── Core override system ─────────────────────────────────────
 
   /// Set a core override for a specific platform slug.

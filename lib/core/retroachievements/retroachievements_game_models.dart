@@ -49,6 +49,20 @@ class RetroAchievement {
     this.dateEarnedHardcore,
   });
 
+  RetroAchievement withUnlock({DateTime? earned, DateTime? earnedHardcore}) => RetroAchievement(
+        id: id,
+        title: title,
+        description: description,
+        points: points,
+        badgeName: badgeName,
+        displayOrder: displayOrder,
+        type: type,
+        numAwarded: numAwarded,
+        numAwardedHardcore: numAwardedHardcore,
+        dateEarned: earned,
+        dateEarnedHardcore: earnedHardcore,
+      );
+
   bool get isUnlocked => dateEarned != null || dateEarnedHardcore != null;
   bool get isUnlockedHardcore => dateEarnedHardcore != null;
 
@@ -168,6 +182,33 @@ class RetroAchievementsGameProgress {
       iconUrl: (icon != null && icon.isNotEmpty) ? '$_mediaBase$icon' : null,
       achievements: sortAchievements(achievements),
       highestAward: RetroAchievementsAward.parse(json['HighestAwardKind']?.toString()),
+    );
+  }
+
+  /// Builds progress from what RomM synced: the achievement set RomM stored
+  /// for the game plus the user's `ra_progression` entry for it, whose
+  /// `earned_achievements` are `{id, date, date_hardcore}` records.
+  factory RetroAchievementsGameProgress.fromRomm({
+    required int gameId,
+    required List<RetroAchievement> achievements,
+    required Map<String, dynamic> progression,
+  }) {
+    final earned = <int, Map<String, dynamic>>{
+      for (final e in (progression['earned_achievements'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>())
+        _int(e['id']): e,
+    };
+    return RetroAchievementsGameProgress(
+      gameId: gameId,
+      title: '',
+      consoleName: '',
+      achievements: [
+        for (final a in achievements)
+          earned.containsKey(a.id)
+              ? a.withUnlock(earned: _raDate(earned[a.id]!['date']), earnedHardcore: _raDate(earned[a.id]!['date_hardcore']))
+              : a,
+      ],
+      highestAward: RetroAchievementsAward.parse(progression['highest_award_kind']?.toString()),
     );
   }
 }

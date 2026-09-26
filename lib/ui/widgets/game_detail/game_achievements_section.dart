@@ -12,10 +12,12 @@ const _hardcoreGold = Color(0xFFFFC107);
 
 /// Game detail section listing a game's RetroAchievements set.
 ///
-/// Shown only when RomM matched the ROM to an RA game (`ra_id`). With an RA
-/// account connected in Settings it shows the user's unlocks, fetched live
-/// from the RA Web API; otherwise (or offline) it falls back to the
-/// achievement list RomM stored for the game, without unlock state.
+/// Shown only when RomM matched the ROM to an RA game (`ra_id`). Unlock
+/// state comes from, in order of preference:
+///  1. the RA Web API, live, when a Web API key is saved in Settings;
+///  2. the progress RomM synced for the user (`ra_progression`), when the
+///     server has RA enabled and the user linked their RA username in RomM;
+///  3. otherwise none — RomM's stored achievement set is shown without it.
 class GameAchievementsSection extends ConsumerWidget {
   final Game game;
 
@@ -27,11 +29,8 @@ class GameAchievementsSection extends ConsumerWidget {
     if (raId == null) return const SizedBox.shrink();
 
     final credentials = ref.watch(retroAchievementsCredentialsProvider).asData?.value;
-    if (credentials == null) {
-      return _AchievementsBody(
-        achievements: game.raAchievements,
-        footer: 'Connect your RetroAchievements account in Settings to see your unlocks.',
-      );
+    if (credentials == null || !credentials.hasWebApiKey) {
+      return _buildFromRomm(ref, raId, hasAccount: credentials != null);
     }
 
     return ref.watch(retroAchievementsGameProgressProvider(raId)).when(
@@ -42,10 +41,32 @@ class GameAchievementsSection extends ConsumerWidget {
           error: (e, _) => _AchievementsBody(
             achievements: game.raAchievements,
             footer: e is RetroAchievementsAuthException
-                ? 'RetroAchievements rejected your credentials — reconnect in Settings.'
+                ? 'RetroAchievements rejected your Web API key — update it in Settings.'
                 : 'Could not load your RetroAchievements progress.',
           ),
         );
+  }
+
+  Widget _buildFromRomm(WidgetRef ref, int raId, {required bool hasAccount}) {
+    final progression = ref.watch(rommRetroAchievementsProgressionProvider).asData?.value[raId];
+    if (progression != null && game.raAchievements.isNotEmpty) {
+      final progress = RetroAchievementsGameProgress.fromRomm(
+        gameId: raId,
+        achievements: game.raAchievements,
+        progression: progression,
+      );
+      return _AchievementsBody(
+        achievements: progress.achievements,
+        progress: progress,
+        footer: 'Progress as last synced by RomM.',
+      );
+    }
+    return _AchievementsBody(
+      achievements: game.raAchievements,
+      footer: hasAccount
+          ? 'Add your Web API key in Settings → RetroAchievements to see your unlocks.'
+          : 'Connect your RetroAchievements account in Settings to see your unlocks.',
+    );
   }
 }
 

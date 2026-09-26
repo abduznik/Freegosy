@@ -9,7 +9,12 @@ class RetroAchievementsCredentials {
 
   const RetroAchievementsCredentials({required this.username, required this.webApiKey});
 
+  /// True when the Web API can't be called (both fields are required there).
   bool get isEmpty => username.isEmpty || webApiKey.isEmpty;
+
+  /// The Web API key is optional in Settings: without it Freegosy can still
+  /// sign emulators in and show progress RomM synced, just not live data.
+  bool get hasWebApiKey => webApiKey.isNotEmpty;
 }
 
 /// A user's profile summary, as returned by API_GetUserSummary.php.

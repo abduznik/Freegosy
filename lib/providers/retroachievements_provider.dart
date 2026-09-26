@@ -4,10 +4,12 @@ import 'package:freegosy/core/retroachievements/retroachievements_game_models.da
 import 'package:freegosy/core/retroachievements/retroachievements_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_service.dart';
 import 'package:freegosy/core/storage/secure_storage_service.dart';
+import 'package:freegosy/providers/romm_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 
 /// Loads the persisted RetroAchievements credentials, if any were saved via
-/// the Settings screen. The Web API key is stored through
+/// the Settings screen. Only the username is required; `webApiKey` is empty
+/// when the user skipped it. The Web API key is stored through
 /// [SecureStorageService] (keychain/DPAPI/libsecret, with a SharedPreferences
 /// fallback), matching how the RomM API key is stored.
 final retroAchievementsCredentialsProvider = FutureProvider<RetroAchievementsCredentials?>((ref) async {
@@ -15,7 +17,7 @@ final retroAchievementsCredentialsProvider = FutureProvider<RetroAchievementsCre
   final username = prefs.getString(kRaUsernameKey) ?? '';
   final webApiKey = await SecureStorageService.read(kRaWebApiKeySecureKey, prefs) ?? '';
   final credentials = RetroAchievementsCredentials(username: username, webApiKey: webApiKey);
-  return credentials.isEmpty ? null : credentials;
+  return credentials.username.isEmpty ? null : credentials;
 });
 
 final retroAchievementsServiceProvider = Provider<RetroAchievementsService>((ref) {
@@ -26,20 +28,29 @@ final retroAchievementsServiceProvider = Provider<RetroAchievementsService>((ref
 /// resolves to null rather than hitting the network.
 final retroAchievementsProfileProvider = FutureProvider<RetroAchievementsProfile?>((ref) async {
   final credentials = await ref.watch(retroAchievementsCredentialsProvider.future);
-  if (credentials == null) return null;
+  if (credentials == null || !credentials.hasWebApiKey) return null;
   final service = ref.watch(retroAchievementsServiceProvider);
   return service.fetchProfile(credentials);
 });
 
 /// Fetches the connected user's progress through one RetroAchievements game,
 /// keyed by RA game ID (RomM's `ra_id`). Resolves to null when no account is
-/// connected. Auto-disposed so reopening a game shows fresh unlocks.
+/// connected or no Web API key was given. Auto-disposed so reopening a game
+/// shows fresh unlocks.
 final retroAchievementsGameProgressProvider =
     FutureProvider.autoDispose.family<RetroAchievementsGameProgress?, int>((ref, gameId) async {
   final credentials = await ref.watch(retroAchievementsCredentialsProvider.future);
-  if (credentials == null) return null;
+  if (credentials == null || !credentials.hasWebApiKey) return null;
   final service = ref.watch(retroAchievementsServiceProvider);
   return service.fetchGameProgress(credentials, gameId);
+});
+
+/// The user's RA progress as synced by RomM, keyed by RA game ID. Used when
+/// no Web API key is set; empty when RomM has no RA data for the user.
+final rommRetroAchievementsProgressionProvider = FutureProvider.autoDispose<Map<int, Map<String, dynamic>>>((ref) async {
+  final romm = ref.watch(rommServiceProvider);
+  if (romm == null) return {};
+  return romm.getRetroAchievementsProgression();
 });
 
 /// The username/token emulators are signed in with, or null when the account
@@ -67,11 +78,18 @@ final retroAchievementsConnectProvider =
     Provider<Future<void> Function(RetroAchievementsCredentials, {String? password})>((ref) {
   return (credentials, {password}) async {
     final service = ref.read(retroAchievementsServiceProvider);
+    final hasPassword = password != null && password.isNotEmpty;
+    if (credentials.username.isEmpty) {
+      throw const RetroAchievementsAuthException('Username is required.');
+    }
+    if (!hasPassword && !credentials.hasWebApiKey) {
+      throw const RetroAchievementsAuthException('Enter your password, your Web API key, or both.');
+    }
     // Validate before persisting so a typo'd key doesn't get saved silently.
-    await service.fetchProfile(credentials);
+    if (credentials.hasWebApiKey) await service.fetchProfile(credentials);
 
     String? token;
-    if (password != null && password.isNotEmpty) {
+    if (hasPassword) {
       final login = await service.fetchConnectToken(credentials.username, password);
       if (login.username.toLowerCase() != credentials.username.toLowerCase()) {
         throw const RetroAchievementsAuthException('That password belongs to a different RetroAchievements account.');
@@ -82,7 +100,11 @@ final retroAchievementsConnectProvider =
     final prefs = ref.read(appPreferencesProvider);
     final previousUsername = prefs.getString(kRaUsernameKey) ?? '';
     await prefs.setString(kRaUsernameKey, credentials.username);
-    await SecureStorageService.write(kRaWebApiKeySecureKey, credentials.webApiKey, prefs);
+    if (credentials.hasWebApiKey) {
+      await SecureStorageService.write(kRaWebApiKeySecureKey, credentials.webApiKey, prefs);
+    } else {
+      await SecureStorageService.delete(kRaWebApiKeySecureKey, prefs);
+    }
     if (token != null) {
       await SecureStorageService.write(kRaConnectTokenSecureKey, token, prefs);
     } else if (previousUsername.toLowerCase() != credentials.username.toLowerCase()) {

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/retroachievements/retroachievements_emulator_login.dart';
 import '../../core/retroachievements/retroachievements_models.dart';
 import '../../providers/retroachievements_provider.dart';
+import '../widgets/dialog_back_bridge.dart';
 import '../widgets/focus_effect_wrapper.dart';
 
 InputDecoration _buildInputDecoration(BuildContext context, String label, {String? hintText, String? helperText}) {
@@ -135,12 +137,13 @@ Widget _buildSectionCard({
 
 /// Settings section for connecting a RetroAchievements account.
 ///
-/// This is intentionally read-only/profile-focused: Freegosy launches
-/// emulators as external processes and has no access to their live memory,
-/// so it cannot itself track or award achievement unlocks the way rcheevos
-/// (built into RetroArch, Dolphin, PCSX2, etc.) does from inside the
-/// emulator. Connecting an account here only lets Freegosy display that
-/// account's profile and points.
+/// Only the username is required. The optional password is exchanged once
+/// for an RA login token so Freegosy can sign emulators in at launch (only
+/// RetroArch so far); the password itself is never stored. The optional Web
+/// API key lets Freegosy show live profile/progress data.
+///
+/// Freegosy never awards achievements itself: unlocks are detected by
+/// rcheevos inside the emulator, which Freegosy has no access to.
 class SettingsRetroAchievementsSection extends ConsumerStatefulWidget {
   const SettingsRetroAchievementsSection({super.key});
 
@@ -151,6 +154,7 @@ class SettingsRetroAchievementsSection extends ConsumerStatefulWidget {
 class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetroAchievementsSection> {
   late final TextEditingController _usernameController;
   late final TextEditingController _webApiKeyController;
+  late final TextEditingController _passwordController;
   bool _isEditing = false;
   bool _isConnecting = false;
   bool _preferencesLoaded = false;
@@ -161,12 +165,14 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
     super.initState();
     _usernameController = TextEditingController();
     _webApiKeyController = TextEditingController();
+    _passwordController = TextEditingController();
   }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _webApiKeyController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -175,11 +181,14 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
     final theme = Theme.of(context);
     final credentialsAsync = ref.watch(retroAchievementsCredentialsProvider);
     final profileAsync = ref.watch(retroAchievementsProfileProvider);
+    final emulatorLogin = ref.watch(retroAchievementsEmulatorLoginProvider).asData?.value;
 
     return credentialsAsync.when(
       data: (credentials) {
         if (!_preferencesLoaded) {
           _usernameController.text = credentials?.username ?? '';
+          // Pre-filled (obscured) so re-saving without retyping keeps the key.
+          _webApiKeyController.text = credentials?.webApiKey ?? '';
           _isEditing = credentials == null;
           _preferencesLoaded = true;
         }
@@ -208,14 +217,16 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Connect your RetroAchievements account to see your profile and points in Freegosy. '
-                'Achievements are still tracked and unlocked by the emulator itself (e.g. RetroArch, Dolphin, PCSX2) — '
-                'Freegosy does not award achievements, only displays your account here.',
+                'Connect your RetroAchievements account once here: Freegosy signs your emulators in when it '
+                'launches them (RetroArch for now) and shows your progress on each game. '
+                'Achievements are still detected and unlocked by the emulator itself.',
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 13),
               ),
               const SizedBox(height: 16),
               if (credentials != null && !_isEditing) ...[
-                _buildProfileDisplay(context, profileAsync),
+                _buildProfileDisplay(context, profileAsync, credentials),
+                const SizedBox(height: 16),
+                _buildStatus(context, credentials, emulatorLogin),
               ] else ...[
                 TextField(
                   controller: _usernameController,
@@ -224,13 +235,26 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
                 ),
                 const SizedBox(height: 16),
                 TextField(
+                  controller: _passwordController,
+                  readOnly: !_isEditing,
+                  obscureText: true,
+                  decoration: _buildInputDecoration(
+                    context,
+                    'Password (optional)',
+                    helperText: emulatorLogin != null
+                        ? 'Emulators are signed in. Leave empty to keep that, or re-enter to refresh.'
+                        : 'Signs RetroArch in to RetroAchievements. Used once, never stored.',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
                   controller: _webApiKeyController,
                   readOnly: !_isEditing,
                   obscureText: true,
                   decoration: _buildInputDecoration(
                     context,
-                    'Web API Key',
-                    helperText: 'Find this under Settings > Keys on retroachievements.org',
+                    'Web API Key (optional)',
+                    helperText: 'Shows live progress in Freegosy. Find it under Settings > Keys on retroachievements.org',
                   ),
                 ),
                 if (_errorMessage != null) ...[
@@ -292,12 +316,27 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
     );
   }
 
-  Widget _buildProfileDisplay(BuildContext context, AsyncValue<RetroAchievementsProfile?> profileAsync) {
+  Widget _buildProfileDisplay(
+    BuildContext context,
+    AsyncValue<RetroAchievementsProfile?> profileAsync,
+    RetroAchievementsCredentials credentials,
+  ) {
     final theme = Theme.of(context);
     return profileAsync.when(
       data: (profile) {
         if (profile == null) {
-          return Text('Not connected.', style: TextStyle(color: theme.colorScheme.onSurfaceVariant));
+          // Connected without a Web API key: no profile data to show.
+          return Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                child: Icon(Icons.person, color: theme.colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(width: 16),
+              Text(credentials.username, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          );
         }
         return Row(
           children: [
@@ -338,14 +377,82 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
     );
   }
 
+  Widget _buildStatus(
+    BuildContext context,
+    RetroAchievementsCredentials credentials,
+    RetroAchievementsEmulatorLogin? emulatorLogin,
+  ) {
+    final theme = Theme.of(context);
+    Widget line(bool ok, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: [
+              Icon(ok ? Icons.check_circle : Icons.info_outline,
+                  size: 16, color: ok ? Colors.green : theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(child: Text(text, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant))),
+            ],
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        line(emulatorLogin != null,
+            emulatorLogin != null ? 'RetroArch is signed in at launch.' : 'Emulators are not signed in — add your password to set them up.'),
+        line(credentials.hasWebApiKey,
+            credentials.hasWebApiKey ? 'Live progress from RetroAchievements.' : 'Progress comes from RomM only (if your server has RetroAchievements enabled).'),
+        if (emulatorLogin != null)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Hardcore mode', style: TextStyle(fontSize: 14)),
+            subtitle: const Text('No save states, rewind or cheats; unlocks count as hardcore.', style: TextStyle(fontSize: 12)),
+            value: emulatorLogin.hardcore,
+            onChanged: (v) => ref.read(retroAchievementsSetHardcoreProvider)(v),
+          ),
+      ],
+    );
+  }
+
+  Future<bool> _confirmNoPassword(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DialogBackBridge(
+        child: AlertDialog(
+          title: const Text('Emulators won\'t be set up'),
+          content: const Text(
+            'Without your password, Freegosy can\'t sign your emulators in to RetroAchievements, '
+            'so you\'d have to log in inside each emulator yourself.\n\nSave without a password anyway?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Go back')),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Save anyway')),
+          ],
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
   Future<void> _connect(BuildContext context) async {
     final username = _usernameController.text.trim();
     final webApiKey = _webApiKeyController.text.trim();
+    final password = _passwordController.text;
 
-    if (username.isEmpty || webApiKey.isEmpty) {
-      setState(() => _errorMessage = 'Username and Web API Key are required.');
+    if (username.isEmpty) {
+      setState(() => _errorMessage = 'Username is required.');
       return;
     }
+    if (password.isEmpty && webApiKey.isEmpty) {
+      setState(() => _errorMessage = 'Enter your password, your Web API key, or both.');
+      return;
+    }
+
+    // An existing emulator login is kept when the username is unchanged, so
+    // only warn when saving would leave emulators signed out.
+    final existing = ref.read(retroAchievementsEmulatorLoginProvider).asData?.value;
+    final keepsLogin = existing != null && existing.username.toLowerCase() == username.toLowerCase();
+    if (password.isEmpty && !keepsLogin && !await _confirmNoPassword(context)) return;
+    if (!context.mounted) return;
 
     setState(() {
       _isConnecting = true;
@@ -354,8 +461,9 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
 
     try {
       final connect = ref.read(retroAchievementsConnectProvider);
-      await connect(RetroAchievementsCredentials(username: username, webApiKey: webApiKey));
+      await connect(RetroAchievementsCredentials(username: username, webApiKey: webApiKey), password: password);
       if (!mounted) return;
+      _passwordController.clear();
       setState(() {
         _isConnecting = false;
         _isEditing = false;
@@ -382,6 +490,7 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
     if (!mounted) return;
     _usernameController.clear();
     _webApiKeyController.clear();
+    _passwordController.clear();
     setState(() {
       _isEditing = true;
       _errorMessage = null;
