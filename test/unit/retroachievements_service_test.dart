@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dio/dio.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
+import 'package:freegosy/core/retroachievements/retroachievements_emulator_login.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_game_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_service.dart';
@@ -201,6 +202,45 @@ void main() {
 
       expect(() => service.fetchGameProgress(credentials, 1), throwsA(isA<RetroAchievementsAuthException>()));
     });
+  });
+
+  group('RetroAchievementsService.fetchConnectToken', () {
+    const connectUrl = 'https://retroachievements.org/dorequest.php';
+
+    test('returns the token and canonical username on success', () async {
+      dioAdapter.onPost(
+        connectUrl,
+        (server) => server.reply(200, {'Success': true, 'User': 'TestUser', 'Token': 'abc123'}),
+        data: {'r': 'login2', 'u': testUsername, 'p': 'pw'},
+      );
+
+      final login = await service.fetchConnectToken(testUsername, 'pw');
+      expect(login.token, 'abc123');
+      expect(login.username, 'TestUser');
+    });
+
+    test('throws RetroAchievementsAuthException with RA\'s message on a wrong password', () async {
+      dioAdapter.onPost(
+        connectUrl,
+        (server) => server.reply(401, {'Success': false, 'Error': 'Invalid User/Password combination.'}),
+        data: {'r': 'login2', 'u': testUsername, 'p': 'bad'},
+      );
+
+      expect(
+        () => service.fetchConnectToken(testUsername, 'bad'),
+        throwsA(isA<RetroAchievementsAuthException>()
+            .having((e) => e.message, 'message', 'Invalid User/Password combination.')),
+      );
+    });
+  });
+
+  test('RetroAchievementsEmulatorLogin.toRetroArchConfig enables cheevos with the token', () {
+    final cfg = const RetroAchievementsEmulatorLogin(username: 'u', token: 't', hardcore: true).toRetroArchConfig();
+    expect(cfg, contains('cheevos_enable = "true"'));
+    expect(cfg, contains('cheevos_username = "u"'));
+    expect(cfg, contains('cheevos_token = "t"'));
+    expect(cfg, contains('cheevos_password = ""'));
+    expect(cfg, contains('cheevos_hardcore_mode_enable = "true"'));
   });
 
   group('RetroAchievementsCredentials', () {

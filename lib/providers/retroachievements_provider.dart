@@ -1,12 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freegosy/core/retroachievements/retroachievements_emulator_login.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_game_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_service.dart';
 import 'package:freegosy/core/storage/secure_storage_service.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
-
-const _usernameKey = 'retroAchievementsUsername';
-const _webApiKeySecureKey = 'retroAchievementsWebApiKey';
 
 /// Loads the persisted RetroAchievements credentials, if any were saved via
 /// the Settings screen. The Web API key is stored through
@@ -14,8 +12,8 @@ const _webApiKeySecureKey = 'retroAchievementsWebApiKey';
 /// fallback), matching how the RomM API key is stored.
 final retroAchievementsCredentialsProvider = FutureProvider<RetroAchievementsCredentials?>((ref) async {
   final prefs = ref.watch(appPreferencesProvider);
-  final username = prefs.getString(_usernameKey) ?? '';
-  final webApiKey = await SecureStorageService.read(_webApiKeySecureKey, prefs) ?? '';
+  final username = prefs.getString(kRaUsernameKey) ?? '';
+  final webApiKey = await SecureStorageService.read(kRaWebApiKeySecureKey, prefs) ?? '';
   final credentials = RetroAchievementsCredentials(username: username, webApiKey: webApiKey);
   return credentials.isEmpty ? null : credentials;
 });
@@ -44,31 +42,71 @@ final retroAchievementsGameProgressProvider =
   return service.fetchGameProgress(credentials, gameId);
 });
 
+/// The username/token emulators are signed in with, or null when the account
+/// was connected without a password (profile/progress only).
+final retroAchievementsEmulatorLoginProvider = FutureProvider<RetroAchievementsEmulatorLogin?>((ref) {
+  return RetroAchievementsEmulatorLogin.load(ref.watch(appPreferencesProvider));
+});
+
+void _invalidateAll(Ref ref) {
+  ref.invalidate(retroAchievementsCredentialsProvider);
+  ref.invalidate(retroAchievementsProfileProvider);
+  ref.invalidate(retroAchievementsEmulatorLoginProvider);
+}
+
 /// Saves credentials and refreshes dependent providers. Throws
-/// [RetroAchievementsAuthException] (surfaced by the caller's UI) if the
-/// credentials are rejected — nothing is persisted in that case.
-final retroAchievementsConnectProvider = Provider<Future<void> Function(RetroAchievementsCredentials)>((ref) {
-  return (credentials) async {
+/// [RetroAchievementsAuthException] (surfaced by the caller's UI) if the Web
+/// API key or the optional [password] is rejected — nothing is persisted in
+/// that case.
+///
+/// With a [password], RA is asked for an emulator login token, which is
+/// stored instead of the password. Without one, an existing token is kept
+/// only if the username is unchanged, so emulators are never signed in to a
+/// different account than the one shown in Settings.
+final retroAchievementsConnectProvider =
+    Provider<Future<void> Function(RetroAchievementsCredentials, {String? password})>((ref) {
+  return (credentials, {password}) async {
     final service = ref.read(retroAchievementsServiceProvider);
     // Validate before persisting so a typo'd key doesn't get saved silently.
     await service.fetchProfile(credentials);
 
-    final prefs = ref.read(appPreferencesProvider);
-    await prefs.setString(_usernameKey, credentials.username);
-    await SecureStorageService.write(_webApiKeySecureKey, credentials.webApiKey, prefs);
+    String? token;
+    if (password != null && password.isNotEmpty) {
+      final login = await service.fetchConnectToken(credentials.username, password);
+      if (login.username.toLowerCase() != credentials.username.toLowerCase()) {
+        throw const RetroAchievementsAuthException('That password belongs to a different RetroAchievements account.');
+      }
+      token = login.token;
+    }
 
-    ref.invalidate(retroAchievementsCredentialsProvider);
-    ref.invalidate(retroAchievementsProfileProvider);
+    final prefs = ref.read(appPreferencesProvider);
+    final previousUsername = prefs.getString(kRaUsernameKey) ?? '';
+    await prefs.setString(kRaUsernameKey, credentials.username);
+    await SecureStorageService.write(kRaWebApiKeySecureKey, credentials.webApiKey, prefs);
+    if (token != null) {
+      await SecureStorageService.write(kRaConnectTokenSecureKey, token, prefs);
+    } else if (previousUsername.toLowerCase() != credentials.username.toLowerCase()) {
+      await SecureStorageService.delete(kRaConnectTokenSecureKey, prefs);
+    }
+
+    _invalidateAll(ref);
   };
 });
 
 final retroAchievementsDisconnectProvider = Provider<Future<void> Function()>((ref) {
   return () async {
     final prefs = ref.read(appPreferencesProvider);
-    await prefs.remove(_usernameKey);
-    await SecureStorageService.delete(_webApiKeySecureKey, prefs);
+    await prefs.remove(kRaUsernameKey);
+    await prefs.remove(kRaHardcoreKey);
+    await SecureStorageService.delete(kRaWebApiKeySecureKey, prefs);
+    await SecureStorageService.delete(kRaConnectTokenSecureKey, prefs);
+    _invalidateAll(ref);
+  };
+});
 
-    ref.invalidate(retroAchievementsCredentialsProvider);
-    ref.invalidate(retroAchievementsProfileProvider);
+final retroAchievementsSetHardcoreProvider = Provider<Future<void> Function(bool)>((ref) {
+  return (enabled) async {
+    await ref.read(appPreferencesProvider).setBool(kRaHardcoreKey, enabled);
+    ref.invalidate(retroAchievementsEmulatorLoginProvider);
   };
 });

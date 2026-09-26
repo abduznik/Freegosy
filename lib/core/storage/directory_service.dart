@@ -71,6 +71,9 @@ class DirectoryService {
   
   LinuxEnvironmentStrategy? _linuxStrategy;
 
+  /// Exposed so strategies can read launch-time settings (e.g. RetroAchievements login).
+  AppPreferences get prefs => _prefs;
+
   DirectoryService(this._prefs, {PlatformInfo? platform, AppPathResolver? pathResolver})
       : _platform = platform ?? PlatformInfo.current,
         _pathResolver = pathResolver ?? const FlutterAppPathResolver();

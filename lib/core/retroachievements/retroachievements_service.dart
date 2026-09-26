@@ -17,6 +17,7 @@ import 'retroachievements_models.dart';
 /// that; Freegosy's role here is limited to showing profile/progress data.
 class RetroAchievementsService {
   static const String _baseUrl = 'https://retroachievements.org/API';
+  static const String _connectUrl = 'https://retroachievements.org/dorequest.php';
 
   final Dio _dio;
 
@@ -27,7 +28,8 @@ class RetroAchievementsService {
               connectTimeout: const Duration(seconds: 15),
               receiveTimeout: const Duration(seconds: 15),
               headers: {
-                'User-Agent': 'Freegosy/${AppConstants.version}',
+                // RA asks Connect API clients for "{Name}/{version} ({platform})".
+                'User-Agent': 'Freegosy/${AppConstants.version} (${defaultTargetPlatform.name})',
                 'Accept': 'application/json',
               },
             ));
@@ -102,6 +104,46 @@ class RetroAchievementsService {
         throw const RetroAchievementsAuthException('Invalid username or Web API key.');
       }
       debugPrint('[RetroAchievements] fetchGameProgress($gameId) network error: $e');
+      rethrow;
+    }
+  }
+
+  /// Exchanges the user's RA password for a Connect API token — the same
+  /// token emulators obtain when you log in inside them — so Freegosy can
+  /// sign emulators in on the user's behalf. The password is sent once, in
+  /// the POST body (never the URL), and is not stored.
+  ///
+  /// Returns the token and the canonical username RA reports. Throws
+  /// [RetroAchievementsAuthException] for a wrong username/password.
+  Future<({String username, String token})> fetchConnectToken(String username, String password) async {
+    if (username.isEmpty || password.isEmpty) {
+      throw const RetroAchievementsAuthException('Username and password are required.');
+    }
+
+    try {
+      final response = await _dio.post(
+        _connectUrl,
+        data: {'r': 'login2', 'u': username, 'p': password},
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
+      final data = response.data;
+      final token = data is Map ? data['Token']?.toString() ?? '' : '';
+      if (data is! Map || data['Success'] != true || token.isEmpty) {
+        throw RetroAchievementsAuthException(
+          (data is Map ? data['Error']?.toString() : null) ?? 'Invalid username or password.',
+        );
+      }
+      return (username: data['User']?.toString() ?? username, token: token);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        final body = e.response?.data;
+        throw RetroAchievementsAuthException(
+          (body is Map ? body['Error']?.toString() : null) ?? 'Invalid username or password.',
+        );
+      }
+      // Deliberately not logging `e`: its request options include the password.
+      debugPrint('[RetroAchievements] fetchConnectToken network error (status $status)');
       rethrow;
     }
   }
