@@ -43,6 +43,11 @@ final selectedPlatformIdProvider = StateProvider<int?>((ref) => null);
 // Display Settings Providers using PersistentStateNotifier
 final cardAspectRatioProvider = createPersistentProvider<double>('card_aspect_ratio', 0.75);
 final columnCountProvider = createPersistentProvider<int>('column_count', 6);
+
+/// Range of games per row offered in Settings → Display and by the library's
+/// cover-size slider. Up to 12 so covers can be made small on big screens.
+const int kMinColumnCount = 2;
+const int kMaxColumnCount = 12;
 final cardSpacingProvider = createPersistentProvider<double>('card_spacing', 12.0);
 final showTitleProvider = createPersistentProvider<bool>('show_title', true);
 final activePresetProvider = createPersistentProvider<String>('active_preset', 'windows_best');

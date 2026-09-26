@@ -309,10 +309,10 @@ Widget buildDisplaySection(
             valueIndicatorTextStyle: TextStyle(color: theme.colorScheme.onPrimary),
           ),
           child: GamepadSlider(
-            value: columnCount.toDouble(),
-            min: 2,
-            max: 8,
-            divisions: 6,
+            value: columnCount.clamp(kMinColumnCount, kMaxColumnCount).toDouble(),
+            min: kMinColumnCount.toDouble(),
+            max: kMaxColumnCount.toDouble(),
+            divisions: kMaxColumnCount - kMinColumnCount,
             label: '$columnCount',
             onChanged: (value) {
               ref.read(activePresetProvider.notifier).update('custom');
