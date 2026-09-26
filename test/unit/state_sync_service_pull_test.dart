@@ -42,6 +42,18 @@ void main() {
     expect(env.stateFile(stateFileA).readAsBytesSync(), stateBytes(1));
   });
 
+  test('reports the names of the files it downloaded', () async {
+    env.api.seed('42', stateFileA, stateBytes(1));
+
+    final result = await env.service.pullStates(env.game, env.romPath);
+
+    expect(result.downloadedFiles, {stateFileA});
+    expect(StateSyncResult.none.downloadedFiles, isEmpty);
+
+    final again = await env.service.pullStates(env.game, env.romPath);
+    expect(again.downloadedFiles, isEmpty, reason: 'nothing new on the second pull');
+  });
+
   test('ignores server states that belong to another game', () async {
     env.api.seed('42', 'SLUS-20312 (A1B2C3D4).01.p2s', stateBytes(1));
 
@@ -155,6 +167,40 @@ void main() {
 
     expect(result.downloaded, 0);
     expect(result.conflicts, isEmpty);
+  });
+
+  test('reports a state RomM only re-stamped (identical bytes) as up to date, not downloaded', () async {
+    await env.writeState(stateFileA, stateBytes(1));
+    await env.service.pushStates(env.game, env.romPath); // POST: state id 1
+    env.api.touch(1, stateBytes(1)); // updated_at moves, the bytes do not
+
+    final result = await env.service.pullStates(env.game, env.romPath);
+
+    expect(result.downloadedFiles, isEmpty);
+    expect(result.upToDateFiles, {stateFileA});
+    expect(result.currentFiles, {stateFileA});
+  });
+
+  test('reports a state linked on first contact (identical bytes) as up to date', () async {
+    await env.writeState(stateFileA, stateBytes(1));
+    env.api.seed('42', stateFileA, stateBytes(1));
+
+    final result = await env.service.pullStates(env.game, env.romPath);
+
+    expect(result.upToDateFiles, {stateFileA});
+    expect(StateSyncResult.none.upToDateFiles, isEmpty);
+  });
+
+  test('a conflict or a download is not reported as up to date', () async {
+    await env.writeState(stateFileA, stateBytes(1));
+    env.api.seed('42', stateFileA, stateBytes(2)); // first contact, different bytes
+    env.api.seed('42', stateFileB, stateBytes(3)); // missing locally
+
+    final result = await env.service.pullStates(env.game, env.romPath);
+
+    expect(result.upToDateFiles, isEmpty);
+    expect(result.downloadedFiles, {stateFileB});
+    expect(result.currentFiles, {stateFileB});
   });
 
   test('first contact with different bytes is a conflict', () async {

@@ -13,13 +13,26 @@ class RommState {
   /// so it says "something happened", not "the bytes are newer".
   final String? updatedAt;
 
-  const RommState({required this.id, required this.fileName, this.updatedAt});
+  /// The `emulator` value the state was uploaded with, if any. Freegosy sends
+  /// its emulator id; other clients may send anything.
+  final String? emulator;
 
-  factory RommState.fromJson(Map<String, dynamic> json) => RommState(
-        id: (json['id'] as num).toInt(),
-        fileName: json['file_name'].toString(),
-        updatedAt: json['updated_at']?.toString(),
-      );
+  /// Server path of the state's screenshot (`screenshot.download_path`), if any.
+  final String? screenshotUrl;
+
+  const RommState({required this.id, required this.fileName, this.updatedAt,
+      this.emulator, this.screenshotUrl});
+
+  factory RommState.fromJson(Map<String, dynamic> json) {
+    final screenshot = json['screenshot'];
+    return RommState(
+      id: (json['id'] as num).toInt(),
+      fileName: json['file_name'].toString(),
+      updatedAt: json['updated_at']?.toString(),
+      emulator: json['emulator']?.toString(),
+      screenshotUrl: screenshot is Map ? screenshot['download_path']?.toString() : null,
+    );
+  }
 }
 
 /// RomM answered 404 for a state id: the state was deleted on the server, or
@@ -37,13 +50,19 @@ class RommStateNotFoundException implements Exception {
 abstract class RommStatesApi {
   Future<List<RommState>> listStates(String romId);
 
+  /// [emulator] is recorded as the state's `emulator` (RomM keeps the value it
+  /// was created with; updates cannot change it). [screenshot] is stored as
+  /// the state's screenshot.
   Future<RommState> uploadState(String romId, io.File file,
-      {required String fileName});
+      {required String fileName, String? emulator, Uint8List? screenshot});
 
   /// Throws [RommStateNotFoundException] if [stateId] no longer exists.
   Future<RommState> updateState(int stateId, io.File file,
-      {required String fileName});
+      {required String fileName, Uint8List? screenshot});
 
   /// Throws [RommStateNotFoundException] if [stateId] no longer exists.
   Future<Uint8List> downloadState(int stateId);
+
+  /// The screenshot at [url] (a [RommState.screenshotUrl]).
+  Future<Uint8List> downloadStateScreenshot(String url);
 }

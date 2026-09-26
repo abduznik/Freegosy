@@ -8,7 +8,9 @@ import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
 import '../../core/save/backup_entry.dart';
 import '../../core/save/background_sync_queue.dart';
+import '../../core/save/resume_service.dart';
 import '../../providers/download_provider.dart';
+import '../../providers/resume_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
@@ -19,6 +21,8 @@ import '../widgets/game_detail/game_metadata_chip.dart';
 import '../widgets/game_detail/game_details_grid.dart';
 import '../widgets/game_detail/game_notes_section.dart';
 import '../widgets/game_detail/game_personal_section.dart';
+import '../widgets/game_detail/resume_split_button.dart';
+import '../widgets/game_detail/resume_slots_dialog.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/controller_hints_bar.dart';
 import '../../providers/ui_provider.dart';
@@ -39,6 +43,9 @@ class GameDetailScreen extends ConsumerStatefulWidget {
   final dynamic onConfigure;
   final RommService? rommService;
 
+  /// Loads a resume entry. When null, the page has no Resume button.
+  final Future<void> Function(ResumeEntry entry)? onResume;
+
   const GameDetailScreen({
     super.key,
     required this.game,
@@ -52,6 +59,7 @@ class GameDetailScreen extends ConsumerStatefulWidget {
     required this.onDelete,
     this.onConfigure,
     this.rommService,
+    this.onResume,
   });
 
   @override
@@ -74,6 +82,14 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   bool _isAddingNote = false;
   StreamSubscription<GameAction>? _inputSub;
   final FocusNode _focusNode = FocusNode();
+  final FocusNode _playFocusNode = FocusNode();
+  List<ResumeEntry> _resumeEntries = const [];
+  bool _slotsOpen = false;
+
+  /// True while a launch started from this page (Play, Resume, a slot pick)
+  /// is still running, e.g. its pre-launch state pull: a second press must
+  /// not start another launch of the same game underneath it.
+  bool _launchInFlight = false;
   late ProviderContainer _container;
 
   @override
@@ -133,6 +149,11 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           return;
         }
 
+        if (action == GameAction.detail) {
+          _openSlots();
+          return;
+        }
+
         if (action == GameAction.back) {
           if (Navigator.of(context).canPop()) {
             Navigator.of(context).pop();
@@ -147,6 +168,60 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         _focusNode.requestFocus();
       }
     });
+  }
+
+  /// The game's resume entries (empty without [GameDetailScreen.onResume]).
+  /// Mirrors the latest list into [_resumeEntries] for [_openSlots] (no
+  /// setState), and focuses Resume when the list first becomes non-empty.
+  List<ResumeEntry> _watchResumeEntries(WidgetRef ref) {
+    final entries = widget.onResume == null
+        ? const <ResumeEntry>[]
+        // valueOrNull keeps the previous list while it reloads (a dependency
+        // change makes it loading again), so the button doesn't blink away.
+        : ref.watch(resumeEntriesProvider(ResumeKey(_currentGame))).valueOrNull ?? const <ResumeEntry>[];
+    final hadEntries = _resumeEntries.isNotEmpty;
+    _resumeEntries = entries;
+    if (!hadEntries && entries.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Resume takes the page's initial focus, never focus the user has
+        // already moved to another button (the list can arrive late).
+        final focused = FocusManager.instance.primaryFocus;
+        final userMoved = focused != null && focused != _focusNode && focused is! FocusScopeNode;
+        if (mounted && !userMoved) _focusNode.requestFocus();
+      });
+    }
+    return entries;
+  }
+
+  /// True while another route (a dialog pushed over this page, or a launch
+  /// already awaiting one) is on top: X or Resume must not start a second
+  /// action underneath it.
+  bool get _pageIsNotCurrentRoute => ModalRoute.of(context)?.isCurrent != true;
+
+  /// Runs [launch] unless a launch from this page is already running; see
+  /// [_launchInFlight].
+  Future<void> _runLaunch(Future<void> Function() launch) async {
+    if (_launchInFlight) return;
+    _launchInFlight = true;
+    try {
+      await launch();
+    } finally {
+      _launchInFlight = false;
+    }
+  }
+
+  Future<void> _openSlots() async {
+    if (_slotsOpen || _launchInFlight || !_isDownloaded || _resumeEntries.isEmpty || widget.onResume == null) return;
+    if (_pageIsNotCurrentRoute) return;
+    _slotsOpen = true;
+    try {
+      final service = ref.read(resumeServiceProvider).asData?.value;
+      final picked = await showResumeSlotsDialog(context, _resumeEntries,
+          thumbnailFor: service?.thumbnailFor);
+      if (picked != null && mounted) await _runLaunch(() => widget.onResume!(picked));
+    } finally {
+      _slotsOpen = false;
+    }
   }
 
   void _toggleAdjustingRating() {
@@ -175,6 +250,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   void dispose() {
     _inputSub?.cancel();
     _focusNode.dispose();
+    _playFocusNode.dispose();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         _container.read(navigationLockedProvider.notifier).state = false;
@@ -485,6 +561,7 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     ref.watch(gamePreferenceVersionProvider);
     final hasLaunchPref = ref.read(strategyRegistryProvider).asData?.value?.getGameEmulatorPreference(_currentGame.id) != null;
 
+    final hasResume = _isDownloaded && _watchResumeEntries(ref).isNotEmpty;
     final theme = Theme.of(context);
     final headerHeight = MediaQuery.of(context).size.height * 0.4;
     String? backgroundUrl = _currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty
@@ -581,13 +658,19 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         },
         child: ref.watch(inputModeProvider) != InputMode.mouse
             ? ControllerHintsBar(
-                hints: [
-                  ControllerHintItem(
-                    label: _isDownloaded ? 'Play' : 'Download', 
-                    button: 'A'
-                  ),
-                  const ControllerHintItem(label: 'Back', button: 'B'),
-                ],
+                hints: hasResume
+                    ? const [
+                        ControllerHintItem(label: 'Resume', button: 'A'),
+                        ControllerHintItem(label: 'Slots', button: 'X'),
+                        ControllerHintItem(label: 'Back', button: 'B'),
+                      ]
+                    : [
+                        ControllerHintItem(
+                          label: _isDownloaded ? 'Play' : 'Download', 
+                          button: 'A'
+                        ),
+                        const ControllerHintItem(label: 'Back', button: 'B'),
+                      ],
               )
             : const SizedBox.shrink(key: ValueKey('hide_detail_hints')),
       ),
@@ -674,19 +757,41 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           ),
         );
       }
+      final entries = _watchResumeEntries(ref);
       return Center(
         child: SizedBox(
           width: 384,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              GameActionButton(
-                focusNode: _focusNode,
-                icon: Icons.play_arrow, 
-                label: 'Play Game', 
-                isPrimary: true,
-                onPressed: () async { if (_isDownloaded) await widget.onLaunch(); }
-              ),
+              if (entries.isNotEmpty) ...[
+                ResumeSplitButton(
+                  newest: entries.first,
+                  focusNode: _focusNode,
+                  onResume: () async {
+                    if (_isDownloaded && !_pageIsNotCurrentRoute) {
+                      await _runLaunch(() => widget.onResume!(entries.first));
+                    }
+                  },
+                  onOpenSlots: _openSlots,
+                ),
+                const SizedBox(height: 12),
+                GameActionButton(
+                  focusNode: _playFocusNode,
+                  icon: Icons.play_arrow,
+                  label: 'Play Game',
+                  sublabel: '(fresh start)',
+                  height: ResumeSplitButton.height,
+                  onPressed: () async { if (_isDownloaded) await _runLaunch(() async => await widget.onLaunch()); },
+                ),
+              ] else
+                GameActionButton(
+                  focusNode: _focusNode,
+                  icon: Icons.play_arrow, 
+                  label: 'Play Game', 
+                  isPrimary: true,
+                  onPressed: () async { if (_isDownloaded) await _runLaunch(() async => await widget.onLaunch()); }
+                ),
               const SizedBox(height: 16),
               Row(
                 children: [

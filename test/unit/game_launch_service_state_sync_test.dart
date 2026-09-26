@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/emulator/game_launch_service.dart';
@@ -55,6 +57,52 @@ class _ConflictingStateSync extends StateSyncService {
         );
     return StateSyncResult(conflicts: [conflict('a.p2s'), conflict('b.p2s')]);
   }
+}
+
+/// A process that has already exited with code 0.
+class _ExitedProcess implements io.Process {
+  @override
+  Future<int> get exitCode => Future.value(0);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A SaveSyncService whose pushSaves only records that it ran.
+class _RecordingSaveSync extends SaveSyncService {
+  _RecordingSaveSync(super.romm, super.dirs, super.registry, super.prefs, this.log);
+  final List<String> log;
+
+  @override
+  Future<bool> pushSaves(Game game, String romPath,
+      {DateTime? sessionStart,
+      String syncMode = 'both',
+      bool force = false,
+      String? coreOverride,
+      String? emulatorId}) async {
+    log.add('push');
+    return true;
+  }
+}
+
+/// A GameLaunchService whose save push appends 'push' to [log].
+Future<GameLaunchService> _launchServiceLogging(List<String> log) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+  final dirService = DirectoryService(prefs);
+  final registry = StrategyRegistry(dirService, prefs);
+  final rommService = RommService(
+    RomMConfig(baseUrl: 'https://romm.example.com', username: '', password: '', apiKey: 'k'),
+    dio: Dio(BaseOptions(baseUrl: 'https://romm.example.com')),
+    skipConnectivityCheck: true,
+  );
+  return GameLaunchService(
+    directoryService: dirService,
+    strategyRegistry: registry,
+    saveSyncService: _RecordingSaveSync(rommService, dirService, registry, prefs, log),
+    backupService: BackupService(),
+    backupRepository: BackupRepository(),
+    prefs: prefs,
+  );
 }
 
 /// A GameLaunchService wired to real (in-memory) collaborators and [stateSync].
@@ -157,6 +205,36 @@ void main() {
       final count = await service.pushStatesAfterExit(_session(), _game, 'Ico.iso');
 
       expect(count, 0);
+    });
+  });
+  group('awaitExitAndSync onExited', () {
+    GameSession exited() => GameSession(
+          process: _ExitedProcess(),
+          sessionStart: DateTime(2026, 1, 1),
+          emulatorId: 'pcsx2',
+          activityTrackerFuture: Future.value(null),
+        );
+
+    test('is called once, right after the exit and before the save push', () async {
+      final log = <String>[];
+      final service = await _launchServiceLogging(log);
+
+      final result = await service.awaitExitAndSync(exited(), _game, 'Ico.iso',
+          syncMode: 'both', onExited: () => log.add('exited'));
+
+      expect(result, isNotNull);
+      expect(log, ['exited', 'push']);
+    });
+
+    test('a throwing onExited does not stop the pipeline', () async {
+      final log = <String>[];
+      final service = await _launchServiceLogging(log);
+
+      final result = await service.awaitExitAndSync(exited(), _game, 'Ico.iso',
+          syncMode: 'both', onExited: () => throw StateError('listener exploded'));
+
+      expect(result, isNotNull);
+      expect(log, ['push']);
     });
   });
 }

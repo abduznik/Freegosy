@@ -4,12 +4,14 @@ import 'dart:typed_data';
 import 'package:freegosy/core/romm/romm_state.dart';
 
 class _Stored {
-  _Stored(this.romId, this.fileName, this.bytes, this.updatedAt);
+  _Stored(this.romId, this.fileName, this.bytes, this.updatedAt, {this.emulator, this.screenshot});
 
   final String romId;
   final String fileName;
   List<int> bytes;
   String updatedAt;
+  String? emulator;
+  List<int>? screenshot;
 }
 
 /// In-memory stand-in for one RomM user's `/api/states`. Every call is
@@ -50,18 +52,34 @@ class FakeRommStatesApi implements RommStatesApi {
   /// list call and the PUT (deleted on the server / other account).
   bool nextUpdateIs404 = false;
 
+  /// Make [downloadStateScreenshot] throw, simulating a failed screenshot
+  /// fetch.
+  bool failScreenshots = false;
+
+  /// Called on every download after recording it; returning true fails that
+  /// download like a stall.
+  bool Function()? failDownloadsAfterFirst;
+
   String _stamp() =>
       DateTime.utc(2026, 1, 1).add(Duration(minutes: ++_clock)).toIso8601String();
 
   RommState _view(int id) {
     final stored = _states[id]!;
-    return RommState(id: id, fileName: stored.fileName, updatedAt: stored.updatedAt);
+    return RommState(
+      id: id,
+      fileName: stored.fileName,
+      updatedAt: stored.updatedAt,
+      emulator: stored.emulator,
+      screenshotUrl: stored.screenshot == null ? null : '/fake/screenshot/$id',
+    );
   }
 
   /// Simulates a state uploaded from another machine.
-  RommState seed(String romId, String fileName, List<int> bytes) {
+  RommState seed(String romId, String fileName, List<int> bytes,
+      {String? emulator, List<int>? screenshot}) {
     final id = _nextId++;
-    _states[id] = _Stored(romId, fileName, bytes, _stamp());
+    _states[id] = _Stored(romId, fileName, bytes, _stamp(),
+        emulator: emulator, screenshot: screenshot);
     return _view(id);
   }
 
@@ -78,6 +96,9 @@ class FakeRommStatesApi implements RommStatesApi {
 
   int get count => _states.length;
 
+  String? emulatorOf(int id) => _states[id]!.emulator;
+  List<int>? screenshotOf(int id) => _states[id]!.screenshot;
+
   @override
   Future<List<RommState>> listStates(String romId) async {
     calls.add('list');
@@ -92,18 +113,19 @@ class FakeRommStatesApi implements RommStatesApi {
 
   @override
   Future<RommState> uploadState(String romId, File file,
-      {required String fileName}) async {
+      {required String fileName, String? emulator, Uint8List? screenshot}) async {
     calls.add('POST $fileName');
     final gate = uploadGates[fileName];
     if (gate != null) await gate.future;
     final id = _nextId++;
-    _states[id] = _Stored(romId, fileName, await file.readAsBytes(), _stamp());
+    _states[id] = _Stored(romId, fileName, await file.readAsBytes(), _stamp(),
+        emulator: emulator, screenshot: screenshot);
     return _view(id);
   }
 
   @override
   Future<RommState> updateState(int stateId, File file,
-      {required String fileName}) async {
+      {required String fileName, Uint8List? screenshot}) async {
     calls.add('PUT $stateId');
     if (nextUpdateIs404) {
       nextUpdateIs404 = false;
@@ -115,12 +137,14 @@ class FakeRommStatesApi implements RommStatesApi {
     stored
       ..bytes = await file.readAsBytes()
       ..updatedAt = _stamp();
+    if (screenshot != null) stored.screenshot = screenshot;
     return _view(stateId);
   }
 
   @override
   Future<Uint8List> downloadState(int stateId) async {
     calls.add('GET $stateId');
+    if (failDownloadsAfterFirst?.call() == true) throw Exception('download stalled');
     final gate = downloadGates[stateId];
     if (gate != null) await gate.future;
     if (failDownloads) throw Exception('download stalled');
@@ -128,5 +152,15 @@ class FakeRommStatesApi implements RommStatesApi {
     final stored = _states[stateId];
     if (stored == null) throw RommStateNotFoundException(stateId);
     return Uint8List.fromList(stored.bytes);
+  }
+
+  @override
+  Future<Uint8List> downloadStateScreenshot(String url) async {
+    calls.add('SHOT $url');
+    if (failScreenshots) throw Exception('screenshot download failed');
+    final id = int.parse(url.substring(url.lastIndexOf('/') + 1));
+    final screenshot = _states[id]?.screenshot;
+    if (screenshot == null) throw RommStateNotFoundException(id);
+    return Uint8List.fromList(screenshot);
   }
 }

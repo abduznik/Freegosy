@@ -573,6 +573,10 @@ def _state_to_response(state):
         "created_at": state["created_at"],
         "updated_at": state["updated_at"],
         "download_path": f"/api/states/{state['id']}/content",
+        "screenshot": {
+            "id": state["id"],
+            "download_path": f"/api/states/{state['id']}/screenshot",
+        } if state.get("has_screenshot") else None,
     }
 
 
@@ -589,12 +593,14 @@ def upload_state():
         return jsonify({"detail": "rom_id and stateFile are required"}), 400
 
     content = state_file.read()
+    screenshot_file = request.files.get("screenshotFile")
     now = datetime.now(timezone.utc).isoformat()
     log_request("POST /api/states", {
         "rom_id": rom_id,
         "emulator": request.args.get("emulator"),
         "file_name": state_file.filename,
         "content_size": len(content),
+        "has_screenshot": screenshot_file is not None,
     })
 
     # RomM upserts on (rom_id, file_name): a second POST under the same name
@@ -605,6 +611,9 @@ def upload_state():
             state.update(size=len(content), updated_at=now,
                          emulator=request.args.get("emulator"))
             _store_state_bytes(state["id"], content)
+            if screenshot_file is not None:
+                (STORAGE_DIR / f"state_{state['id']}_shot.png").write_bytes(screenshot_file.read())
+                state["has_screenshot"] = True
             return jsonify(_state_to_response(state))
 
     state_id = NEXT_STATE_ID
@@ -615,6 +624,9 @@ def upload_state():
         "created_at": now, "updated_at": now,
     }
     _store_state_bytes(state_id, content)
+    if screenshot_file is not None:
+        (STORAGE_DIR / f"state_{state_id}_shot.png").write_bytes(screenshot_file.read())
+        STATES[state_id]["has_screenshot"] = True
     return jsonify(_state_to_response(STATES[state_id]))
 
 
@@ -636,9 +648,17 @@ def update_state(state_id):
     if state_file is None:
         return jsonify({"detail": "stateFile is required"}), 400
     content = state_file.read()
-    log_request("PUT /api/states/<id>", {"state_id": state_id, "content_size": len(content)})
+    screenshot_file = request.files.get("screenshotFile")
+    log_request("PUT /api/states/<id>", {
+        "state_id": state_id,
+        "content_size": len(content),
+        "has_screenshot": screenshot_file is not None,
+    })
     state.update(size=len(content), updated_at=datetime.now(timezone.utc).isoformat())
     _store_state_bytes(state_id, content)
+    if screenshot_file is not None:
+        (STORAGE_DIR / f"state_{state_id}_shot.png").write_bytes(screenshot_file.read())
+        state["has_screenshot"] = True
     return jsonify(_state_to_response(state))
 
 
@@ -647,6 +667,14 @@ def download_state(state_id):
     if state_id not in STATES:
         return jsonify({"detail": "State not found"}), 404
     return send_file(STORAGE_DIR / f"state_{state_id}.bin")
+
+
+@app.route("/api/states/<int:state_id>/screenshot", methods=["GET"])
+def download_state_screenshot(state_id):
+    path = STORAGE_DIR / f"state_{state_id}_shot.png"
+    if state_id not in STATES or not path.exists():
+        return jsonify({"detail": "Screenshot not found"}), 404
+    return send_file(path, mimetype="image/png")
 
 
 @app.route("/api/states/delete", methods=["POST"])
@@ -705,6 +733,7 @@ if __name__ == "__main__":
     print(f"  GET    /api/states              - List save states")
     print(f"  PUT    /api/states/<id>         - Update save state")
     print(f"  GET    /api/states/<id>/content - Download save state")
+    print(f"  GET    /api/states/<id>/screenshot - Download state screenshot")
     print(f"  POST   /api/states/delete       - Delete save states")
     print(f"  POST   /api/devices             - Register device")
     print(f"  POST   /api/sync/negotiate      - Negotiate sync")

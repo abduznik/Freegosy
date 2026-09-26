@@ -78,7 +78,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       switch (action) {
         case GameAction.detail:
           if (_isFilterSheetOpen) Navigator.pop(context);
-          else _openFilterSheet(context, ref);
+          // Not while another page (e.g. the game page, whose X opens the
+          // resume slots) is on top of the library.
+          else if (ModalRoute.of(context)?.isCurrent ?? true) _openFilterSheet(context, ref);
           break;
         case GameAction.favorite:
           _scrollToTopAndFocusSearch();
@@ -161,6 +163,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           isDownloaded: isDownloaded,
           rommService: ref.read(rommServiceProvider),
           onLaunch: () => handleLaunch(context, ref, game),
+          onResume: (entry) => handleLaunch(context, ref, game, resume: entry),
           onDownload: (freshGame) async => startDownload(context, ref, freshGame),
           onPushSaves: () => handlePushSaves(context, ref, game),
           onPullSaves: () => handlePullSaves(context, ref, game),

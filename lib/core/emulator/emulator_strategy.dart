@@ -41,6 +41,12 @@ abstract class EmulatorStrategy {
   /// [statePath]. Only used when [supportsStateLoadOnLaunch] is true.
   List<String> stateLoadArgs(String statePath) => const [];
 
+  /// The installed emulator's version as the emulator reports it (e.g.
+  /// `2.8.2.0`), or null when it cannot be determined. Compared with the
+  /// version a save state records to warn before loading a state from a
+  /// different build. Must never throw.
+  Future<String?> installedVersion() async => null;
+
   /// The directory service used for finding and launching emulators.
   DirectoryService get directoryService;
 

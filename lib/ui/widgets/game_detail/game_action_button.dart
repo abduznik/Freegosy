@@ -8,6 +8,11 @@ class GameActionButton extends StatelessWidget {
   final Color? color;
   final FocusNode? focusNode;
   final bool isPrimary;
+  final String? sublabel;
+
+  /// Fixed height, to line the button up with a neighbour of another kind;
+  /// null sizes it to its content.
+  final double? height;
 
   const GameActionButton({
     super.key,
@@ -17,6 +22,8 @@ class GameActionButton extends StatelessWidget {
     this.color,
     this.focusNode,
     this.isPrimary = false,
+    this.sublabel,
+    this.height,
   });
 
   @override
@@ -30,6 +37,7 @@ class GameActionButton extends StatelessWidget {
       borderRadius: 16.0,
       scaleFactor: 1.005,
       child: Container(
+        height: height,
         alignment: Alignment.center,
         padding: EdgeInsets.symmetric(
           horizontal: isPrimary ? 40 : 16,
@@ -85,6 +93,20 @@ class GameActionButton extends StatelessWidget {
                 ),
               ),
             ),
+            if (sublabel != null) ...[
+              const SizedBox(width: 6),
+              Text(
+                sublabel!,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: (isPrimary
+                          ? theme.colorScheme.onPrimary
+                          : (isDestructive ? Colors.redAccent : theme.colorScheme.onSurface.withValues(alpha: 0.9)))
+                      .withValues(alpha: 0.75),
+                ),
+              ),
+            ],
           ],
         ),
       ),

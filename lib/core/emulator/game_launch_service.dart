@@ -99,6 +99,17 @@ class GameLaunchService {
     this.stateSyncService,
   });
 
+  /// Disc-image extensions [scanForDiscFiles] recognises (playlists aside).
+  static const List<String> discImageExtensions = [
+    '.rvz', '.gcm', '.iso', '.cso', '.wbfs', '.bin', '.img', '.chd', '.pbp', '.ccd',
+  ];
+
+  /// True when [fileName] is a disc image (see [discImageExtensions]).
+  static bool isDiscImageName(String fileName) {
+    final name = fileName.toLowerCase();
+    return discImageExtensions.any(name.endsWith);
+  }
+
   /// Scans [existingRomPath] (a directory) for `.m3u` playlists or known
   /// disc-image files. Used when RomM doesn't correctly report
   /// `hasMultipleFiles` for multi-disc games (e.g. GameCube with `.m3u`).
@@ -111,10 +122,7 @@ class GameLaunchService {
       if (name.endsWith('.m3u')) {
         final stat = await entity.stat();
         discFiles.add({'file_name': p.basename(entity.path), 'file_size_bytes': stat.size});
-      } else if (name.endsWith('.rvz') || name.endsWith('.gcm') || name.endsWith('.iso') ||
-          name.endsWith('.cso') || name.endsWith('.wbfs') ||
-          name.endsWith('.bin') || name.endsWith('.img') ||
-          name.endsWith('.chd') || name.endsWith('.pbp') || name.endsWith('.ccd')) {
+      } else if (isDiscImageName(name)) {
         final stat = await entity.stat();
         discFiles.add({'file_name': p.basename(entity.path), 'file_size_bytes': stat.size});
       }
@@ -291,19 +299,28 @@ class GameLaunchService {
   /// null, i.e. the fire-and-forget `launch` path was used), then runs the
   /// post-exit pipeline: push saves, push save states (if enabled), create a
   /// local backup, and report the play session to RomM (best-effort,
-  /// non-fatal on failure).
+  /// non-fatal on failure). [onExited] runs right after the process exits,
+  /// before anything is pushed (e.g. to refresh a list that depends on the
+  /// files the emulator just wrote); an exception from it is logged and
+  /// ignored.
   Future<LaunchResult?> awaitExitAndSync(
     GameSession session,
     Game game,
     String romPath, {
     required String syncMode,
     String? overrideCoreId,
+    void Function()? onExited,
   }) async {
     final process = session.process;
     if (process == null) return null;
 
     await process.exitCode;
     final sessionEnd = DateTime.now();
+    try {
+      onExited?.call();
+    } catch (e) {
+      dev.log('onExited listener failed (non-fatal)', error: e);
+    }
 
     final activityTracker = await session.activityTrackerFuture;
     if (activityTracker != null) await activityTracker.stop();

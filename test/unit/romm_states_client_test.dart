@@ -94,18 +94,78 @@ void main() {
     expect(states.single.id, 8);
   });
 
-  test('uploadState POSTs a multipart stateFile with emulator=freegosy', () async {
+  test('uploadState POSTs the stateFile with the emulator id', () async {
     adapter.onPost(
       '/api/states',
       (server) => server.reply(200, stateJson(9, 'SCUS-97113 (A1B2C3D4).01.p2s')),
       data: Matchers.any,
-      queryParameters: {'rom_id': '42', 'emulator': 'freegosy'},
+      queryParameters: {'rom_id': '42', 'emulator': 'pcsx2'},
     );
 
     final state = await service.uploadState('42', stateFile,
-        fileName: 'SCUS-97113 (A1B2C3D4).01.p2s');
+        fileName: 'SCUS-97113 (A1B2C3D4).01.p2s', emulator: 'pcsx2');
 
     expect(state.id, 9);
+  });
+
+  test('uploadState without an emulator sends no emulator parameter', () async {
+    adapter.onPost('/api/states', (server) => server.reply(200, {'id': 5, 'file_name': 'a.p2s'}),
+        queryParameters: {'rom_id': '42'}, data: Matchers.any);
+    await service.uploadState('42', stateFile, fileName: 'a.p2s');
+    expect(requests.single.queryParameters.containsKey('emulator'), isFalse);
+  });
+
+  test('uploadState sends screenshotFile when given', () async {
+    adapter.onPost('/api/states', (server) => server.reply(200, {'id': 5, 'file_name': 'a.p2s'}),
+        queryParameters: {'rom_id': '42', 'emulator': 'pcsx2'}, data: Matchers.any);
+    await service.uploadState('42', stateFile, fileName: 'a.p2s', emulator: 'pcsx2',
+        screenshot: Uint8List.fromList([1, 2, 3]));
+    final form = requests.single.data as FormData;
+    expect(form.files.map((f) => f.key), containsAll(['stateFile', 'screenshotFile']));
+    expect(form.files.firstWhere((f) => f.key == 'screenshotFile').value.filename, 'a.p2s.png');
+  });
+
+  test('updateState sends screenshotFile when given, and only stateFile otherwise', () async {
+    adapter.onPut('/api/states/7', (server) => server.reply(200, {'id': 7, 'file_name': 'a.p2s'}),
+        data: Matchers.any);
+    await service.updateState(7, stateFile, fileName: 'a.p2s', screenshot: Uint8List.fromList([9]));
+    await service.updateState(7, stateFile, fileName: 'a.p2s');
+    expect((requests[0].data as FormData).files.map((f) => f.key), ['stateFile', 'screenshotFile']);
+    expect((requests[1].data as FormData).files.map((f) => f.key), ['stateFile']);
+  });
+
+  test('listStates reads emulator and screenshot download path, leniently', () async {
+    adapter.onGet('/api/states', (server) => server.reply(200, [
+          {'id': 1, 'file_name': 'a.p2s', 'updated_at': 'u1', 'emulator': 'pcsx2',
+           'screenshot': {'id': 3, 'download_path': '/api/raw/assets/s/3.png'}},
+          {'id': 2, 'file_name': 'b.p2s', 'updated_at': 'u2'},
+          {'id': 4, 'file_name': 'c.p2s', 'emulator': null, 'screenshot': null},
+        ]), queryParameters: {'rom_id': '42'});
+    final states = await service.listStates('42');
+    expect(states[0].emulator, 'pcsx2');
+    expect(states[0].screenshotUrl, '/api/raw/assets/s/3.png');
+    expect(states[1].emulator, isNull);
+    expect(states[1].screenshotUrl, isNull);
+    expect(states[2].screenshotUrl, isNull);
+  });
+
+  test('downloadStateScreenshot rejects an absolute URL and makes no request', () async {
+    await expectLater(
+      service.downloadStateScreenshot('https://evil.example/x.png'),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(requests, isEmpty);
+  });
+
+  test('downloadStateScreenshot: authenticated, bounded, no retry', () async {
+    adapter.onGet(
+        '/api/raw/assets/s/3.png', (server) => server.reply(200, Uint8List.fromList([1, 2, 3])));
+    final bytes = await service.downloadStateScreenshot('/api/raw/assets/s/3.png');
+    expect(bytes, Uint8List.fromList([1, 2, 3]));
+    final options = requests.single;
+    expect(options.receiveTimeout, RommService.stateDownloadInactivityTimeout);
+    expect(options.extra['no_retry'], isTrue);
+    expect(options.headers['Authorization'], isNotNull);
   });
 
   test('updateState PUTs to the state id', () async {
@@ -191,7 +251,7 @@ void main() {
         '/api/states',
         (server) => server.reply(200, stateJson(9, 'a.p2s')),
         data: Matchers.any,
-        queryParameters: {'rom_id': '42', 'emulator': 'freegosy'},
+        queryParameters: {'rom_id': '42', 'emulator': 'pcsx2'},
       );
       adapter.onPut(
         '/api/states/7',
@@ -199,7 +259,7 @@ void main() {
         data: Matchers.any,
       );
 
-      await service.uploadState('42', stateFile, fileName: 'a.p2s');
+      await service.uploadState('42', stateFile, fileName: 'a.p2s', emulator: 'pcsx2');
       await service.updateState(7, stateFile, fileName: 'a.p2s');
 
       expect(requests, hasLength(2));

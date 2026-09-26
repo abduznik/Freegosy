@@ -7,8 +7,10 @@ import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../storage/directory_service.dart';
+import '../save_state_info.dart';
 import '../save_strategy.dart';
 import '../state_sync_capable.dart';
+import 'pcsx2_state_file.dart';
 
 /// Save strategy for PCSX2 (PlayStation 2).
 /// Memcards: {systemDir}/memcards/*.ps2
@@ -97,6 +99,32 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
   @override
   bool looksLikeValidState(Uint8List bytes) =>
       bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+
+  static final _slotPattern = RegExp(r'\.(\d{2}|resume)\.p2s$');
+
+  @override
+  StateSlot slotOf(String fileName) {
+    final match = _slotPattern.firstMatch(fileName);
+    if (match == null || !_stateFilePattern.hasMatch(fileName)) {
+      return UnknownStateSlot(fileName);
+    }
+    final slot = match.group(1)!;
+    return slot == 'resume' ? const AutoStateSlot() : NumberedStateSlot(int.parse(slot));
+  }
+
+  @override
+  Future<StateFileInfo> describeState(io.File file) async {
+    final base = await super.describeState(file);
+    final header = await Pcsx2StateFile.readVersion(file);
+    return StateFileInfo(
+      savedAt: base.savedAt,
+      emulatorVersion: header?.version,
+      formatId: header?.formatId,
+    );
+  }
+
+  @override
+  Future<Uint8List?> stateScreenshot(io.File file) => Pcsx2StateFile.readScreenshot(file);
 
   Future<String> _getSaveRoot() async {
     // 1. Check portable mode first — memcards folder next to exe (Windows)

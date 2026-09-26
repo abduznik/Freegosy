@@ -15,9 +15,9 @@ This page describes the feature and how it behaves.
 | Emulators | PCSX2 only for now. Every other emulator shows the toggle disabled with "Not supported yet". |
 | Default | **Off.** Turn it on per emulator. |
 | Where | Settings → Emulators → PCSX2 → "Sync save states"; "Sync Save States" button on a game's page. |
-| Loading a state at launch | Not available: a launch always starts the game fresh. See [Loading a state at launch](#loading-a-state-at-launch). |
+| Resume | **Resume Game ▾** on the game page (see [Resume Game](#resume-game)). |
 | RomM API | `/api/states` (separate from `/api/saves`). Works on any RomM that has the states API. |
-| Privacy | States belong to your RomM user and stay private. Freegosy never shares them. |
+| Privacy | States and their screenshots belong to your RomM user; Freegosy never makes them public. Checked on a real RomM: another user does not see them, and they do not appear in the game's screenshot gallery. |
 
 ## Using it
 
@@ -60,18 +60,78 @@ for that game, the new one does nothing (the **Sync Save States** button tells
 you so instead of reporting a sync that did not happen; the pre-launch pull just
 carries on and launches).
 
-## Loading a state at launch
-
-Every launch starts the game fresh; Freegosy never loads a save state for you.
-Load one from inside PCSX2 as usual.
+## Resume Game
 
 An earlier opt-in switch, "Auto-load resume state on launch", booted PCSX2 straight
 into the game's resume state on every launch. It was removed before it was
 released: a resume state made by a different PCSX2 version crashed PCSX2 at boot,
 and because the switch applied to every launch, the game could not be started
-again until the switch was turned off. Loading a state at launch is being
-redesigned as a **Resume Game** button on the game's page, next to Play, so
-loading a state is a choice made for that one launch.
+again until the switch was turned off. **Resume Game** replaces it with a
+choice made for one launch at a time, and works for any emulator that
+implements the contract below (PCSX2 today).
+
+**The buttons.** When a game has at least one save state, its page shows
+**Resume Game ▾** above **Play Game (fresh start)**. **Play Game** always
+starts the game fresh, whether or not states exist.
+
+**What Resume loads.** Pressing **Resume Game** loads the newest state. The
+**▾** (or **X** on a controller) opens a centred dialog — not anchored to the
+button — listing every state: when it was saved, the emulator version it was
+made with, where it is (`this PC`, `RomM`, or `newer on RomM`), and a ⚠ line
+when its version differs from the installed one. **B** on a controller closes
+the dialog.
+
+**Sources.** States on this PC are always listed. States on RomM are added
+too when **Sync save states** is on for that emulator and RomM is reachable:
+local states show first, and RomM's are merged in a moment later once the
+server answers.
+
+**The emulator rule.** Resume starts whichever emulator made the state: from
+the state's own folder, from RomM's `emulator` tag, or — when neither
+applies — the one emulator whose file-naming matches. It never asks which
+emulator to use. A state whose emulator can't be determined isn't listed.
+States uploaded before this feature all carry `emulator=freegosy`, which
+isn't a real emulator id, so those fall back to the file-naming match too.
+
+**Multi-disc games.** A state belongs to one disc (its serial), so the list
+shows the states of every disc in the game's folder, and Resume boots the disc
+that state was made with, whichever disc you'd pick for a fresh start.
+
+**One launch at a time.** While a Play or Resume started from the game page is
+still getting ready (e.g. downloading the state), pressing Resume, Play, a
+slot or **X** again does nothing.
+
+**Before launch:** the chosen state is downloaded first. Then:
+- If it isn't on disk, nothing launches and the message says where it was
+  expected: `Couldn't get <slot> from RomM. Nothing was started.` for a state
+  that was only on RomM or newer there, `Couldn't find <slot> on this PC.
+  Nothing was started.` for a local state that has since gone, and `Resume
+  isn't available right now. Nothing was started.` when Freegosy's resume
+  support isn't ready yet.
+- If a newer RomM copy was expected but the download didn't bring it: the
+  older local copy loads instead, and the "Launching" toast says `Couldn't
+  update <slot> from RomM. Loading the copy on this PC.` A state you just
+  settled in the conflict dialog never gets this notice: the copy on disk is
+  the one you chose.
+- If the state's version turns out different from the installed emulator and
+  the list didn't already show ⚠ for it (e.g. the emulator was updated since
+  the list was built): the **Load anyway / Cancel** prompt appears first.
+  Cancel starts nothing.
+
+A state that was synced and then deleted on this PC isn't listed even though
+RomM still has it: the sync deliberately doesn't bring deleted states back.
+When a RomM server is set up and Freegosy keeps a handle on the emulator it
+started (it then syncs saves after exit), the list refreshes as soon as the
+emulator exits, and again once the post-exit sync is done. Otherwise it
+refreshes after **Sync Save States** or the next time the game's page opens.
+
+**Versions.** Read from the state itself (PCSX2: the `.p2s` header). The
+installed version comes from `pcsx2-qt.exe` on Windows only; Linux, AppImage,
+Flatpak and macOS builds have no version reader, so there's no warning there.
+A nightly or self-built emulator writes versions like `v2.3.72-12-gabcdef`;
+when the numbers match the installed release (`2.3.72.0`) the build can't be
+told apart from it, so there's no ⚠ and no prompt. Different numbers still
+warn.
 
 ## Conflicts and safety
 
@@ -132,7 +192,17 @@ Safety rules that always apply:
 - **How do I tell what state sync did?** — open the log: **Settings**, in the
   **Storage** card under **Troubleshooting**, press **View Logs** (the **System
   Logs** window). Leave the filter on **ALL** (the **ERROR** filter only shows
-  the failure lines). State sync lines start with `[StateSync]`. Select the text to copy it. The log is kept in memory
+  the failure lines). State sync lines start with `[StateSync]`; Resume Game
+  lines start with `[Resume]`, for example:
+
+  ```
+  [Resume] resume Ico: Slot 1 SCUS-97113 (A1B2C3D4).01.p2s (emulator pcsx2, where both)
+  [Resume] version v2.8.2 vs installed 2.8.2.0: ok
+  [Resume] SCUS-97113 (A1B2C3D4).01.p2s is stale: newer RomM copy did not arrive, loading the local copy
+  [Resume] will load C:\PCSX2\sstates\SCUS-97113 (A1B2C3D4).01.p2s
+  ```
+
+  Select the text to copy it. The log is kept in memory
   only: the last 500 lines since Freegosy started (the trash-sweep icon with the
   tooltip **Clear Logs** empties it), so an older sync may have scrolled out. IP
   addresses are masked. The same lines also print to the console in a debug run.
@@ -177,27 +247,42 @@ Safety rules that always apply:
   and choose a side.
 - **A state won't load in PCSX2** — the two machines are on different PCSX2
   versions.
+- **No Resume button** — the game has no state of at least 100 bytes that the
+  emulator's naming matches; or the emulator can't load a state on launch; or
+  the state's emulator can't be determined.
 
 ## For contributors
 
 - Code: `lib/core/save/state_sync_service.dart` (pull, push, resolve),
   `state_sync_capable.dart` (what an emulator provides), `state_sync_record.dart`
-  (records), `RommService` states client in `lib/core/romm/`.
+  (records), `RommService` states client in `lib/core/romm/`, and Resume Game
+  itself in `lib/core/save/resume_service.dart`, `lib/providers/resume_provider.dart`
+  and `lib/ui/widgets/game_detail/` (split button, slot list, version dialog).
 - To add an emulator: implement the `StateSyncCapable` mixin on its save
   strategy (`stateDirectory`, `stateFileMatcher`, optionally
   `looksLikeValidState`) and return `true` from
   `EmulatorStrategy.supportsStateSync`. A unit test fails if the two disagree.
-- Loading a state at launch (the groundwork for Resume Game): an
-  `EmulatorStrategy` returns `true` from `supportsStateLoadOnLaunch` and the
-  command-line arguments that load a state from `stateLoadArgs` (PCSX2:
-  `-statefile <path>`). `GameLaunchService.launch(..., loadStatePath: ...)`
-  passes them to the base `launchWithExtraArgs` / `launchWithHandleAndExtraArgs`
-  methods for that launch only; nothing is stored on the shared strategy
-  (launches of the same emulator can overlap). Do not override `launch` /
-  `launchWithHandle` on such an emulator in a way that skips the base
-  implementation; override the `...ExtraArgs` variants instead. A unit test
-  checks that every such emulator has a `StateSyncCapable` save strategy.
-  Nothing passes `loadStatePath` yet.
+- To add Resume Game for an emulator: an `EmulatorStrategy` returns `true`
+  from `supportsStateLoadOnLaunch` and the command-line arguments that load a
+  state from `stateLoadArgs` (PCSX2: `-statefile <path>`); optionally
+  implement `installedVersion()` so mismatched-version warnings work. On the
+  `StateSyncCapable` save strategy, `slotOf`, `describeState` and
+  `stateScreenshot` are all optional (each has a safe default) but describe
+  the slot label, the emulator version and a thumbnail respectively.
+  `GameLaunchService.launch(..., loadStatePath: ...)` passes `stateLoadArgs`
+  to the base `launchWithExtraArgs` / `launchWithHandleAndExtraArgs` methods
+  for that launch only; nothing is stored on the shared strategy (launches of
+  the same emulator can overlap). Do not override `launch` / `launchWithHandle`
+  on such an emulator in a way that skips the base implementation; override
+  the `...ExtraArgs` variants instead. A unit test checks that every such
+  emulator has a `StateSyncCapable` save strategy.
+- `ResumeService` itself must stay emulator-agnostic: it only calls through
+  `EmulatorStrategy` and `StateSyncCapable`, never anything PCSX2-specific.
+  Its tests exercise this against a made-up "fakeemu" emulator
+  (`test/helpers/fake_state_emulator.dart`), not PCSX2, to prove it.
+- State uploads now send `emulator=<emulatorId>` (the real emulator id, not
+  the generic `freegosy` client tag used elsewhere) and, when the emulator
+  provides one, the state's screenshot as `screenshotFile`.
 - Tests: `test/unit/state_sync_*`, with an in-memory fake RomM in
   `test/helpers/fake_romm_states_api.dart`. `test/mock_romm_server.py` also
   serves `/api/states` for manual runs.
@@ -212,16 +297,23 @@ Safety rules that always apply:
     button, the dialog, and both **Use Local Version** and **Use Cloud
     Version**;
   - an offline launch: with RomM unreachable (502 through a reverse proxy) the
-    launch skipped the pre-launch state pull immediately and the game started.
+    launch skipped the pre-launch state pull immediately and the game started;
+  - Resume Game: a new upload is listed by RomM with `"emulator": "pcsx2"`; its
+    screenshot is stored and shows as the slot's thumbnail on another PC; a
+    second RomM user does not see the state's screenshot, and it does not
+    appear in the game's screenshot gallery or header image; a PC with no
+    local states lists the RomM state and resumes from it; a state made with
+    an older PCSX2 asks **Load anyway / Cancel**, and Cancel starts nothing.
 - Not yet verified against a real RomM: whether re-POSTing an existing file name
-  replaces it (Freegosy does not rely on it), and a launch against a RomM that
+  replaces it (Freegosy does not rely on it); a launch against a RomM that
   is up but not answering (it should be delayed by no more than the ~20 s list
-  timeout plus one 30 s download stall).
+  timeout plus one 30 s download stall); and resuming a multi-disc or cue/bin
+  game on real hardware.
 
 ## Possible follow-ups
 
-- A **Resume Game** button on the game's page (newest state, with a list of
-  every slot, the PCSX2 version each state was made with, and a warning when it
-  differs from the installed one). Being designed.
+- Headless CLI `--resume`: the `launch` command currently always starts
+  fresh; a flag to resume the newest (or a named) state would bring Resume
+  Game to scripted/headless launches too.
 - Other emulators (DuckStation, RetroArch, PPSSPP, ares, Dolphin).
 - Deleting states on RomM and propagating deletes.

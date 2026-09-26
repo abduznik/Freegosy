@@ -10,6 +10,11 @@ class FocusEffectWrapper extends ConsumerStatefulWidget {
   final VoidCallback? onLongPress;
   final double scaleFactor;
   final double borderRadius;
+
+  /// Per-corner shape of the focus border, for children that are not rounded
+  /// on every corner (e.g. one half of a split button). Overrides
+  /// [borderRadius] when set.
+  final BorderRadius? borderRadiusGeometry;
   final bool showGlow;
   final FocusNode? focusNode;
   final bool autofocus;
@@ -23,6 +28,7 @@ class FocusEffectWrapper extends ConsumerStatefulWidget {
     this.onLongPress,
     this.scaleFactor = 1.005,
     this.borderRadius = 12.0,
+    this.borderRadiusGeometry,
     this.showGlow = false,
     this.focusNode,
     this.autofocus = false,
@@ -133,7 +139,7 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 100),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(widget.borderRadius),
+              borderRadius: widget.borderRadiusGeometry ?? BorderRadius.circular(widget.borderRadius),
               border: Border.all(color: borderColor, width: borderWidth),
             ),
             child: widget.child,

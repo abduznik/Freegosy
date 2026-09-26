@@ -10,6 +10,9 @@ import 'package:freegosy/providers/paginated_games_provider.dart';
 import 'package:freegosy/providers/romm_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/library_screen.dart';
+import 'package:freegosy/ui/widgets/filter_bottom_sheet.dart';
+import 'package:freegosy/core/input/input_action_bus.dart';
+import 'package:freegosy/core/input/gamepad_service.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -151,5 +154,43 @@ void main() {
 
       expect(find.text('Error: Connection Failed'), findsOneWidget);
     });
+
+    // X (GameAction.detail) opens the filter sheet on the library, but not
+    // while another page (the game page, whose X opens the resume slots) is
+    // on top of it.
+    for (final covered in [false, true]) {
+      testWidgets('X opens the filter sheet only when the library is the current page (covered: $covered)', (WidgetTester tester) async {
+        when(mockRommService.getPlatforms()).thenAnswer((_) async => []);
+        when(mockRommService.getCollections()).thenAnswer((_) async => []);
+        final navKey = GlobalKey<NavigatorState>();
+
+        await tester.pumpWidget(ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            rommServiceProvider.overrideWithValue(mockRommService),
+            romMappingServiceProvider.overrideWith((ref) => Future.value(mockRomMappingService)),
+            romScannerServiceProvider.overrideWithValue(null),
+            directoryServiceProvider.overrideWith((ref) => Future.value(mockDirectoryService)),
+            librarySnapshotServiceProvider.overrideWithValue(mockSnapshotService),
+            metadataCacheServiceProvider.overrideWith((ref) => Future.value(mockCacheService)),
+            platformsProvider.overrideWith((ref) => []),
+            isHomeSelectedProvider.overrideWith((ref) => false),
+            paginatedGamesProvider.overrideWith((ref) => PaginatedGamesNotifier(ref)..state = const PaginatedGamesState(games: [], total: 0, hasMore: false)),
+          ],
+          child: MaterialApp(navigatorKey: navKey, home: const LibraryScreen()),
+        ));
+        await tester.pumpAndSettle();
+
+        if (covered) {
+          navKey.currentState!.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('Game page'))));
+          await tester.pumpAndSettle();
+        }
+
+        inputActionBus.add(GameAction.detail);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FilterBottomSheet), covered ? findsNothing : findsOneWidget);
+      });
+    }
   });
 }

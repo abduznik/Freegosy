@@ -783,15 +783,20 @@ class RommService implements RommStatesApi {
         .toList();
   }
 
+  Map<String, dynamic> _stateForm(MultipartFile state, String fileName, Uint8List? screenshot) => {
+        'stateFile': state,
+        if (screenshot != null)
+          'screenshotFile': MultipartFile.fromBytes(screenshot, filename: '$fileName.png'),
+      };
+
   @override
   Future<RommState> uploadState(String romId, io.File file,
-      {required String fileName}) async {
+      {required String fileName, String? emulator, Uint8List? screenshot}) async {
     final response = await _dio.post(
       '/api/states',
-      queryParameters: {'rom_id': romId, 'emulator': 'freegosy'},
-      data: FormData.fromMap({
-        'stateFile': await MultipartFile.fromFile(file.path, filename: fileName),
-      }),
+      queryParameters: {'rom_id': romId, 'emulator': ?emulator},
+      data: FormData.fromMap(_stateForm(
+          await MultipartFile.fromFile(file.path, filename: fileName), fileName, screenshot)),
       options: _stateOptions,
     );
     return RommState.fromJson(response.data as Map<String, dynamic>);
@@ -799,14 +804,12 @@ class RommService implements RommStatesApi {
 
   @override
   Future<RommState> updateState(int stateId, io.File file,
-      {required String fileName}) async {
+      {required String fileName, Uint8List? screenshot}) async {
     try {
       final response = await _dio.put(
         '/api/states/$stateId',
-        data: FormData.fromMap({
-          'stateFile':
-              await MultipartFile.fromFile(file.path, filename: fileName),
-        }),
+        data: FormData.fromMap(_stateForm(
+            await MultipartFile.fromFile(file.path, filename: fileName), fileName, screenshot)),
         options: _stateOptions,
       );
       return RommState.fromJson(response.data as Map<String, dynamic>);
@@ -828,6 +831,16 @@ class RommService implements RommStatesApi {
       if (e.response?.statusCode == 404) throw RommStateNotFoundException(stateId);
       rethrow;
     }
+  }
+
+  @override
+  Future<Uint8List> downloadStateScreenshot(String url) async {
+    final uri = Uri.parse(url);
+    if (!url.startsWith('/') || uri.hasScheme || uri.hasAuthority) {
+      throw ArgumentError.value(url, 'url', 'must be a server-relative path');
+    }
+    final response = await _dio.get<List<int>>(url, options: _stateDownloadOptions);
+    return Uint8List.fromList(List<int>.from(response.data ?? const <int>[]));
   }
 
   // ---------------------------------------------------------------------------

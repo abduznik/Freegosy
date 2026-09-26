@@ -22,14 +22,18 @@ import '../../core/save/strategies/ryujinx_save_strategy.dart';
 import '../../core/save/strategies/azahar_save_strategy.dart';
 import '../../core/emulator/strategies/windows_strategy.dart';
 import '../../core/emulator/emulator_strategy.dart';
+import '../../core/emulator/game_launch_service.dart' show LaunchResult;
 import '../../core/emulator/strategies/retroarch_strategy.dart';
 import '../widgets/retroarch_core_picker_dialog.dart';
 import '../widgets/windows_game_config_dialog.dart';
 import '../widgets/multi_disc_picker.dart';
 import '../../core/save/save_sync_service.dart';
 import '../../core/save/state_sync_service.dart';
+import '../../core/save/resume_service.dart';
+import '../../providers/resume_provider.dart';
 import './library_dialog_service.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/state_version_dialog.dart';
 
 mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   Map<String, bool> get downloadedStates;
@@ -232,53 +236,64 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
   }
 
-  Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game) async {
+  Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game, {ResumeEntry? resume}) async {
     debugPrint('[Launch] Starting launch for: ${game.name} (id: ${game.id})');
     debugPrint('[Launch] Platform: ${game.platformSlug}, hasMultipleFiles: ${game.hasMultipleFiles}, files: ${game.files.length}');
-    
+
     final registryReady = await ref.read(strategyRegistryProvider.future);
     if (!context.mounted || registryReady == null) return;
-
-    // Check per-game emulator preference first
-    final gamePrefEmulator = registryReady.getGameEmulatorPreference(game.id);
-    final gamePrefCore = registryReady.getGameCorePreference(game.id);
-    debugPrint('[Launch] Per-game preference: emulator=$gamePrefEmulator, core=$gamePrefCore');
 
     EmulatorStrategy? strategy;
     String? overrideCoreId;
 
-    if (gamePrefEmulator != null) {
-      // Use saved per-game preference
-      strategy = registryReady.getStrategyById(gamePrefEmulator);
-      overrideCoreId = gamePrefCore;
+    if (resume != null) {
+      // Resume starts the emulator that owns the state: no picker, no preference.
+      strategy = registryReady.getStrategyById(resume.emulatorId);
+      debugPrint('[Resume] resume ${game.name}: ${resume.slot.label} ${resume.fileName} '
+          '(emulator ${resume.emulatorId}, where ${resume.where.name})');
+      if (strategy == null) {
+        ErrorHandler.showInfo(context, 'Not Available', message: "${resume.emulatorName} isn't set up.");
+        return;
+      }
     } else {
-      // Check if platform has multiple emulator options
-      final allStrategies = registryReady.getAllStrategiesForSlug(game.platformSlug ?? '');
-      final perGameEnabled = ref.read(perGameLauncherEnabledProvider);
+      // Check per-game emulator preference first
+      final gamePrefEmulator = registryReady.getGameEmulatorPreference(game.id);
+      final gamePrefCore = registryReady.getGameCorePreference(game.id);
+      debugPrint('[Launch] Per-game preference: emulator=$gamePrefEmulator, core=$gamePrefCore');
 
-      if (allStrategies.length > 1 && perGameEnabled && context.mounted) {
-        // Per-game picker enabled — show dialog
-        final choice = await RetroArchCorePickerDialog.show(
-          context,
-          game: game,
-          availableStrategies: allStrategies,
-          registry: registryReady,
-        );
-        if (choice == null) return; // cancelled
-
-        strategy = registryReady.getStrategyById(choice.emulatorId);
-        overrideCoreId = choice.coreId;
-
-        // Save preference if "remember" was checked
-        if (choice.remember) {
-          await registryReady.setGameEmulatorPreference(game.id, choice.emulatorId);
-          if (choice.coreId != null) {
-            await registryReady.setGameCorePreference(game.id, choice.coreId!);
-          }
-          ref.read(gamePreferenceVersionProvider.notifier).state++;
-        }
+      if (gamePrefEmulator != null) {
+        // Use saved per-game preference
+        strategy = registryReady.getStrategyById(gamePrefEmulator);
+        overrideCoreId = gamePrefCore;
       } else {
-        strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
+        // Check if platform has multiple emulator options
+        final allStrategies = registryReady.getAllStrategiesForSlug(game.platformSlug ?? '');
+        final perGameEnabled = ref.read(perGameLauncherEnabledProvider);
+
+        if (allStrategies.length > 1 && perGameEnabled && context.mounted) {
+          // Per-game picker enabled — show dialog
+          final choice = await RetroArchCorePickerDialog.show(
+            context,
+            game: game,
+            availableStrategies: allStrategies,
+            registry: registryReady,
+          );
+          if (choice == null) return; // cancelled
+
+          strategy = registryReady.getStrategyById(choice.emulatorId);
+          overrideCoreId = choice.coreId;
+
+          // Save preference if "remember" was checked
+          if (choice.remember) {
+            await registryReady.setGameEmulatorPreference(game.id, choice.emulatorId);
+            if (choice.coreId != null) {
+              await registryReady.setGameCorePreference(game.id, choice.coreId!);
+            }
+            ref.read(gamePreferenceVersionProvider.notifier).state++;
+          }
+        } else {
+          strategy = registryReady.getStrategyForSlug(game.platformSlug ?? '');
+        }
       }
     }
 
@@ -316,10 +331,19 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     String romPath = existingRomPath;
     bool isAutoDetected = await io.File(existingRomPath).exists();
 
+    // A save state belongs to one disc (its serial): a resume boots exactly the
+    // ROM file the state was identified with, so no disc/file picker is shown.
+    final resumeRomPath = resume?.romPath;
+    final resumeUsesItsOwnRom = resumeRomPath != null && await io.File(resumeRomPath).exists();
+    if (resumeUsesItsOwnRom) {
+      romPath = resumeRomPath;
+      debugPrint('[Resume] booting the ROM the state belongs to: $romPath');
+    }
+
     // If romPath is a directory, scan for disc files and show picker if multiple found.
     // This handles cases where RomM doesn't set hasMultipleFiles correctly
     // (e.g. GameCube multidisc with .m3u).
-    if (!game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
+    if (!resumeUsesItsOwnRom && !game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
       debugPrint('[Launch] romPath is a directory: $existingRomPath');
       final discFiles = await launchService.scanForDiscFiles(existingRomPath);
       debugPrint('[Launch] Scan complete: ${discFiles.length} disc files');
@@ -337,7 +361,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       }
     }
 
-    if (game.hasMultipleFiles) {
+    if (!resumeUsesItsOwnRom && game.hasMultipleFiles) {
       debugPrint('[Launch] Multi-file game detected, fetching/filtering launchable files...');
       final result = await launchService.launchableFilesFor(game);
       final files = result.files;
@@ -395,6 +419,9 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // and nothing in here (not even resolving the service) can abort the launch.
     // An offline RomM skips the pull altogether so launching stays instant; the
     // service also bounds its list call, for a server that is up but not answering.
+    // The pull's result (null when none ran) tells a resume whether its state
+    // was brought down or was a conflict the user just settled.
+    StateSyncResult? statePull;
     try {
       final stateSync = await ref.read(stateSyncServiceProvider.future);
       if (!context.mounted) return;
@@ -403,7 +430,8 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           debugPrint('[StateSync] RomM is offline — skipping the pre-launch state pull');
         } else {
           ErrorHandler.showInfo(context, 'Syncing', message: 'Checking save states...');
-          final pull = await stateSync.pullStates(game, romPath, emulatorId: strategy.emulatorId);
+          final pull = await stateSync.pullStates(game, romPath, emulatorId: strategy.emulatorId, priority: resume?.fileName);
+          statePull = pull;
           if (context.mounted) await _resolveStateConflicts(context, stateSync, pull.conflicts);
         }
       } else {
@@ -414,6 +442,44 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       debugPrint('[StateSync] Pre-launch pull failed: $e');
     }
     if (!context.mounted) return;
+
+    String? loadStatePath;
+    String? staleResumeNotice;
+    if (resume != null) {
+      final resumeService = await ref.read(resumeServiceProvider.future);
+      if (!context.mounted) return;
+      final check = resumeService == null
+          ? const ResumeMissing()
+          : await resumeService.checkBeforeLaunch(resume, game, romPath,
+              pulled: statePull?.currentFiles,
+              conflicted: statePull?.conflicts.map((c) => c.fileName).toSet());
+      if (!context.mounted) return;
+      switch (check) {
+        case ResumeMissing():
+          ErrorHandler.showInfo(context, 'Resume failed',
+              message: resumeMissingMessage(resume, serviceAvailable: resumeService != null));
+          return;
+        case ResumeReady(:final path, :final stale, :final prompt):
+          if (prompt != null) {
+            final load = await showStateVersionDialog(context,
+                slotLabel: resume.slot.label,
+                emulatorName: resume.emulatorName,
+                stateVersion: prompt.stateVersion,
+                installed: prompt.installed);
+            if (!load || !context.mounted) return;
+          }
+          if (stale) {
+            // A separate toast here would be cleared almost immediately by the
+            // 'Launching' toast below (ErrorHandler.show clears prior snack
+            // bars); fold the notice into that one instead so it's seen.
+            staleResumeNotice =
+                "Couldn't update ${resume.slot.label} from RomM. Loading the copy on this PC.";
+            debugPrint('[Resume] ${resume.fileName} is stale: newer RomM copy did not arrive, loading the local copy');
+          }
+          debugPrint('[Resume] will load $path');
+          loadStatePath = path;
+      }
+    }
 
     // Pull save in background — don't block the launch.
     // Previously, the save pull was a blocking await (10-15s of HTTP requests
@@ -451,20 +517,30 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     try {
       if (!context.mounted) return;
       debugPrint('[Launch] Strategy: ${strategy.name}, ROM: $romPath');
-      ErrorHandler.showInfo(context, 'Launching', message: 'Launching ${game.name}...');
+      ErrorHandler.showInfo(context, 'Launching',
+          message: staleResumeNotice ?? 'Launching ${game.name}...');
 
-      final session = await launchService.launch(game, romPath, strategy, overrideCoreId: overrideCoreId);
+      final session = await launchService.launch(game, romPath, strategy, overrideCoreId: overrideCoreId, loadStatePath: loadStatePath);
       if (!context.mounted) return;
       if (session.process != null && syncService != null) {
         final syncMode = ref.read(retroarchSyncModeProvider);
         unawaited(Future.delayed(Duration.zero, () async {
           try {
             debugPrint('[SaveSync] Auto-pushing saves after exit: game="${game.displayName}" syncMode=$syncMode');
-            final result = await launchService.awaitExitAndSync(
-              session, game, romPath,
-              syncMode: syncMode,
-              overrideCoreId: overrideCoreId,
-            );
+            // The resume list is refreshed as soon as the emulator exits (the
+            // states it just wrote), and again once the pipeline is over,
+            // even if it throws (what the push changed on RomM).
+            final LaunchResult? result;
+            try {
+              result = await launchService.awaitExitAndSync(
+                session, game, romPath,
+                syncMode: syncMode,
+                overrideCoreId: overrideCoreId,
+                onExited: () => ref.invalidate(resumeEntriesProvider),
+              );
+            } finally {
+              ref.invalidate(resumeEntriesProvider);
+            }
             if (!context.mounted || result == null) return;
             if (result.syncOk) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
             else ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
@@ -493,7 +569,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
           try {
             await (strategy as RetroArchStrategy).downloadCore(e.coreName, File(e.corePath).parent.path, Dio());
-            if (context.mounted) { Navigator.pop(context); await handleLaunch(context, ref, game); }
+            if (context.mounted) { Navigator.pop(context); await handleLaunch(context, ref, game, resume: resume); }
           } catch (err) { if (context.mounted) { Navigator.pop(context); ErrorHandler.showException(context, err, contextLabel: 'Download Core Failed'); } }
         }
       } else if ((['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '')) && (e.toString().contains('No executable') || e.toString().contains('not found'))) {
@@ -632,10 +708,12 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       if (pull.skipped && push.skipped) {
         // The service could not even start (game not identified, state folder
         // not found): don't report that as a successful "0 downloaded" sync.
+        ref.invalidate(resumeEntriesProvider);
         ErrorHandler.showInfo(context, 'Nothing to sync',
             message: "Couldn't identify the game or find the save state folder for ${game.name}.");
         return;
       }
+      ref.invalidate(resumeEntriesProvider);
       ErrorHandler.showSuccess(context, 'States Synced',
           message: '${pull.downloaded} downloaded, ${push.uploaded} uploaded');
     } catch (e) {

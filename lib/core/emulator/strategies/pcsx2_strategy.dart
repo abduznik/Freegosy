@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
+import 'package:freegosy/core/emulator/pe_version_reader.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
@@ -47,6 +48,19 @@ class Pcsx2Strategy extends EmulatorStrategy {
   /// PCSX2: `-statefile <filename>` loads the given state at boot.
   @override
   List<String> stateLoadArgs(String statePath) => ['-statefile', statePath];
+
+  /// Windows: the file version of `pcsx2-qt.exe` (e.g. `2.8.2.0`). Linux
+  /// AppImage/Flatpak and macOS builds carry no such resource: null.
+  @override
+  Future<String?> installedVersion() async {
+    if (!platform.isWindows) return null;
+    try {
+      final exe = await findExecutable();
+      return exe == null ? null : await PeVersionReader.fileVersion(exe);
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   String resolveSavePath(Game game) {
