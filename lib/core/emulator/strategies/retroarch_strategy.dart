@@ -245,7 +245,8 @@ class RetroArchStrategy extends EmulatorStrategy {
   /// Settings, via a Freegosy-owned `--appendconfig` file so the user's
   /// retroarch.cfg is left alone. Empty when no emulator login is saved;
   /// never fails a launch.
-  Future<List<String>> _achievementArgs() async {
+  @visibleForTesting
+  Future<List<String>> retroAchievementsLaunchArgs() async {
     try {
       final login = await (_raLoginLoader ?? () => RetroAchievementsEmulatorLogin.load(_directoryService.prefs))();
       if (login == null) return const [];
@@ -277,7 +278,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     }
 
     if (coreName == null) {
-      await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: await _achievementArgs());
+      await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: await retroAchievementsLaunchArgs());
       return;
     }
 
@@ -301,7 +302,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: [...await _achievementArgs(), '-L', corePath]);
+    await _directoryService.launchGame(game, normalizedRomPath, emulatorId, exePath, args: [...await retroAchievementsLaunchArgs(), '-L', corePath]);
   }
 
   @override
@@ -320,7 +321,7 @@ class RetroArchStrategy extends EmulatorStrategy {
     }
 
     if (resolvedCoreName == null) {
-      return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: await _achievementArgs());
+      return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: await retroAchievementsLaunchArgs());
     }
 
     final corePath = await _resolveCorePath(exePath, resolvedCoreName);
@@ -343,7 +344,7 @@ class RetroArchStrategy extends EmulatorStrategy {
       );
     }
 
-    return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: [...await _achievementArgs(), '-L', corePath]);
+    return await _directoryService.launchGameWithHandle(game, normalizedRomPath, emulatorId, exePath, args: [...await retroAchievementsLaunchArgs(), '-L', corePath]);
   }
 
   // ── Core download ────────────────────────────────────────────

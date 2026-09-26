@@ -36,7 +36,8 @@ class RetroAchievementsEmulatorLogin {
   /// RetroArch config overrides, passed via `--appendconfig` so the user's
   /// own retroarch.cfg is never edited by Freegosy.
   String toRetroArchConfig() {
-    String quote(String v) => '"${v.replaceAll('"', '')}"';
+    // Drop quotes and line breaks so a value can't end its string or add cfg lines.
+    String quote(String v) => '"${v.replaceAll(RegExp(r'["\r\n]'), '')}"';
     return [
       'cheevos_enable = "true"',
       'cheevos_username = ${quote(username)}',

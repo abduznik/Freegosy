@@ -402,12 +402,16 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
         line(credentials.hasWebApiKey,
             credentials.hasWebApiKey ? 'Live progress from RetroAchievements.' : 'Progress comes from RomM only (if your server has RetroAchievements enabled).'),
         if (emulatorLogin != null)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Hardcore mode', style: TextStyle(fontSize: 14)),
-            subtitle: const Text('No save states, rewind or cheats; unlocks count as hardcore.', style: TextStyle(fontSize: 12)),
-            value: emulatorLogin.hardcore,
-            onChanged: (v) => ref.read(retroAchievementsSetHardcoreProvider)(v),
+          // Own Material so the tile's ink isn't hidden by the card's background.
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Hardcore mode', style: TextStyle(fontSize: 14)),
+              subtitle: const Text('No save states, rewind or cheats; unlocks count as hardcore.', style: TextStyle(fontSize: 12)),
+              value: emulatorLogin.hardcore,
+              onChanged: (v) => ref.read(retroAchievementsSetHardcoreProvider)(v),
+            ),
           ),
       ],
     );

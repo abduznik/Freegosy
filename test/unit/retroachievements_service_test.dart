@@ -234,6 +234,91 @@ void main() {
     });
   });
 
+  group('RetroAchievementsService.fetchConnectToken edge cases', () {
+    const connectUrl = 'https://retroachievements.org/dorequest.php';
+
+    test('sends the password form-encoded in the body, never in the URL', () async {
+      RequestOptions? sent;
+      dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
+        sent = o;
+        h.next(o);
+      }));
+      dioAdapter.onPost(
+        connectUrl,
+        (server) => server.reply(200, {'Success': true, 'User': testUsername, 'Token': 't'}),
+        data: {'r': 'login2', 'u': testUsername, 'p': 's3cret'},
+      );
+
+      await service.fetchConnectToken(testUsername, 's3cret');
+
+      expect(sent!.method, 'POST');
+      expect(sent!.contentType, Headers.formUrlEncodedContentType);
+      expect(sent!.uri.toString(), isNot(contains('s3cret')));
+      expect(sent!.queryParameters, isEmpty);
+    });
+
+    test('Success:false with HTTP 200 is an auth failure', () async {
+      dioAdapter.onPost(
+        connectUrl,
+        (server) => server.reply(200, {'Success': false, 'Error': 'Account is banned.'}),
+        data: {'r': 'login2', 'u': testUsername, 'p': 'pw'},
+      );
+      expect(
+        () => service.fetchConnectToken(testUsername, 'pw'),
+        throwsA(isA<RetroAchievementsAuthException>().having((e) => e.message, 'message', 'Account is banned.')),
+      );
+    });
+
+    test('a success without a token is an auth failure', () async {
+      dioAdapter.onPost(
+        connectUrl,
+        (server) => server.reply(200, {'Success': true, 'User': testUsername}),
+        data: {'r': 'login2', 'u': testUsername, 'p': 'pw'},
+      );
+      expect(() => service.fetchConnectToken(testUsername, 'pw'), throwsA(isA<RetroAchievementsAuthException>()));
+    });
+
+    test('an empty password is rejected without a request', () async {
+      expect(() => service.fetchConnectToken(testUsername, ''), throwsA(isA<RetroAchievementsAuthException>()));
+    });
+
+    test('server errors propagate as DioException', () async {
+      dioAdapter.onPost(
+        connectUrl,
+        (server) => server.reply(503, 'down'),
+        data: {'r': 'login2', 'u': testUsername, 'p': 'pw'},
+      );
+      expect(() => service.fetchConnectToken(testUsername, 'pw'), throwsA(isA<DioException>()));
+    });
+  });
+
+  group('RetroAchievementsService.fetchGameProgress edge cases', () {
+    test('an empty body is treated as bad credentials', () async {
+      dioAdapter.onGet(
+        '/API_GetGameInfoAndUserProgress.php',
+        (server) => server.reply(200, {}),
+        queryParameters: {'u': testUsername, 'y': testApiKey, 'g': 3},
+      );
+      expect(
+        () => service.fetchGameProgress(
+          const RetroAchievementsCredentials(username: testUsername, webApiKey: testApiKey), 3),
+        throwsA(isA<RetroAchievementsAuthException>()),
+      );
+    });
+
+    test('requires a Web API key', () async {
+      expect(
+        () => service.fetchGameProgress(const RetroAchievementsCredentials(username: testUsername, webApiKey: ''), 3),
+        throwsA(isA<RetroAchievementsAuthException>()),
+      );
+    });
+  });
+
+  test('RetroAchievementsCredentials.hasWebApiKey', () {
+    expect(const RetroAchievementsCredentials(username: 'u', webApiKey: '').hasWebApiKey, isFalse);
+    expect(const RetroAchievementsCredentials(username: 'u', webApiKey: 'k').hasWebApiKey, isTrue);
+  });
+
   test('RetroAchievementsEmulatorLogin.toRetroArchConfig enables cheevos with the token', () {
     final cfg = const RetroAchievementsEmulatorLogin(username: 'u', token: 't', hardcore: true).toRetroArchConfig();
     expect(cfg, contains('cheevos_enable = "true"'));

@@ -210,6 +210,7 @@ class GamepadUtils {
 - `multi_disc_filter_test.dart` — 13 tests: .m3u/.cue/.ccd/.mds/.toc filtering
 - `windows_game_lookup_test.dart` — 11 tests: folder-based platforms, exe detection, nested folders
 - `windows_save_filter_test.dart` — 10 tests: glob pattern matching, filter parsing
+- RetroAchievements (`test/unit/retroachievements_*_test.dart`, `romm_retroachievements_progression_test.dart`, `test/widgets/*achievements*_test.dart`): connect/disconnect rules (password → token, never stored; optional Web API key), RetroArch `--appendconfig` args, RA/RomM parsing, Settings form and game-page section. Shared fakes in `test/helpers/fake_retroachievements.dart` (`InMemoryAppPreferences`, `FakeRetroAchievementsService`, `useInMemorySecureStorage()`).
 
 ### Running Tests
 ```bash
