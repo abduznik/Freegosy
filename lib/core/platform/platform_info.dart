@@ -1,4 +1,5 @@
 import 'dart:io' as io;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Platform abstraction for testability.
 ///
@@ -14,6 +15,10 @@ class PlatformInfo {
   bool get isMacOS => os == 'macos';
   bool get isLinux => os == 'linux';
 
+  /// Running in a browser: there is no `dart:io` platform, file system or
+  /// emulator to launch.
+  bool get isWeb => os == 'web';
+
   /// Returns the platform-specific path separator.
   String get pathSeparator => isWindows ? '\\' : '/';
 
@@ -26,11 +31,14 @@ class PlatformInfo {
   /// Returns the AppData directory (Windows) or empty string.
   String get appData => environment['APPDATA'] ?? '';
 
-  /// Returns the current platform from dart:io.
-  static PlatformInfo get current => PlatformInfo(
+  /// Returns the current platform from dart:io, or [web] in a browser, where
+  /// `dart:io`'s Platform throws.
+  static PlatformInfo get current => kIsWeb ? web : PlatformInfo(
     io.Platform.operatingSystem,
     environment: Map<String, String>.from(io.Platform.environment),
   );
+
+  static const web = PlatformInfo('web');
 
   @override
   String toString() => 'PlatformInfo($os)';

@@ -46,7 +46,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
     
     // Global Keyboard Listener - Maps physical keys to Action Bus commands
     HardwareKeyboard.instance.addHandler((event) {
-      // F11 toggles fullscreen everywhere, even while typing (issue #74).
+      // F11 toggles fullscreen everywhere, even while typing.
       if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f11) {
         WindowService.toggleFullScreen();
         return true;

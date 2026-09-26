@@ -17,6 +17,7 @@ import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
 import '../../core/romm/rom_constants.dart';
+import '../../providers/platform_info_provider.dart';
 import '../../core/save/save_strategy.dart';
 import '../../core/save/strategies/eden_save_strategy.dart';
 import '../../core/save/strategies/ryujinx_save_strategy.dart';
@@ -41,7 +42,17 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   void refreshDownloadState(DirectoryService dirService, Game game);
   void refreshAllDownloadStates();
 
+  /// In a browser there's no disk to download to and no emulator to run:
+  /// say so instead of starting something that can only fail.
+  bool _showDesktopOnly(BuildContext context, WidgetRef ref, String action) {
+    if (!ref.read(platformInfoProvider).isWeb) return false;
+    ErrorHandler.showInfo(context, '$action needs the desktop app',
+        message: 'The browser version of Freegosy can browse your RomM library. Use the Windows, Linux or macOS app to download and play games.');
+    return true;
+  }
+
   void startDownload(BuildContext context, WidgetRef ref, Game game) {
+    if (_showDesktopOnly(context, ref, 'Downloading')) return;
     final service = ref.read(rommServiceProvider);
     if (service == null) {
       ErrorHandler.showInfo(context, 'Not Connected', message: 'Not connected to RomM');
@@ -238,6 +249,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   }
 
   Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game, {ResumeEntry? resume}) async {
+    if (_showDesktopOnly(context, ref, 'Playing')) return;
     debugPrint('[Launch] Starting launch for: ${game.name} (id: ${game.id})');
     debugPrint('[Launch] Platform: ${game.platformSlug}, hasMultipleFiles: ${game.hasMultipleFiles}, files: ${game.files.length}');
 

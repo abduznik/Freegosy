@@ -7,7 +7,7 @@ import 'package:freegosy/ui/widgets/cover_size_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  group('CoverSizeButton step mapping (issue #59)', () {
+  group('CoverSizeButton step mapping', () {
     test('slider runs small covers (many columns) to large covers (few columns)', () {
       expect(CoverSizeButton.columnCountFor(0), kMaxColumnCount);
       expect(CoverSizeButton.columnCountFor(kMaxColumnCount - kMinColumnCount), kMinColumnCount);

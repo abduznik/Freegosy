@@ -52,7 +52,7 @@ const int kMaxColumnCount = 12;
 final cardSpacingProvider = createPersistentProvider<double>('card_spacing', 12.0);
 final showTitleProvider = createPersistentProvider<bool>('show_title', true);
 final activePresetProvider = createPersistentProvider<String>('active_preset', 'windows_best');
-/// "Start in fullscreen" (issue #74); read directly from SharedPreferences
+/// "Start in fullscreen"; read directly from SharedPreferences
 /// in main() before the first frame, so the key lives in [WindowService].
 final launchFullscreenProvider = createPersistentProvider<bool>(WindowService.launchFullscreenPrefKey, false);
 final libraryHeaderTitleModeProvider = createPersistentProvider<String>('library_header_title_mode', 'daily');

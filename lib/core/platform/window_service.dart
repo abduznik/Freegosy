@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 import 'platform_info.dart';
 
-/// Desktop window control (issue #74): start in fullscreen and toggle it.
+/// Desktop window control: start in fullscreen and toggle it.
 ///
 /// Every call is a no-op off desktop and never throws — a window that can't
 /// go fullscreen (no plugin in tests, an odd compositor) must not stop the

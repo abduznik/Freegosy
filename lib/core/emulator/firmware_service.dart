@@ -74,7 +74,7 @@ class FirmwareService {
   ///
   /// With [installedEmulatorIds], every installed emulator that supports a
   /// platform gets that platform's firmware, not only the platform's default
-  /// emulator (issue #88): a game can be sent to a second emulator through
+  /// emulator: a game can be sent to a second emulator through
   /// the per-game launch picker, and that emulator needs its BIOS too.
   /// Without it, only the platform's default emulator is synced.
   Future<void> syncAllFirmware({FirmwareProgressCallback? onProgress, Set<String>? installedEmulatorIds}) async {

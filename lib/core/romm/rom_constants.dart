@@ -58,7 +58,7 @@ class RomConstants {
   };
 
   /// Platforms whose games are a folder of data files started as a whole
-  /// (ScummVM, issue #53): the game folder is launched as is, with no file
+  /// (ScummVM): the game folder is launched as is, with no file
   /// or disc picker.
   static const Set<String> folderGamePlatforms = {'scummvm'};
 

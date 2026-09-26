@@ -70,7 +70,7 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('syncAllFirmware() with installed emulators syncs every installed emulator for the platform (issue #88)', () async {
+    test('syncAllFirmware() with installed emulators syncs every installed emulator for the platform', () async {
       final tempDir = await Directory.systemTemp.createTemp('firmware_test_installed');
       final dirA = p.join(tempDir.path, 'A');
       final dirB = p.join(tempDir.path, 'B');

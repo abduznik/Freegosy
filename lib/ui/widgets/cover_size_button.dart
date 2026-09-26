@@ -5,7 +5,7 @@ import 'dialog_back_bridge.dart';
 import 'focus_effect_wrapper.dart';
 import 'gamepad_slider.dart';
 
-/// Library app-bar button that opens a cover-size slider (issue #59), so the
+/// Library app-bar button that opens a cover-size slider, so the
 /// grid can be resized without going through Settings → Display.
 ///
 /// The slider runs small → large covers, i.e. the inverse of the column

@@ -56,7 +56,7 @@ abstract class LinuxEnvironmentStrategy {
   ///
   /// `flatpak` is resolved to its absolute path (see
   /// [resolveFlatpakExecutable]) so the launch doesn't depend on the PATH
-  /// Freegosy inherited (issue #84).
+  /// Freegosy inherited.
   static (String, List<String>) splitCommand(String exePath) {
     if (exePath.startsWith('flatpak ')) {
       final parts = exePath.split(' ');
@@ -77,7 +77,7 @@ abstract class LinuxEnvironmentStrategy {
   /// inherited, which on some sessions (Steam Deck game mode, launched as an
   /// AppImage or from Steam) doesn't hold `/usr/bin`, so the launch failed
   /// with "ProcessException: No such file or directory" although `flatpak`
-  /// runs fine from a terminal (issue #84).
+  /// runs fine from a terminal.
   static String resolveFlatpakExecutable({String? pathEnv, bool Function(String path)? fileExists}) {
     final exists = fileExists ?? (String path) => io.File(path).existsSync();
     final path = pathEnv ?? PlatformInfo.current.environment['PATH'] ?? '';

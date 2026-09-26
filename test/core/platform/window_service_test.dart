@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/platform/window_service.dart';
 
 void main() {
-  group('WindowService.shouldStartFullscreen (issue #74)', () {
+  group('WindowService.shouldStartFullscreen', () {
     test('the --fullscreen flag wins over the setting', () {
       expect(WindowService.shouldStartFullscreen(['--fullscreen'], false), isTrue);
       expect(WindowService.shouldStartFullscreen(['--fullscreen'], null), isTrue);

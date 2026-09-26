@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'strategy_registry_test.mocks.dart';
 
 void main() {
-  group('ScummVMStrategy (issue #53)', () {
+  group('ScummVMStrategy', () {
     test('starts the game folder with --auto-detect --path, no bare path argument', () {
       // ScummVM rejects a bare folder argument as an unknown game target.
       expect(ScummVMStrategy.gameArgs('/games/Drascula The Vampire'),

@@ -6,7 +6,7 @@ import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
-/// ScummVM (issue #53). A ScummVM game is a folder of data files, not a ROM:
+/// ScummVM. A ScummVM game is a folder of data files, not a ROM:
 /// ScummVM is started with `--auto-detect --path=<game folder>`, which
 /// detects the game in that folder and starts it. ScummVM rejects a folder
 /// passed as a plain argument ("Unrecognized game"), so unlike other

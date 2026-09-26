@@ -131,7 +131,7 @@ class NativeLinuxStrategy extends LinuxEnvironmentStrategy {
       // doesn't include `flatpak`, causing a ProcessException even though
       // `flatpak` works fine from an interactive shell. splitCommand resolves
       // `flatpak` to its absolute path; if it couldn't be found, fall back to
-      // shell resolution — see issue #84.
+      // shell resolution.
       await io.Process.start(exe, [...cmdArgs, ...args, romPath], mode: io.ProcessStartMode.detached, runInShell: exe == 'flatpak');
     } else if (exePath.endsWith('.sh')) {
       await io.Process.start('bash', [exePath, ...args, romPath], mode: io.ProcessStartMode.detached);

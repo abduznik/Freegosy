@@ -156,7 +156,7 @@ void main() {
     });
   });
 
-  group('LinuxEnvironmentStrategy.resolveFlatpakExecutable (issue #84)', () {
+  group('LinuxEnvironmentStrategy.resolveFlatpakExecutable', () {
     test('finds flatpak in a PATH entry', () {
       final exe = LinuxEnvironmentStrategy.resolveFlatpakExecutable(
         pathEnv: '/opt/bin:/usr/bin',
