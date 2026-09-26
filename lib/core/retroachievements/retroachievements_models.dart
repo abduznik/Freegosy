@@ -53,6 +53,22 @@ class RetroAchievementsProfile {
   }
 }
 
+/// RetroAchievements state on the RomM side: whether the server can match
+/// ROMs to RA at all, and which RA username the RomM profile is linked to.
+class RommRetroAchievementsStatus {
+  /// Null when unknown (offline, no RomM configured, or an older server).
+  final bool? serverEnabled;
+  final int? rommUserId;
+  final String? linkedUsername;
+
+  const RommRetroAchievementsStatus({this.serverEnabled, this.rommUserId, this.linkedUsername});
+
+  bool isLinkedTo(String username) => linkedUsername?.toLowerCase() == username.toLowerCase();
+
+  /// Freegosy can offer to link [username] on the RomM profile.
+  bool canLink(String username) => serverEnabled == true && rommUserId != null && !isLinkedTo(username);
+}
+
 /// Thrown when the RetroAchievements API rejects a request, most commonly
 /// due to an invalid username/API key pair.
 class RetroAchievementsAuthException implements Exception {

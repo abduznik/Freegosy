@@ -439,7 +439,13 @@ class RommCapabilities {
   /// RomM 4.9+ real-time "active sessions" heartbeat (issue #93).
   bool get hasActivitySync => hasDeviceSaveSync;
 
-  RommCapabilities({required this.version})
+  /// Whether the server has a RetroAchievements API key configured
+  /// (`METADATA_SOURCES.RA_API_ENABLED`), which RomM needs to match ROMs to
+  /// RA games and sync users' progress. Null when unknown (offline, or a
+  /// server that doesn't report it).
+  final bool? retroAchievementsEnabled;
+
+  RommCapabilities({required this.version, this.retroAchievementsEnabled})
       : major = _parsePart(version, 0),
         minor = _parsePart(version, 1);
 
@@ -447,7 +453,8 @@ class RommCapabilities {
   RommCapabilities.unknown()
       : version = '0.0.0',
         major = 0,
-        minor = 0;
+        minor = 0,
+        retroAchievementsEnabled = null;
 
   static int _parsePart(String v, int index) {
     final parts = v.split(RegExp(r'[.\-]'));

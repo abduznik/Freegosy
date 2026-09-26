@@ -53,6 +53,38 @@ final rommRetroAchievementsProgressionProvider = FutureProvider.autoDispose<Map<
   return romm.getRetroAchievementsProgression();
 });
 
+/// Whether the RomM server has RetroAchievements enabled and which RA
+/// username the user's RomM profile is linked to.
+final rommRetroAchievementsStatusProvider = FutureProvider<RommRetroAchievementsStatus>((ref) async {
+  final romm = ref.watch(rommServiceProvider);
+  if (romm == null) return const RommRetroAchievementsStatus();
+  final caps = await ref.watch(rommCapabilitiesProvider.future);
+  if (caps.retroAchievementsEnabled != true) {
+    return RommRetroAchievementsStatus(serverEnabled: caps.retroAchievementsEnabled);
+  }
+  final link = await romm.getRetroAchievementsLink();
+  return RommRetroAchievementsStatus(serverEnabled: true, rommUserId: link?.id, linkedUsername: link?.raUsername);
+});
+
+/// Links [username] on the user's RomM profile and asks RomM to sync their
+/// progress. Returns whether the sync succeeded (the link itself throws on
+/// failure). Only call after the user agreed — it edits their RomM profile.
+final linkRommRetroAchievementsProvider = Provider<Future<bool> Function(String username)>((ref) {
+  return (username) async {
+    final romm = ref.read(rommServiceProvider);
+    final status = await ref.read(rommRetroAchievementsStatusProvider.future);
+    final userId = status.rommUserId;
+    if (romm == null || userId == null) {
+      throw StateError('Could not reach your RomM profile.');
+    }
+    await romm.setRetroAchievementsUsername(userId, username);
+    final synced = await romm.refreshRetroAchievements(userId);
+    ref.invalidate(rommRetroAchievementsStatusProvider);
+    ref.invalidate(rommRetroAchievementsProgressionProvider);
+    return synced;
+  };
+});
+
 /// The username/token emulators are signed in with, or null when the account
 /// was connected without a password (profile/progress only).
 final retroAchievementsEmulatorLoginProvider = FutureProvider<RetroAchievementsEmulatorLogin?>((ref) {

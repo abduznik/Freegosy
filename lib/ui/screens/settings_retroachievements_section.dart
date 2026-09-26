@@ -5,6 +5,7 @@ import '../../core/retroachievements/retroachievements_models.dart';
 import '../../providers/retroachievements_provider.dart';
 import '../widgets/dialog_back_bridge.dart';
 import '../widgets/focus_effect_wrapper.dart';
+import '../widgets/retroachievements_romm_link.dart';
 
 InputDecoration _buildInputDecoration(BuildContext context, String label, {String? hintText, String? helperText}) {
   final theme = Theme.of(context);
@@ -223,6 +224,7 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8), fontSize: 13),
               ),
               const SizedBox(height: 16),
+              if (credentials == null || _isEditing) const RetroAchievementsRommLink(),
               if (credentials != null && !_isEditing) ...[
                 _buildProfileDisplay(context, profileAsync, credentials),
                 const SizedBox(height: 16),
@@ -401,6 +403,7 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
             emulatorLogin != null ? 'RetroArch is signed in at launch.' : 'Emulators are not signed in — add your password to set them up.'),
         line(credentials.hasWebApiKey,
             credentials.hasWebApiKey ? 'Live progress from RetroAchievements.' : 'Progress comes from RomM only (if your server has RetroAchievements enabled).'),
+        RetroAchievementsRommLink(username: credentials.username),
         if (emulatorLogin != null)
           // Own Material so the tile's ink isn't hidden by the card's background.
           Material(
@@ -473,6 +476,8 @@ class _SettingsRetroAchievementsSectionState extends ConsumerState<SettingsRetro
         _isEditing = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connected to RetroAchievements!')));
+      // With permission, also link the account on the RomM profile.
+      await offerRommLink(context, ref, username);
     } on RetroAchievementsAuthException catch (e) {
       if (!mounted) return;
       setState(() {

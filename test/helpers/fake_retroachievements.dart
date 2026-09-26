@@ -1,7 +1,10 @@
+import 'package:dio/dio.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_game_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_models.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_service.dart';
+import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/romm/romm_service.dart';
 import 'package:freegosy/core/storage/app_preferences.dart';
 import 'package:freegosy/core/storage/secure_storage_service.dart';
 
@@ -69,4 +72,47 @@ class FakeRetroAchievementsService extends RetroAchievementsService {
     calls.add('progress:$gameId');
     return progress ?? RetroAchievementsGameProgress(gameId: gameId, title: '', consoleName: '', achievements: const []);
   }
+}
+
+/// RommService stand-in for the RetroAchievements link flow.
+class FakeRommRaService extends RommService {
+  final List<String> calls = [];
+  bool? raEnabled;
+  int? userId;
+  String? linkedUsername;
+  bool refreshSucceeds;
+  Object? setError;
+
+  FakeRommRaService({this.raEnabled = true, this.userId = 5, this.linkedUsername, this.refreshSucceeds = true})
+      : super(
+          RomMConfig(baseUrl: 'https://romm.test', username: '', password: '', apiKey: 'k'),
+          dio: Dio(),
+          skipConnectivityCheck: true,
+        );
+
+  @override
+  Future<RommCapabilities> fetchCapabilities() async =>
+      RommCapabilities(version: '4.9.0', retroAchievementsEnabled: raEnabled);
+
+  @override
+  Future<({int id, String? raUsername})?> getRetroAchievementsLink() async {
+    calls.add('me');
+    return userId == null ? null : (id: userId!, raUsername: linkedUsername);
+  }
+
+  @override
+  Future<void> setRetroAchievementsUsername(int userId, String raUsername) async {
+    calls.add('set:$userId:$raUsername');
+    if (setError != null) throw setError!;
+    linkedUsername = raUsername;
+  }
+
+  @override
+  Future<bool> refreshRetroAchievements(int userId) async {
+    calls.add('refresh:$userId');
+    return refreshSucceeds;
+  }
+
+  @override
+  Future<Map<int, Map<String, dynamic>>> getRetroAchievementsProgression() async => {};
 }

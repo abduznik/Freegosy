@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_emulator_login.dart';
 import 'package:freegosy/core/retroachievements/retroachievements_models.dart';
 import 'package:freegosy/providers/retroachievements_provider.dart';
+import 'package:freegosy/providers/romm_provider.dart';
 import 'package:freegosy/providers/shared_prefs_provider.dart';
 import 'package:freegosy/ui/screens/settings_retroachievements_section.dart';
 
@@ -23,11 +24,13 @@ void main() {
   });
   tearDown(resetSecureStorage);
 
-  Future<void> pumpSection(WidgetTester tester) async {
+  // No RomM connection unless a test provides one, so the RomM link UI stays hidden.
+  Future<void> pumpSection(WidgetTester tester, {FakeRommRaService? romm}) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         appPreferencesProvider.overrideWithValue(prefs),
         retroAchievementsServiceProvider.overrideWithValue(service),
+        rommServiceProvider.overrideWithValue(romm),
       ],
       child: const MaterialApp(
         home: Scaffold(body: SingleChildScrollView(child: SettingsRetroAchievementsSection())),
@@ -191,5 +194,94 @@ void main() {
     expect(find.text('Player'), findsOneWidget);
     expect(service.calls, isEmpty);
     expect(find.text('Progress comes from RomM only (if your server has RetroAchievements enabled).'), findsOneWidget);
+  });
+
+  group('RomM link', () {
+    final dialogLink = find.descendant(of: find.byType(AlertDialog), matching: find.widgetWithText(TextButton, 'Link'));
+
+    Future<void> connectWithPassword(WidgetTester tester) async {
+      await tester.enterText(field('Username'), 'Player');
+      await tester.enterText(field('Password (optional)'), 'pw');
+      await tapConnect(tester);
+    }
+
+    testWidgets('warns when the RomM server has RetroAchievements disabled', (tester) async {
+      await pumpSection(tester, romm: FakeRommRaService(raEnabled: false));
+      expect(find.textContaining('RomM server doesn\'t have RetroAchievements enabled'), findsOneWidget);
+      expect(find.textContaining('RETROACHIEVEMENTS_API_KEY'), findsOneWidget);
+    });
+
+    testWidgets('no warning when RomM\'s RA status is unknown', (tester) async {
+      await pumpSection(tester, romm: FakeRommRaService(raEnabled: null));
+      expect(find.textContaining('RetroAchievements enabled'), findsNothing);
+    });
+
+    testWidgets('after connecting, asks permission and links the RomM profile', (tester) async {
+      final romm = FakeRommRaService(linkedUsername: 'OldName');
+      await pumpSection(tester, romm: romm);
+      await connectWithPassword(tester);
+
+      expect(find.text('Link RomM profile?'), findsOneWidget);
+      expect(find.textContaining('(currently "OldName")'), findsOneWidget);
+      await tester.tap(dialogLink);
+      await tester.pumpAndSettle();
+
+      expect(romm.calls, containsAllInOrder(['set:5:Player', 'refresh:5']));
+      expect(find.text('Linked to RomM and synced your RetroAchievements progress.'), findsOneWidget);
+      expect(find.text('Linked to your RomM profile.'), findsOneWidget);
+    });
+
+    testWidgets('Not now leaves RomM untouched and offers a Link button', (tester) async {
+      final romm = FakeRommRaService();
+      await pumpSection(tester, romm: romm);
+      await connectWithPassword(tester);
+
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(romm.calls.where((c) => c.startsWith('set:')), isEmpty);
+      expect(find.text('Not linked to your RomM profile.'), findsOneWidget);
+
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Link'));
+      await tester.tap(find.widgetWithText(TextButton, 'Link'));
+      await tester.pumpAndSettle();
+      expect(find.text('Link RomM profile?'), findsOneWidget);
+    });
+
+    testWidgets('no prompt when the RomM profile is already linked', (tester) async {
+      final romm = FakeRommRaService(linkedUsername: 'player');
+      await pumpSection(tester, romm: romm);
+      await connectWithPassword(tester);
+
+      expect(find.text('Link RomM profile?'), findsNothing);
+      expect(find.text('Linked to your RomM profile.'), findsOneWidget);
+    });
+
+    testWidgets('no prompt when the RomM server has RA disabled', (tester) async {
+      await pumpSection(tester, romm: FakeRommRaService(raEnabled: false));
+      await connectWithPassword(tester);
+      expect(find.text('Link RomM profile?'), findsNothing);
+    });
+
+    testWidgets('a sync failure still reports the link', (tester) async {
+      final romm = FakeRommRaService(refreshSucceeds: false);
+      await pumpSection(tester, romm: romm);
+      await connectWithPassword(tester);
+      await tester.tap(dialogLink);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Linked to RomM. It will sync your progress on its next scheduled run.'), findsOneWidget);
+    });
+
+    testWidgets('a failed link is reported', (tester) async {
+      final romm = FakeRommRaService()..setError = Exception('403');
+      await pumpSection(tester, romm: romm);
+      await connectWithPassword(tester);
+      await tester.tap(dialogLink);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Could not link your RomM profile'), findsOneWidget);
+      expect(find.text('Not linked to your RomM profile.'), findsOneWidget);
+    });
   });
 }

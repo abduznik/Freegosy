@@ -122,6 +122,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions. Now a StatefulWidget for managing personal game properties (rating, status, completion).
 
 ### UI — Widgets
+- `lib/ui/widgets/retroachievements_romm_link.dart` — Settings row for the RomM side of RA: warns when the server has RA disabled (`RommCapabilities.retroAchievementsEnabled` from heartbeat `METADATA_SOURCES.RA_API_ENABLED`), and `offerRommLink()` asks permission to set `ra_username` on the RomM profile + trigger `/api/users/{id}/ra/refresh`.
 - `lib/ui/widgets/game_detail/game_achievements_section.dart` — Game detail Achievements section. Hidden unless `game.raId` is set; live unlocks via `retroAchievementsGameProgressProvider` with a Web API key, else RomM's synced `ra_progression` (`RommService.getRetroAchievementsProgression()`), else RomM's stored set without unlock state.
 - `lib/ui/widgets/game_card.dart` — Grid item for games.
 - `lib/ui/widgets/filter_bottom_sheet.dart` — Library filtering UI. Updated to use status lists.
