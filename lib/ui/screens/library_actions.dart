@@ -16,6 +16,7 @@ import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
+import '../../core/romm/rom_constants.dart';
 import '../../core/save/save_strategy.dart';
 import '../../core/save/strategies/eden_save_strategy.dart';
 import '../../core/save/strategies/ryujinx_save_strategy.dart';
@@ -343,7 +344,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // If romPath is a directory, scan for disc files and show picker if multiple found.
     // This handles cases where RomM doesn't set hasMultipleFiles correctly
     // (e.g. GameCube multidisc with .m3u).
-    if (!resumeUsesItsOwnRom && !game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
+    // Folder games (ScummVM) start from the whole folder: no picker.
+    final isFolderGame = RomConstants.isFolderGamePlatform(game.platformSlug);
+
+    if (!resumeUsesItsOwnRom && !isFolderGame && !game.hasMultipleFiles && await io.Directory(existingRomPath).exists()) {
       debugPrint('[Launch] romPath is a directory: $existingRomPath');
       final discFiles = await launchService.scanForDiscFiles(existingRomPath);
       debugPrint('[Launch] Scan complete: ${discFiles.length} disc files');
@@ -361,7 +365,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       }
     }
 
-    if (!resumeUsesItsOwnRom && game.hasMultipleFiles) {
+    if (!resumeUsesItsOwnRom && !isFolderGame && game.hasMultipleFiles) {
       debugPrint('[Launch] Multi-file game detected, fetching/filtering launchable files...');
       final result = await launchService.launchableFilesFor(game);
       final files = result.files;

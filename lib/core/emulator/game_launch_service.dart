@@ -155,6 +155,7 @@ class GameLaunchService {
     if (!await io.Directory(romPath).exists()) return romPath;
     final lowerPlatformSlug = (platformSlug ?? '').toLowerCase();
     if (['windows', 'pc', 'win'].contains(lowerPlatformSlug)) return romPath;
+    if (RomConstants.isFolderGamePlatform(lowerPlatformSlug)) return romPath;
 
     final knownExtensions = RomConstants.platformExtensions[lowerPlatformSlug] ?? [];
     final dir = io.Directory(romPath);

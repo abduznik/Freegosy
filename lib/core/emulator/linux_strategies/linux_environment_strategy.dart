@@ -40,6 +40,7 @@ const Map<String, String> kEmulatorFlatpakPackages = {
   'mame': 'org.mamedev.MAME',
   'xemu': 'app.xemu.xemu',
   'azahar': 'io.github.azahar-emu.azahar',
+  'scummvm': 'org.scummvm.ScummVM',
 };
 
 abstract class LinuxEnvironmentStrategy {
