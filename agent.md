@@ -100,6 +100,12 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Core — Error
 - `lib/core/error/error_handler.dart` — Centralized error handling and snackbar notifications.
 
+### Core — RetroAchievements
+- `lib/core/retroachievements/retroachievements_service.dart` — Read-only RA Web API client (`u`/`y` query auth). `fetchProfile()` (API_GetUserSummary), `fetchGameProgress(gameId)` (API_GetGameInfoAndUserProgress), `fetchConnectToken(user, password)` (Connect API `login2`, POST body). Freegosy never awards achievements — emulators do that via rcheevos.
+- `lib/core/retroachievements/retroachievements_models.dart` — Credentials (only username required; `hasWebApiKey`), profile, `RetroAchievementsAuthException`.
+- `lib/core/retroachievements/retroachievements_emulator_login.dart` — Storage keys + `RetroAchievementsEmulatorLogin` (username, Connect API token from `fetchConnectToken()`, hardcore). The RA password is exchanged once and never stored. `toRetroArchConfig()` feeds RetroArch's `--appendconfig`. Other emulators: override `EmulatorStrategy.supportsRetroAchievementsLogin` (scaffolded, RetroArch only today).
+- `lib/core/retroachievements/retroachievements_game_models.dart` — `RetroAchievement` (parses both RA Web API and RomM `merged_ra_metadata` shapes), `RetroAchievementsGameProgress`, `RetroAchievementsAward`. `Game.raId`/`Game.raAchievements` come from RomM's `ra_id`/`merged_ra_metadata`.
+
 ### Providers
 - `lib/providers/romm_provider.dart` — Riverpod providers for RomM services. Added downloadCacheServiceProvider.
 - `lib/providers/library_provider.dart` — Platform and display setting providers.
@@ -116,6 +122,8 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions. Now a StatefulWidget for managing personal game properties (rating, status, completion).
 
 ### UI — Widgets
+- `lib/ui/widgets/retroachievements_romm_link.dart` — Settings row for the RomM side of RA: warns when the server has RA disabled (`RommCapabilities.retroAchievementsEnabled` from heartbeat `METADATA_SOURCES.RA_API_ENABLED`), and `offerRommLink()` asks permission to set `ra_username` on the RomM profile + trigger `/api/users/{id}/ra/refresh`.
+- `lib/ui/widgets/game_detail/game_achievements_section.dart` — Game detail Achievements section. Hidden unless `game.raId` is set; live unlocks via `retroAchievementsGameProgressProvider` with a Web API key, else RomM's synced `ra_progression` (`RommService.getRetroAchievementsProgression()`), else RomM's stored set without unlock state.
 - `lib/ui/widgets/game_card.dart` — Grid item for games.
 - `lib/ui/widgets/filter_bottom_sheet.dart` — Library filtering UI. Updated to use status lists.
 - `lib/ui/widgets/platform_filter_bar.dart` — Horizontal platform selector.
@@ -203,6 +211,7 @@ class GamepadUtils {
 - `multi_disc_filter_test.dart` — 13 tests: .m3u/.cue/.ccd/.mds/.toc filtering
 - `windows_game_lookup_test.dart` — 11 tests: folder-based platforms, exe detection, nested folders
 - `windows_save_filter_test.dart` — 10 tests: glob pattern matching, filter parsing
+- RetroAchievements (`test/unit/retroachievements_*_test.dart`, `romm_retroachievements_progression_test.dart`, `test/widgets/*achievements*_test.dart`): connect/disconnect rules (password → token, never stored; optional Web API key), RetroArch `--appendconfig` args, RA/RomM parsing, Settings form and game-page section. Shared fakes in `test/helpers/fake_retroachievements.dart` (`InMemoryAppPreferences`, `FakeRetroAchievementsService`, `useInMemorySecureStorage()`).
 
 ### Running Tests
 ```bash

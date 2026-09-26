@@ -102,6 +102,17 @@ abstract class EmulatorStrategy {
     return process;
   }
 
+  /// Whether this strategy signs the emulator in to RetroAchievements at
+  /// launch using the login saved in Settings (see
+  /// `RetroAchievementsEmulatorLogin`). Only RetroArch does so far.
+  ///
+  /// Planned, each storing the same RA token in its own config:
+  /// DuckStation (settings.ini `[Cheevos]`), PCSX2 (PCSX2.ini `[Achievements]`),
+  /// PPSSPP (`[Achievements]` + token file), Dolphin (RetroAchievements.ini).
+  /// An implementation overrides this to true and applies the login from
+  /// its launch path, never failing the launch if it can't.
+  bool get supportsRetroAchievementsLogin => false;
+
   Future<void> preLaunch(Game game, String romPath) async {}
   Future<void> postLaunch(Game game, String romPath) async {}
 

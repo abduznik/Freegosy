@@ -9,7 +9,12 @@ class RetroAchievementsCredentials {
 
   const RetroAchievementsCredentials({required this.username, required this.webApiKey});
 
+  /// True when the Web API can't be called (both fields are required there).
   bool get isEmpty => username.isEmpty || webApiKey.isEmpty;
+
+  /// The Web API key is optional in Settings: without it Freegosy can still
+  /// sign emulators in and show progress RomM synced, just not live data.
+  bool get hasWebApiKey => webApiKey.isNotEmpty;
 }
 
 /// A user's profile summary, as returned by API_GetUserSummary.php.
@@ -46,6 +51,22 @@ class RetroAchievementsProfile {
       memberSince: DateTime.tryParse(json['MemberSince']?.toString() ?? ''),
     );
   }
+}
+
+/// RetroAchievements state on the RomM side: whether the server can match
+/// ROMs to RA at all, and which RA username the RomM profile is linked to.
+class RommRetroAchievementsStatus {
+  /// Null when unknown (offline, no RomM configured, or an older server).
+  final bool? serverEnabled;
+  final int? rommUserId;
+  final String? linkedUsername;
+
+  const RommRetroAchievementsStatus({this.serverEnabled, this.rommUserId, this.linkedUsername});
+
+  bool isLinkedTo(String username) => linkedUsername?.toLowerCase() == username.toLowerCase();
+
+  /// Freegosy can offer to link [username] on the RomM profile.
+  bool canLink(String username) => serverEnabled == true && rommUserId != null && !isLinkedTo(username);
 }
 
 /// Thrown when the RetroAchievements API rejects a request, most commonly
