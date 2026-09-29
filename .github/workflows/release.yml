@@ -28,7 +28,12 @@ jobs:
   build_linux:
     name: Build Linux
     if: ${{ inputs.build_linux }}
-    runs-on: ubuntu-latest
+    # Pinned to the oldest supported Ubuntu (not ubuntu-latest): the AppImage
+    # links against whatever glibc/libstdc++ the build image has, and it must
+    # run on older distros too. ubuntu-latest (24.04, glibc 2.39) produced
+    # binaries needing GLIBC_2.38/GLIBCXX_3.4.32, which don't exist on 22.04
+    # and broke AppImageHub's test runner (AppImage/appimage.github.io#7845).
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
