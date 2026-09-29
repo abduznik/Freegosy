@@ -80,7 +80,17 @@ jobs:
           
           # Mandatory files for AppImage
           cp AppDir/usr/share/applications/freegosy.desktop AppDir/
-          ln -s usr/bin/freegosy AppDir/AppRun
+          # A plain symlink to the runner isn't enough: Flutter plugins that
+          # load their native lib via bare-filename dlopen (e.g. zstandard's
+          # DynamicLibrary.open('libzstandard_linux.so')) rely on
+          # LD_LIBRARY_PATH, not the executable's own RPATH, so AppRun must
+          # export the bundle's lib/ dir before exec'ing the binary.
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "${0}")")"
+          export LD_LIBRARY_PATH="${HERE}/usr/bin/lib:${LD_LIBRARY_PATH}"
+          exec "${HERE}/usr/bin/freegosy" "$@"
+          EOF
           chmod +x AppDir/AppRun
 
           # Build AppImage
