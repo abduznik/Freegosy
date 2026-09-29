@@ -339,7 +339,7 @@ const List<RetroArchCore> kRetroArchCores = [
   RetroArchCore(
     id: 'picodrive_libretro',
     displayName: 'PicoDrive',
-    platforms: ['megadrive', 'genesis', 'md', 'sms', 'mastersystem'],
+    platforms: ['megadrive', 'genesis', 'md', 'sms', 'mastersystem', 'sega32'],
     category: CoreCategory.sega,
   ),
   RetroArchCore(
@@ -870,21 +870,9 @@ const List<RetroArchCore> kRetroArchCores = [
     category: CoreCategory.computer,
   ),
   RetroArchCore(
-    id: 'oricium_libretro',
-    displayName: 'Oricium',
-    platforms: ['oric'],
-    category: CoreCategory.computer,
-  ),
-  RetroArchCore(
     id: 'theodore_libretro',
     displayName: 'Théodore',
     platforms: ['mo5'],
-    category: CoreCategory.computer,
-  ),
-  RetroArchCore(
-    id: 'multicore_libretro',
-    displayName: 'MultiCore',
-    platforms: ['multi'],
     category: CoreCategory.computer,
   ),
   RetroArchCore(
@@ -899,12 +887,6 @@ const List<RetroArchCore> kRetroArchCores = [
     platforms: ['intellivision'],
     category: CoreCategory.computer,
     isRecommended: true,
-  ),
-  RetroArchCore(
-    id: 'jaguar_libretro',
-    displayName: 'ProSystem Jaguar',
-    platforms: ['jaguar'],
-    category: CoreCategory.computer,
   ),
   RetroArchCore(
     id: 'virtualjaguar_libretro',

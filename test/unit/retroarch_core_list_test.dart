@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/emulator/bios_registry.dart';
 import 'package:freegosy/core/emulator/retroarch_core_list.dart';
+import 'package:freegosy/core/emulator/retroarch_core_names.dart';
 
 void main() {
   group('RetroArchCoreList', () {
@@ -50,6 +51,21 @@ void main() {
         expect(namingPattern.hasMatch(core.id), isTrue,
             reason: 'Core ${core.id} does not follow naming convention');
       }
+    });
+
+    test('every core is a real libretro core', () {
+      // oricium, multicore and "ProSystem Jaguar" (jaguar_libretro) were
+      // listed but exist nowhere; jaguar_libretro was Jaguar's first core,
+      // so Jaguar games launched with a core RetroArch couldn't load.
+      // kRetroArchCoreLibraryNames holds every core whose libretro .info
+      // file names it. fbalpha and boom3_xp are on the buildbot without an
+      // .info file; anarch's .info has no corename.
+      const noLibraryName = {'fbalpha_libretro', 'boom3_xp_libretro', 'anarch_libretro'};
+      final unknown = [
+        for (final core in kRetroArchCores)
+          if (!kRetroArchCoreLibraryNames.containsKey(core.id) && !noLibraryName.contains(core.id)) core.id,
+      ];
+      expect(unknown, isEmpty);
     });
   });
 
@@ -103,6 +119,12 @@ void main() {
           expect(getDefaultCoreForSlug(slug), isNotNull, reason: slug);
         }
       }
+    });
+
+    test('Jaguar and 32X launch with a core RetroArch has', () {
+      expect(getDefaultCoreForSlug('jaguar'), 'virtualjaguar_libretro');
+      // "sega32" is RomM's slug for the 32X; PicoDrive runs it.
+      expect(getDefaultCoreForSlug('sega32'), 'picodrive_libretro');
     });
 
     test('a recommended core still wins over one listed before it', () {

@@ -100,6 +100,8 @@ void main() {
       'tg16': 'Beetle PCE',
       'turbografx-cd': 'Beetle PCE',
       'supergrafx': 'Beetle PCE',
+      'sega32': 'PicoDrive',
+      'jaguar': 'Virtual Jaguar',
     };
     for (final MapEntry(key: slug, value: folder) in expected.entries) {
       final g = game(slug, 'Some Game.bin');
