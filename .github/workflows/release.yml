@@ -260,6 +260,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -279,15 +280,25 @@ jobs:
           sed -i "s|hash = \".*\"|hash = \"${SRI}\"|" flake.nix
           sed -i "s|version = \".*\"|version = \"${VERSION}\"|" flake.nix
           cat flake.nix | grep -A2 "hash\|version"
-      - name: Commit updated flake.nix
+      - name: Open PR with updated flake.nix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if git diff --quiet -- flake.nix; then
+            exit 0
+          fi
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="chore/flake-hash-${VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- flake.nix; then
-            git add flake.nix
-            git commit -m "chore: update flake.nix hash for ${{ github.event.inputs.version }}"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
+          git checkout -b "$BRANCH"
+          git add flake.nix
+          git commit -m "chore: update flake.nix hash for ${VERSION}"
+          git push --force origin "$BRANCH"
+          gh pr create --base "${{ github.ref_name }}" --head "$BRANCH" \
+            --title "chore: update flake.nix hash for ${VERSION}" \
+            --body "Automated flake.nix hash/version bump from the release workflow." \
+            || gh pr view "$BRANCH" --json url -q .url
 
   release:
     name: Create Release
