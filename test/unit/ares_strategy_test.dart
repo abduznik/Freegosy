@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/emulator/strategies/ares_strategy.dart';
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
@@ -12,6 +13,7 @@ import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 class _MockDirectoryService extends DirectoryService {
   List<String>? lastArgs;
   String? lastExePath;
+  void Function()? onLaunch;
 
   _MockDirectoryService(super.prefs);
 
@@ -23,6 +25,7 @@ class _MockDirectoryService extends DirectoryService {
   @override
   Future<void> launchGame(Game game, String romPath, String emulatorId, String exePath,
       {List<String> args = const []}) async {
+    onLaunch?.call();
     lastArgs = args;
     lastExePath = exePath;
   }
@@ -30,6 +33,7 @@ class _MockDirectoryService extends DirectoryService {
   @override
   Future<Process?> launchGameWithHandle(Game game, String romPath, String emulatorId,
       String exePath, {List<String> args = const []}) async {
+    onLaunch?.call();
     lastArgs = args;
     lastExePath = exePath;
     return null;
@@ -163,6 +167,43 @@ void main() {
 
       expect(mockDir.lastExePath, '/fake/ares');
     });
+  });
+
+  /// With no saves path, ares keeps saves next to the ROMs. Freegosy sets
+  /// one before ares starts: ares reads its settings once, at start, and
+  /// writes them back later, so setting it during the pull is too late.
+  group('saves path is set before ares starts', () {
+    late Directory home;
+    late File settings;
+
+    setUp(() async {
+      home = await Directory.systemTemp.createTemp('ares_prelaunch_');
+      final dataDir = Directory(p.join(home.path, '.local', 'share', 'ares'))..createSync(recursive: true);
+      settings = File(p.join(dataDir.path, 'settings.bml'))..writeAsStringSync('Paths\n  Home\n  Saves\n');
+    });
+
+    tearDown(() => home.delete(recursive: true));
+
+    for (final withHandle in [false, true]) {
+      test(withHandle ? 'launchWithHandle' : 'launch', () async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+        final mockDir = _MockDirectoryService(prefs);
+        final strategy = AresStrategy(mockDir, platform: PlatformInfo('linux', environment: {'HOME': home.path}));
+        String? settingsAtLaunch;
+        mockDir.onLaunch = () => settingsAtLaunch = settings.readAsStringSync();
+
+        final game = _makeGame('Mario Kart 64 (U) [!].zip', 'n64');
+        if (withHandle) {
+          await strategy.launchWithHandle(game, '/roms/n64/Mario Kart 64 (U) [!].zip');
+        } else {
+          await strategy.launch(game, '/roms/n64/Mario Kart 64 (U) [!].zip');
+        }
+
+        final dataDir = p.join(home.path, '.local', 'share', 'ares').replaceAll(r'\', '/');
+        expect(settingsAtLaunch, 'Paths\n  Home\n  Saves: $dataDir/Saves/\n');
+      });
+    }
   });
 
   group('unsupported platform throws', () {

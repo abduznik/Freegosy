@@ -8,8 +8,9 @@ import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../storage/directory_service.dart';
-import '../ps1_memory_card.dart';
-import '../ps2_memory_card.dart';
+import '../formats/ps1_memory_card.dart';
+import '../formats/ps2_memory_card.dart';
+import '../formats/save_format_registry.dart';
 import '../save_state_info.dart';
 import '../save_strategy.dart';
 import '../state_sync_capable.dart';
@@ -1114,24 +1115,6 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
     return finalResult;
   }
 
-  /// Whether a downloaded [fileName] is a PS1 memory card for port 1 that the
-  /// core should open as the game's `<content>.srm`: every RetroArch PS1 core
-  /// keeps card 1 there by default, and a raw `.mcd` card is the same format.
-  /// Covers DuckStation's cards (`<name>_1.mcd`, shared `shared_card_1.mcd`,
-  /// `mcd1.mcd`), PCSX-ReARMed's `<serial>_1.mcd` / `pcsx-card1.mcd`, and a
-  /// `.mcd` with no port in its name. Cards for other ports keep their names.
-  @visibleForTesting
-  static bool isPs1Port1Card(String slug, String fileName, List<int> bytes) {
-    if (!_ps1Slugs.contains(slug)) return false;
-    final base = p.basename(fileName).toLowerCase();
-    if (!base.endsWith('.mcd')) return false;
-    if (!Ps1MemoryCard.looksLikeCard(bytes is Uint8List ? bytes : Uint8List.fromList(bytes))) return false;
-    final port = RegExp(r'(?:_|^mcd|card)(\d+)\.mcd$').firstMatch(base)?.group(1);
-    return port == null || int.parse(port) == 1;
-  }
-
-  static const _ps1Slugs = {'psx', 'ps1', 'playstation'};
-
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
@@ -1167,16 +1150,27 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
           final dir = io.Directory(fileTargetDir);
           if (!await dir.exists()) await dir.create(recursive: true);
 
-          String targetFilename = file.name;
+          final content = Uint8List.fromList(file.content as List<int>);
+          var outputs = [SaveBlob(file.name, content)];
           if (!isFileState && file.name.toLowerCase().endsWith('.sav')) {
-            targetFilename = '${p.basenameWithoutExtension(file.name)}.srm';
-          } else if (!isFileState && isPs1Port1Card(slug, file.name, file.content)) {
-            targetFilename = '${getRomStem(game)}.srm';
+            outputs = [SaveBlob('${p.basenameWithoutExtension(file.name)}.srm', content)];
+          } else if (!isFileState) {
+            // A save from another emulator in the bundle, e.g. a DuckStation
+            // PS1 card, in the format and under the name this core reads.
+            final conversion = convertSave(
+              platformSlug: slug,
+              files: [SaveBlob(p.basename(file.name), content)],
+              targetTag: coreIdFor(game) ?? '',
+              stem: getRomStem(game),
+            );
+            if (conversion is SaveConverted) outputs = conversion.files;
           }
 
-          final targetPath = p.normalize(p.join(fileTargetDir, targetFilename));
-          await backupSave(targetPath);
-          await io.File(targetPath).writeAsBytes(file.content);
+          for (final out in outputs) {
+            final targetPath = p.normalize(p.join(fileTargetDir, out.name));
+            await backupSave(targetPath);
+            await io.File(targetPath).writeAsBytes(out.bytes);
+          }
         }
         return true;
       }
@@ -1199,7 +1193,9 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
       final dir = io.Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      // Handle .sav to .srm renaming for RetroArch NDS cores
+      // Handle .sav to .srm renaming for RetroArch NDS cores. A save from
+      // another emulator (e.g. a DuckStation PS1 card) arrives already
+      // converted by SaveSyncService (save/formats).
       String targetFilename = filename;
       // RomM's web player names saves "<game> [timestamp].srm"; RetroArch only
       // opens "<rom>.srm", so a save it can't match by name is renamed to it.
@@ -1207,8 +1203,6 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
         targetFilename = '${p.basenameWithoutExtension(destPath)}.srm';
       } else if (!isState && filename.toLowerCase().endsWith('.sav')) {
         targetFilename = '${p.basenameWithoutExtension(filename)}.srm';
-      } else if (!isState && isPs1Port1Card(slug, filename, data)) {
-        targetFilename = '${getRomStem(game)}.srm';
       }
 
       final targetPath = p.normalize(p.join(targetDir, targetFilename));

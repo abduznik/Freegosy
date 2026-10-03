@@ -33,9 +33,15 @@ import '../../core/save/save_sync_service.dart';
 import '../../core/save/state_sync_service.dart';
 import '../../core/save/resume_service.dart';
 import '../../providers/resume_provider.dart';
+import '../../providers/save_catalog_provider.dart';
 import './library_dialog_service.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/state_version_dialog.dart';
+import '../../core/save/catalog/play_preparer.dart';
+import '../../core/save/catalog/save_entry.dart';
+import '../../core/save/catalog/save_maker.dart';
+import '../../core/save/catalog/play_request.dart';
+export '../../core/save/catalog/play_request.dart';
 
 mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   Map<String, bool> get downloadedStates;
@@ -248,25 +254,40 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
   }
 
-  Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game, {ResumeEntry? resume}) async {
-    if (_showDesktopOnly(context, ref, 'Playing')) return;
+  Future<bool> handleLaunch(BuildContext context, WidgetRef ref, Game game, {ResumeEntry? resume, PlayRequest? play}) async {
+    if (_showDesktopOnly(context, ref, 'Playing')) return false;
     debugPrint('[Launch] Starting launch for: ${game.name} (id: ${game.id})');
     debugPrint('[Launch] Platform: ${game.platformSlug}, hasMultipleFiles: ${game.hasMultipleFiles}, files: ${game.files.length}');
 
     final registryReady = await ref.read(strategyRegistryProvider.future);
-    if (!context.mounted || registryReady == null) return;
+    if (!context.mounted || registryReady == null) return false;
 
     EmulatorStrategy? strategy;
     String? overrideCoreId;
 
-    if (resume != null) {
+    if (play != null) {
+      // The play screen chose the emulator (and core): no picker. Like the
+      // picker, it becomes the game's emulator only when "Remember" is ticked.
+      strategy = registryReady.getStrategyById(play.emulator.emulatorId);
+      overrideCoreId = play.emulator.coreId == null ? null : '${play.emulator.coreId}_libretro';
+      if (strategy != null && play.remember) {
+        await registryReady.setGameEmulatorPreference(game.id, play.emulator.emulatorId);
+        if (overrideCoreId != null) await registryReady.setGameCorePreference(game.id, overrideCoreId);
+        ref.read(gamePreferenceVersionProvider.notifier).state++;
+      } else if (play.forget) {
+        // "Remember" turned off for the remembered emulator.
+        await registryReady.clearGameEmulatorPreference(game.id);
+        await registryReady.clearGameCorePreference(game.id);
+        ref.read(gamePreferenceVersionProvider.notifier).state++;
+      }
+    } else if (resume != null) {
       // Resume starts the emulator that owns the state: no picker, no preference.
       strategy = registryReady.getStrategyById(resume.emulatorId);
       debugPrint('[Resume] resume ${game.name}: ${resume.slot.label} ${resume.fileName} '
           '(emulator ${resume.emulatorId}, where ${resume.where.name})');
       if (strategy == null) {
         ErrorHandler.showInfo(context, 'Not Available', message: "${resume.emulatorName} isn't set up.");
-        return;
+        return false;
       }
     } else {
       // Check per-game emulator preference first
@@ -291,7 +312,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
             availableStrategies: allStrategies,
             registry: registryReady,
           );
-          if (choice == null) return; // cancelled
+          if (choice == null) return false; // cancelled
 
           strategy = registryReady.getStrategyById(choice.emulatorId);
           overrideCoreId = choice.coreId;
@@ -312,33 +333,33 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
     if (strategy == null) {
       ErrorHandler.showInfo(context, 'No Emulator', message: 'No emulator configured for ${game.platformDisplayName ?? game.platformSlug ?? 'this platform'}');
-      return;
+      return false;
     }
 
     final syncService = await ref.read(saveSyncServiceProvider.future);
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
 
     final dir = await ref.read(directoryServiceProvider.future);
     if (!context.mounted || dir == null) {
       ErrorHandler.showInfo(context, 'Not Available', message: 'Storage service not available');
-      return;
+      return false;
     }
 
     final launchService = await ref.read(gameLaunchServiceProvider.future);
     if (!context.mounted || launchService == null) {
       ErrorHandler.showInfo(context, 'Not Available', message: 'Launch service not available');
-      return;
+      return false;
     }
 
     final existingRomPath = await dir.findExistingRomPath(game);
     final expectedRomPath = await dir.getRomFilePath(game);
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
 
     if (existingRomPath == null) {
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
       final shouldDownload = await _showMissingRomDialog(context, game.name, expectedRomPath);
       if (context.mounted && shouldDownload == true) startDownload(context, ref, game);
-      return;
+      return false;
     }
 
     String romPath = existingRomPath;
@@ -366,12 +387,12 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       // Show picker if multiple launchable files found (including .m3u playlists)
       if (discFiles.length > 1) {
         debugPrint('[Launch] Multi-disc detected (${discFiles.length} files), showing picker');
-        if (!context.mounted) return;
+        if (!context.mounted) return false;
         String? selectedFilePath;
         await MultiDiscPicker.show(context, game: game, files: discFiles, onSelect: (file) {
           selectedFilePath = file['file_name']?.toString();
         });
-        if (selectedFilePath == null) return;
+        if (selectedFilePath == null) return false;
         romPath = p.join(existingRomPath, selectedFilePath);
         debugPrint('[Launch] Resolved romPath: $romPath');
       }
@@ -392,7 +413,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           debugPrint('[Launch] Automatic detection found file: $romPath. Skipping picker.');
         } else {
           debugPrint('[Launch] Showing multi-file picker with ${launchableFiles.length} files...');
-          if (!context.mounted) return;
+          if (!context.mounted) return false;
           String? selectedFilePath;
           await MultiDiscPicker.show(context, game: game, files: launchableFiles, onSelect: (file) {
             // Use file_name for the actual filename, not full_path which includes platform prefix
@@ -401,7 +422,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           });
           if (selectedFilePath == null) {
             debugPrint('[Launch] User cancelled file selection');
-            return;
+            return false;
           }
           
           // The selected file is relative to the game's directory (existingRomPath)
@@ -424,10 +445,10 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
 
     if (!await io.File(romPath).exists() && !await io.Directory(romPath).exists()) {
        if (context.mounted) ErrorHandler.showInfo(context, 'File Not Found', message: 'The ROM was not found at the expected location.');
-       return;
+       return false;
     }
 
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
 
     // Save states: pull before launch and AWAIT it (unlike the save pull below)
     // so a conflict dialog can still influence what the user is about to play.
@@ -440,13 +461,14 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     StateSyncResult? statePull;
     try {
       final stateSync = await ref.read(stateSyncServiceProvider.future);
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
       if (stateSync != null && stateSync.isAvailableFor(game, emulatorId: strategy.emulatorId)) {
         if (_rommOffline(ref)) {
           debugPrint('[StateSync] RomM is offline — skipping the pre-launch state pull');
         } else {
           ErrorHandler.showInfo(context, 'Syncing', message: 'Checking save states...');
-          final pull = await stateSync.pullStates(game, romPath, emulatorId: strategy.emulatorId, priority: resume?.fileName);
+          final pull = await stateSync.pullStates(game, romPath,
+              emulatorId: strategy.emulatorId, priority: resume?.fileName, coreOverride: overrideCoreId);
           statePull = pull;
           if (context.mounted) await _resolveStateConflicts(context, stateSync, pull.conflicts);
         }
@@ -457,24 +479,24 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     } catch (e) {
       debugPrint('[StateSync] Pre-launch pull failed: $e');
     }
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
 
     String? loadStatePath;
     String? staleResumeNotice;
     if (resume != null) {
       final resumeService = await ref.read(resumeServiceProvider.future);
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
       final check = resumeService == null
           ? const ResumeMissing()
           : await resumeService.checkBeforeLaunch(resume, game, romPath,
               pulled: statePull?.currentFiles,
               conflicted: statePull?.conflicts.map((c) => c.fileName).toSet());
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
       switch (check) {
         case ResumeMissing():
           ErrorHandler.showInfo(context, 'Resume failed',
               message: resumeMissingMessage(resume, serviceAvailable: resumeService != null));
-          return;
+          return false;
         case ResumeReady(:final path, :final stale, :final prompt):
           if (prompt != null) {
             final load = await showStateVersionDialog(context,
@@ -482,7 +504,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
                 emulatorName: resume.emulatorName,
                 stateVersion: prompt.stateVersion,
                 installed: prompt.installed);
-            if (!load || !context.mounted) return;
+            if (!load || !context.mounted) return false;
           }
           if (stale) {
             // A separate toast here would be cleared almost immediately by the
@@ -503,7 +525,40 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     // usually already on disk from the last session, and the pull cooldown
     // (60s) prevents redundant network requests on rapid re-launches.
     // The actual save sync happens post-exit in the unawaited block below.
-    if (syncService != null) {
+    final syncMode = ref.read(retroarchSyncModeProvider);
+    if (play != null && syncService != null) {
+      // The play screen's choice is put in place before launch, awaited; a
+      // failure stops the launch with the reason.
+      final preparer = PlayPreparer(
+        sync: syncService,
+        backups: ref.read(backupServiceProvider),
+        repository: ref.read(backupRepositoryProvider),
+      );
+      try {
+        if (play.save != null) {
+          if (context.mounted) ErrorHandler.showInfo(context, 'Preparing', message: 'Putting your save in place...');
+          await preparer.prepare(game, romPath, play.save!, target: play.emulator);
+        }
+      } on SaveChoiceException catch (e) {
+        if (context.mounted) ErrorHandler.showInfo(context, "Couldn't start with that save", message: e.message);
+        return false;
+      } catch (e) {
+        if (context.mounted) ErrorHandler.showException(context, e, contextLabel: 'Save not put in place');
+        return false;
+      }
+      if (!context.mounted) return false;
+      // Starting the save on this PC that RomM's save is a copy of: tell RomM
+      // this device has it, as a download would have.
+      if (play.rommCopy != null) await syncService.confirmRommCopy(play.rommCopy!);
+      if (!context.mounted) return false;
+      // A save just downloaded from RomM is what RomM has: unchanged at exit,
+      // it isn't uploaded again (an older one would become the newest).
+      if (play.save?.source == SaveSource.romm) {
+        await syncService.markSaveSynced(game, romPath,
+            emulatorId: strategy.emulatorId, syncMode: syncMode, coreOverride: overrideCoreId);
+        if (!context.mounted) return false;
+      }
+    } else if (syncService != null) {
       debugPrint('[SaveSync] Auto-pulling save before launch: game="${game.displayName}"');
       // Snapshot the current local save before overwriting it — the pull
       // path used to rely on Pcsx2SaveStrategy's per-file .bak rotation for
@@ -511,12 +566,18 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       // PCSX2 folder-type memcard made PCSX2 itself refuse to save (issue
       // discovered testing #98). This restores a safety net without
       // reintroducing files inside the emulator-managed folder.
-      final backupService = ref.read(backupServiceProvider);
+      // The snapshot is listed among the game's backups.
+      final preparer = PlayPreparer(
+        sync: syncService,
+        backups: ref.read(backupServiceProvider),
+        repository: ref.read(backupRepositoryProvider),
+      );
       final resolvedEmulatorId = strategy.emulatorId;
       final guard = SaveRestoreGuard();
       final pull = guard
-          .run(() => backupService
-              .createImmediate(game, romPath, syncService, emulatorId: resolvedEmulatorId)
+          .run(() => preparer
+              .backUp(game, romPath,
+                  SaveMaker(resolvedEmulatorId, coreId: resolvedEmulatorId == 'retroarch' ? bareCoreId(overrideCoreId) : null))
               .then((_) =>
                   syncService.pullSave(game, romPath, coreOverride: overrideCoreId, emulatorId: resolvedEmulatorId)))
           .catchError((Object e) {
@@ -529,6 +590,14 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         }
         return false;
       });
+      // A save the pull put in place is what RomM has (a pull that came too
+      // late writes nothing and reports false).
+      unawaited(pull.then((pulled) async {
+        if (pulled) {
+          await syncService.markSaveSynced(game, romPath,
+              emulatorId: resolvedEmulatorId, syncMode: syncMode, coreOverride: overrideCoreId);
+        }
+      }).catchError((Object e) => debugPrint('[SaveSync] not marked as synced: $e')));
       // A pull that rewrites a file other games' saves share (e.g. a
       // DuckStation card shared by all games) must land before the emulator
       // opens it; bounded so an unreachable RomM can't hold the launch. A
@@ -564,15 +633,16 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
 
     try {
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
       debugPrint('[Launch] Strategy: ${strategy.name}, ROM: $romPath');
       ErrorHandler.showInfo(context, 'Launching',
           message: staleResumeNotice ?? 'Launching ${game.name}...');
 
-      final session = await launchService.launch(game, romPath, strategy, overrideCoreId: overrideCoreId, loadStatePath: loadStatePath);
-      if (!context.mounted) return;
+      final session = await launchService.launch(game, romPath, strategy,
+          overrideCoreId: overrideCoreId, loadStatePath: loadStatePath);
+      // The emulator started.
+      if (!context.mounted) return true;
       if (session.process != null && syncService != null) {
-        final syncMode = ref.read(retroarchSyncModeProvider);
         unawaited(Future.delayed(Duration.zero, () async {
           try {
             debugPrint('[SaveSync] Auto-pushing saves after exit: game="${game.displayName}" syncMode=$syncMode');
@@ -585,13 +655,33 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
                 session, game, romPath,
                 syncMode: syncMode,
                 overrideCoreId: overrideCoreId,
-                onExited: () => ref.invalidate(resumeEntriesProvider),
+                onExited: () {
+                  ref.invalidate(resumeEntriesProvider);
+                  // Re-read at once: it waits for the save lock (the upload),
+                  // so an open list waits instead of showing the old saves.
+                  ref.invalidate(saveCatalogProvider(SaveCatalogKey(game)));
+                },
               );
             } finally {
               ref.invalidate(resumeEntriesProvider);
             }
+            // The save on this PC may have changed: lists of it are re-read.
+            if (context.mounted) ref.invalidate(saveCatalogProvider(SaveCatalogKey(game)));
             if (!context.mounted || result == null) return;
-            if (result.saveSyncBlocked != null) ErrorHandler.showInfo(context, 'Saves Not Synced', message: result.saveSyncBlocked!);
+            if (result.saveConflict != null) {
+              // RomM has a newer save from another device: ask which to keep.
+              try {
+                await _handleSyncError(context, result.saveConflict!, game, romPath, syncService, syncMode, push: true);
+              } catch (e) {
+                if (context.mounted) ErrorHandler.showException(context, e, contextLabel: 'Save conflict not resolved');
+              }
+              if (!context.mounted) return;
+              // The choice may have replaced this PC's save or RomM's.
+              ref.invalidate(saveCatalogProvider(SaveCatalogKey(game)));
+              ref.invalidate(resumeEntriesProvider);
+            }
+            else if (result.saveSyncBlocked != null) ErrorHandler.showInfo(context, 'Saves Not Synced', message: result.saveSyncBlocked!);
+            else if (result.saveUnchanged) ErrorHandler.showSuccess(context, 'Up to Date', message: 'Save unchanged — nothing uploaded');
             else if (result.syncOk) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves synced');
             else ErrorHandler.showSuccess(context, 'Up to Date', message: 'No files to upload');
             if (result.stateConflictCount > 0) {
@@ -606,25 +696,29 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           } catch (_) {}
         }));
       }
+      return true;
     } catch (e) {
       // Log unconditionally before the mounted check — otherwise a widget
       // unmounted by the time the exception surfaces (e.g. window/focus
       // lifecycle quirks on Steam Deck) silently drops the failure with no
       // toast and no debug log entry. See issue #84.
       debugPrint('[Launch] Launch failed: $e');
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
+      // Started after all only when a retry does.
+      var started = false;
       if (e is MissingRetroArchCoreException) {
         final shouldInstall = await _showMissingCoreDialog(context, e.coreName);
         if (shouldInstall == true && context.mounted) {
           showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
           try {
             await (strategy as RetroArchStrategy).downloadCore(e.coreName, File(e.corePath).parent.path, Dio());
-            if (context.mounted) { Navigator.pop(context); await handleLaunch(context, ref, game, resume: resume); }
+            if (context.mounted) { Navigator.pop(context); started = await handleLaunch(context, ref, game, resume: resume, play: play); }
           } catch (err) { if (context.mounted) { Navigator.pop(context); ErrorHandler.showException(context, err, contextLabel: 'Download Core Failed'); } }
         }
       } else if ((['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '')) && (e.toString().contains('No executable') || e.toString().contains('not found'))) {
         await handleWindowsConfig(context, ref, game, fromError: true);
       } else { ErrorHandler.showException(context, e, contextLabel: 'Launch Failed'); }
+      return started;
     }
   }
 
@@ -811,6 +905,38 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     }
   }
 
+  /// Puts [save] in place for [target] without launching (the Saves tab's
+  /// Restore to this PC). The current save is backed up first.
+  Future<void> handleRestoreSave(BuildContext context, WidgetRef ref, Game game, SaveEntry save, SaveMaker target) async {
+    final syncService = await ref.read(saveSyncServiceProvider.future);
+    final dir = await ref.read(directoryServiceProvider.future);
+    if (!context.mounted || syncService == null || dir == null) return;
+    // As push resolves it (Windows games: the install folder, not the zip).
+    final romPath = await dir.findExistingRomPath(game) ?? await dir.getRomFilePath(game);
+    final preparer = PlayPreparer(
+      sync: syncService,
+      backups: ref.read(backupServiceProvider),
+      repository: ref.read(backupRepositoryProvider),
+    );
+    try {
+      if (context.mounted) ErrorHandler.showInfo(context, 'Restoring', message: 'Putting ${save.fileName} in place...');
+      await preparer.prepare(game, romPath, save, target: target);
+      if (save.source == SaveSource.romm) {
+        await syncService.markSaveSynced(game, romPath,
+            emulatorId: target.emulatorId,
+            syncMode: ref.read(retroarchSyncModeProvider),
+            coreOverride: target.coreId == null ? null : '${target.coreId}_libretro');
+      }
+      if (context.mounted) ErrorHandler.showSuccess(context, 'Save Restored', message: '${save.fileName} is now on this PC.');
+    } on SaveChoiceException catch (e) {
+      if (context.mounted) ErrorHandler.showInfo(context, "Couldn't restore that save", message: e.message);
+    } catch (e) {
+      if (context.mounted) ErrorHandler.showException(context, e, contextLabel: 'Restore Save');
+    } finally {
+      ref.invalidate(saveCatalogProvider(SaveCatalogKey(game)));
+    }
+  }
+
   Future<void> handlePushSaves(BuildContext context, WidgetRef ref, Game game) async {
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (!context.mounted || syncService == null) { ErrorHandler.showInfo(context, 'Sync Unavailable', message: 'Save sync not available'); return; }
@@ -833,44 +959,6 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     } catch (e) { if (context.mounted) await _handleSyncError(context, e, game, romPath, syncService, syncMode, push: true); }
   }
 
-  Future<void> handlePullSaves(BuildContext context, WidgetRef ref, Game game) async {
-    final syncService = await ref.read(saveSyncServiceProvider.future);
-    if (!context.mounted || syncService == null) { ErrorHandler.showInfo(context, 'Sync Unavailable', message: 'Save sync not available'); return; }
-    final dir = ref.read(directoryServiceProvider).asData?.value;
-    //Changed : For Win Games, this used to return the game ZIP path. 
-    //Added a check for Win games to make sure it returns the current install folder.
-    final String romPath = dir != null ? (game.platformSlug != 'win' ? await dir.getRomFilePath(game) : await dir.findExistingRomPath(game) ?? '') : '';
-    if (!context.mounted) return;
-    debugPrint('[SaveSync] handlePullSaves: game="${game.displayName}" romPath=$romPath');
-    try {
-      ErrorHandler.showInfo(context, 'Syncing', message: 'Fetching cloud saves...');
-      final saves = await syncService.getSavesForGame(game.id);
-      if (!context.mounted) return;
-      if (saves.isEmpty) { ErrorHandler.showInfo(context, 'No Saves', message: 'No cloud saves found.'); return; }
-      final selectedSave = await LibraryDialogService.showSaveSelectionDialog(context, saves);
-      if (selectedSave == null || !context.mounted) return;
-      ErrorHandler.showInfo(context, 'Syncing', message: 'Downloading selected save...');
-      // Snapshot the current local save before overwriting it with the
-      // chosen cloud save, same as the auto-pull-before-launch path.
-      await ref.read(backupServiceProvider).createImmediate(game, romPath, syncService);
-      final ok = await syncService.pullSave(game, romPath, saveData: selectedSave);
-      if (context.mounted) {
-        if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
-        else {
-          ErrorHandler.showInfo(context, 'Retry Sync', message: 'Save unchanged. Retrying with force...');
-          await ref.read(sharedPreferencesProvider).remove('last_pull_${game.id}');
-          if (context.mounted) {
-            final retryOk = await syncService.pullSave(game, romPath, saveData: selectedSave);
-            if (context.mounted) {
-              if (retryOk) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
-              else ErrorHandler.showInfo(context, 'Sync Incomplete', message: 'Save applied but strategy failed.');
-            }
-          }
-        }
-      }
-    } catch (e) { if (context.mounted) await _handleSyncError(context, e, game, romPath, syncService, 'both', push: false); }
-  }
-
   Future<dynamic> _handleSyncError(BuildContext context, dynamic e, Game game, String romPath, SaveSyncService syncService, String syncMode, {required bool push}) async {
     if (e is SaveSyncNotPossibleException) {
       ErrorHandler.showInfo(context, 'Saves Not Synced', message: e.message);
@@ -879,13 +967,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       final selectedFolder = await LibraryDialogService.showFolderMappingDialog(context, strategy);
       if (selectedFolder != null) {
         await syncService.saveMappedFolder(game.id, selectedFolder);
-        if (context.mounted) return push ? handlePushSaves(context, ref, game) : handlePullSaves(context, ref, game);
+        if (push && context.mounted) return handlePushSaves(context, ref, game);
       }
     } else if (e is ProfileConflictException) {
       final selectedProfile = await LibraryDialogService.showProfileConflictDialog(context, e.profiles);
       if (selectedProfile != null) {
         await syncService.saveActiveProfile(selectedProfile);
-        if (context.mounted) return push ? handlePushSaves(context, ref, game) : handlePullSaves(context, ref, game);
+        if (push && context.mounted) return handlePushSaves(context, ref, game);
       }
     } else if (e is SaveConflictException) {
       final choice = await LibraryDialogService.showSaveConflictDialog(context, e);

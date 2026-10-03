@@ -71,12 +71,21 @@ class LaunchResult {
   /// (see [SaveSyncNotPossibleException]), or null.
   final String? saveSyncBlocked;
 
+  /// The save is the one RomM has, so nothing was uploaded.
+  final bool saveUnchanged;
+
+  /// RomM refused the upload: it has a newer save (from another device)
+  /// than the one this session started from. Nothing was uploaded.
+  final SaveConflictException? saveConflict;
+
   const LaunchResult({
     required this.syncOk,
     this.saveSyncBlocked,
     this.backupZipPath,
     this.playSessionRecorded = false,
     this.stateConflictCount = 0,
+    this.saveUnchanged = false,
+    this.saveConflict,
   });
 }
 
@@ -283,7 +292,7 @@ class GameLaunchService {
   /// is logged and counted as no conflicts.
   @visibleForTesting
   Future<int> pushStatesAfterExit(
-      GameSession session, Game game, String romPath) async {
+      GameSession session, Game game, String romPath, {String? coreOverride}) async {
     if (stateSyncService == null) {
       debugPrint('[StateSync] post-exit push skipped: state sync service not available');
     } else {
@@ -296,6 +305,7 @@ class GameLaunchService {
         romPath,
         sessionStart: session.sessionStart,
         emulatorId: session.emulatorId,
+        coreOverride: coreOverride,
       );
       return result?.conflicts.length ?? 0;
     } catch (e) {
@@ -335,31 +345,67 @@ class GameLaunchService {
     if (activityTracker != null) await activityTracker.stop();
 
     var syncOk = false;
+    var saveUnchanged = false;
     String? saveSyncBlocked;
+    SaveConflictException? saveConflict;
     try {
-      syncOk = await saveSyncService.pushSaves(
-        game,
-        romPath,
-        sessionStart: session.sessionStart,
-        syncMode: syncMode,
-        coreOverride: overrideCoreId,
-        emulatorId: session.emulatorId,
-      );
+      // One hold of the save lock for the check, the upload and the mark, so
+      // nothing reads the save in between (e.g. the Saves tab seeing it
+      // uploaded but not yet marked as RomM's).
+      await saveSyncService.exclusive(() async {
+        // A save RomM already has (pulled or chosen before the game started,
+        // and not changed since) is not uploaded again: an older RomM save
+        // played without saving must not become the newest.
+        if (await saveSyncService.saveIsSynced(game, romPath,
+            emulatorId: session.emulatorId, syncMode: syncMode, coreOverride: overrideCoreId)) {
+          dev.log('${game.displayName}: the save is the one RomM has — not uploading');
+          saveUnchanged = true;
+          syncOk = true;
+        } else {
+          syncOk = await saveSyncService.pushSaves(
+            game,
+            romPath,
+            sessionStart: session.sessionStart,
+            syncMode: syncMode,
+            coreOverride: overrideCoreId,
+            emulatorId: session.emulatorId,
+          );
+          if (syncOk) {
+            await saveSyncService.markSaveSynced(game, romPath,
+                emulatorId: session.emulatorId, syncMode: syncMode, coreOverride: overrideCoreId);
+          }
+        }
+      }, doing: "Syncing ${game.displayName}'s save");
     } on SaveSyncNotPossibleException catch (e) {
       saveSyncBlocked = e.message;
+    } on SaveConflictException catch (e) {
+      // Reported, not thrown: the backup and state sync below still run.
+      saveConflict = e;
     }
 
     // Save states sync separately from game saves; see [pushStatesAfterExit].
-    final stateConflictCount = await pushStatesAfterExit(session, game, romPath);
+    final stateConflictCount = await pushStatesAfterExit(session, game, romPath, coreOverride: overrideCoreId);
 
     String? backupZipPath;
     try {
-      final postBackup = await backupService.createImmediate(game, romPath, saveSyncService, emulatorId: session.emulatorId);
-      if (postBackup != null) {
-        await backupRepository.addEntry(
-          game.id,
-          BackupEntry(timestamp: DateTime.now(), md5Hash: postBackup.md5, localZipPath: postBackup.zipPath),
-        );
+      final postBackup = await backupService.createImmediate(game, romPath, saveSyncService,
+          emulatorId: session.emulatorId, coreOverride: overrideCoreId);
+      // A session that left the save as it was adds no backup.
+      if (postBackup != null &&
+          await backupRepository.addUnlessSameAsNewest(
+            game.id,
+            BackupEntry(
+                timestamp: DateTime.now(),
+                md5Hash: postBackup.md5,
+                localZipPath: postBackup.zipPath,
+                emulatorId: session.emulatorId,
+                coreId: postBackup.coreId,
+                // RomM answered the push (took it, has it, refused it as
+                // older, or it can't be synced): not for the offline queue,
+                // which uploads without asking and would put a save RomM
+                // refused over the newer one.
+                isSynced: syncOk || saveConflict != null || saveSyncBlocked != null),
+          )) {
         backupZipPath = postBackup.zipPath;
       }
     } catch (e) {
@@ -393,6 +439,8 @@ class GameLaunchService {
       backupZipPath: backupZipPath,
       playSessionRecorded: playSessionRecorded,
       stateConflictCount: stateConflictCount,
+      saveUnchanged: saveUnchanged,
+      saveConflict: saveConflict,
     );
   }
 }

@@ -14,7 +14,7 @@ recommendations**. Findings are marked **verified** (checked against real
 files or by hand) or **from source** (read in the emulator's code).
 
 Platforms covered so far: [PlayStation (PS1)](#playstation-ps1),
-[PlayStation 2 (PS2)](#playstation-2-ps2).
+[PlayStation 2 (PS2)](#playstation-2-ps2), [Nintendo 64](#nintendo-64).
 
 ## How Freegosy moves a game save
 
@@ -28,10 +28,72 @@ For reference when reading the matrices:
   emulator (e.g. `pcsx2`, `duckstation`), in the `freegosy` slot.
 - **Download**: Freegosy takes RomM's **newest save for the game, whoever
   uploaded it** (`RommService.getLatestSave`; neither the tag nor the slot is
-  checked), and hands it to the strategy of the emulator on this
-  machine (`restoreSave`), which decides where, and under what name, it goes.
+  checked). A save RetroArch compressed (RZIP, "SaveRAM compression") is
+  unpacked, and so is one about to be uploaded. The save is then converted
+  to the format the emulator on this machine reads, when it's in another
+  emulator's format (`lib/core/save/formats/`, `convertSave`: source by the
+  save's RomM tag, else by its files; target by this machine's tag), and
+  handed to that emulator's strategy (`restoreSave`), which decides where it
+  goes.
 - So for a save to cross emulators, the **receiving** strategy must recognise
   the uploaded file (name and format) and write it where its emulator reads it.
+- **Choosing a save** (the play screen and the game page's Saves tab): every
+  save is listed, from this PC (each installed emulator's own, and backups)
+  and RomM (live, nothing downloaded). For the emulator picked, each is
+  marked by `fitFor` (`lib/core/save/catalog/`): its own, converted (its
+  RomM tag, or by content, maps to another format of the same system), unknown
+  maker (restored as it is), or unusable (another core's local save, another
+  emulator's backup, no format to convert into). The chosen save is put in
+  place before the game starts (`PlayPreparer`: the current save is backed up
+  first; a failure stops the launch), and after play the save is uploaded
+  unless it is still the content RomM has (`markSaveSynced` / `saveIsSynced`).
+  Replacing a save on this PC that RomM doesn't have (never uploaded, e.g.
+  played offline) always asks first (`PlayPrompt.notOnRomm`), whatever the
+  times. A save on a memory card shared by every game (PCSX2, DuckStation,
+  RetroArch's PS1/PS2 cores) is dated by the card, which any game changes:
+  with a usable RomM save, it counts with its RomM copy's time, or not at all
+  when RomM has no copy (`SaveEntry.sharedFile`). With RetroArch sorting saves
+  by core, each core's own save for the game is a row of its own. The Saves
+  tab restores into the game's emulator when the save fits it, else into the
+  emulator that made it.
+- **Same save or changed?** RomM keeps a `content_hash` for every save
+  (`backend/handler/filesystem/assets_handler.py`): the md5 of a plain file;
+  for a zip, the md5 of its files' sorted `<name>:<md5>` lines (folders
+  skipped). Freegosy computes the same hash for the save on this PC
+  (`lib/core/save/romm_content_hash.dart`, `SaveSyncService.rommHashOfLocal`:
+  the files a push would upload, RZIP unpacked, a folder or several files as
+  the zip a push builds). A push skips an upload whose hash is the last
+  upload's; a pull downloads nothing when RomM's newest save has the hash of
+  the save on this PC; the play screen marks such a RomM save "on this PC"
+  and doesn't preselect it over the local one. Bundle zips carry no time in
+  `freegosy_sync.txt` (only `contentHash`, and `savePath` for Windows games),
+  so an unchanged save keeps its hash. Without a `content_hash` (older RomM,
+  or zips RomM hashed before its fix), Freegosy falls back to its own
+  fingerprint of the save it last synced.
+- **Same name, two emulators**: RetroArch tags a save with its bare core
+  name, which for `mgba`, `melonds`, `pcsx2`, `ppsspp`, `azahar`, `flycast`
+  and `mame` is also a standalone emulator's id. RomM can't tell which made
+  it, so such a RomM save fits both (`fitFor`).
+- **Raw systems** (`lib/core/save/formats/raw_save_systems.dart`): emulators
+  whose saves are the same bytes, named differently (`.sav`, `.srm`); each
+  save strategy already names a save the way its emulator reads it, so the
+  save is used as it is (`SaveAsIs`). One line per system:
+  - NDS: melonDS ↔ RetroArch's melonDS and melonDS DS cores.
+
+  Add a line only after loading a real save from each emulator in the other.
+  Not verified yet: mGBA ↔ gambatte/SameBoy (GB/GBC, RTC data differs),
+  mGBA ↔ VBA-Next/gpSP (GBA, save sizes differ), ares ↔ RetroArch for NES and
+  SNES (ares names saves by memory type: `.ram`, `.eeprom`, …).
+- **One save operation at a time** (`lib/core/save/strategy_lock.dart`): the
+  save strategies are shared by every game and hold one game's setup (the
+  RetroArch core, Eden's folder), so push, pull, restore, the backups and the
+  save list run under one lock (`SaveSyncService.withStrategy`).
+- **Backups** record the emulator and, for RetroArch, the core whose folder
+  they copied, and go back only there; older RetroArch backups without a
+  core go back into RetroArch with any core. A backup of a shared memory card
+  puts back only this game's saves (`SaveStrategy.restoreBackup`). A session
+  that left the save as it was adds no backup (same content hash of the files
+  as the newest backup, file times ignored); 8 are kept per game.
 
 ## PlayStation (PS1)
 
@@ -108,6 +170,7 @@ The other rows follow from the formats and the clients' code.
 | RetroArch (`.srm`) → DuckStation | ✅ verified | A 128 KB `.srm` with the `MC` header is taken as the port-1 card. |
 | RetroArch ↔ RetroArch, RetroArch ↔ Argosy | ✅ | The same `<content>.srm` everywhere. |
 | Argosy → DuckStation | ✅ | As RetroArch → DuckStation. |
+| Chosen on the play screen: RetroArch card → DuckStation, or DuckStation card → RetroArch | ✅ | Shown as converted (`ps1.retroarch_srm` ↔ `ps1.mcd`): the same 128 KB card, under the name each one reads (`<stem>_1.mcd` for DuckStation, port 1). |
 | Older `.mcd` uploads (DuckStation before the `.srm` name, or other clients' `<serial>_1.mcd`) → RetroArch (Freegosy) | ✅ | The RetroArch strategy restores a port-1 PS1 card (`.mcd`, 128 KB, `MC` header) as the game's `<content>.srm`. A card for another port keeps its name, which the core doesn't open by default. An old whole shared card (`shared_card_1.mcd`) lands with every game's saves on it; the game only sees its own. |
 | A RetroArch core set to serial / shared / Mednafen cards → anywhere | ⚠️ | The RetroArch strategy only finds `<content>.srm`-style files, so those cards are never uploaded. |
 
@@ -120,8 +183,8 @@ The other rows follow from the formats and the clients' code.
 2. **Done: RetroArch restores a PS1 `.mcd` as `<content>.srm`**, when it is a
    128 KB `MC` card for port 1 (`_1.mcd`, `mcd1` / `card1`, `shared_card_1`,
    or no port in the name), alone or in a zip
-   (`RetroArchSaveStrategy.isPs1Port1Card`). This covers `.mcd` saves already
-   on RomM and other clients' serial/title cards.
+   (`lib/core/save/formats/ps1_card_formats.dart`). This covers `.mcd` saves
+   already on RomM and other clients' serial/title cards.
 3. **Done (RetroArch, every platform): a stricter save match** (#116). A save
    belongs to the game when it is the ROM name followed by an extension, or
    else has the same title (every word, numbers included; case, punctuation,
@@ -298,3 +361,47 @@ another one.
 - [rommapp/argosy-launcher](https://github.com/rommapp/argosy-launcher):
   `PlatformSaveHandlerRegistry.kt` (`Ps2FolderHandler`),
   `SavePathRegistry.kt`.
+
+## Nintendo 64
+
+### Format
+
+**From source.** RetroArch's N64 cores (Mupen64Plus-Next, ParaLLEl N64,
+Mupen64Plus) keep one `<content>.srm` of 0x48800 bytes
+(`save_memory_data` in `libretro/libretro_memory.h`): EEPROM (0x800),
+four controller paks (4 × 0x8000), SRAM (0x8000), FlashRAM (0x20000).
+SRAM and FlashRAM are stored as host-order 32-bit words
+(`mem[addr ^ S8]`), so byte-reversed per word on a PC; EEPROM and paks are
+in the N64's order. Unused parts are 0xFF, unused paks formatted
+(`format_mempak`). ParaLLEl appends a 64DD disk area for 64DD games.
+
+ares keeps one file per part the game uses, `<rom>.eeprom` (512 or 2048
+bytes), `.ram`, `.flash`, big-endian (`ares/n64/memory/msb/writable.hpp`);
+controller paks are separate files Freegosy doesn't sync.
+
+### Interop matrix
+
+| Made in → played in | Result | Why |
+|---|---|---|
+| RetroArch core ↔ RetroArch core, RomM's player, Argosy's RetroArch | ✅ | The same `.srm`. |
+| RetroArch ↔ ares (Freegosy) | ❌ | Not converted: Freegosy's save formats cover raw saves and memory cards only. A save from the other emulator is shown as one that can't be used. |
+| Project64, Mupen64Plus FZ (Android) → anywhere | ❌ | Their files aren't decoded. |
+
+N64 saves move only between RetroArch's N64 cores (one format). Freegosy
+converted between RetroArch and ares for a while; that code is on the
+`feat/n64-save-conversion` branch of the fork, with the format notes above.
+
+### Sources
+
+- [libretro/mupen64plus-libretro-nx](https://github.com/libretro/mupen64plus-libretro-nx)
+  (4bc73fb): `libretro/libretro_memory.h`, `libretro/libretro.c`
+  (`format_saved_memory`), `mupen64plus-core/src/device/cart/{sram,flashram,eeprom}.c`,
+  `device/controllers/paks/mempak.c`.
+- [libretro/parallel-n64](https://github.com/libretro/parallel-n64) (0bd516e):
+  `libretro/libretro_memory.h`, `libretro/libretro.c` (`retro_get_memory_size`).
+- [ares-emulator/ares](https://github.com/ares-emulator/ares) (4cb8d92):
+  `ares/n64/cartridge/cartridge.cpp`, `ares/n64/memory/msb/writable.hpp`,
+  `mia/medium/nintendo-64.cpp`.
+- [libretro/RetroArch](https://github.com/libretro/RetroArch) (b6f4143):
+  `save.c` (`content_load_ram_file`: a shorter `.srm` is copied over the
+  core's formatted memory).

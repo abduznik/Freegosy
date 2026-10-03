@@ -299,7 +299,7 @@ void main() {
   test('a strategy resolver that throws never makes a push throw', () async {
     await env.writeState(stateFileA, stateBytes(1));
     final broken = StateSyncService(env.api, env.pcsx2.prefs,
-        (game, {emulatorId}) => throw StateError('no strategy'));
+        (game, {emulatorId, coreOverride}) => throw StateError('no strategy'));
 
     final result = await broken.pushStates(env.game, env.romPath);
 

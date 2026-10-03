@@ -84,7 +84,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           else if (ModalRoute.of(context)?.isCurrent ?? true) _openFilterSheet(context, ref);
           break;
         case GameAction.favorite:
-          _scrollToTopAndFocusSearch();
+          // Not while another page (the game page, whose Y resumes) is on
+          // top: focus would land in the hidden library.
+          if (ModalRoute.of(context)?.isCurrent ?? true) _scrollToTopAndFocusSearch();
           break;
         case GameAction.back:
           if (_isFilterSheetOpen) {
@@ -163,14 +165,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           rommBaseUrl: baseUrl,
           isDownloaded: isDownloaded,
           rommService: ref.read(rommServiceProvider),
-          onLaunch: () => handleLaunch(context, ref, game),
+          onPlay: (request) => handleLaunch(context, ref, game, play: request),
           onResume: (entry) => handleLaunch(context, ref, game, resume: entry),
           onDownload: (freshGame) async => startDownload(context, ref, freshGame),
           onPushSaves: () => handlePushSaves(context, ref, game),
-          onPullSaves: () => handlePullSaves(context, ref, game),
           onSyncStates: () => handleSyncStates(context, ref, game),
           onDelete: () => handleDeleteRom(context, ref, game),
           onConfigure: () => handleWindowsConfig(context, ref, game),
+          onRestoreSave: (save, target) => handleRestoreSave(context, ref, game, save, target),
         ),
       ),
     );

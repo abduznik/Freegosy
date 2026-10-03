@@ -1,11 +1,10 @@
 import 'dart:io' as io;
 import 'dart:isolate';
 import 'package:flutter/foundation.dart';
-import 'package:zstandard/zstandard.dart';
+import '../formats/zstd.dart';
 import '../rgba_png.dart';
 
-/// Decompresses one complete zstd frame; null when it can't.
-typedef ZstdDecompressor = Future<Uint8List?> Function(Uint8List compressed);
+export '../formats/zstd.dart' show ZstdDecompressor;
 
 /// Reads what a DuckStation `.sav` state records about itself.
 ///
@@ -87,7 +86,7 @@ class DuckstationStateFile {
       final stored = await raf.read(size);
       if (stored.length != size) return null;
       final pixels = compression == _zstd
-          ? await (zstd ?? _zstandard)(stored)
+          ? await (zstd ?? zstandardDecompress)(stored)
           : stored;
       if (pixels == null || pixels.length != width * height * 4) return null;
       return await Isolate.run(() => encodeRgbaPng(width, height, pixels));
@@ -98,7 +97,4 @@ class DuckstationStateFile {
       await raf?.close();
     }
   }
-
-  static Future<Uint8List?> _zstandard(Uint8List compressed) =>
-      Zstandard().decompress(compressed);
 }

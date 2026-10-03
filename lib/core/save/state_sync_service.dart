@@ -10,7 +10,13 @@ import 'state_sync_capable.dart';
 import 'state_sync_record.dart';
 
 typedef SaveStrategyResolver = SaveStrategy? Function(Game game,
-    {String? emulatorId});
+    {String? emulatorId, String? coreOverride});
+
+/// Runs a body with no other save operation in between (SaveSyncService's
+/// save lock): the strategies are shared by every game.
+typedef StrategyExclusive = Future<T> Function<T>(Future<T> Function() body);
+
+Future<T> _runDirectly<T>(Future<T> Function() body) => body();
 
 /// A state file that changed both locally and on RomM since the last sync (or
 /// that exists on both sides without ever having been synced) and now needs
@@ -138,9 +144,13 @@ class StateSyncService {
   static const Duration defaultListTimeout = Duration(seconds: 20);
 
   StateSyncService(this._api, this._prefs, this._resolveStrategy,
-      {Duration listTimeout = defaultListTimeout})
+      {Duration listTimeout = defaultListTimeout, StrategyExclusive? exclusive})
       : _records = StateRecordStore(_prefs),
-        _listTimeout = listTimeout;
+        _listTimeout = listTimeout,
+        _exclusive = exclusive ?? _runDirectly;
+
+  /// Pull, push and conflict resolution run through it (see StrategyExclusive).
+  final StrategyExclusive _exclusive;
 
   bool isEnabledFor(String emulatorId) =>
       _prefs.getBool(enabledKey(emulatorId)) ?? false;
@@ -172,9 +182,9 @@ class StateSyncService {
 
   /// Null when state sync cannot run for this game (not capable, turned off,
   /// game not identified, state folder unresolved). Never throws.
-  Future<_Ctx?> _context(Game game, String romPath, String? emulatorId) async {
+  Future<_Ctx?> _context(Game game, String romPath, String? emulatorId, {String? coreOverride}) async {
     try {
-      final strategy = _resolveStrategy(game, emulatorId: emulatorId);
+      final strategy = _resolveStrategy(game, emulatorId: emulatorId, coreOverride: coreOverride);
       if (strategy is! StateSyncCapable) {
         debugPrint('[StateSync] ${game.name}: ${_unsupportedReason(emulatorId, strategy)}');
         return null;
@@ -219,13 +229,18 @@ class StateSyncService {
   /// of that slot must not wait behind, or be stopped by, another slot's
   /// download).
   Future<StateSyncResult> pullStates(Game game, String romPath,
-      {String? emulatorId, String? priority}) async {
+          {String? emulatorId, String? priority, String? coreOverride}) =>
+      _exclusive(() => _pullStatesUnlocked(game, romPath,
+          emulatorId: emulatorId, priority: priority, coreOverride: coreOverride));
+
+  Future<StateSyncResult> _pullStatesUnlocked(Game game, String romPath,
+      {String? emulatorId, String? priority, String? coreOverride}) async {
     if (!_busyGames.add(game.id)) {
       debugPrint('[StateSync] ${game.id} is busy — skipping pull');
       return StateSyncResult.busyGame;
     }
     try {
-      final ctx = await _context(game, romPath, emulatorId);
+      final ctx = await _context(game, romPath, emulatorId, coreOverride: coreOverride);
       if (ctx == null) return StateSyncResult.unavailable;
 
       debugPrint('[StateSync] pull ${game.name} (rom ${game.id}, emulator '
@@ -388,13 +403,18 @@ class StateSyncService {
   /// for a busy game (see [_busyGames]) does nothing and returns
   /// [StateSyncResult.busyGame].
   Future<StateSyncResult> pushStates(Game game, String romPath,
-      {DateTime? sessionStart, String? emulatorId}) async {
+          {DateTime? sessionStart, String? emulatorId, String? coreOverride}) =>
+      _exclusive(() => _pushStatesUnlocked(game, romPath,
+          sessionStart: sessionStart, emulatorId: emulatorId, coreOverride: coreOverride));
+
+  Future<StateSyncResult> _pushStatesUnlocked(Game game, String romPath,
+      {DateTime? sessionStart, String? emulatorId, String? coreOverride}) async {
     if (!_busyGames.add(game.id)) {
       debugPrint('[StateSync] ${game.id} is busy — skipping push');
       return StateSyncResult.busyGame;
     }
     try {
-      final ctx = await _context(game, romPath, emulatorId);
+      final ctx = await _context(game, romPath, emulatorId, coreOverride: coreOverride);
       if (ctx == null) return StateSyncResult.unavailable;
 
       var uploaded = 0;
@@ -534,7 +554,10 @@ class StateSyncService {
   /// server copy (backing the local one up first). Either way the record is
   /// re-baselined so the conflict flag clears. Returns false on any failure,
   /// and when the game is busy (see [_busyGames]).
-  Future<bool> resolveConflict(StateConflict conflict,
+  Future<bool> resolveConflict(StateConflict conflict, {required String choice}) =>
+      _exclusive(() => _resolveConflictUnlocked(conflict, choice: choice));
+
+  Future<bool> _resolveConflictUnlocked(StateConflict conflict,
       {required String choice}) async {
     final gameId = conflict.game.id;
     if (!_busyGames.add(gameId)) {

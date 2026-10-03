@@ -458,6 +458,38 @@ void main() {
     });
   });
 
+  test('a local backup of a folder memcard goes back onto the card', () async {
+    final base = await Directory.systemTemp.createTemp('pcsx2_folder_backup');
+    try {
+      final exeDir = p.join(base.path, 'pcsx2');
+      final folderCard = Directory(p.join(exeDir, 'memcards', 'Mcd001.ps2'));
+      final matching = Directory(p.join(folderCard.path, 'BASLUS-20152AC04'));
+      await matching.create(recursive: true);
+      await File(p.join(matching.path, 'save.bin')).writeAsBytes(List.filled(150, 1));
+      final fakeExe = p.join(exeDir, 'pcsx2-qt.exe');
+      await File(fakeExe).writeAsString('');
+      final strategy = Pcsx2SaveStrategy(await _StubDirectoryService.create(exePath: fakeExe), await _testPrefs(),
+          platform: const PlatformInfo('windows', environment: {}));
+      final game = Game(id: 'g7', name: 'Game (SLUS-20152)', platformSlug: 'ps2', fileSize: 0);
+      final romPath = p.join(base.path, 'Game (SLUS-20152).iso');
+
+      // Zipped as BackupService does it.
+      final files = await strategy.getSaveFiles(game, romPath);
+      final zipPath = p.join(base.path, 'backup.zip');
+      final encoder = ZipFileEncoder()..create(zipPath);
+      await encoder.addDirectory(Directory(files.single.path), includeDirName: true);
+      encoder.close();
+      await File(p.join(matching.path, 'save.bin')).writeAsBytes(List.filled(150, 9));
+
+      expect(await strategy.restoreBackup(game, romPath, await File(zipPath).readAsBytes(), 'backup.zip'), isTrue);
+      expect(await File(p.join(matching.path, 'save.bin')).readAsBytes(), List.filled(150, 1));
+      expect(Directory(p.join(exeDir, 'memcards', 'BASLUS-20152AC04')).existsSync(), isFalse,
+          reason: 'not beside the card');
+    } finally {
+      await base.delete(recursive: true);
+    }
+  });
+
   group('Pcsx2SaveStrategy restoreSave zip entry-shape handling', () {
     Future<Uint8List> buildZip(Map<String, List<int>> entries) async {
       final archive = Archive();

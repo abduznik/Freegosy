@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/save/strategies/ares_save_strategy.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/emulator/platform_slugs.dart';
 
@@ -128,6 +129,13 @@ class AresStrategy extends EmulatorStrategy {
     await process?.exitCode;
     await postLaunch(game, romPath);
     return process;
+  }
+
+  /// Gives ares a saves folder before it starts, when it has none, so it
+  /// keeps saves there and not next to the ROMs (see AresSaveStrategy).
+  @override
+  Future<void> preLaunch(Game game, String romPath) async {
+    await AresSaveStrategy(_directoryService, platform: platform).ensureSavesPath();
   }
 
   @override

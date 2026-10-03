@@ -88,10 +88,9 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
     final isFocused = showEffect;
     final borderColor = isFocused
         ? (Theme.of(context).brightness == Brightness.light
-            ? Colors.black.withValues(alpha: 0.8)
-            : Colors.white.withValues(alpha: 0.8))
+            ? Colors.black.withValues(alpha: 0.9)
+            : Colors.white.withValues(alpha: 0.9))
         : Colors.transparent;
-    final borderWidth = isFocused ? 2.5 : 0.0;
 
     return Focus(
       autofocus: widget.autofocus,
@@ -138,9 +137,12 @@ class _FocusEffectWrapperState extends ConsumerState<FocusEffectWrapper> {
           behavior: HitTestBehavior.opaque,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 100),
-            decoration: BoxDecoration(
+            // Painted over the child, inside its edges: a border in the
+            // decoration would take up room and make the item (and all
+            // around it) jump when focus arrives.
+            foregroundDecoration: BoxDecoration(
               borderRadius: widget.borderRadiusGeometry ?? BorderRadius.circular(widget.borderRadius),
-              border: Border.all(color: borderColor, width: borderWidth),
+              border: Border.all(color: borderColor, width: 2.5),
             ),
             child: widget.child,
           ),

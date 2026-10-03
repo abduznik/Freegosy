@@ -6,7 +6,7 @@
 Freegosy is a cross-platform Flutter app for browsing a RomM library, downloading ROMs via HTTP, and launching emulators. Built with Riverpod for state management.
 
 ## Rules (MANDATORY)
-- No file exceeds 600 lines. If adding code would exceed this, split the file first and update this map.
+- Aim for files under 600 lines. When a file is over it, or a change would push it over, first look for parts that can move out to a helper file (a self-contained class, a parser, a group of pure functions, a dialog or sub-widget) and move them when the result is clearer. If the file is one cohesive unit (e.g. a data table) and splitting would only scatter it, keep it as is. Update this map when you create or split a file.
 - All RomM API calls go through `romm_service.dart` only. Never call the API directly from UI or providers.
 - All emulator logic goes through the strategy pattern. Never hardcode emulator behavior in UI.
 - New emulator = new file in `core/emulator/strategies/`, register in `strategy_registry.dart` only.
@@ -24,11 +24,24 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Entry Points
 - `lib/main.dart` — App entry point. Initializes Riverpod ProviderScope. Calls app.dart.
 - `lib/app.dart` — MaterialApp setup, theme, initial route, navigation shell.
+- `lib/main_cli.dart` — Headless mode: `lib/main.dart` hands `--headless` to it. Runs the Flutter engine without a window and reuses the GUI's stored credentials (`lib/core/cli/cli_config.dart`).
+
+### Core — Constants, CLI, Disc
+- `lib/core/constants/app_constants.dart` — app version from pubspec via package_info_plus.
+- `lib/core/constants/gaming_quotes.dart` — quotes for loading screens.
+- `lib/core/cli/cli_config.dart` — builds `RomMConfig` for the headless CLI from prefs + secure storage.
+- `lib/core/disc/serial_extraction_service.dart` — disc serial (e.g. `SLUS-12345`) from a ROM path; uses `chdman` for CHD.
 
 ### Core — RomM
 - `lib/core/romm/romm_service.dart` — All RomM HTTP calls (Dio). Methods: getPlatforms(), getGames(), getAllGames(), getGamesPage(offset, limit, platformId, search), getSaves(), uploadSave(), getLatestSave(), downloadSave(), pruneOldSaves(), getRecentlyPlayed(), getRandomGame(), updateRomProps(), refreshToken(), fetchToken(). Includes silent re-authentication interceptor. Upload uses slot `'freegosy'` (not timestamped), `autocleanup: true`, `autocleanupLimit: 5`, `overwrite: 'force'`.
 - `lib/core/romm/romm_models.dart` — Data models: Game, Platform (with fsSlug, displayName, gamesCount and flexible parsing), SaveFile, RomMConfig.
 - `lib/core/romm/rom_constants.dart` — Platform slug-to-extension mappings. Windows/PC/Win slugs have empty extension lists (folder-based platforms). PSX/PS2 include `.chd`.
+
+Also in `lib/core/romm/`:
+- `romm_state.dart` — save states on RomM (`/api/states`), `RommStatesApi`. Freegosy never makes them public.
+- `activity_session_tracker.dart` — heartbeats for RomM's "active sessions" board while a game runs.
+- `rom_scanner_service.dart` — incremental scan of the ROM directory; drops stale mappings.
+- `library_snapshot_service.dart` — cached library snapshot.
 
 ### Core — Save Sync
 - `lib/core/save/save_strategy.dart` — Abstract base class SaveStrategy. Methods: getSaveDir(), getSaveFiles(), restoreSave(). Helpers: backupSave() keeps max 3 clean versions (.bak, .bak1, .bak2), getRomStem().
@@ -52,13 +65,29 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/save/strategies/ppsspp_save_strategy.dart` — PPSSPP save strategy (PSP).
 - `lib/core/save/strategies/cemu_save_strategy.dart` — Cemu save strategy (Wii U).
 
+Also in `lib/core/save/`:
+- `save_content_hash.dart` — Freegosy's own content fingerprint of a save's files, and the file digests of a bundle as a push zips it.
+- `romm_content_hash.dart` — RomM's save `content_hash`, computed locally (md5 of a file; for a zip, of its sorted `name:md5` lines).
+- `strategy_lock.dart` — one save operation at a time (`SaveSyncService.withStrategy`); the strategies are shared by every game.
+- `state_sync_service.dart` — syncs save states with RomM; `StateConflict` when both sides changed. Opt in per strategy via `state_sync_capable.dart`; metadata in `state_sync_record.dart`.
+- `resume_service.dart` — the list of states a game can resume from (local and RomM).
+- `save_state_info.dart` — state slot kinds (auto / numbered / unknown).
+- `rgba_png.dart` — raw RGBA → PNG for state screenshots.
+- `strategies/ryujinx_save_strategy.dart` — Ryujinx (Switch) saves by title ID.
+- `strategies/duckstation_config.dart`, `duckstation_state_file.dart`, `pcsx2_state_file.dart` — read emulator settings and state headers.
+- `strategies/ps2_save_folders.dart` — PS2 saves as save folders on RomM (shared with PCSX2 folder cards and Argosy).
+- `formats/` — converting saves between emulators: `save_format.dart` (`SaveBlob`, `SaveFormat`, `SaveSystem`), `save_format_registry.dart` (entry point), PS1 (`ps1_memory_card.dart`, `ps1_card_formats.dart`), PS2 (`ps2_memory_card.dart`), RetroArch RZIP (`rzip.dart`), `zstd.dart`, `raw_save_systems.dart` (one-line systems whose emulators keep the same save bytes).
+- `catalog/` — every save of a game for the play screen and Saves tab:
+  - `save_catalog.dart` + `save_catalog_sources.dart` — gathers this PC, backups and RomM.
+  - `save_entry.dart` (one save row + its source), `save_maker.dart` (emulator/core that made it), `save_fit.dart` (fits as-is / needs conversion / no).
+  - `play_view.dart` (rows for one emulator choice), `play_choice.dart` (default pick: newest save or newer state), `play_request.dart`, `play_preparer.dart` (backs up the current save, then puts the chosen one in place).
+
 ### Core — Emulator
 - `lib/core/emulator/emulator_strategy.dart` — Abstract base class for launch logic. Has `launchWithHandle()` returning `Process?`. `preLaunch()`/`postLaunch()` hooks.
 - `lib/core/emulator/emulator_registry_data.dart` — Static definitions for emulator downloads and filters.
 - `lib/core/emulator/strategy_registry.dart` — Registry for emulator strategies with conflict detection. OS-based strategy filtering. `detectConflicts()` returns merged slugs for dedup groups. Canonical slug: shortest without hyphens. Per-game emulator/core preference (`setGameEmulatorPreference`/`getGameEmulatorPreference`/`clearGameEmulatorPreference`). Per-platform core override (`setCoreOverride`/`getCoreOverride`/`clearCoreOverride`). Strategy resolution order: per-game > per-platform > fallback.
 - `lib/core/emulator/retroarch_core_list.dart` — 197 libretro cores with searchable platform browser. Per-platform default core selection. Categories: recommended/official/alternative/community.
 - `lib/core/emulator/emulator_download_service.dart` — Downloads emulators from direct URLs or GitHub.
-- `lib/core/emulator/github_release_service.dart` — Resolves latest GitHub release assets.
 - `lib/core/emulator/strategies/` — Specific implementations for each emulator (RetroArch, Dolphin, Eden, Ryujinx, RPCS3, PCSX2, Azahar, Cemu, DuckStation, Flycast, melonDS, PPSSPP, mGBA, MAME, Xemu, Xenia, ScummVM, Windows, Ares).
 - `lib/core/emulator/strategies/ares_strategy.dart` — Ares emulator strategy. 30 platform slugs mapped to system names (`kAresSystemNames`). Build CLI args `['--system', systemName]` only (no `--fullscreen`/`--no-file-prompt`). Launch throws for unsupported platforms.
 - `lib/core/emulator/strategies/scummvm_strategy.dart` — ScummVM strategy. Games are folders: launched with `--auto-detect --path=<game folder>` and NO trailing ROM path (ScummVM rejects it), so it starts the process itself instead of going through `DirectoryService.launchGame`. Also finds distro installs (`/usr/bin`, `/usr/games`) on Linux. `scummvm` is in `RomConstants.folderGamePlatforms` (no file/disc picker).
@@ -69,6 +98,16 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
   - `retrodeck_strategy.dart` — RetroDECK Flatpak resolution.
   - `native_linux_strategy.dart` — Default Linux directory structure.
   - `linux_native_game_service.dart` — Proton/Steam prefix path resolution for native PC games on Linux.
+
+Also in `lib/core/emulator/`:
+- `bios_registry.dart` — per-emulator BIOS requirements (libretro docs), with optional MD5s.
+- `firmware_service.dart` — checks local BIOS files against the registry.
+- `game_launch_service.dart` — ROM resolution (asks to pick when ambiguous), `GameSession`, `LaunchResult`.
+- `custom_emulator_config.dart` + `strategies/custom_emulator_strategy.dart` — user-defined emulators (shell command split respecting quotes).
+- `platform_slugs.dart` — RomM/IGDB slug aliases for systems Freegosy already emulates under another slug.
+- `retroarch_core_names.dart` — each core's `library_name` (save/state folder names when RetroArch sorts by core).
+- `pe_version_reader.dart` — reads a Windows exe's file version (no native code); used for state-version checks.
+- `strategies/*_strategy.dart` — one per emulator. Strategies that can load a state at boot (RetroArch `-e`, DuckStation/PCSX2 `-statefile`) and write RA logins (Dolphin, PPSSPP) hold that logic in their own file.
 
 ### Core — Extraction
 - `lib/core/extraction/extraction_service.dart` — Unified extraction for .zip, .7z, .dmg, .tar.gz, .tar.xz, and .exe. Sanitizes macOS .app bundles. ROM name sanitization includes `!` in regex.
@@ -84,6 +123,10 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/input/custom_controller_mappings.dart` — Persistence for custom controller mappings via SharedPreferences.
 - `lib/core/input/deadzone_config.dart` — Configurable deadzone (0-50%) with per-controller overrides. `applyDeadzone()` rescales `[deadzone, 1.0]` to `[0.0, 1.0]`. DirectInput axes normalized from 0-65535 to -1.0..1.0.
 
+Also in `lib/core/input/`:
+- `input_action_bus.dart` — global broadcast stream of high-level controller/keyboard actions; screens listen to it.
+- `global_actions.dart` — app-wide action handling; counts screens that claim LB/RB (see `ui/widgets/shoulder_owner.dart`).
+
 ### Core — Platform
 - `lib/core/platform/platform_info.dart` — PlatformInfo abstraction for cross-platform testability. Accepts platform name and optional environment map. Used instead of `dart:io Platform` in all services.
 - `lib/core/platform/window_service.dart` — Desktop window control via `window_manager`: `init(fullscreen:)` from main(), `toggleFullScreen()` (F11 in app.dart), `--fullscreen` flag, `launch_fullscreen` pref. No-op off desktop, never throws.
@@ -92,6 +135,13 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/storage/directory_service.dart` — Manages paths. Linux Sync Presets (Default/EmuDeck) and EmuDeck root path management. Emulator path overrides via `setEmulatorPathOverride()`/`getEmulatorPathOverride()`. ROM name sanitization includes `!` in regex.
 - `lib/core/storage/download_cache_service.dart` — Manages and persists a set of downloaded filenames mapped by platform slug. Uses SharedPreferences.
 - `lib/core/storage/rom_lookup_service.dart` — ROM file lookup by name. `findMainRomInFolder()` returns folder path for folder-based platforms (`windows`/`pc`/`win`/`ps3`/`switch`). Fuzzy matching with token-based scoring. `resolveFuzzyRomFile()` for path override resolution.
+
+Also in `lib/core/storage/`:
+- `app_preferences.dart` + `shared_preferences_app_preferences.dart` — prefs interface used by core services (in-memory fake in tests).
+- `app_path_resolver.dart` + `flutter_app_path_resolver.dart` / `cli_app_path_resolver.dart` — app dirs for GUI and CLI (same paths).
+- `secure_storage_service.dart` — keyring with SharedPreferences fallback (Linux/Steam Deck).
+- `rom_mapping_service.dart`, `file_system_index.dart`, `file_sanity_service.dart` — game → local path mappings and their checks.
+- `metadata_cache_service.dart`, `logger_service.dart`, `system_utils.dart` (open folders), `safe_fs.dart` (exists-or-null), `ini_file.dart` (edits only the lines asked for).
 
 ### Core — Windows
 - `lib/core/windows/windows_game_service.dart` — Native execution helper. `findExecutable()` searches `.exe`/`.bat`/`.cmd`. Skips `__MACOSX`/`_CommonRedist`/`._` prefixed files. Token-based fuzzy hint matching. `shouldSkipExe()` filters vcredist, setup, uninstall, etc.
@@ -112,6 +162,10 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/providers/paginated_games_provider.dart` — Server-side pagination. Added recentlyPlayedProvider and statuses support in ActiveFilters.
 - `lib/providers/download_provider.dart` — Active download state tracking.
 
+Also in `lib/providers/`:
+- `save_catalog_provider.dart` — `SaveCatalogKey`; invalidated when the play screen or Saves tab opens.
+- `resume_provider.dart`, `retroachievements_provider.dart`, `custom_emulators_provider.dart`, `downloaded_games_cache_provider.dart`, `shared_prefs_provider.dart` (overridden in `ProviderScope`), `platform_info_provider.dart` (override in tests), `theme_provider.dart`, `ui_provider.dart` (`InputMode`).
+
 ### UI — Screens
 - `lib/ui/screens/library_screen.dart` — Main library grid. Includes "Continue Playing" section. Uses LibraryActionsMixin.
 - `lib/ui/screens/library_actions.dart` — LibraryActionsMixin containing shared operation logic (download, launch, sync, delete). Integrated with ErrorHandler and MultiDiscPicker. Save pull is non-blocking (`unawaited`). 60s pull cooldown prevents redundant network requests.
@@ -119,7 +173,14 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/screens/settings_emulators_section.dart` — Emulator management UI. Per-game toggle. Emulator status refreshes on screen open.
 - `lib/ui/screens/settings_controller_section.dart` — Controller/gamepad settings UI.
 - `lib/ui/screens/settings_deadzone_section.dart` — Analog deadzone configuration UI.
-- `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions. Now a StatefulWidget for managing personal game properties (rating, status, completion).
+- `lib/ui/screens/game_detail_screen.dart` — The game page, after RomM's: banner, cover, ▶ Play (opens the play screen), ⋯ menu, your status/rating/completion, and tabs Overview, Saves, Achievements, Notes, Details. LB/RB switch tabs; Y opens the play screen on the states.
+
+### UI — Play screen and game page
+- `lib/ui/screens/play_screen.dart` — pick the save/state and emulator a game starts with, like RomM's play page. Opened from ▶ Play on the game page.
+- `lib/ui/play/emulator_choices.dart` — emulators a game can play in, the default and the remembered one.
+- `lib/ui/widgets/save_list/` — `save_list.dart` (choose mode for play, manage mode for the Saves tab), `state_list.dart`, `save_labels.dart` (sizes and dates as RomM shows them), `save_waiting.dart` (spinner plus what the save lock is busy with).
+- `lib/ui/widgets/game_detail/saves_tab.dart` — the game page's Saves tab: restore (X) or delete (hold A), never launch.
+- `lib/ui/widgets/game_detail/` also: `game_action_button.dart`, `game_details_grid.dart`, `game_metadata_chip.dart`, `game_notes_section.dart`, `game_personal_section.dart`, `resume_slots_dialog.dart`.
 
 ### UI — Widgets
 - `lib/ui/widgets/retroachievements_romm_link.dart` — Settings row for the RomM side of RA: warns when the server has RA disabled (`RommCapabilities.retroAchievementsEnabled` from heartbeat `METADATA_SOURCES.RA_API_ENABLED`), and `offerRommLink()` asks permission to set `ra_username` on the RomM profile + trigger `/api/users/{id}/ra/refresh`.
@@ -133,7 +194,12 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/widgets/gamepad_slider.dart` — GamepadSlider widget (Select to enter, D-pad to adjust deadzone).
 - `lib/ui/widgets/cover_size_button.dart` — Library app-bar button + dialog with a cover-size slider. Drives `columnCountProvider` inversely within `kMinColumnCount..kMaxColumnCount` (2..12).
 - `lib/ui/widgets/screenshot_gallery_dialog.dart` — Fullscreen swipeable screenshot gallery with zoom support.
-- `lib/ui/widgets/backup_history_sheet.dart` — Bottom sheet listing up to 8 local backup checkpoints per game. Includes Restore button with pre-restore safety snapshot.
+
+Also, screens in `lib/ui/screens/` and widgets in `lib/ui/widgets/`:
+- Screens: `onboarding_screen.dart`, `download_screen.dart`, `library_skeleton.dart`, `library_dialog_service.dart` (save/state conflict prompts), `settings_display_section.dart`, `settings_custom_emulators_section.dart`, `settings_retroachievements_section.dart`.
+- Controller: `controller_dialogs.dart` (yes/no and pick-one that answer to A/B), `dialog_back_bridge.dart` (B/Esc closes a dialog), `shoulder_owner.dart` (screen claims LB/RB), `controller_hints_bar.dart`, `focus_effect_wrapper.dart`.
+- Saves/states: `save_conflict_dialog.dart`, `state_sync_toggle.dart`, `state_version_dialog.dart` (warn before loading a state from another emulator build).
+- Misc: `download_progress_card.dart`, `download_progress_indicator.dart`, `emulator_selection_dialog.dart`, `windows_pcgw_search_dialog.dart`.
 
 ## Key Contracts
 
@@ -190,10 +256,11 @@ class GamepadUtils {
 - Mocks are generated via `@GenerateMocks` annotation + `build_runner`. Generated in `.mocks.dart` files.
 
 ### Test Structure
-- `test/unit/` — Pure logic tests (42 files)
-- `test/widgets/` — Widget rendering tests (6 files)
-- `test/core/` — Integration-level core logic (5 files)
+- `test/unit/` — Pure logic tests (140 files)
+- `test/widgets/` — Widget rendering tests (26 files)
+- `test/core/` — Integration-level core logic (9 files)
 - `test/health/` — Smoke checks (1 file)
+- `tool/integration_tests/` — Integration tests against a live RomM server
 - `test/mock_romm_server.py` — Flask mock server for integration tests
 - `test/save_sync_integration_test.py` — End-to-end save sync tests
 
@@ -202,7 +269,7 @@ class GamepadUtils {
 - Feature tests: `test/unit/<feature>_test.dart` (ares_strategy, ares_save_strategy, etc.)
 - Issue-specific tests: `test/unit/<issue>_<feature>_test.dart` (appimage_detection, download_extension, etc.)
 
-### Key Test Files (713 tests as of v0.5.10-pre)
+### Key Test Files
 - `controller_settings_regression_test.dart` — 94 tests: built-in mappings, POV decoding, SDL parsing, custom mapping persistence, deadzone config, PS4/PS5 USB controller entries, empty-token fallback
 - `ares_strategy_test.dart` — 14 tests: getSystemNameForSlug, supportedSlugs, launch args regression (no --fullscreen/--no-file-prompt), unsupported platform throws
 - `ares_save_strategy_test.dart` — 34 tests: extension classification, state file exclusion, stem-prefix matching, restoreSave directory creation
@@ -215,10 +282,15 @@ class GamepadUtils {
 
 ### Running Tests
 ```bash
-flutter test                    # Full suite (~30s)
+flutter analyze && flutter test        # What CI runs (.github/workflows/ci.yml, ubuntu-latest)
+python run_checks.py                   # The same two steps, local helper
 flutter test test/unit/ares_strategy_test.dart  # Single file
-flutter analyze                 # Lint check
+dart run tool/cli.dart <cmd>           # Read-only RomM CLI (ROMM_URL, ROMM_API_KEY)
+freegosy.exe --headless list|launch|interactive   # Headless app (lib/main_cli.dart)
+testing/scripts/blackbox.sh            # Live-RomM save round trip; its config is git-ignored
 ```
+- The full suite is about 2,070 tests (a minute). On a Windows host, 13 tests that need Linux paths (AppImage, XDG, retroarch.cfg) fail; CI runs on Linux.
+- Background notes on save interop between emulators and RomM clients: `docs/save-interop.md`, `docs/save-state-sync.md`, `docs/romm_49_save_sync_research.md`.
 
 ### Pre-existing Widget Test Flaky
 - `settings_screen_test.dart: "renders emulator section"` — ambiguous ListView finder on macOS. Fixed with `.first` on the finder.

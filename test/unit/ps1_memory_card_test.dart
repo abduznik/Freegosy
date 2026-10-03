@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:freegosy/core/save/ps1_memory_card.dart';
+import 'package:freegosy/core/save/formats/ps1_memory_card.dart';
 
 import '../helpers/ps1_card_builder.dart';
 

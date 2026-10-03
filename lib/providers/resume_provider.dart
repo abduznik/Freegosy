@@ -17,7 +17,8 @@ final resumeServiceProvider = FutureProvider<ResumeService?>((ref) async {
   final romm = ref.watch(rommServiceProvider);
   return ResumeService(
     emulatorsFor: registry.getAllStrategiesForSlug,
-    resolveSaveStrategy: saveSync.getStrategyForGame,
+    resolveSaveStrategy: saveSync.strategyForGame,
+    exclusive: saveSync.exclusive,
     prefs: ref.watch(appPreferencesProvider),
     api: romm,
     isOffline: () => romm?.isOffline.value == true,

@@ -9,7 +9,7 @@ import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../storage/directory_service.dart';
-import '../ps2_memory_card.dart';
+import '../formats/ps2_memory_card.dart';
 import '../save_state_info.dart';
 import '../save_strategy.dart';
 import '../state_sync_capable.dart';
@@ -575,6 +575,15 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
       debugPrint('[PCSX2] cannot tell whether saves can be synced: $e');
       return null;
     }
+  }
+
+  /// A backup holds what a push would zip (this game's folders off a folder
+  /// card, or its saves/{Serial} folder), so it goes back the way a pull
+  /// does; shared file cards go back card by card (the base class).
+  @override
+  Future<bool> restoreBackup(Game game, String romPath, Uint8List zipBytes, String zipName) async {
+    if (await pullMustFinishBeforeLaunch(game, romPath)) return super.restoreBackup(game, romPath, zipBytes, zipName);
+    return restoreSave(game, romPath, zipBytes, zipName.toLowerCase().endsWith('.zip') ? zipName : '$zipName.zip');
   }
 
   /// PCSX2 opens its file cards when a game starts, so a pull that lands
