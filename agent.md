@@ -73,6 +73,11 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 ### Core — Extraction
 - `lib/core/extraction/extraction_service.dart` — Unified extraction for .zip, .7z, .dmg, .tar.gz, .tar.xz, and .exe. Sanitizes macOS .app bundles. ROM name sanitization includes `!` in regex.
 
+### Core — Disc
+- `lib/core/disc/chd_reader.dart` — Reads the disc inside a CHD v5 file without chdman (ported from libchdr): header, Huffman-coded hunk map, codecs zlib/LZMA/Huffman/zstd and their CD versions; FLAC, parent CHDs and older versions throw `ChdException` (`chd_exception.dart`). Bit reader and Huffman decoder in `chd_bits.dart`.
+- `lib/core/disc/chd_disc.dart` — `readSystemCnf()`: finds SYSTEM.CNF through the disc's ISO9660 root directory (DVD sectors, or CD frames with raw mode 1/2 sectors).
+- `lib/core/disc/serial_extraction_service.dart` — PS1/PS2 serial from the file name, a CHD (native reader, else chdman), or an ISO/BIN boot-line scan.
+
 ### Core — Downloader
 - `lib/core/downloader/download_service.dart` — Stream-based HTTP ROM downloader. Uses `file_name` from API (not `full_path`) to avoid platform prefix duplication. Multi-file launch path joins `existingRomPath` + selected filename.
 

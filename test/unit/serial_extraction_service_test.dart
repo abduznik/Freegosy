@@ -218,6 +218,62 @@ void main() {
       expect(serial, 'SLUS-20152');
     });
 
+    group('read natively', () {
+      late List<List<String>> ran;
+      late SerialExtractionService native;
+
+      setUp(() {
+        ran = [];
+        native = SerialExtractionService(
+          _StubDirectoryService(prefs),
+          prefs,
+          platform: const PlatformInfo('windows', environment: {}),
+          runProcess: (exe, args) async {
+            ran.add(args);
+            return ProcessResult(0, 1, '', 'not run in tests');
+          },
+        );
+      });
+
+      Future<String> copyFixture(String name, String as) async {
+        final path = p.join(tempDir.path, as);
+        await File(p.join('test', 'fixtures', 'chd', name)).copy(path);
+        return path;
+      }
+
+      test('a PS2 DVD CHD gives its serial without chdman, and it is remembered', () async {
+        final romPath = await copyFixture('ps2_dvd_default.chd', 'Game.chd');
+
+        final serial = await native.extractSerial(
+            romPath: romPath, bootLinePattern: ps2BootPattern, chdmanCandidates: const []);
+
+        expect(serial, 'SLUS-20328');
+        expect(ran, isEmpty, reason: 'chdman was not needed');
+        expect(prefs.getString('disc_serial_${p.absolute(romPath)}'), 'SLUS-20328');
+      });
+
+      test('a PS1 CD CHD gives its serial without chdman', () async {
+        final romPath = await copyFixture('ps1_cd_cdlz.chd', 'Game.chd');
+
+        final serial = await native.extractSerial(
+            romPath: romPath, bootLinePattern: ps1BootPattern, chdmanCandidates: const []);
+
+        expect(serial, 'SCES-01237');
+        expect(ran, isEmpty);
+      });
+
+      test('a CHD the native reader can\'t read still goes to chdman', () async {
+        final romPath = p.join(tempDir.path, 'Broken.chd');
+        await File(romPath).writeAsBytes(List.filled(300, 9));
+
+        final serial = await native.extractSerial(
+            romPath: romPath, bootLinePattern: ps2BootPattern, chdmanCandidates: const []);
+
+        expect(serial, isNull);
+        expect(ran.first.first, 'extractdvd');
+      });
+    });
+
     test('returns null (not an error) when chdman cannot be found for an uncached CHD', () async {
       final romPath = p.join(tempDir.path, 'Uncached.chd');
       await File(romPath).writeAsBytes([0]);

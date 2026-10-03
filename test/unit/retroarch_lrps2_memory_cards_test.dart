@@ -223,7 +223,7 @@ void main() {
     test('shared cards: nothing is synced, and the user is told why', () async {
       mcd(1).writeAsBytesSync(card([gt4, ac5]));
       expect(await strategy.getSaveFilesWithScreenshots(game, romPath, syncMode: 'saves'), isEmpty);
-      expect(await strategy.saveSyncBlockedReason(game, romPath), contains('serial'));
+      expect(await strategy.saveSyncBlockedReason(game, romPath), allOf(contains('serial'), contains('file name')));
       final before = mcd(1).readAsBytesSync();
       await expectLater(strategy.restoreSave(game, romPath, card([ac5]), 'Mcd001.ps2'),
           throwsA(isA<SaveSyncNotPossibleException>()));

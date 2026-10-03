@@ -2,19 +2,26 @@ import 'dart:convert';
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+
 import '../platform/platform_info.dart';
 import '../storage/app_preferences.dart';
 import '../storage/directory_service.dart';
+import 'chd_disc.dart';
+import 'chd_reader.dart';
 
 /// An emulator install to check beside for a `chdman` executable, in
 /// addition to the app itself and (always) MAME.
 typedef ChdmanCandidate = ({String emulatorId, String exeName});
 
+/// Runs a program, as [io.Process.run].
+typedef ProcessRunner = Future<io.ProcessResult> Function(String executable, List<String> arguments);
+
 /// Extracts a disc serial (e.g. "SLUS-12345") from a ROM path.
 ///
 /// Shared across per-console save strategies whose games are identified by
 /// a Sony-style disc serial (PS1, PS2, ...): the serial shape, filename
-/// convention, and `chdman`-based CHD handling are identical between them.
+/// convention, and CHD handling (Freegosy's own reader, else `chdman`) are
+/// identical between them.
 /// What differs is the boot-line format inside `SYSTEM.CNF` (PS1 uses
 /// `BOOT =`, PS2 uses `BOOT2 =`) and which emulator to check beside for
 /// `chdman` — both are caller-supplied parameters.
@@ -22,9 +29,11 @@ class SerialExtractionService {
   final DirectoryService _directoryService;
   final AppPreferences _prefs;
   final PlatformInfo _platform;
+  final ProcessRunner _runProcess;
 
-  SerialExtractionService(this._directoryService, this._prefs, {PlatformInfo? platform})
-      : _platform = platform ?? PlatformInfo.current;
+  SerialExtractionService(this._directoryService, this._prefs, {PlatformInfo? platform, ProcessRunner? runProcess})
+      : _platform = platform ?? PlatformInfo.current,
+        _runProcess = runProcess ?? io.Process.run;
 
   /// Bytes read from the start of the disc when probing for the boot line.
   /// The ISO9660 primary volume descriptor lives at sector 16 (byte 0x8000)
@@ -41,6 +50,9 @@ class SerialExtractionService {
   /// 2. Read the boot line from inside the disc image (CHD, ISO, or BIN),
   ///    matching [bootLinePattern] against a bounded chunk of its header.
   ///    [bootLinePattern] must capture the raw serial in its first group.
+  ///    A CHD is read by Freegosy's own reader (chd_reader.dart), which
+  ///    finds SYSTEM.CNF through the disc's ISO9660 file system; a CHD it
+  ///    can't read (FLAC hunks, a parent CHD) goes to `chdman`.
   ///
   /// [chdmanCandidates] lists additional emulator installs to check beside
   /// for `chdman` (MAME is always checked, since it ships `chdman`
@@ -70,7 +82,8 @@ class SerialExtractionService {
         return cachedSerial;
       }
 
-      final serial = await _extractSerialFromChd(romPath, bootLinePattern, chdmanCandidates);
+      final serial = await _readChdNatively(romPath, bootLinePattern) ??
+          await _extractSerialFromChd(romPath, bootLinePattern, chdmanCandidates);
       if (serial != null) await _writeChdSerialMetadata(romPath, serial);
       return serial;
     }
@@ -128,7 +141,7 @@ class SerialExtractionService {
     return s;
   }
 
-  /// CHDs need a full chdman extraction to determine their serial, so the
+  /// Reading a CHD's serial means decompressing part of it, so the
   /// result is cached under this key (rather than a sidecar file next to
   /// the CHD) so it works even when the ROM directory is read-only, e.g. a
   /// network share or some EmuDeck/Steam Deck mounts.
@@ -147,6 +160,31 @@ class SerialExtractionService {
       await _prefs.setString(_cacheKey(chdPath), serial);
     } catch (error) {
       debugPrint('[SerialExtraction] could not cache CHD serial: $error');
+    }
+  }
+
+  /// The serial from the boot line of the disc's SYSTEM.CNF, read by
+  /// Freegosy's own CHD reader; null when it can't read this CHD (then
+  /// chdman is tried, if installed).
+  Future<String?> _readChdNatively(String chdPath, RegExp bootLinePattern) async {
+    try {
+      final chd = await ChdReader.open(chdPath);
+      try {
+        final cnf = await readSystemCnf(chd);
+        final match = cnf == null ? null : bootLinePattern.firstMatch(cnf);
+        if (match == null) {
+          debugPrint('[SerialExtraction] no boot line in the SYSTEM.CNF of $chdPath');
+          return null;
+        }
+        final serial = normalizeSerial(match.group(1)!);
+        debugPrint('[SerialExtraction] serial from CHD (read natively): $serial');
+        return serial;
+      } finally {
+        await chd.close();
+      }
+    } catch (error) {
+      debugPrint('[SerialExtraction] CHD not read natively ($error); trying chdman');
+      return null;
     }
   }
 
@@ -179,7 +217,7 @@ class SerialExtractionService {
         final mode = extractionModes[i];
         final extractedPath = p.join(tempDirectory.path, 'disc_$i.${mode.extension}');
         try {
-          final result = await io.Process.run(chdman, [
+          final result = await _runProcess(chdman, [
             mode.command,
             '-i',
             chdPath,

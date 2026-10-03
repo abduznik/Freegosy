@@ -81,7 +81,7 @@ void main() {
     test('serial unknown: nothing is uploaded, and the user is told why', () async {
       mcd(1).writeAsBytesSync(card([gt4, ac5]));
       expect(await env.strategy.getSaveFilesWithScreenshots(game, romPath('Ace Combat 5.iso')), isEmpty);
-      expect(await env.strategy.saveSyncBlockedReason(game, romPath('Ace Combat 5.iso')), contains('serial'));
+      expect(await env.strategy.saveSyncBlockedReason(game, romPath('Ace Combat 5.iso')), allOf(contains('serial'), contains('file name')));
       expect(await env.strategy.saveSyncBlockedReason(game, romPath()), isNull);
     });
   });

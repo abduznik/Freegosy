@@ -393,7 +393,8 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
   String get _fileCardTempRoot => p.join(io.Directory.systemTemp.path, 'freegosy_pcsx2');
 
   static const _noSerialMessage = "Freegosy couldn't read this PS2 game's serial (e.g. SLUS-20851), which is how "
-      "it tells this game's saves from the others on PCSX2's memory card, so its saves weren't synced.";
+      "it tells this game's saves from the others on PCSX2's memory card, so its saves weren't synced. "
+      'Putting the serial in the file name, e.g. "Ace Combat 5 (SLUS-20851).chd", fixes it.';
 
   /// PCSX2's memory cards in [memcardsDir]: `.ps2` files (file cards) and
   /// directories (folder cards), without timestamped backup copies, in name

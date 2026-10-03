@@ -504,7 +504,8 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
   }
 
   static const _lrps2NoSerial = "Freegosy couldn't read this PS2 game's serial (e.g. SLUS-20851), which is how it "
-      "tells this game's saves from the others on LRPS2's shared memory cards, so its saves weren't synced.";
+      "tells this game's saves from the others on LRPS2's shared memory cards, so its saves weren't synced. "
+      'Putting the serial in the file name, e.g. "Ace Combat 5 (SLUS-20851).chd", fixes it.';
 
   String get _lrps2TempRoot => p.join(io.Directory.systemTemp.path, 'freegosy_lrps2');
 
