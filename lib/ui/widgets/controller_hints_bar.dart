@@ -66,6 +66,8 @@ class ControllerHintsBar extends ConsumerWidget {
       } else if (buttonText == 'R1') {
         buttonText = 'E';
         width = 24;
+      } else if (buttonText == 'L1 R1') {
+        buttonText = 'Q E';
       } else if (buttonText == 'X') {
         buttonText = 'X';
         width = 24;
@@ -88,8 +90,11 @@ class ControllerHintsBar extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: width,
+            // At least [width]; wider when the text needs it (e.g. "LB RB").
+            constraints: BoxConstraints(minWidth: width),
             height: 24,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: glyphBg,
               borderRadius: BorderRadius.circular(6),
@@ -105,14 +110,13 @@ class ControllerHintsBar extends ConsumerWidget {
                 ),
               ],
             ),
-            child: Center(
-              child: Text(
-                buttonText,
-                style: TextStyle(
-                  color: glyphFg,
-                  fontSize: width > 32 ? 10 : 12,
-                  fontWeight: FontWeight.bold,
-                ),
+            child: Text(
+              buttonText,
+              maxLines: 1,
+              style: TextStyle(
+                color: glyphFg,
+                fontSize: width > 32 ? 10 : 12,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),

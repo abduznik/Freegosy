@@ -20,7 +20,7 @@ class MockRommService extends Mock implements RommService {
   int uploadCount = 0;
 
   @override
-  Future<({bool ok, Map<String, dynamic>? conflict})> uploadSave(
+  Future<({bool ok, Map<String, dynamic>? conflict, Map<String, dynamic>? saved})> uploadSave(
     String gameId,
     io.File saveFile, {
     String? emulator,
@@ -33,7 +33,7 @@ class MockRommService extends Mock implements RommService {
     String? overrideFilename,
   }) async {
     uploadCount++;
-    return (ok: true, conflict: null);
+    return (ok: true, conflict: null, saved: null);
   }
 }
 

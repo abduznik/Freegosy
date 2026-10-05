@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:freegosy/core/save/ps2_memory_card.dart';
+import 'package:freegosy/core/save/formats/ps2_memory_card.dart';
 
 /// Cards in test/fixtures/ps2_cards are made by mymcplus, an independent
 /// implementation of the PS2 memory card file system (see make_fixtures.py

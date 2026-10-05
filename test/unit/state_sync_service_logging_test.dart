@@ -44,7 +44,7 @@ void main() {
 
     test('a strategy without StateSyncCapable says so, with the emulator id', () async {
       final incapable = StateSyncService(FakeRommStatesApi(), env.pcsx2.prefs,
-          (game, {emulatorId}) => null);
+          (game, {emulatorId, coreOverride}) => null);
       final logs = _captureLogs();
 
       final pull = await incapable.pullStates(env.game, env.romPath, emulatorId: 'duckstation');
@@ -367,7 +367,7 @@ void main() {
           addTearDown(disabled.dispose);
           return disabled.service;
         default:
-          return StateSyncService(FakeRommStatesApi(), env.pcsx2.prefs, (game, {emulatorId}) => null);
+          return StateSyncService(FakeRommStatesApi(), env.pcsx2.prefs, (game, {emulatorId, coreOverride}) => null);
       }
     }
 

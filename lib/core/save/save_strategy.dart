@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' as io;
 import 'dart:typed_data';
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
 import '../platform/platform_info.dart';
@@ -82,6 +83,36 @@ abstract class SaveStrategy {
   /// e.g. because restoring changes a file other games' saves share. The
   /// pull otherwise runs alongside the launch.
   Future<bool> pullMustFinishBeforeLaunch(Game game, String romPath) async => false;
+
+  /// Puts a local backup back: [zipBytes] is a zip of getSaveFiles, as
+  /// BackupService makes it. Save files other games share (memory cards,
+  /// see pullMustFinishBeforeLaunch) go back one by one through restoreSave,
+  /// like a pulled card, which takes only this game's saves from each.
+  /// Anything else is unzipped into getSaveDir; nothing outside it.
+  Future<bool> restoreBackup(Game game, String romPath, Uint8List zipBytes, String zipName) async {
+    if (await pullMustFinishBeforeLaunch(game, romPath)) {
+      var ok = true;
+      for (final entry in ZipDecoder().decodeBytes(zipBytes)) {
+        if (!entry.isFile) continue;
+        final bytes = Uint8List.fromList(entry.content as List<int>);
+        ok = await restoreSave(game, romPath, bytes, p.basename(entry.name)) && ok;
+      }
+      return ok;
+    }
+    final saveDir = await getSaveDir(game, romPath);
+    if (saveDir == null) return false;
+    for (final entry in ZipDecoder().decodeBytes(zipBytes)) {
+      final path = p.normalize(p.join(saveDir, entry.name));
+      if (!p.isWithin(saveDir, path)) continue;
+      if (entry.isFile) {
+        await io.File(path).parent.create(recursive: true);
+        await io.File(path).writeAsBytes(entry.content as List<int>);
+      } else {
+        await io.Directory(path).create(recursive: true);
+      }
+    }
+    return true;
+  }
 
   /// Returns the local save directory for [game] given its [romPath].
   Future<String?> getSaveDir(Game game, String romPath);

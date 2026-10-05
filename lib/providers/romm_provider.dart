@@ -153,7 +153,8 @@ final stateSyncServiceProvider = FutureProvider<StateSyncService?>((ref) async {
   final saveSyncService = await ref.watch(saveSyncServiceProvider.future);
   final prefs = ref.watch(appPreferencesProvider);
   if (rommService == null || saveSyncService == null) return null;
-  return StateSyncService(rommService, prefs, saveSyncService.getStrategyForGame);
+  return StateSyncService(rommService, prefs, saveSyncService.strategyForGame,
+      exclusive: <T>(Future<T> Function() body) => saveSyncService.exclusive(body, doing: 'Syncing save states'));
 });
 
 // GameLaunchService provider — orchestrates ROM resolution, process launch,

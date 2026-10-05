@@ -118,7 +118,9 @@ class ResumeService {
     RommStatesApi? api,
     bool Function()? isOffline,
     Duration listTimeout = StateSyncService.defaultListTimeout,
+    StrategyExclusive? exclusive,
   })  : _emulatorsFor = emulatorsFor,
+        _exclusive = exclusive,
         _resolve = resolveSaveStrategy,
         _prefs = prefs,
         _records = StateRecordStore(prefs),
@@ -133,6 +135,9 @@ class ResumeService {
   final RommStatesApi? _api;
   final bool Function() _isOffline;
   final Duration _listTimeout;
+
+  /// The save lock: finding a game's states sets up the shared strategies.
+  final StrategyExclusive? _exclusive;
   final Map<String, Uint8List?> _thumbnails = {};
 
   /// Save strategy per emulator id, as last resolved by [_sources]; used for
@@ -307,7 +312,14 @@ class ResumeService {
 
   /// [versions] caches each emulator's installed version for the caller's
   /// run (one question per emulator, not per disc).
-  Future<List<_Source>> _sources(Game game, String romPath, Map<String, String?> versions) async {
+  Future<List<_Source>> _sources(Game game, String romPath, Map<String, String?> versions) {
+    final exclusive = _exclusive;
+    return exclusive == null
+        ? _sourcesUnlocked(game, romPath, versions)
+        : exclusive(() => _sourcesUnlocked(game, romPath, versions));
+  }
+
+  Future<List<_Source>> _sourcesUnlocked(Game game, String romPath, Map<String, String?> versions) async {
     final result = <_Source>[];
     for (final emulator in _emulatorsFor(game.platformSlug ?? '')) {
       if (!emulator.supportsStateLoadOnLaunch) continue;

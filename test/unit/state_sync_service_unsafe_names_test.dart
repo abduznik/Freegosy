@@ -55,7 +55,7 @@ void main() {
     env = await StateSyncTestEnv.create();
     await env.pcsx2.prefs.setBool(StateSyncService.enabledKey('permissive'), true);
     service = StateSyncService(env.api, env.pcsx2.prefs,
-        (game, {emulatorId}) => _PermissiveStrategy(env.statesDir));
+        (game, {emulatorId, coreOverride}) => _PermissiveStrategy(env.statesDir));
   });
   tearDown(() => env.dispose());
 

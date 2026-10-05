@@ -213,7 +213,8 @@ class _HeadlessSession {
     final rommService = RommService(rommConfig);
     final strategyRegistry = StrategyRegistry(directoryService, prefs);
     final saveSyncService = SaveSyncService(rommService, directoryService, strategyRegistry, prefs);
-    final stateSyncService = StateSyncService(rommService, prefs, saveSyncService.getStrategyForGame);
+    final stateSyncService = StateSyncService(rommService, prefs, saveSyncService.strategyForGame,
+      exclusive: <T>(Future<T> Function() body) => saveSyncService.exclusive(body, doing: 'Syncing save states'));
 
     final backupRepository = BackupRepository();
     backupRepository.initBox();

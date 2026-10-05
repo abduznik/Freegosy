@@ -87,6 +87,7 @@ void main() {
     List<EmulatorStrategy>? emulators,
     bool withApi = true,
     SaveStrategy? Function(Game game, {String? emulatorId})? resolveSaveStrategy,
+    StrategyExclusive? exclusive,
   }) =>
       ResumeService(
         emulatorsFor: (slug) => slug == 'fakeplatform' ? (emulators ?? [emu]) : [],
@@ -95,6 +96,7 @@ void main() {
         prefs: prefs,
         api: withApi ? api : null,
         isOffline: () => offline,
+        exclusive: exclusive,
       );
 
   Future<List<ResumeEntry>> lastOf(Stream<List<ResumeEntry>> s) async => (await s.toList()).last;
@@ -135,6 +137,17 @@ void main() {
   });
 
   // ─── 2 ────────────────────────────────────────────────────────────────────
+  test('states are found under the save lock (the strategies are shared by every game)', () async {
+    var locked = 0;
+    final service = build(exclusive: <T>(Future<T> Function() body) {
+      locked++;
+      return body();
+    });
+    writeLocal('GAME.1.st', '1.2.0');
+    await lastOf(service.entriesFor(game, [romPath]));
+    expect(locked, greaterThan(0));
+  });
+
   test('a version different from the installed one is a mismatch; unknown installed version is unknown', () async {
     writeLocal('GAME.1.st', '1.0.0');
     final service = build();

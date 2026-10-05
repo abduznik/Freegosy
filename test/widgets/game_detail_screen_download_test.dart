@@ -75,12 +75,11 @@ void main() {
             rommBaseUrl: config.baseUrl,
             isDownloaded: false,
             rommService: fakeService,
-            onLaunch: () {},
+            onPlay: (_) async => true,
             onDownload: (game) async {
               gamePassedToDownload = game;
             },
             onPushSaves: () {},
-            onPullSaves: () {},
             onDelete: () {},
           ),
         ),
@@ -90,7 +89,7 @@ void main() {
     // Let _refreshGame()'s async getGame() call resolve and rebuild state.
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Download Game'));
+    await tester.tap(find.text('⭳ Download'));
     await tester.pump();
 
     expect(gamePassedToDownload, isNotNull);

@@ -109,7 +109,7 @@ void main() {
         overwrite: anyNamed('overwrite'),
         screenshotFile: anyNamed('screenshotFile'),
         overrideFilename: anyNamed('overrideFilename'),
-      )).thenAnswer((_) async => (ok: true, conflict: null));
+      )).thenAnswer((_) async => (ok: true, conflict: null, saved: null));
 
       await service.pushSaves(game, romPath);
 
@@ -153,7 +153,7 @@ void main() {
         overrideFilename: anyNamed('overrideFilename'),
       )).thenAnswer((invocation) async {
         capturedSlot = invocation.namedArguments[#slot] as String?;
-        return (ok: true, conflict: null);
+        return (ok: true, conflict: null, saved: null);
       });
 
       await service.pushSaves(game, romPath);
@@ -195,7 +195,7 @@ void main() {
             invocation.namedArguments[#autocleanup] as bool?;
         capturedLimit =
             invocation.namedArguments[#autocleanupLimit] as int?;
-        return (ok: true, conflict: null);
+        return (ok: true, conflict: null, saved: null);
       });
 
       await service.pushSaves(game, romPath);
@@ -232,7 +232,7 @@ void main() {
       )).thenAnswer((invocation) async {
         capturedOverwrite =
             invocation.namedArguments[#overwrite] as bool?;
-        return (ok: true, conflict: null);
+        return (ok: true, conflict: null, saved: null);
       });
 
       await service.pushSaves(game, romPath, force: true);
@@ -293,7 +293,7 @@ void main() {
         overwrite: anyNamed('overwrite'),
         screenshotFile: anyNamed('screenshotFile'),
         overrideFilename: anyNamed('overrideFilename'),
-      )).thenAnswer((_) async => (ok: true, conflict: null));
+      )).thenAnswer((_) async => (ok: true, conflict: null, saved: null));
 
       await service.pushSaves(game, romPath);
 
@@ -389,7 +389,7 @@ void main() {
         overwrite: anyNamed('overwrite'),
         screenshotFile: anyNamed('screenshotFile'),
         overrideFilename: anyNamed('overrideFilename'),
-      )).thenAnswer((_) async => (ok: true, conflict: null));
+      )).thenAnswer((_) async => (ok: true, conflict: null, saved: null));
 
       final result = await service.pushSaves(game, romPath);
 
@@ -431,7 +431,7 @@ void main() {
         overwrite: anyNamed('overwrite'),
         screenshotFile: anyNamed('screenshotFile'),
         overrideFilename: anyNamed('overrideFilename'),
-      )).thenAnswer((_) async => (ok: true, conflict: null));
+      )).thenAnswer((_) async => (ok: true, conflict: null, saved: null));
 
       final result = await service.pushSaves(game, romPath);
 
