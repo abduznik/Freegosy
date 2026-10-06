@@ -351,36 +351,17 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
     return result;
   }
 
-  /// The 2-letter prefix PCSX2 prepends to a game's serial when naming its
-  /// folder-memcard save-artifact directories (e.g. "BASLUS-20152AC04" for
-  /// a US game whose serial is "SLUS-20152"). Keyed off the serial's region
-  /// letter, same scheme as RomM's Argosy launcher uses for the same data:
-  /// U (US) -> BA, E (Europe) -> BE, P/J/K (Japan/Asia) -> BI.
-  String _ps2RegionPrefix(String serial) {
-    if (serial.length < 3) return 'BA';
-    switch (serial[2].toUpperCase()) {
-      case 'E':
-        return 'BE';
-      case 'P':
-      case 'J':
-      case 'K':
-        return 'BI';
-      default:
-        return 'BA';
-    }
-  }
-
-  /// Matches a folder-memcard directory against a game's serial. Real
-  /// PCSX2 folders are named `<region-prefix><dash-serial><suffix>` (the
-  /// suffix distinguishes sibling artifacts like data vs. system config —
-  /// e.g. "AC04"/"SYS"), so this checks a prefix match against that shape
-  /// rather than requiring an exact match against the bare serial.
+  /// Matches a folder-memcard directory against a game's serial. Real PCSX2
+  /// folders are named `<region prefix><dash-serial><suffix>` (the suffix
+  /// distinguishes sibling artifacts like data vs. system config, e.g.
+  /// "AC04"/"SYS"). The two-letter prefix is not guessed from the serial's
+  /// region: it varies ("BA", "BE", "BI", ...) and a wrong guess hides the
+  /// save, so [Ps2SaveFolders.isSaveOf] — the match the file-card and restore
+  /// paths already use — skips it.
   bool _serialMatchesDirectory(String directoryName, String serial) {
     String normalize(String value) => value.toUpperCase().replaceAll('_', '-');
-    final normalizedDir = normalize(directoryName);
-    final normalizedSerial = normalize(serial);
-    if (normalizedDir == normalizedSerial) return true;
-    return normalizedDir.startsWith('${_ps2RegionPrefix(normalizedSerial)}$normalizedSerial');
+    if (normalize(directoryName) == normalize(serial)) return true;
+    return Ps2SaveFolders.isSaveOf(directoryName, serial);
   }
 
   // ─── File memory cards (Mcd00N.ps2 images) ────────────────────────────
@@ -645,7 +626,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
         // dash-separated (e.g. "-PROFILE") suffixes, and plenty of folders
         // have no suffix at all — so it's just "anything but a separator".
         final ps2FolderArtifactPattern = RegExp(
-          r'^(B[AEI]S[A-Z]{3,4}-\d{5}[^/\\]*)[/\\]',
+          r'^(B[A-Z]S[A-Z]{3,4}-\d{5}[^/\\]*)[/\\]',
           caseSensitive: false,
         );
 

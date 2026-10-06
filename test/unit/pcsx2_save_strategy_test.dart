@@ -389,6 +389,35 @@ void main() {
       }
     });
 
+    test('finds a folder card save whatever its two-letter prefix, and only this game\'s', () async {
+      final base = await Directory.systemTemp.createTemp('pcsx2_prefix_card');
+      try {
+        final exeDir = p.join(base.path, 'pcsx2');
+        final folderCard = Directory(p.join(exeDir, 'memcards', 'Mcd001.ps2'));
+        for (final name in ['BCSCAJ-20001DATA', 'BASCAJ-20002OTHER']) {
+          await Directory(p.join(folderCard.path, name)).create(recursive: true);
+          await File(p.join(folderCard.path, name, 'save.bin')).writeAsBytes(List.filled(150, 2));
+        }
+        final fakeExe = p.join(exeDir, 'pcsx2-qt.exe');
+        await File(fakeExe).writeAsString('');
+
+        final strategy = Pcsx2SaveStrategy(
+          await _StubDirectoryService.create(exePath: fakeExe),
+          await _testPrefs(),
+          platform: const PlatformInfo('windows', environment: {}),
+        );
+
+        final files = await strategy.getSaveFiles(
+          Game(id: 'g8', name: 'Game (SCAJ-20001)', platformSlug: 'ps2', fileSize: 0),
+          p.join(base.path, 'Game (SCAJ-20001).iso'),
+        );
+
+        expect(files.map((f) => p.basename(f.path)), ['BCSCAJ-20001DATA']);
+      } finally {
+        await base.delete(recursive: true);
+      }
+    });
+
     test('folder-type memcard bundle survives a push (zip) then restore round trip, without dragging along other games', () async {
       final base = await Directory.systemTemp.createTemp('pcsx2_folder_round_trip');
       try {
