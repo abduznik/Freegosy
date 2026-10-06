@@ -18,6 +18,7 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - Use `PlatformInfo` for cross-platform abstraction (file: `core/platform/platform_info.dart`). Accept it as a constructor parameter, never use `dart:io Platform` directly in services.
 - ROM name sanitization: `!` must be included in the sanitization regex across all services (`extraction_service`, `directory_service`, `rom_lookup_service`) for consistent folder naming.
 - Windows games are folder-based: `findMainRomInFolder()` returns the folder path for `windows`/`pc`/`win` slugs, not a file.
+- App data paths come from `path_provider`/`AppPathResolver` only; never build `%APPDATA%`, Documents or home paths by hand, and never import `path_provider_windows`/`shared_preferences_windows` (portable mode depends on it; `no_direct_windows_plugins_test.dart`).
 
 ## File Map
 
@@ -102,6 +103,14 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/windows/windows_game_service.dart` — Native execution helper. `findExecutable()` searches `.exe`/`.bat`/`.cmd`. Skips `__MACOSX`/`_CommonRedist`/`._` prefixed files. Token-based fuzzy hint matching. `shouldSkipExe()` filters vcredist, setup, uninstall, etc.
 - `lib/core/windows/pcgamingwiki_service.dart` — Queries PCGamingWiki for save locations. `{{p|game}}` uses gameDir directly. `_sanitizeWindowsPath()` strips invalid Windows filename chars (keeps drive letter colons).
 
+### Core — Portable
+- `lib/core/portable/portable_mode.dart` — Windows portable mode: `portable.txt` beside `freegosy.exe` → everything in `<folder>\userdata` (not `data\`: the Windows build keeps its own files there). `install()` runs first in `main()`, refuses read-only settings/Hive files and replaces `PathProviderPlatform.instance` (`portable_path_provider.dart`) and `SharedPreferencesStorePlatform.instance` (`json_file_preferences_store.dart`, atomic JSON file), and routes `SecureStorageService` to `portable_credential_store.dart` (DPAPI, one file per PC). `restart()` (flushes settings, closes Hive), `folderWritable()`. **Installer copies are never portable:** a folder with Inno Setup's `unins000.exe`/`unins000.dat` ignores `portable.txt` (`isInstallerCopy()`) and Settings offers the zip version instead — the next installer run deletes the whole app folder.
+- `lib/core/portable/dpapi.dart` — `DataProtector` interface; exports `dpapi_ffi.dart` (DPAPI + MachineGuid via `win32`/FFI) where `dart:ffi` exists, else `dpapi_stub.dart` (throws `UnsupportedError`; keeps the web build compiling). Nothing else under `lib/` may import `dart:ffi`/`ffi`/`win32`.
+- `lib/core/storage/secret_store.dart` — `SecretStore` interface `SecureStorageService` writes through (platform secure storage, or a portable copy's per-PC credential file).
+- `lib/core/portable/portable_paths.dart` — same-drive paths stored as `@freegosy:<relative>|<absolute>`; applied by the prefs store and `BackupEntryAdapter`.
+- `lib/core/portable/portable_migration.dart` — copying data into (`toPortable`, `importInstalled`, `makePortableFresh`) and out of (`toInstalled`) a portable copy; marker written/deleted last. `toInstalled` keeps the PC's own default `ROMs`/`Emulators` folders in use and never copies the stick's over them. **Per-PC files are never copied:** `retroarch_achievements.cfg` (RA token) — a portable copy writes it to the PC's own app folder (`RetroAchievementsEmulatorLogin.retroArchConfigFile()`), never to the stick.
+- `lib/core/portable/portable_handover.dart` — steps run after a restart: credential hand-overs, backup path rebase.
+
 ### Core — Error
 - `lib/core/error/error_handler.dart` — Centralized error handling and snackbar notifications.
 
@@ -124,9 +133,14 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/ui/screens/settings_emulators_section.dart` — Emulator management UI. Per-game toggle. Emulator status refreshes on screen open.
 - `lib/ui/screens/settings_controller_section.dart` — Controller/gamepad settings UI.
 - `lib/ui/screens/settings_deadzone_section.dart` — Analog deadzone configuration UI.
+- `lib/ui/screens/portable_import_screen.dart` — First start of a new portable copy on a PC with an installed Freegosy: import its settings or start fresh.
+- `lib/ui/screens/portable_error_app.dart` — `showPortableError()`: shown instead of the app when `portable.txt` exists but the folder can't be written. `showStartupError()`: any failure before the first frame (`main()` wraps startup), so Freegosy never runs without a window.
 - `lib/ui/screens/game_detail_screen.dart` — Expanded game info and actions. Now a StatefulWidget for managing personal game properties (rating, status, completion).
 
 ### UI — Widgets
+- `lib/ui/widgets/portable_mode_settings.dart` — Settings → Storage row: make this copy portable / stop being portable (confirm dialog, `runThenRestart()`).
+- `lib/ui/widgets/portable_sign_in_prompt.dart` — One-time "sign in to RomM" snackbar for a portable copy on a PC without its credentials.
+- `lib/ui/widgets/storage_problem_reporter.dart` — Settings save/read problems as a throttled snackbar; holds a problem found before `runApp` until the first frame.
 - `lib/ui/widgets/retroachievements_romm_link.dart` — Settings row for the RomM side of RA: warns when the server has RA disabled (`RommCapabilities.retroAchievementsEnabled` from heartbeat `METADATA_SOURCES.RA_API_ENABLED`), and `offerRommLink()` asks permission to set `ra_username` on the RomM profile + trigger `/api/users/{id}/ra/refresh`.
 - `lib/ui/widgets/game_detail/game_achievements_section.dart` — Game detail Achievements section. Hidden unless `game.raId` is set; live unlocks via `retroAchievementsGameProgressProvider` with a Web API key, else RomM's synced `ra_progression` (`RommService.getRetroAchievementsProgression()`), else RomM's stored set without unlock state.
 - `lib/ui/widgets/game_card.dart` — Grid item for games.

@@ -12,6 +12,8 @@ import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
+import 'ui/screens/portable_import_screen.dart';
+import 'ui/widgets/portable_sign_in_prompt.dart';
 import 'providers/ui_provider.dart';
 import 'core/storage/file_sanity_service.dart';
 import 'core/input/gamepad_service.dart';
@@ -39,6 +41,7 @@ class FreegosyApp extends ConsumerStatefulWidget {
 
 class _FreegosyAppState extends ConsumerState<FreegosyApp> {
   StreamSubscription<GameAction>? _inputSub;
+  bool _portableImportDismissed = false;
 
   @override
   void initState() {
@@ -210,8 +213,12 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
             return isOnboardedAsync.when(
               data: (config) {
                 if (config.baseUrl.isEmpty) {
+                  if (!_portableImportDismissed && PortableImportScreen.shouldOffer()) {
+                    return PortableImportScreen(onStartFresh: () => setState(() => _portableImportDismissed = true));
+                  }
                   return const OnboardingScreen();
                 }
+                maybeShowPortableSignInPrompt(ref, config);
 
                 return Scaffold(
                   body: _screens[currentIndex],

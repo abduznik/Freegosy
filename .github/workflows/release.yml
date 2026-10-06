@@ -203,6 +203,13 @@ jobs:
           $buildPath = $exe.DirectoryName
           Write-Host "Zipping from: $buildPath"
           Compress-Archive -Path "$buildPath/*" -DestinationPath staging/freegosy-windows-x64.zip
+
+          # The same bundle plus portable.txt: a copy that keeps its data in its
+          # own folder (e.g. on a USB stick). The plain zip stays non-portable.
+          $portablePath = Join-Path $env:RUNNER_TEMP "freegosy-portable"
+          Copy-Item -Recurse -Path $buildPath -Destination $portablePath
+          New-Item -ItemType File -Path (Join-Path $portablePath "portable.txt") | Out-Null
+          Compress-Archive -Path "$portablePath/*" -DestinationPath staging/freegosy-windows-x64-portable.zip
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -344,6 +351,7 @@ jobs:
             artifacts/Freegosy-linux-x86_64.AppImage
             artifacts/*.exe
             artifacts/freegosy-windows-x64.zip
+            artifacts/freegosy-windows-x64-portable.zip
             artifacts/freegosy-macos.dmg
             artifacts/freegosy-macos-x64.zip
           fail_on_unmatched_files: false

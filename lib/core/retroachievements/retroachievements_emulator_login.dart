@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:freegosy/core/portable/portable_mode.dart';
 import 'package:freegosy/core/storage/app_preferences.dart';
 import 'package:freegosy/core/storage/secure_storage_service.dart';
 
@@ -45,14 +46,27 @@ class RetroAchievementsEmulatorLogin {
     );
   }
 
+  /// The `--appendconfig` file RetroArch reads the RA token from. A portable
+  /// copy keeps it in the PC's own app folder, never on the portable drive:
+  /// tokens belong to the PC (see the portable mode spec).
+  static Future<File> retroArchConfigFile() async {
+    final portable = PortableMode.current;
+    final String dir;
+    if (portable == null) {
+      dir = (await getApplicationSupportDirectory()).path;
+    } else {
+      dir = portable.installedSupportDir.isNotEmpty ? portable.installedSupportDir : Directory.systemTemp.path;
+    }
+    return File(p.join(dir, kRetroArchAchievementsConfigFileName));
+  }
+
   /// Deletes the on-disk `--appendconfig` files emulator strategies wrote
   /// the RA token into (currently just RetroArch's), so disconnecting in
   /// Settings doesn't leave the token behind on disk. Never throws — a
   /// missing or unwritable file isn't a reason to fail disconnect.
   static Future<void> deleteEmulatorFiles() async {
     try {
-      final dir = await getApplicationSupportDirectory();
-      final file = File(p.join(dir.path, kRetroArchAchievementsConfigFileName));
+      final file = await retroArchConfigFile();
       if (await file.exists()) await file.delete();
     } catch (_) {
       // Best-effort: disconnect still clears the credentials that matter.

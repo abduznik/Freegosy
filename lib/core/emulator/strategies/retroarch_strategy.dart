@@ -274,8 +274,8 @@ class RetroArchStrategy extends EmulatorStrategy {
     try {
       final login = await (_raLoginLoader ?? () => RetroAchievementsEmulatorLogin.load(_directoryService.prefs))();
       if (login == null) return const [];
-      final dir = await getApplicationSupportDirectory();
-      final file = io.File(p.join(dir.path, kRetroArchAchievementsConfigFileName));
+      final file = await RetroAchievementsEmulatorLogin.retroArchConfigFile();
+      await file.parent.create(recursive: true);
       // Restrict permissions before writing the token, not after — otherwise
       // it's briefly on disk with the directory's default (often world-readable)
       // permissions.

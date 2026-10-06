@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../platform/platform_info.dart';
 import 'app_preferences.dart';
+import 'secret_store.dart';
 
 /// A wrapper around FlutterSecureStorage that falls back to SharedPreferences
 /// if the system keyring is unavailable (common on Linux/Steam Deck).
@@ -23,11 +24,26 @@ class SecureStorageService {
 
   static PlatformInfo _platform = PlatformInfo.current;
 
+  static SecretStore? _store;
+
+  /// Use [store] for every secret instead of the platform's secure storage
+  /// (a portable copy's per-PC credential file); null restores the default.
+  static void useStore(SecretStore? store) => _store = store;
+
   static void configure({PlatformInfo? platform}) {
     _platform = platform ?? PlatformInfo.current;
   }
 
   static Future<String?> read(String key, AppPreferences prefs) async {
+    final store = _store;
+    if (store != null) {
+      try {
+        return await store.read(key);
+      } catch (e) {
+        debugPrint('[SecureStorage] Portable store error reading $key: $e');
+        return null;
+      }
+    }
     // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
     if (!kIsWeb && _platform.isMacOS) {
       return prefs.getString('macos_secure_$key');
@@ -51,6 +67,15 @@ class SecureStorageService {
   }
 
   static Future<void> write(String key, String value, AppPreferences prefs) async {
+    final store = _store;
+    if (store != null) {
+      try {
+        await store.write(key, value);
+      } catch (e) {
+        debugPrint('[SecureStorage] Portable store error writing $key: $e');
+      }
+      return;
+    }
     // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
     if (!kIsWeb && _platform.isMacOS) {
       await prefs.setString('macos_secure_$key', value);
@@ -74,6 +99,15 @@ class SecureStorageService {
   }
 
   static Future<void> delete(String key, AppPreferences prefs) async {
+    final store = _store;
+    if (store != null) {
+      try {
+        await store.delete(key);
+      } catch (e) {
+        debugPrint('[SecureStorage] Portable store error deleting $key: $e');
+      }
+      return;
+    }
     // macOS bypass: Use SharedPreferences directly for stability in ad-hoc builds
     if (!kIsWeb && _platform.isMacOS) {
       await prefs.remove('macos_secure_$key');
