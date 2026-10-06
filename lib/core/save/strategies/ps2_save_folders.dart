@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
-import '../ps2_memory_card.dart';
+import '../formats/ps2_memory_card.dart';
 
 /// PS2 saves as they move through RomM: a game's **save folders** (e.g.
 /// `BASLUS-20851AC5/…`), the shape PCSX2 folder cards and Argosy use, so

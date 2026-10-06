@@ -3,6 +3,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../../storage/rom_lookup_service.dart';
@@ -40,7 +41,12 @@ class EdenSaveStrategy extends SaveStrategy {
   void setManualMapping(String? titleId) => _manualMapping = titleId;
   void setActiveProfileOverride(String? profileId) => _activeProfileOverride = profileId;
 
-  Future<String> _resolveTitleId(String romPath, Game game) async {
+  @visibleForTesting
+  Future<String> resolveTitleId(String romPath, Game game) async {
+    // RomM's id (RomM 5.3+) first: the header and file name are slower, and
+    // the cached mapping below can be stale.
+    final fromRomm = _rommTitleId(game);
+    if (fromRomm != null) return fromRomm;
     final (fromHeader, resolvedRomPath) = await extractTitleIdFromHeader(romPath);
     if (fromHeader != null) {
       if (onMappingResolved != null) await onMappingResolved!(game.id, fromHeader);
@@ -81,6 +87,13 @@ class EdenSaveStrategy extends SaveStrategy {
       if (match != null) return (_normalizeToBaseId(match.group(1)!), actualPath);
     } catch (_) {}
     return (null, actualPath);
+  }
+
+  /// RomM's title id (RomM 5.3+) as the base game's, or null.
+  static String? _rommTitleId(Game game) {
+    final id = GameIdResolver.server('Eden ${game.name}', game.titleId?.toUpperCase(),
+        shape: GameIdResolver.switchTitleId);
+    return id == null ? null : _normalizeToBaseId(id);
   }
 
   static String _normalizeToBaseId(String raw) {
@@ -246,7 +259,7 @@ class EdenSaveStrategy extends SaveStrategy {
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
-    final titleId = await _resolveTitleId(romPath, game);
+    final titleId = await resolveTitleId(romPath, game);
     final profileDir = await _resolveProfileDir(base, titleId: titleId);
     return p.join(profileDir, titleId);
   }
@@ -273,9 +286,11 @@ class EdenSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     final base = await _getEdenSaveBase(platformSlug: game.platformSlug);
     final profileDir = await _resolveProfileDir(base);
-    String? titleId;
-    final (headerId, resolvedPath) = await extractTitleIdFromHeader(destPath);
-    titleId = headerId ?? _extractTitleIdFromFilename(resolvedPath ?? destPath, game);
+    String? titleId = _rommTitleId(game);
+    if (titleId == null) {
+      final (headerId, resolvedPath) = await extractTitleIdFromHeader(destPath);
+      titleId = headerId ?? _extractTitleIdFromFilename(resolvedPath ?? destPath, game);
+    }
 
     Archive? archive;
     if (titleId == null && filename.toLowerCase().endsWith('.zip')) {

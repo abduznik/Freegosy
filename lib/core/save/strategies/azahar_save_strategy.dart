@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -86,7 +87,9 @@ class AzaharSaveStrategy extends SaveStrategy {
 
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
-    if (_manualMapping == null || _manualMapping!.isEmpty) {
+    final manual = GameIdResolver.clean(_manualMapping);
+    final fromRomm = manual == null ? GameIdResolver.server('Azahar ${game.name}', rommTitlePath(game.saveTarget)) : null;
+    if (manual == null && fromRomm == null) {
       debugPrint('[Azahar] FAILED: No manual mapping resolved for ${game.name}');
       throw SaveMappingRequiredException(
           'Could not determine save folder for "${game.name}". '
@@ -94,12 +97,55 @@ class AzaharSaveStrategy extends SaveStrategy {
     }
 
     final base = await _getAzaharSaveBase(platformSlug: game.platformSlug);
-
-    // _manualMapping is expected to be the relative path from sdmc
-    final finalPath = p.join(base, 'sdmc', _manualMapping!);
+    // A mapping is the folder's path from sdmc, as the folder dialog gives it.
+    final mapping = manual ?? await mappingFromSaveTarget(base, fromRomm!);
+    final finalPath = p.join(base, 'sdmc', mapping);
     debugPrint('[Azahar] Final path: $finalPath');
-
     return finalPath;
+  }
+
+  /// RomM's 3DS `save_target` as `<high>/<low>` of the base game's title:
+  /// `00040000/00033500`, also from a flat `0004000000033500`. An update's
+  /// (`0004000e`) or DLC's (`0004008c`) id becomes the game's, where the
+  /// save is. Null for anything else.
+  @visibleForTesting
+  static String? rommTitlePath(String? saveTarget) {
+    var id = GameIdResolver.clean(saveTarget)?.toLowerCase();
+    if (id == null) return null;
+    if (RegExp(r'^[0-9a-f]{16}$').hasMatch(id)) id = '${id.substring(0, 8)}/${id.substring(8)}';
+    if (RegExp(r'^[0-9a-f]{8}$').hasMatch(id)) id = '00040000/$id'; // no category: the game's
+    if (!RegExp(r'^[0-9a-f]{8}/[0-9a-f]{8}$').hasMatch(id)) return null;
+    final high = id.substring(0, 8);
+    return high == '0004000e' || high == '0004008c' ? '00040000${id.substring(8)}' : id;
+  }
+
+  /// The sdmc-relative folder of a title's save data, as the folder dialog
+  /// gives it: `Nintendo 3DS/<id0>/<id1>/title/<high>/<low>/data/00000001`.
+  /// [saveTarget] is RomM's `<high>/<low>` (`00040000/00033500`). The
+  /// `<id0>/<id1>` pair is the one already holding this title, else the only
+  /// one there, else Azahar's default (32 zeros each).
+  @visibleForTesting
+  static Future<String> mappingFromSaveTarget(String base, String saveTarget) async {
+    final titlePath = saveTarget.toLowerCase().split('/');
+    String under(String id0, String id1) =>
+        p.joinAll(['Nintendo 3DS', id0, id1, 'title', ...titlePath, 'data', '00000001']);
+
+    final pairs = <(String, String)>[];
+    final root = io.Directory(p.join(base, 'sdmc', 'Nintendo 3DS'));
+    if (await root.exists()) {
+      await for (final id0 in root.list()) {
+        if (id0 is! io.Directory) continue;
+        await for (final id1 in id0.list()) {
+          if (id1 is io.Directory) pairs.add((p.basename(id0.path), p.basename(id1.path)));
+        }
+      }
+    }
+    for (final (id0, id1) in pairs) {
+      if (await io.Directory(p.join(base, 'sdmc', under(id0, id1))).exists()) return under(id0, id1);
+    }
+    if (pairs.length == 1) return under(pairs.single.$1, pairs.single.$2);
+    const zeros = '00000000000000000000000000000000';
+    return under(zeros, zeros);
   }
 
   @override

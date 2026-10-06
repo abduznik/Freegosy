@@ -4,7 +4,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/emulator/strategy_registry.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
-import 'package:freegosy/core/save/ps1_memory_card.dart';
+import 'package:freegosy/core/save/formats/ps1_memory_card.dart';
 import 'package:freegosy/core/save/save_strategy.dart';
 import 'package:freegosy/core/save/save_sync_service.dart';
 import 'package:freegosy/core/save/strategies/duckstation_config.dart';
@@ -412,6 +412,23 @@ void main() {
         }
         expect(cardsOnDisk(), ['shared_card_1.mcd'], reason: 'no per-game card is written');
         expect(File('${shared.path}.bak').existsSync(), isTrue, reason: 'the old card is backed up first');
+      });
+
+      test('a local backup of the shared card puts back only this game\'s saves', () async {
+        final newerOther = (name: otherGame.name, blocks: otherGame.blocks, fill: 0x55);
+        final shared = await writeShared([newerOther, colinSetting]);
+        final before = shared.readAsBytesSync();
+        final backedUp = buildPs1Card([otherGame, (name: 'BESLES-02605-OLDER', blocks: [3], fill: 0x77)]);
+        final backup = Uint8List.fromList(
+            ZipEncoder().encode(Archive()..addFile(ArchiveFile('shared_card_1.mcd', backedUp.length, backedUp))));
+
+        expect(await env.strategy.restoreBackup(game, romPath(), backup, 'freegosy_g1_backup.zip'), isTrue);
+
+        final after = shared.readAsBytesSync();
+        expect(Ps1MemoryCard.parse(after).saves.map((s) => s.name).toSet(), {otherGame.name, 'BESLES-02605-OLDER'});
+        for (final block in otherGame.blocks) {
+          expect(blockData(after, block), blockData(before, block), reason: 'another game: untouched');
+        }
       });
 
       test('once DuckStation has started without this pull, the card is left as it is', () async {

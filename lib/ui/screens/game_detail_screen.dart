@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import 'dart:developer' as dev;
 import '../../core/storage/system_utils.dart';
 import '../../core/romm/romm_models.dart';
@@ -8,22 +9,31 @@ import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
 import '../../core/save/backup_entry.dart';
 import '../../core/save/background_sync_queue.dart';
+import '../../core/save/catalog/play_choice.dart';
+import '../../core/save/catalog/play_request.dart';
+import '../../core/save/catalog/save_entry.dart';
+import '../../core/save/catalog/save_maker.dart';
 import '../../core/save/resume_service.dart';
 import '../../providers/download_provider.dart';
 import '../../providers/resume_provider.dart';
 import '../../providers/romm_provider.dart';
+import '../../providers/save_catalog_provider.dart';
 import '../../providers/shared_prefs_provider.dart';
 import '../widgets/screenshot_gallery_dialog.dart';
 import '../widgets/download_progress_indicator.dart';
-import '../widgets/backup_history_sheet.dart';
 import '../widgets/game_detail/game_achievements_section.dart';
 import '../widgets/game_detail/game_action_button.dart';
+import '../widgets/game_detail/game_banner.dart';
 import '../widgets/game_detail/game_metadata_chip.dart';
 import '../widgets/game_detail/game_details_grid.dart';
 import '../widgets/game_detail/game_notes_section.dart';
 import '../widgets/game_detail/game_personal_section.dart';
-import '../widgets/game_detail/resume_split_button.dart';
-import '../widgets/game_detail/resume_slots_dialog.dart';
+import '../widgets/game_detail/saves_tab.dart';
+import '../widgets/save_list/save_labels.dart';
+import '../widgets/shoulder_owner.dart';
+import 'play_screen.dart';
+import '../play/emulator_choices.dart';
+import '../widgets/controller_dialogs.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/controller_hints_bar.dart';
 import '../../providers/ui_provider.dart';
@@ -35,32 +45,37 @@ class GameDetailScreen extends ConsumerStatefulWidget {
   final Game game;
   final String rommBaseUrl;
   final bool isDownloaded;
-  final dynamic onLaunch;
+
+  /// Starts the game as the play screen asks.
+  /// Starts the game; true once the emulator started.
+  final Future<bool> Function(PlayRequest request) onPlay;
   final Future<void> Function(Game game) onDownload;
   final dynamic onPushSaves;
-  final dynamic onPullSaves;
   final dynamic onSyncStates;
   final dynamic onDelete;
   final dynamic onConfigure;
   final RommService? rommService;
 
-  /// Loads a resume entry. When null, the page has no Resume button.
+  /// Loads a resume entry. When null, there are no states to resume.
   final Future<void> Function(ResumeEntry entry)? onResume;
+
+  /// Puts a save in place for an emulator without launching (Saves tab).
+  final Future<void> Function(SaveEntry save, SaveMaker target)? onRestoreSave;
 
   const GameDetailScreen({
     super.key,
     required this.game,
     required this.rommBaseUrl,
     required this.isDownloaded,
-    required this.onLaunch,
+    required this.onPlay,
     required this.onDownload,
     required this.onPushSaves,
-    required this.onPullSaves,
     this.onSyncStates,
     required this.onDelete,
     this.onConfigure,
     this.rommService,
     this.onResume,
+    this.onRestoreSave,
   });
 
   @override
@@ -83,9 +98,9 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   bool _isAddingNote = false;
   StreamSubscription<GameAction>? _inputSub;
   final FocusNode _focusNode = FocusNode();
-  final FocusNode _playFocusNode = FocusNode();
   List<ResumeEntry> _resumeEntries = const [];
-  bool _slotsOpen = false;
+  int _tab = 0;
+  final _progressKey = GlobalKey();
 
   /// True while a launch started from this page (Play, Resume, a slot pick)
   /// is still running, e.g. its pre-launch state pull: a second press must
@@ -150,12 +165,15 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
           return;
         }
 
-        if (action == GameAction.detail) {
-          _openSlots();
-          return;
-        }
-
-        if (action == GameAction.back) {
+        // Only while this page is on top: not under the play screen or a
+        // dialog, which handle B, Y and LB/RB themselves.
+        if (ModalRoute.of(context)?.isCurrent != true) return;
+        if (action == GameAction.favorite) {
+          // Y: the play screen on the states, the newest chosen.
+          if (_resumeEntries.isNotEmpty) _openPlay(initialTab: 1);
+        } else if (action == GameAction.l1 || action == GameAction.r1) {
+          setState(() => _tab = (_tab + (action == GameAction.l1 ? -1 : 1)).clamp(0, _tabs.length - 1));
+        } else if (action == GameAction.back) {
           if (Navigator.of(context).canPop()) {
             Navigator.of(context).pop();
           }
@@ -171,26 +189,16 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     });
   }
 
-  /// The game's resume entries (empty without [GameDetailScreen.onResume]).
-  /// Mirrors the latest list into [_resumeEntries] for [_openSlots] (no
-  /// setState), and focuses Resume when the list first becomes non-empty.
+  /// The game's resume entries, newest first (empty without
+  /// [GameDetailScreen.onResume]). Mirrors the latest list into
+  /// [_resumeEntries] for Y (no setState).
   List<ResumeEntry> _watchResumeEntries(WidgetRef ref) {
     final entries = widget.onResume == null
         ? const <ResumeEntry>[]
         // valueOrNull keeps the previous list while it reloads (a dependency
-        // change makes it loading again), so the button doesn't blink away.
+        // change makes it loading again).
         : ref.watch(resumeEntriesProvider(ResumeKey(_currentGame))).valueOrNull ?? const <ResumeEntry>[];
-    final hadEntries = _resumeEntries.isNotEmpty;
     _resumeEntries = entries;
-    if (!hadEntries && entries.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Resume takes the page's initial focus, never focus the user has
-        // already moved to another button (the list can arrive late).
-        final focused = FocusManager.instance.primaryFocus;
-        final userMoved = focused != null && focused != _focusNode && focused is! FocusScopeNode;
-        if (mounted && !userMoved) _focusNode.requestFocus();
-      });
-    }
     return entries;
   }
 
@@ -211,19 +219,6 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     }
   }
 
-  Future<void> _openSlots() async {
-    if (_slotsOpen || _launchInFlight || !_isDownloaded || _resumeEntries.isEmpty || widget.onResume == null) return;
-    if (_pageIsNotCurrentRoute) return;
-    _slotsOpen = true;
-    try {
-      final service = ref.read(resumeServiceProvider).asData?.value;
-      final picked = await showResumeSlotsDialog(context, _resumeEntries,
-          thumbnailFor: service?.thumbnailFor);
-      if (picked != null && mounted) await _runLaunch(() => widget.onResume!(picked));
-    } finally {
-      _slotsOpen = false;
-    }
-  }
 
   void _toggleAdjustingRating() {
     setState(() {
@@ -251,7 +246,6 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   void dispose() {
     _inputSub?.cancel();
     _focusNode.dispose();
-    _playFocusNode.dispose();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         _container.read(navigationLockedProvider.notifier).state = false;
@@ -548,6 +542,91 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
     return result ?? false;
   }
 
+  static const _tabs = ['Overview', 'Saves', 'Achievements', 'Notes', 'Details'];
+
+  SaveCatalogKey get _catalogKey => SaveCatalogKey(_currentGame);
+
+  Future<void> _openPlay({int? initialTab}) async {
+    if (!_isDownloaded || _launchInFlight || _pageIsNotCurrentRoute) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PlayScreen(
+        game: _currentGame,
+        initialTab: initialTab,
+        coverUrl: _normalizeUrl(_currentGame.pathCoverLarge),
+        onPlay: (request) async {
+          var started = false;
+          await _runLaunch(() async => started = await widget.onPlay(request));
+          return started;
+        },
+        onResume: widget.onResume == null ? null : (entry) => _runLaunch(() => widget.onResume!(entry)),
+      ),
+    ));
+  }
+
+  Future<void> _showMore() async {
+    final registry = await ref.read(strategyRegistryProvider.future);
+    if (!mounted) return;
+    final hasLaunchPref = registry?.getGameEmulatorPreference(_currentGame.id) != null;
+    final isWindowsGame = ['windows', 'pc', 'win'].contains(_currentGame.platformSlug?.toLowerCase());
+    final stateSync = widget.onSyncStates != null &&
+        (ref.read(stateSyncServiceProvider).asData?.value?.isAvailableFor(_currentGame) ?? false);
+    final items = <(String, IconData, Future<void> Function(), bool)>[
+      ('Open folder', Icons.folder_open_outlined, () async {
+        final ds = ref.read(directoryServiceProvider).value;
+        if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
+      }, false),
+      if (stateSync) ('Sync save states', Icons.sync, () async => await widget.onSyncStates(), false),
+      if (isWindowsGame && widget.onConfigure != null)
+        ('Configure', Icons.settings_outlined, () async => await widget.onConfigure(), false),
+      if (hasLaunchPref) ('Forget launch choice', Icons.restart_alt, _forgetLaunch, false),
+      ('Delete from this PC', Icons.delete_outline, () async {
+        await widget.onDelete();
+        ref.invalidate(downloadProvider);
+        _checkDownloadStatus();
+      }, true),
+    ];
+    final picked = await showControllerChoice(context,
+        title: _currentGame.name, labels: [for (final i in items) i.$1], danger: [for (final i in items) i.$4]);
+    if (picked != null && mounted) await items[picked].$3();
+  }
+
+  Future<void> _forgetLaunch() async {
+    final registry = ref.read(strategyRegistryProvider).asData?.value;
+    if (registry == null) return;
+    await registry.clearGameEmulatorPreference(_currentGame.id);
+    await registry.clearGameCorePreference(_currentGame.id);
+    ref.invalidate(strategyRegistryProvider);
+    ref.read(gamePreferenceVersionProvider.notifier).state++;
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Launch preference cleared')));
+  }
+
+  Future<void> _deleteSave(SaveEntry save) async {
+    switch (save.source) {
+      case SaveSource.romm:
+        final id = save.rommSave?['id'];
+        final rommService = widget.rommService;
+        if (id is! int || rommService == null) return;
+        if (!await rommService.deleteSaves([id])) {
+          if (mounted) ErrorHandler.showInfo(context, "Couldn't delete", message: 'RomM did not delete ${save.fileName}.');
+          return;
+        }
+        // RomM may no longer have what this PC last synced: upload it again.
+        await (await ref.read(saveSyncServiceProvider.future))?.forgetSynced(_currentGame);
+      case SaveSource.backup:
+        await ref.read(backupRepositoryProvider).removeEntry(_currentGame.id, save.backup!);
+      case SaveSource.local:
+        break;
+    }
+  }
+
+  void _goToProgress() {
+    setState(() => _tab = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _progressKey.currentContext;
+      if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 250));
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(downloadProvider, (prev, next) {
@@ -558,320 +637,364 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       }
     });
 
-    // Watch for preference changes to update Forget Launch button
+    // Rebuild when the remembered emulator changes (⋯ Forget launch choice).
     ref.watch(gamePreferenceVersionProvider);
-    final hasLaunchPref = ref.read(strategyRegistryProvider).asData?.value?.getGameEmulatorPreference(_currentGame.id) != null;
 
-    final hasResume = _isDownloaded && _watchResumeEntries(ref).isNotEmpty;
     final theme = Theme.of(context);
-    final headerHeight = MediaQuery.of(context).size.height * 0.4;
-    String? backgroundUrl = _currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty
+    final background = _currentGame.screenshotUrl != null && _currentGame.screenshotUrl!.isNotEmpty
         ? _normalizeUrl(_currentGame.screenshotUrl)
         : (_currentGame.mergedScreenshots.isNotEmpty ? _normalizeUrl(_currentGame.mergedScreenshots.first) : null);
-
+    final hasResume = _isDownloaded && _watchResumeEntries(ref).isNotEmpty;
+    final saveCount = ref.watch(saveCatalogProvider(_catalogKey)).valueOrNull?.all.length;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: Listener(
-        onPointerHover: (event) {
-          if (event.delta.distance > 0 && ref.read(inputModeProvider) != InputMode.mouse) {
-            ref.read(inputModeProvider.notifier).state = InputMode.mouse;
-          }
-        },
-        child: SingleChildScrollView(
-          child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeroHeader(context, headerHeight, backgroundUrl, theme),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildActionsRow(),
-                  const SizedBox(height: 24),
-                  _buildMetadataChips(),
-                  const SizedBox(height: 24),
-                  _buildSectionTitle(theme, 'About'),
-                  const SizedBox(height: 8),
-                  Text(_currentGame.summary ?? 'No description available', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5)),
-                  const SizedBox(height: 24),
-                  _buildSectionTitle(theme, 'Details'),
-                  const SizedBox(height: 12),
-                  GameDetailsGrid(game: _currentGame),
-                  const SizedBox(height: 24),
-                  GameNotesSection(notes: _currentGame.notes, onAddNote: _addNote, onViewNote: _viewNote),
-                  const SizedBox(height: 24),
-                  GameAchievementsSection(game: _currentGame),
-                  _buildScreenshotsSection(theme),
-                  GamePersonalSection(
-                    status: _status,
-                    rating: _rating,
-                    completion: _completion,
-                    backlogged: _backlogged,
-                    nowPlaying: _nowPlaying,
-                    isSaving: _isSaving,
-                    adjustingRating: _adjustingRating,
-                    adjustingCompletion: _adjustingCompletion,
-                    onStatusChanged: (val) => setState(() => _status = val),
-                    onRatingChanged: (val) => setState(() => _rating = val),
-                    onCompletionChanged: (val) => setState(() => _completion = val),
-                    onBacklogChanged: (val) => setState(() => _backlogged = val),
-                    onNowPlayingChanged: (val) => setState(() => _nowPlaying = val),
-                    onToggleAdjustingRating: _toggleAdjustingRating,
-                    onToggleAdjustingCompletion: _toggleAdjustingCompletion,
-                    hasLaunchPreference: hasLaunchPref,
-                    onForgetLaunch: () async {
-                      final registry = ref.read(strategyRegistryProvider).asData?.value;
-                      if (registry != null) {
-                        await registry.clearGameEmulatorPreference(_currentGame.id);
-                        await registry.clearGameCorePreference(_currentGame.id);
-                        ref.invalidate(strategyRegistryProvider);
-                        ref.read(gamePreferenceVersionProvider.notifier).state++;
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Launch preference cleared')),
-                          );
-                        }
-                      }
-                    },
-                    onSave: () => _saveProps(context),
-                  ),
-                  const SizedBox(height: 80),
-                ],
-              ),
+      body: ShoulderOwner(
+        child: Listener(
+          onPointerHover: (event) {
+            if (event.delta.distance > 0 && ref.read(inputModeProvider) != InputMode.mouse) {
+              ref.read(inputModeProvider.notifier).state = InputMode.mouse;
+            }
+          },
+          child: Stack(children: [
+            SafeArea(
+              top: false,
+              child: LayoutBuilder(builder: (context, box) {
+                final narrow = box.maxWidth < 900;
+                final pad = narrow ? 16.0 : 28.0;
+                final bannerHeight = GameBanner.heightFor(box.maxHeight);
+                // The banner scrolls with the page; the cover and title start
+                // a third of the way down it, on its dimmed part.
+                final top = MediaQuery.paddingOf(context).top;
+                final contentTop = top + (background != null ? bannerHeight * 0.3 : 60);
+                return SingleChildScrollView(
+                  child: Stack(children: [
+                    if (background != null)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: GameBanner(key: const ValueKey('game-banner'), imageUrl: background, height: bannerHeight),
+                      ),
+                    Positioned(top: top + 10, left: pad - 6, child: _backButton()),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(pad, contentTop, pad, pad),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _cover(narrow ? 110 : 170),
+                        SizedBox(width: narrow ? 14 : 26),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(_currentGame.name,
+                                style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 6),
+                            _metaLine(theme),
+                            const SizedBox(height: 12),
+                            _actionRow(theme),
+                            const SizedBox(height: 14),
+                            _tabBar(theme, saveCount: saveCount),
+                            const SizedBox(height: 12),
+                            _tabContent(theme),
+                            const SizedBox(height: 60),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ]),
+                );
+              }),
             ),
-          ],
+          ]),
         ),
-      ),
       ),
       bottomNavigationBar: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
-        transitionBuilder: (child, animation) {
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            )),
-            child: child,
-          );
-        },
+        transitionBuilder: (child, animation) => SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+              .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
         child: ref.watch(inputModeProvider) != InputMode.mouse
-            ? ControllerHintsBar(
-                hints: hasResume
-                    ? const [
-                        ControllerHintItem(label: 'Resume', button: 'A'),
-                        ControllerHintItem(label: 'Slots', button: 'X'),
-                        ControllerHintItem(label: 'Back', button: 'B'),
-                      ]
-                    : [
-                        ControllerHintItem(
-                          label: _isDownloaded ? 'Play' : 'Download', 
-                          button: 'A'
-                        ),
-                        const ControllerHintItem(label: 'Back', button: 'B'),
-                      ],
-              )
+            ? ControllerHintsBar(hints: [
+                ControllerHintItem(label: _isDownloaded ? 'Play' : 'Download', button: 'A'),
+                if (hasResume) const ControllerHintItem(label: 'States', button: 'Y'),
+                if (_tab == 1) ...const [
+                  ControllerHintItem(label: 'Restore', button: 'X'),
+                  ControllerHintItem(label: 'Delete', button: 'hold A'),
+                ],
+                const ControllerHintItem(label: 'Tabs', button: 'L1 R1'),
+                const ControllerHintItem(label: 'Back', button: 'B'),
+              ])
             : const SizedBox.shrink(key: ValueKey('hide_detail_hints')),
       ),
     );
   }
 
-  Widget _buildHeroHeader(BuildContext context, double height, String? backgroundUrl, ThemeData theme) {
-    return SizedBox(
-      height: height,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: backgroundUrl != null
-                ? CachedNetworkImage(imageUrl: backgroundUrl, fit: BoxFit.cover, placeholder: (_, __) => Container(color: Colors.grey[900]), errorWidget: (_, __, ___) => Container(color: Colors.grey[900]))
-                : Container(color: Colors.grey[900]),
+  Widget _backButton() => FocusEffectWrapper(
+        key: const ValueKey('back-button'),
+        onTap: () => Navigator.of(context).maybePop(),
+        borderRadius: 22,
+        useSafeScale: false,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.black54),
+          child: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
+      );
+
+  Widget _cover(double width) => Hero(
+        tag: 'game_cover_${_currentGame.id}',
+        child: Container(
+          width: width,
+          height: width * 1.38,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 18, offset: const Offset(0, 6))],
           ),
-          Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black87, Colors.black], stops: [0.5, 0.8, 1.0])))),
-          Positioned(top: MediaQuery.of(context).padding.top + 8, left: 16, child: CircleAvatar(backgroundColor: Colors.black54, child: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.of(context).pop()))),
-          Positioned(
-            bottom: 16, left: 16, right: 16,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Hero(
-                  tag: 'game_cover_${_currentGame.id}',
-                  child: Container(
-                    width: 130, height: 180,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))]),
-                    child: ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: _normalizeUrl(_currentGame.pathCoverLarge), fit: BoxFit.cover, placeholder: (_, __) => Container(color: Colors.grey[800]), errorWidget: (_, __, ___) => const Icon(Icons.image_not_supported))),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_currentGame.name, style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      if (_currentGame.platformDisplayName != null) Text(_currentGame.platformDisplayName!, style: theme.textTheme.titleMedium?.copyWith(color: Colors.white60)),
-                    ],
-                  ),
-                ),
-              ],
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: CachedNetworkImage(
+              imageUrl: _normalizeUrl(_currentGame.pathCoverLarge),
+              fit: BoxFit.cover,
+              placeholder: (_, _) => Container(color: Colors.grey[850]),
+              errorWidget: (_, _, _) => Container(color: Colors.grey[850], child: const Icon(Icons.image_not_supported)),
             ),
           ),
-        ],
+        ),
+      );
+
+  Widget _metaLine(ThemeData theme) {
+    final parts = [
+      if (_currentGame.platformDisplayName != null) _currentGame.platformDisplayName!,
+      if (_currentGame.firstReleaseDate != null)
+        DateFormat('MMM d, y').format(DateTime.fromMillisecondsSinceEpoch(_currentGame.firstReleaseDate!)),
+      if (_currentGame.playerCount?.isNotEmpty ?? false) '${_currentGame.playerCount} players',
+    ];
+    return Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      Text(parts.join(' · '), style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+      for (final r in _currentGame.regions) SaveChip(r, color: Colors.lightBlueAccent),
+    ]);
+  }
+
+  Widget _roundButton(
+      {required Key key, required String label, required VoidCallback onTap, FocusNode? focusNode, bool primary = false}) {
+    final theme = Theme.of(context);
+    return FocusEffectWrapper(
+      key: key,
+      focusNode: focusNode,
+      onTap: onTap,
+      borderRadius: 24,
+      useSafeScale: false,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: primary ? 22 : 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          // Play/Download looks like the other buttons; only its size sets it apart.
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        ),
+        child: Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
       ),
     );
   }
 
-  Widget _buildActionsRow() {
-    return Consumer(builder: (context, ref, _) {
-      final downloads = ref.watch(downloadProvider);
-      final progress = downloads[_currentGame.id];
-      if (!_isDownloaded) {
-        if (progress != null) {
-          return Column(children: [
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: DownloadProgressIndicator(progress: progress, compact: true)),
-            const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              if (!progress.isComplete && progress.error == null) ...[
-                GameActionButton(icon: progress.isPaused ? Icons.play_arrow : Icons.pause, label: progress.isPaused ? 'Resume' : 'Pause', onPressed: () {
-                  if (progress.isPaused) { if (progress.game != null && progress.downloadUrl != null) ref.read(downloadProvider.notifier).startDownload(progress.game!, progress.downloadUrl!); }
-                  else { ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id); }
-                }),
-                const SizedBox(width: 16),
-              ],
-              GameActionButton(icon: Icons.close, label: 'Cancel', color: Colors.red, onPressed: () async {
-                if (progress.isComplete || progress.error != null) ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
-                else if (await _showCancelConfirmation(context, progress.gameName)) ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
-              }),
-            ]),
-          ]);
-        }
-        return Center(
-          child: SizedBox(
-            width: 384,
-            child: GameActionButton(
-              focusNode: _focusNode,
-              icon: Icons.download, 
-              label: 'Download Game', 
-              isPrimary: true,
-              onPressed: () async { await widget.onDownload(_currentGame); _checkDownloadStatus(); }
-            ),
-          ),
-        );
-      }
-      final entries = _watchResumeEntries(ref);
-      return Center(
-        child: SizedBox(
-          width: 384,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (entries.isNotEmpty) ...[
-                ResumeSplitButton(
-                  newest: entries.first,
-                  focusNode: _focusNode,
-                  onResume: () async {
-                    if (_isDownloaded && !_pageIsNotCurrentRoute) {
-                      await _runLaunch(() => widget.onResume!(entries.first));
+  Widget _actionRow(ThemeData theme) => Consumer(builder: (context, ref, _) {
+        final progress = ref.watch(downloadProvider)[_currentGame.id];
+        final Widget main;
+        if (!_isDownloaded && progress != null) {
+          main = SizedBox(
+            width: 360,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              DownloadProgressIndicator(progress: progress, compact: true),
+              const SizedBox(height: 8),
+              Row(children: [
+                if (!progress.isComplete && progress.error == null) ...[
+                  GameActionButton(
+                    icon: progress.isPaused ? Icons.play_arrow : Icons.pause,
+                    label: progress.isPaused ? 'Resume' : 'Pause',
+                    onPressed: () {
+                      if (progress.isPaused) {
+                        if (progress.game != null && progress.downloadUrl != null) {
+                          ref.read(downloadProvider.notifier).startDownload(progress.game!, progress.downloadUrl!);
+                        }
+                      } else {
+                        ref.read(downloadProvider.notifier).pauseDownload(_currentGame.id);
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                GameActionButton(
+                  icon: Icons.close,
+                  label: 'Cancel',
+                  color: Colors.red,
+                  onPressed: () async {
+                    if (progress.isComplete || progress.error != null) {
+                      ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
+                    } else if (await _showCancelConfirmation(context, progress.gameName)) {
+                      ref.read(downloadProvider.notifier).cancelDownload(_currentGame.id);
                     }
                   },
-                  onOpenSlots: _openSlots,
                 ),
-                const SizedBox(height: 12),
-                GameActionButton(
-                  focusNode: _playFocusNode,
-                  icon: Icons.play_arrow,
-                  label: 'Play Game',
-                  sublabel: '(fresh start)',
-                  height: ResumeSplitButton.height,
-                  onPressed: () async { if (_isDownloaded) await _runLaunch(() async => await widget.onLaunch()); },
-                ),
-              ] else
-                GameActionButton(
-                  focusNode: _focusNode,
-                  icon: Icons.play_arrow, 
-                  label: 'Play Game', 
-                  isPrimary: true,
-                  onPressed: () async { if (_isDownloaded) await _runLaunch(() async => await widget.onLaunch()); }
-                ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: GameDetailActionButton(
-                      icon: Icons.cloud_upload_outlined,
-                      label: 'Push Saves',
-                      onTap: () async { if (_isDownloaded) await widget.onPushSaves(); },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GameDetailActionButton(
-                      icon: Icons.cloud_download_outlined,
-                      label: 'Pull Saves',
-                      onTap: () async { if (_isDownloaded) await widget.onPullSaves(); },
-                    ),
-                  ),
-                ],
-              ),
-              if (widget.onSyncStates != null &&
-                  (ref.watch(stateSyncServiceProvider).asData?.value?.isAvailableFor(_currentGame) ?? false)) ...[
-                const SizedBox(height: 12),
-                GameDetailActionButton(
-                  icon: Icons.save_alt,
-                  label: 'Sync Save States',
-                  onTap: () async { if (_isDownloaded) await widget.onSyncStates(); },
-                ),
-              ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: GameDetailActionButton(
-                      icon: Icons.folder_open_outlined,
-                      label: 'Folder',
-                      onTap: () async {
-                        final ds = ref.read(directoryServiceProvider).value;
-                        if (ds != null) await SystemUtils.openDirectory(await ds.getRomDirectory(_currentGame));
-                      },
-                    ),
-                  ),
-                  if (['windows', 'pc', 'win'].contains(_currentGame.platformSlug?.toLowerCase())) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GameDetailActionButton(
-                        icon: Icons.settings_outlined,
-                        label: 'Configure',
-                        onTap: () async { if (widget.onConfigure != null) await widget.onConfigure(); },
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GameDetailActionButton(
-                      icon: Icons.backup_outlined,
-                      label: 'Backups',
-                      onTap: () => _showLocalBackupsMenu(ref),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GameDetailActionButton(
-                      icon: Icons.delete_outline,
-                      label: 'Delete',
-                      iconColor: Colors.redAccent,
-                      textColor: Colors.redAccent,
-                      onTap: () async { await widget.onDelete(); ref.invalidate(downloadProvider); _checkDownloadStatus(); },
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ]),
+            ]),
+          );
+        } else if (!_isDownloaded) {
+          main = _roundButton(
+            key: const ValueKey('download-button'),
+            focusNode: _focusNode,
+            label: '⭳ Download',
+            primary: true,
+            onTap: () async {
+              await widget.onDownload(_currentGame);
+              _checkDownloadStatus();
+            },
+          );
+        } else {
+          main = _roundButton(
+              key: const ValueKey('play-button'), focusNode: _focusNode, label: '▶ Play', primary: true, onTap: _openPlay);
+        }
+        return Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          main,
+          _roundButton(key: const ValueKey('more-button'), label: '⋯', onTap: _showMore),
+          const SizedBox(width: 12),
+          _pill('pill-status', '◔ ${_status ?? 'No status'}'),
+          _pill('pill-rating', '☆ $_rating/10'),
+          _pill('pill-completion', '✓ $_completion%'),
+        ]);
+      });
+
+  Widget _pill(String key, String label) => FocusEffectWrapper(
+        key: ValueKey(key),
+        onTap: _goToProgress,
+        borderRadius: 18,
+        useSafeScale: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.35)),
           ),
+          child: Text(label, style: const TextStyle(fontSize: 12)),
         ),
       );
-    });
+
+  Widget _tabBar(ThemeData theme, {int? saveCount}) {
+    String? badge(int i) => switch (i) {
+          1 => saveCount?.toString(),
+          3 => _currentGame.notes.isEmpty ? null : '${_currentGame.notes.length}',
+          _ => null,
+        };
+    return Container(
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.25)))),
+      child: Wrap(spacing: 4, children: [
+        for (var i = 0; i < _tabs.length; i++)
+          FocusEffectWrapper(
+            key: ValueKey('tab-${_tabs[i].toLowerCase()}'),
+            onTap: () => setState(() => _tab = i),
+            borderRadius: 6,
+            useSafeScale: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: i == _tab ? theme.colorScheme.primary : Colors.transparent, width: 2)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(_tabs[i],
+                    style: TextStyle(color: i == _tab ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant)),
+                if (badge(i) != null) ...[
+                  const SizedBox(width: 4),
+                  SaveChip(badge(i)!, color: theme.colorScheme.onSurfaceVariant),
+                ],
+              ]),
+            ),
+          ),
+      ]),
+    );
   }
+
+  Widget _tabContent(ThemeData theme) => switch (_tab) {
+        0 => _overview(theme),
+        1 => SavesTab(
+            game: _currentGame,
+            onPush: () async {
+              if (_isDownloaded) await widget.onPushSaves();
+            },
+            onBackupNow: () => _handleLocalBackup(ref),
+            onRestore: (save, target) async => await widget.onRestoreSave?.call(save, target),
+            onDelete: _deleteSave,
+          ),
+        2 => _currentGame.raId == null
+            ? Text('No RetroAchievements for this game.', style: TextStyle(color: theme.colorScheme.onSurfaceVariant))
+            : GameAchievementsSection(game: _currentGame),
+        3 => GameNotesSection(notes: _currentGame.notes, onAddNote: _addNote, onViewNote: _viewNote),
+        _ => GameDetailsGrid(game: _currentGame),
+      };
+
+  Widget _overview(ThemeData theme) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_currentGame.summary ?? 'No description available',
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, height: 1.5)),
+        const SizedBox(height: 16),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          ..._currentGame.genres.map((g) => GameMetadataChip(label: g)),
+          if (_currentGame.averageRating != null)
+            GameMetadataChip(label: '${_currentGame.averageRating!.toStringAsFixed(0)}/100', icon: Icons.star_outline),
+          if (_currentGame.lastPlayed != null)
+            GameMetadataChip(label: 'Last played ${formatSaveTime(_currentGame.lastPlayed!)}', icon: Icons.history),
+        ]),
+        if (_currentGame.mergedScreenshots.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 120,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _currentGame.mergedScreenshots.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (ctx, index) => FocusEffectWrapper(
+                onTap: () => showDialog(
+                    context: context,
+                    useRootNavigator: true,
+                    builder: (_) => ScreenshotGalleryDialog(
+                        initialIndex: index, imageUrls: _currentGame.mergedScreenshots.map(_normalizeUrl).toList())),
+                borderRadius: 8,
+                useSafeScale: false,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: _normalizeUrl(_currentGame.mergedScreenshots[index]),
+                    width: 200,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, _, _) => const Icon(Icons.image_not_supported),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        KeyedSubtree(
+          key: _progressKey,
+          child: GamePersonalSection(
+            status: _status,
+            rating: _rating,
+            completion: _completion,
+            backlogged: _backlogged,
+            nowPlaying: _nowPlaying,
+            isSaving: _isSaving,
+            adjustingRating: _adjustingRating,
+            adjustingCompletion: _adjustingCompletion,
+            onStatusChanged: (val) => setState(() => _status = val),
+            onRatingChanged: (val) => setState(() => _rating = val),
+            onCompletionChanged: (val) => setState(() => _completion = val),
+            onBacklogChanged: (val) => setState(() => _backlogged = val),
+            onNowPlayingChanged: (val) => setState(() => _nowPlaying = val),
+            onToggleAdjustingRating: _toggleAdjustingRating,
+            onToggleAdjustingCompletion: _toggleAdjustingCompletion,
+            onSave: () => _saveProps(context),
+          ),
+        ),
+      ]);
 
   Future<void> _handleLocalBackup(WidgetRef ref) async {
     try {
@@ -879,12 +1002,28 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
       if (!mounted) return;
       final ds = await ref.read(directoryServiceProvider.future);
       if (!mounted || syncService == null || ds == null) return;
+      // The save of the emulator the game plays in (remembered, else the
+      // platform's default), recorded with the backup.
+      final registry = await ref.read(strategyRegistryProvider.future);
+      final installed = await ref.read(emulatorStatusProvider.future);
+      if (!mounted) return;
+      final who = registry == null ? null : EmulatorChoices.of(registry, installed, _currentGame).forThisGame;
+      final emulatorId = who?.emulatorId;
+      final romPath = await ds.findExistingRomPath(_currentGame) ?? await ds.getRomFilePath(_currentGame);
       final backupService = ref.read(backupServiceProvider);
-      final result = await backupService.createImmediate(_currentGame, await ds.getRomFilePath(_currentGame), syncService);
+      final result = await backupService.createImmediate(_currentGame, romPath, syncService,
+          emulatorId: emulatorId, coreOverride: who?.coreId == null ? null : '${who!.coreId}_libretro');
       if (!mounted) return;
       if (result != null) {
         final backupRepo = ref.read(backupRepositoryProvider);
-        await backupRepo.addEntry(_currentGame.id, BackupEntry(timestamp: DateTime.now(), md5Hash: result.md5, localZipPath: result.zipPath));
+        await backupRepo.addEntry(
+            _currentGame.id,
+            BackupEntry(
+                timestamp: DateTime.now(),
+                md5Hash: result.md5,
+                localZipPath: result.zipPath,
+                emulatorId: emulatorId,
+                coreId: result.coreId ?? who?.coreId));
         if (!mounted) return;
         ErrorHandler.showSuccess(context, 'Backup Created', message: 'Local restore point saved.');
         final rommService = ref.read(rommServiceProvider);
@@ -893,102 +1032,6 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
         ErrorHandler.showInfo(context, 'No Saves', message: 'No save files found to back up.');
       }
     } catch (e) { if (mounted) ErrorHandler.showException(context, e, contextLabel: 'Local Backup'); }
-  }
-
-  Future<void> _handleLocalRestore(WidgetRef ref) async {
-    try {
-      final ds = ref.read(directoryServiceProvider).value;
-      if (mounted) await BackupHistorySheet.show(context, game: _currentGame, romPath: ds != null ? await ds.getRomFilePath(_currentGame) : '');
-    } catch (e) { if (mounted) ErrorHandler.showException(context, e, contextLabel: 'Local Restore'); }
-  }
-
-  Widget _buildMetadataChips() {
-    return Wrap(spacing: 8, runSpacing: 8, children: [
-      ..._currentGame.genres.take(2).map((g) => GameMetadataChip(label: g)),
-      if (_currentGame.playerCount?.isNotEmpty ?? false) GameMetadataChip(label: _currentGame.playerCount!, icon: Icons.people_outline),
-      if (_currentGame.averageRating != null) GameMetadataChip(label: '${_currentGame.averageRating!.toStringAsFixed(0)}/100', icon: Icons.star_outline),
-      if (_currentGame.firstReleaseDate != null) GameMetadataChip(label: DateTime.fromMillisecondsSinceEpoch(_currentGame.firstReleaseDate!).year.toString(), icon: Icons.calendar_today_outlined),
-    ]);
-  }
-
-  Widget _buildScreenshotsSection(ThemeData theme) {
-    if (_currentGame.mergedScreenshots.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _buildSectionTitle(theme, 'Screenshots'),
-      const SizedBox(height: 12),
-      SizedBox(
-        height: 120,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal, itemCount: _currentGame.mergedScreenshots.length, separatorBuilder: (_, __) => const SizedBox(width: 12),
-          itemBuilder: (ctx, index) {
-            final url = _normalizeUrl(_currentGame.mergedScreenshots[index]);
-            return GestureDetector(
-              onTap: () => showDialog(context: context, useRootNavigator: true, builder: (_) => ScreenshotGalleryDialog(initialIndex: index, imageUrls: _currentGame.mergedScreenshots.map(_normalizeUrl).toList())),
-              child: ClipRRect(borderRadius: BorderRadius.circular(8), child: CachedNetworkImage(imageUrl: url, width: 200, height: 120, fit: BoxFit.cover, placeholder: (_, __) => Container(color: Colors.grey[900]), errorWidget: (_, __, ___) => const Icon(Icons.image_not_supported))),
-            );
-          },
-        ),
-      ),
-      const SizedBox(height: 24),
-    ]);
-  }
-
-  Widget _buildSectionTitle(ThemeData theme, String title) => Text(title, style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onSurface, fontWeight: FontWeight.bold));
-
-  Future<void> _showLocalBackupsMenu(WidgetRef ref) async {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.backup_outlined, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 12),
-            Text('Local Saves', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text(
-          'Choose an action to perform on your local save backups.',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        actions: [
-          FocusEffectWrapper(
-            onTap: () {
-              Navigator.pop(ctx);
-              _handleLocalBackup(ref);
-            },
-            borderRadius: 12.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
-              ),
-              child: Text('Create Backup', style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FocusEffectWrapper(
-            onTap: () {
-              Navigator.pop(ctx);
-              _handleLocalRestore(ref);
-            },
-            borderRadius: 12.0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4)),
-              ),
-              child: Text('Restore Backup', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

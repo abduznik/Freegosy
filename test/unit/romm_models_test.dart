@@ -130,4 +130,63 @@ void main() {
       expect(p2.nameForDisplay, 'GBA');
     });
   });
+
+  group('Game: the id RomM read from the ROM (RomM 5.3+)', () {
+    test('title_id, save_target and save_target_layout are read', () {
+      final game = Game.fromJson({
+        'id': 7,
+        'name': 'Ico',
+        'title_id': 'SCUS-97113',
+        'save_target': 'BASCUS-97113',
+        'save_target_layout': 'FOLDER_PREFIX',
+      });
+      expect(game.titleId, 'SCUS-97113');
+      expect(game.saveTarget, 'BASCUS-97113');
+      expect(game.saveTargetLayout, SaveTargetLayout.folderPrefix);
+    });
+
+    test('an older server sends none of them', () {
+      final game = Game.fromJson({'id': 7, 'name': 'Ico'});
+      expect(game.titleId, isNull);
+      expect(game.saveTarget, isNull);
+      expect(game.saveTargetLayout, isNull);
+    });
+
+    test('an unknown layout or a non-string value is null, not an error', () {
+      final game = Game.fromJson({'id': 7, 'name': 'Ico', 'save_target_layout': 'SIDEWAYS', 'title_id': 12});
+      expect(game.saveTargetLayout, isNull);
+      expect(game.titleId, isNull);
+      expect(SaveTargetLayout.fromJson(42), isNull);
+    });
+
+    test('the layout as the RomM API really sends it (lower case, hyphens)', () {
+      expect(Game.fromJson({'id': 1, 'name': 'Burnout 3', 'save_target_layout': 'folder-prefix'}).saveTargetLayout,
+          SaveTargetLayout.folderPrefix);
+      expect({
+        for (final v in ['folder-exact', 'folder-prefix', 'file-exact', 'file-prefix', 'folder-split'])
+          SaveTargetLayout.fromJson(v)
+      }, SaveTargetLayout.values.toSet());
+    });
+
+    test('every layout RomM sends is known', () {
+      expect({
+        for (final v in ['FOLDER_EXACT', 'FOLDER_PREFIX', 'FILE_EXACT', 'FILE_PREFIX', 'FOLDER_SPLIT'])
+          SaveTargetLayout.fromJson(v)
+      }, SaveTargetLayout.values.toSet());
+    });
+
+    test('toJson keeps them, so a cached game still has its id', () {
+      final game = Game.fromJson({
+        'id': 7,
+        'name': 'Pilotwings',
+        'title_id': '0004000000033500',
+        'save_target': '00040000/00033500',
+        'save_target_layout': 'FOLDER_SPLIT',
+      });
+      final again = Game.fromJson(game.toJson());
+      expect(again.titleId, '0004000000033500');
+      expect(again.saveTarget, '00040000/00033500');
+      expect(again.saveTargetLayout, SaveTargetLayout.folderSplit);
+    });
+  });
 }

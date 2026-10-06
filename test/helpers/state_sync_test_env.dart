@@ -37,7 +37,7 @@ class StateSyncTestEnv {
       await pcsx2.prefs.setBool(StateSyncService.enabledKey('pcsx2'), true);
     }
     final api = FakeRommStatesApi();
-    final service = StateSyncService(api, pcsx2.prefs, (game, {emulatorId}) => pcsx2.strategy,
+    final service = StateSyncService(api, pcsx2.prefs, (game, {emulatorId, coreOverride}) => pcsx2.strategy,
         listTimeout: listTimeout);
     final game = Game(id: '42', name: 'Ico (SCUS-97113)', platformSlug: 'ps2', fileSize: 0);
     return StateSyncTestEnv._(

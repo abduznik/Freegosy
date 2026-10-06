@@ -6,10 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../disc/serial_extraction_service.dart';
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../storage/directory_service.dart';
-import '../ps2_memory_card.dart';
+import '../formats/ps2_memory_card.dart';
 import '../save_state_info.dart';
 import '../save_strategy.dart';
 import '../state_sync_capable.dart';
@@ -42,13 +43,14 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
   @override
   String get strategyId => 'pcsx2';
 
-  /// Extracts the PS2 game serial (e.g. "SLUS-12345") from the ROM. See
-  /// [SerialExtractionService] for the filename/CHD/ISO extraction strategy.
-  /// Returns null if the serial cannot be determined.
-  Future<String?> _extractSerial(String romPath) => _serialExtractionService.extractSerial(
-        romPath: romPath,
-        bootLinePattern: bootLinePattern,
-        chdmanCandidates: [(emulatorId: 'pcsx2', exeName: _getEmuExe())],
+  /// The game's PS2 serial (e.g. "SLUS-12345"): RomM's, else read from the
+  /// ROM (see [SerialExtractionService]). Null if neither has it.
+  Future<String?> _serial(Game game, String romPath) => GameIdResolver.resolve(
+        label: 'PCSX2 ${game.name}',
+        server: GameIdResolver.discSerial(game, romPath),
+        shape: GameIdResolver.ps1ps2Serial,
+        local: () => _serialExtractionService.extractSerial(
+            romPath: romPath, bootLinePattern: bootLinePattern, chdmanCandidates: [(emulatorId: 'pcsx2', exeName: _getEmuExe())]),
       );
 
   String _normalizeMemcardFilename(String filename) {
@@ -90,7 +92,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
   @override
   Future<bool Function(String fileName)?> stateFileMatcher(
       Game game, String romPath) async {
-    final serial = await _extractSerial(romPath);
+    final serial = await _serial(game, romPath);
     if (serial == null) return null;
     final wanted = _serialKey(serial);
     return (String fileName) {
@@ -233,7 +235,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
       // Mcd001.ps2/Mcd002.ps2 (file OR folder type). This `saves/{Serial}`
       // check is kept as a best-effort for user-created structures and some
       // third-party setups; it only fires if the folder actually exists.
-      final serial = await _extractSerial(romPath);
+      final serial = await _serial(game, romPath);
       if (serial != null) {
         final perGameDir = io.Directory(isEmuDeck
             ? p.join(root, serial)
@@ -416,7 +418,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
     }
     if (fileCards.isEmpty) return result;
 
-    final serial = await _extractSerial(romPath);
+    final serial = await _serial(game, romPath);
     if (serial == null) {
       debugPrint("[PCSX2]   serial unknown — can't tell this game's saves on the file card(s); not uploading them");
       return result;
@@ -453,7 +455,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
   /// folder-card restore can't: when the card they belong on is a file card,
   /// or the download is a whole file card. Returns false to leave the
   /// download to it (save folders into a folder card, per-game folders).
-  Future<bool> _restoreOntoCard(String romPath, String memcardsDir, Uint8List data, String filename) async {
+  Future<bool> _restoreOntoCard(Game game, String romPath, String memcardsDir, Uint8List data, String filename) async {
     final List<Ps2CardSave> incoming;
     try {
       incoming = Ps2SaveFolders.savesFromUpload(data, filename);
@@ -464,7 +466,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
     if (incoming.isEmpty) return false;
     final incomingIsCard = Ps2MemoryCard.looksLikeCard(data);
     final cards = await _memcards(memcardsDir);
-    final serial = await _extractSerial(romPath);
+    final serial = await _serial(game, romPath);
 
     // The card that already holds this game's saves, else the first one.
     io.FileSystemEntity? target;
@@ -552,11 +554,20 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
     try {
       final cards = await _memcards(await _memcardsDir());
       if (!cards.any((c) => c is io.File)) return null;
-      return await _extractSerial(romPath) == null ? _noSerialMessage : null;
+      return await _serial(game, romPath) == null ? _noSerialMessage : null;
     } catch (e) {
       debugPrint('[PCSX2] cannot tell whether saves can be synced: $e');
       return null;
     }
+  }
+
+  /// A backup holds what a push would zip (this game's folders off a folder
+  /// card, or its saves/{Serial} folder), so it goes back the way a pull
+  /// does; shared file cards go back card by card (the base class).
+  @override
+  Future<bool> restoreBackup(Game game, String romPath, Uint8List zipBytes, String zipName) async {
+    if (await pullMustFinishBeforeLaunch(game, romPath)) return super.restoreBackup(game, romPath, zipBytes, zipName);
+    return restoreSave(game, romPath, zipBytes, zipName.toLowerCase().endsWith('.zip') ? zipName : '$zipName.zip');
   }
 
   /// PCSX2 opens its file cards when a game starts, so a pull that lands
@@ -578,7 +589,7 @@ class Pcsx2SaveStrategy extends SaveStrategy with StateSyncCapable {
       final bool isEmuDeck = p.basename(root) == 'saves';
 
       if (!_stateFilePattern.hasMatch(p.basename(filename)) &&
-          await _restoreOntoCard(destPath, isEmuDeck ? root : p.join(root, 'memcards'), data, filename)) {
+          await _restoreOntoCard(game, destPath, isEmuDeck ? root : p.join(root, 'memcards'), data, filename)) {
         return true;
       }
 

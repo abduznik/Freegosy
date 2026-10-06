@@ -121,7 +121,7 @@ void main() {
 
   test('returns false instead of throwing when the strategy resolver throws', () async {
     final broken = StateSyncService(env.api, env.pcsx2.prefs,
-        (game, {emulatorId}) => throw StateError('no strategy'));
+        (game, {emulatorId, coreOverride}) => throw StateError('no strategy'));
 
     expect(await broken.resolveConflict(conflict, choice: 'local'), isFalse);
     expect(env.stateFile(stateFileA).readAsBytesSync(), stateBytes(3));

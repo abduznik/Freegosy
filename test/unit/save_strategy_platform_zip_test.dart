@@ -134,7 +134,7 @@ void main() {
       )).thenAnswer((inv) async {
         uploadedFile = inv.positionalArguments[1] as File;
         uploadedFilename = inv.namedArguments[#overrideFilename] as String?;
-        return (ok: true, conflict: null);
+        return (ok: true, conflict: null, saved: null);
       });
       when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
@@ -197,7 +197,7 @@ void main() {
         if (uploadedFile != null && uploadedFile!.existsSync()) {
           uploadedBytes = await uploadedFile!.readAsBytes();
         }
-        return (ok: true, conflict: null);
+        return (ok: true, conflict: null, saved: null);
       });
       when(mockRommService.pruneOldSaves(any, keepCount: anyNamed('keepCount'))).thenAnswer((_) async {});
 
@@ -215,6 +215,8 @@ void main() {
       expect(filenames.any((name) => name.endsWith('save1.dat')), isTrue);
       expect(filenames.any((name) => name.endsWith('save2.dat')), isTrue);
       expect(filenames.any((name) => name.endsWith('freegosy_sync.txt')), isTrue);
+      final meta = archive.firstWhere((e) => e.name.endsWith('freegosy_sync.txt'));
+      expect(String.fromCharCodes(meta.content as List<int>), isNot(contains('contentHash')));
       
       await tempDir.delete(recursive: true);
     });

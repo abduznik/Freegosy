@@ -634,7 +634,8 @@ class RommService implements RommStatesApi {
   /// clients name it (a RetroArch core like `pcsx_rearmed`, or an emulator
   /// like `duckstation`); RomM's in-browser player only offers saves tagged
   /// with its core. `freegosy` when unknown.
-  Future<({bool ok, Map<String, dynamic>? conflict})> uploadSave(
+  /// [saved]: RomM's record of the uploaded save (its `id`), when it sent one.
+  Future<({bool ok, Map<String, dynamic>? conflict, Map<String, dynamic>? saved})> uploadSave(
     String gameId,
     io.File saveFile, {
     String? emulator,
@@ -692,16 +693,35 @@ class RommService implements RommStatesApi {
             ? (response.data['detail'] as Map<String, dynamic>?)
             : null;
         debugPrint('[RomM] uploadSave 409 conflict: $detail');
-        return (ok: false, conflict: detail);
+        return (ok: false, conflict: detail, saved: null);
       }
 
       final ok = response.statusCode != null &&
           response.statusCode! >= 200 &&
           response.statusCode! < 300;
-      return (ok: ok, conflict: null);
+      final saved = ok && response.data is Map ? Map<String, dynamic>.from(response.data as Map) : null;
+      return (ok: ok, conflict: null, saved: saved);
     } catch (e) {
       debugPrint('[RomM] uploadSave error: $e');
-      return (ok: false, conflict: null);
+      return (ok: false, conflict: null, saved: null);
+    }
+  }
+
+  /// Tells RomM that device [deviceId] has save [saveId] (POST
+  /// /api/saves/{id}/downloaded), as a download would: RomM's device sync
+  /// then doesn't take this device's next upload for a stale one. For a save
+  /// this device already had byte for byte. False when it fails.
+  Future<bool> confirmSaveDownloaded(int saveId, {required String deviceId}) async {
+    try {
+      final response = await _dio.post(
+        '/api/saves/$saveId/downloaded',
+        data: {'device_id': deviceId},
+        options: _authOptions.copyWith(contentType: 'application/json', validateStatus: (s) => s != null && s < 500),
+      );
+      return response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+    } catch (e) {
+      debugPrint('[RomM] confirmSaveDownloaded error: $e');
+      return false;
     }
   }
 
@@ -751,6 +771,15 @@ class RommService implements RommStatesApi {
     String gameId, {
     String? deviceId,
     String? slot,
+  }) async =>
+      await getSavesListOrNull(gameId, deviceId: deviceId, slot: slot) ?? [];
+
+  /// Like [getSavesList], but null when the list couldn't be read (an error
+  /// or a refused request), so a caller can tell that apart from no saves.
+  Future<List<Map<String, dynamic>>?> getSavesListOrNull(
+    String gameId, {
+    String? deviceId,
+    String? slot,
   }) async {
     try {
       final params = <String, dynamic>{'rom_id': gameId};
@@ -759,7 +788,7 @@ class RommService implements RommStatesApi {
 
       final response =
           await _dio.get('/api/saves', queryParameters: params, options: _authOptions);
-      if (response.statusCode != 200) return [];
+      if (response.statusCode != 200) return null;
       final List<dynamic> items =
           (response.data is Map && response.data.containsKey('items'))
               ? response.data['items']
@@ -777,7 +806,7 @@ class RommService implements RommStatesApi {
       });
       return sorted;
     } catch (_) {
-      return [];
+      return null;
     }
   }
 

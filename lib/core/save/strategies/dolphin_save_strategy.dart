@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -101,6 +102,27 @@ class DolphinSaveStrategy extends SaveStrategy {
     return isUpper || isDigit;
   }
 
+  /// The game's 4-character disc id (`GZLE`): RomM's (`save_target`, RomM
+  /// 5.3+), else read from the `.iso`/`.rvz` file. Null if neither has it.
+  @visibleForTesting
+  Future<String?> gameIdFor(Game game, String romPath) async =>
+      GameIdResolver.server('Dolphin ${game.name}', _rommGameId(game)) ?? await _extractGameId(romPath);
+
+  /// RomM's `save_target` as a disc id: GameCube's is the id itself; Wii's
+  /// is the id as 8 hex digits. Anything else (a WAD's path) is no disc id.
+  static String? _rommGameId(Game game) {
+    final target = GameIdResolver.clean(game.saveTarget);
+    if (target == null) return null;
+    if (game.platformSlug?.toLowerCase() != 'wii') {
+      // GCI names carry the 4-character id (01-GZLE-…), whatever RomM sends.
+      final id = target.toUpperCase();
+      return RegExp(r'^[A-Z0-9]{4}').hasMatch(id) ? id.substring(0, 4) : null;
+    }
+    if (!RegExp(r'^[0-9a-fA-F]{8}$').hasMatch(target)) return null;
+    return String.fromCharCodes(
+        [for (var i = 0; i < 8; i += 2) int.parse(target.substring(i, i + 2), radix: 16)]);
+  }
+
   /// Extracts Game ID/Code from file if possible.
   /// Often formatted as [GAMEID] Name.ext or Name [GAMEID].ext
   Future<String?> _extractGameId(String romPath) async {
@@ -162,7 +184,7 @@ class DolphinSaveStrategy extends SaveStrategy {
 
     if (isWii) {
       // Wii saves are in Wii/title/00010000/[TITLE_ID_HEX]
-      String? titleId = await _extractGameId(romPath);
+      String? titleId = await gameIdFor(game, romPath);
       
       final String wiiBase = (isIntegratedEnv && p.basename(userDir).toLowerCase() == 'wii')
           ? userDir
@@ -216,7 +238,7 @@ class DolphinSaveStrategy extends SaveStrategy {
         // GameCube save matching
         final dir = io.Directory(rootSaveDir);
         if (await dir.exists()) {
-          final gameId = (await _extractGameId(romPath))?.toUpperCase();
+          final gameId = (await gameIdFor(game, romPath))?.toUpperCase();
           final normalizedTarget = _normalizeGameName(game.displayName);
 
           // Dolphin timestamps backups with [YYYY-MM-DD_HH-MM-SS] in the filename.
@@ -286,7 +308,7 @@ class DolphinSaveStrategy extends SaveStrategy {
       final stateDir = p.join(userDir, 'StateSaves');
       final stateDirObj = io.Directory(stateDir);
       if (await stateDirObj.exists()) {
-        final gameId = (await _extractGameId(romPath))?.toUpperCase();
+        final gameId = (await gameIdFor(game, romPath))?.toUpperCase();
         final romStem = p.basenameWithoutExtension(romPath).toUpperCase();
 
         await for (final entity in stateDirObj.list()) {

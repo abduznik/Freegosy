@@ -75,7 +75,7 @@ void main() {
     });
 
     test('that it ran, before the service reports what it did', () async {
-      final stateSync = StateSyncService(FakeRommStatesApi(), env.prefs, (g, {emulatorId}) => null);
+      final stateSync = StateSyncService(FakeRommStatesApi(), env.prefs, (g, {emulatorId, coreOverride}) => null);
       final logs = _captureLogs('[StateSync]');
 
       await buildService(stateSync: stateSync).pushStatesAfterExit(session(), game, romPath);

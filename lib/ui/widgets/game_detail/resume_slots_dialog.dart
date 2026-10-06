@@ -22,7 +22,7 @@ Future<ResumeEntry?> showResumeSlotsDialog(
           shrinkWrap: true,
           padding: const EdgeInsets.all(8),
           itemCount: entries.length,
-          itemBuilder: (context, i) => _SlotRow(
+          itemBuilder: (context, i) => ResumeSlotRow(
             key: ValueKey('${entries[i].emulatorId}|${entries[i].fileName}'),
             entry: entries[i],
             autofocus: i == 0,
@@ -36,8 +36,10 @@ Future<ResumeEntry?> showResumeSlotsDialog(
   );
 }
 
-class _SlotRow extends StatefulWidget {
-  const _SlotRow({
+/// One save state: slot, time, emulator version, where it is, and a ⚠ line
+/// when it was made with another emulator version.
+class ResumeSlotRow extends StatefulWidget {
+  const ResumeSlotRow({
     super.key,
     required this.entry,
     required this.autofocus,
@@ -53,10 +55,10 @@ class _SlotRow extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_SlotRow> createState() => _SlotRowState();
+  State<ResumeSlotRow> createState() => _ResumeSlotRowState();
 }
 
-class _SlotRowState extends State<_SlotRow> {
+class _ResumeSlotRowState extends State<ResumeSlotRow> {
   Future<Uint8List?>? _thumbnail;
 
   @override

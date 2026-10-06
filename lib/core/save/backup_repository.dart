@@ -8,7 +8,7 @@ import 'backup_entry.dart';
 /// so that providers stay thin.
 class BackupRepository {
   static const String _boxName = 'freegosy_backups';
-  static const int _maxBackups = 4;
+  static const int _maxBackups = 8;
 
   Box<List>? _box;
 
@@ -72,6 +72,19 @@ class BackupRepository {
     await _openBox.put(romId, entries);
   }
 
+  /// Adds [entry] unless it holds the same files as the newest backup of
+  /// [romId] (same [BackupEntry.md5Hash]); then its zip is deleted instead.
+  /// Whether it was added.
+  Future<bool> addUnlessSameAsNewest(String romId, BackupEntry entry) async {
+    final newest = getEntries(romId).firstOrNull;
+    if (newest != null && newest.md5Hash == entry.md5Hash) {
+      await _deleteFile(entry.localZipPath);
+      return false;
+    }
+    await addEntry(romId, entry);
+    return true;
+  }
+
   /// Removes a specific [entry] for [romId] and deletes its physical ZIP.
   Future<void> removeEntry(String romId, BackupEntry entry) async {
     final entries = getEntries(romId);
@@ -95,6 +108,8 @@ class BackupRepository {
         md5Hash: old.md5Hash,
         localZipPath: old.localZipPath,
         isSynced: true,
+        emulatorId: old.emulatorId,
+        coreId: old.coreId,
       );
       await _openBox.put(romId, entries);
     }

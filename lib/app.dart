@@ -16,6 +16,7 @@ import 'providers/ui_provider.dart';
 import 'core/storage/file_sanity_service.dart';
 import 'core/input/gamepad_service.dart';
 import 'core/input/input_action_bus.dart';
+import 'core/input/global_actions.dart';
 import 'package:flutter/services.dart';
 import 'providers/theme_provider.dart';
 import 'core/platform/window_service.dart';
@@ -89,29 +90,8 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
 
     // Global Action Executor: Listen for actions that apply everywhere
     _inputSub = inputActionBus.stream.listen((action) {
-      if (action == GameAction.confirm) {
-        final focusedAction = ref.read(focusedActionProvider);
-        if (focusedAction != null) {
-          debugPrint('🎯 Global: Executing focused action.');
-          focusedAction();
-        }
-      } else if (action == GameAction.confirmHold) {
-        final focusedLongPress = ref.read(focusedLongPressActionProvider);
-        if (focusedLongPress != null) {
-          debugPrint('🎯 Global: Executing focused long-press action.');
-          focusedLongPress();
-        }
-      } else if (action == GameAction.l1) {
-        final current = ref.read(currentTabIndexProvider);
-        if (current > 0) {
-          ref.read(currentTabIndexProvider.notifier).state = current - 1;
-        }
-      } else if (action == GameAction.r1) {
-        final current = ref.read(currentTabIndexProvider);
-        if (current < _screens.length - 1) {
-          ref.read(currentTabIndexProvider.notifier).state = current + 1;
-        }
-      }
+      if (!mounted) return;
+      runGlobalAction(action, ProviderScope.containerOf(context, listen: false), screenCount: _screens.length);
     });
   }
 

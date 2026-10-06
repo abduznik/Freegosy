@@ -1,4 +1,7 @@
 import '../retroachievements/retroachievements_game_models.dart';
+import 'save_target_layout.dart';
+
+export 'save_target_layout.dart';
 
 class Game {
   final String id;
@@ -40,6 +43,9 @@ class Game {
   final List<RomNote> notes; // from all_user_notes
   final int? raId; // RetroAchievements game ID, set once RomM's RA provider matched the ROM
   final List<RetroAchievement> raAchievements; // from merged_ra_metadata.achievements (no user progress)
+  final String? titleId; // RomM 5.3+: the game's own id read from the ROM, e.g. SLUS-20675
+  final String? saveTarget; // RomM 5.3+: the folder/file name the emulator saves under
+  final SaveTargetLayout? saveTargetLayout; // how saveTarget is used on disk
 
   bool get isMultiFile => hasMultipleFiles;
 
@@ -102,6 +108,9 @@ class Game {
     this.notes = const [],
     this.raId,
     this.raAchievements = const [],
+    this.titleId,
+    this.saveTarget,
+    this.saveTargetLayout,
   });
 
   factory Game.fromJson(Map<String, dynamic> json) {
@@ -147,6 +156,9 @@ class Game {
             .whereType<Map<String, dynamic>>()
             .map(RetroAchievement.fromRommJson),
       ),
+      titleId: json['title_id'] is String ? json['title_id'] as String : null,
+      saveTarget: json['save_target'] is String ? json['save_target'] as String : null,
+      saveTargetLayout: SaveTargetLayout.fromJson(json['save_target_layout']),
     );
   }
 
@@ -202,6 +214,9 @@ class Game {
       'merged_ra_metadata': {
         'achievements': raAchievements.map((a) => a.toRommJson()).toList(),
       },
+      'title_id': titleId,
+      'save_target': saveTarget,
+      'save_target_layout': saveTargetLayout?.toJson(),
     };
   }
 }

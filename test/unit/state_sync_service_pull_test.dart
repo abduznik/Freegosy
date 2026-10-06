@@ -390,7 +390,7 @@ void main() {
 
   test('a strategy resolver that throws never makes a pull throw', () async {
     final broken = StateSyncService(env.api, env.pcsx2.prefs,
-        (game, {emulatorId}) => throw StateError('no strategy'));
+        (game, {emulatorId, coreOverride}) => throw StateError('no strategy'));
 
     final result = await broken.pullStates(env.game, env.romPath);
 

@@ -5,10 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../disc/serial_extraction_service.dart';
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../storage/directory_service.dart';
-import '../ps1_memory_card.dart';
+import '../formats/ps1_memory_card.dart';
 import '../save_state_info.dart';
 import '../save_strategy.dart';
 import '../state_sync_capable.dart';
@@ -44,13 +45,14 @@ class DuckstationSaveStrategy extends SaveStrategy with StateSyncCapable {
   @override
   String get strategyId => 'duckstation';
 
-  /// Extracts the PS1 game serial (e.g. "SLES-03508") from the ROM. See
-  /// [SerialExtractionService] for the filename/CHD/ISO extraction strategy.
-  /// Returns null if the serial cannot be determined.
-  Future<String?> _extractSerial(String romPath) => _serialExtractionService.extractSerial(
-        romPath: romPath,
-        bootLinePattern: _bootLinePattern,
-        chdmanCandidates: [(emulatorId: 'duckstation', exeName: _getEmuExe())],
+  /// The game's PS1 serial (e.g. "SLES-03508"): RomM's, else read from the
+  /// ROM (see [SerialExtractionService]). Null if neither has it.
+  Future<String?> _serial(Game game, String romPath) => GameIdResolver.resolve(
+        label: 'DuckStation ${game.name}',
+        server: GameIdResolver.discSerial(game, romPath),
+        shape: GameIdResolver.ps1ps2Serial,
+        local: () => _serialExtractionService.extractSerial(romPath: romPath, bootLinePattern: _bootLinePattern,
+            chdmanCandidates: [(emulatorId: 'duckstation', exeName: _getEmuExe())]),
       );
 
   /// DuckStation's per-game state naming: `SERIAL_N.sav` or
@@ -75,7 +77,7 @@ class DuckstationSaveStrategy extends SaveStrategy with StateSyncCapable {
   @override
   Future<bool Function(String fileName)?> stateFileMatcher(
       Game game, String romPath) async {
-    final serial = await _extractSerial(romPath);
+    final serial = await _serial(game, romPath);
     if (serial == null) return null;
     final wanted = _serialKey(serial);
     return (String fileName) {
@@ -181,7 +183,7 @@ class DuckstationSaveStrategy extends SaveStrategy with StateSyncCapable {
 
   Future<_CardSetup> _cardSetup(Game game, String romPath, {bool needSerial = true}) async {
     final baseDir = await _getBaseDir(platformSlug: game.platformSlug);
-    final serial = needSerial ? await _extractSerial(romPath) : null;
+    final serial = needSerial ? await _serial(game, romPath) : null;
     final globalIni = await _readIfExists(p.join(baseDir, 'settings.ini'));
     final gameIni =
         serial == null ? null : await _readIfExists(p.join(baseDir, 'gamesettings', '$serial.ini'));

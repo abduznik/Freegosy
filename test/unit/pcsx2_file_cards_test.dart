@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
-import 'package:freegosy/core/save/ps2_memory_card.dart';
+import 'package:freegosy/core/save/formats/ps2_memory_card.dart';
 import 'package:freegosy/core/save/save_strategy.dart';
 import 'package:path/path.dart' as p;
 
@@ -103,6 +103,19 @@ void main() {
       mcd(1).writeAsBytesSync(card([ratchet]));
       await env.strategy.restoreSave(game, romPath(), card([gt4, ac5]), 'Mcd001.ps2');
       expect(cardContents(mcd(1)).keys.toSet(), {'BASCUS-97199RATCHET', 'BASLUS-20851AC5'});
+    });
+
+    test('a local backup of the shared card puts back only this game\'s saves', () async {
+      final olderAc5 = save('BASLUS-20851AC5', {'BASLUS-20851AC5': pattern(11, 40000), 'icon.sys': pattern(2, 964)});
+      final backedUp = card([olderAc5, gt4]);
+      final backup = Uint8List.fromList(ZipEncoder().encode(Archive()..addFile(ArchiveFile('Mcd001.ps2', backedUp.length, backedUp))));
+      final newerGt4 = save('BESCES-52438GAMEDATA', {'BESCES-52438GAMEDATA': pattern(12, 124880)});
+      mcd(1).writeAsBytesSync(card([ac5, newerGt4]));
+
+      expect(await env.strategy.restoreBackup(game, romPath(), backup, 'freegosy_77_backup.zip'), isTrue);
+      final after = cardContents(mcd(1));
+      expect(after['BASLUS-20851AC5'], filesOf(olderAc5), reason: 'this game: back to the backup');
+      expect(after['BESCES-52438GAMEDATA'], filesOf(newerGt4), reason: 'another game: untouched');
     });
 
     test('the card that already holds the game\'s saves gets them', () async {

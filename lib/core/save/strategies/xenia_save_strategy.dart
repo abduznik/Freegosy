@@ -3,6 +3,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -20,8 +21,13 @@ class XeniaSaveStrategy extends SaveStrategy {
   @override
   String get strategyId => 'xenia_canary';
 
-  /// Xbox 360 title IDs are 8 hex characters e.g. 4D5307E6
-  String? _extractTitleId(Game game) {
+  /// Xbox 360 title id, 8 hex characters e.g. 4D5307E6: RomM's (`title_id`,
+  /// RomM 5.3+), else from the file name.
+  @visibleForTesting
+  static String? titleIdFor(Game game) {
+    final fromRomm =
+        GameIdResolver.server('Xenia ${game.name}', game.titleId?.toUpperCase(), shape: RegExp(r'^[0-9A-F]{8}$'));
+    if (fromRomm != null) return fromRomm;
     final name = game.fsName ?? game.fileName ?? game.name;
     final match = RegExp(r'[0-9A-Fa-f]{8}').firstMatch(name);
     return match?.group(0)?.toUpperCase();
@@ -38,7 +44,7 @@ class XeniaSaveStrategy extends SaveStrategy {
   Future<String?> getSaveDir(Game game, String romPath) async {
     final contentDir = await _getContentDir();
     if (contentDir == null) return null;
-    final titleId = _extractTitleId(game);
+    final titleId = titleIdFor(game);
     if (titleId == null) return null;
     return '$contentDir\\$titleId\\00000001';
   }

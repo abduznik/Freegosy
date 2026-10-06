@@ -5,11 +5,13 @@ import 'package:flutter/foundation.dart';
 
 import '../../disc/serial_extraction_service.dart';
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../storage/directory_service.dart';
-import '../ps1_memory_card.dart';
-import '../ps2_memory_card.dart';
+import '../formats/ps1_memory_card.dart';
+import '../formats/ps2_memory_card.dart';
+import '../formats/save_format_registry.dart';
 import '../save_state_info.dart';
 import '../save_strategy.dart';
 import '../state_sync_capable.dart';
@@ -488,17 +490,18 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
     return (cards: [io.File(p.join(saveDir, '${p.basenameWithoutExtension(romPath)}.ps2'))], shared: false);
   }
 
-  Future<String?> _ps2Serial(String romPath) async {
-    if (ps2SerialOverride != null) return ps2SerialOverride!(romPath);
-    return _serials?.extractSerial(
-        romPath: romPath, bootLinePattern: Pcsx2SaveStrategy.bootLinePattern, chdmanCandidates: const []);
-  }
+  Future<String?> _ps2Serial(Game game, String romPath) => GameIdResolver.resolve(
+      label: 'LRPS2 ${game.name}',
+      server: GameIdResolver.discSerial(game, romPath),
+      shape: GameIdResolver.ps1ps2Serial,
+      local: () async => ps2SerialOverride != null ? ps2SerialOverride!(romPath) : _serials?.extractSerial(
+          romPath: romPath, bootLinePattern: Pcsx2SaveStrategy.bootLinePattern, chdmanCandidates: const []));
 
   /// Which saves on LRPS2's cards are [romPath]'s: those named after its
   /// serial; every save on a per-game card when the serial is unknown. Null
   /// when it can't be told (shared cards, serial unknown).
-  Future<bool Function(String)?> _lrps2SavesOf(String romPath, bool shared) async {
-    final serial = await _ps2Serial(romPath);
+  Future<bool Function(String)?> _lrps2SavesOf(Game game, String romPath, bool shared) async {
+    final serial = await _ps2Serial(game, romPath);
     if (serial != null) return (name) => Ps2SaveFolders.isSaveOf(name, serial);
     return shared ? null : (_) => true;
   }
@@ -524,7 +527,7 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
       }
       if (!changed) return const [];
     }
-    final belongs = await _lrps2SavesOf(romPath, setup.shared);
+    final belongs = await _lrps2SavesOf(game, romPath, setup.shared);
     if (belongs == null) {
       debugPrint("[SaveSync] [retroarch] LRPS2: serial unknown — can't tell this game's saves on the shared cards");
       return const [];
@@ -571,7 +574,7 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
           "The PS2 memory card from RomM ($filename) isn't one Freegosy can read ($e). Nothing was changed.");
     }
     final setup = await _lrps2Cards(game, romPath);
-    final belongs = await _lrps2SavesOf(romPath, setup.shared);
+    final belongs = await _lrps2SavesOf(game, romPath, setup.shared);
     if (belongs == null) throw SaveSyncNotPossibleException(_lrps2NoSerial);
     final mine = incoming.where((s) => belongs(s.name)).toList();
     if (mine.isEmpty) {
@@ -630,7 +633,7 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
     if (!_isLrps2(slug)) return null;
     try {
       final setup = await _lrps2Cards(game, romPath);
-      return await _lrps2SavesOf(romPath, setup.shared) == null ? _lrps2NoSerial : null;
+      return await _lrps2SavesOf(game, romPath, setup.shared) == null ? _lrps2NoSerial : null;
     } catch (e) {
       debugPrint('[SaveSync] [retroarch] LRPS2: cannot tell whether saves can be synced: $e');
       return null;
@@ -1115,24 +1118,6 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
     return finalResult;
   }
 
-  /// Whether a downloaded [fileName] is a PS1 memory card for port 1 that the
-  /// core should open as the game's `<content>.srm`: every RetroArch PS1 core
-  /// keeps card 1 there by default, and a raw `.mcd` card is the same format.
-  /// Covers DuckStation's cards (`<name>_1.mcd`, shared `shared_card_1.mcd`,
-  /// `mcd1.mcd`), PCSX-ReARMed's `<serial>_1.mcd` / `pcsx-card1.mcd`, and a
-  /// `.mcd` with no port in its name. Cards for other ports keep their names.
-  @visibleForTesting
-  static bool isPs1Port1Card(String slug, String fileName, List<int> bytes) {
-    if (!_ps1Slugs.contains(slug)) return false;
-    final base = p.basename(fileName).toLowerCase();
-    if (!base.endsWith('.mcd')) return false;
-    if (!Ps1MemoryCard.looksLikeCard(bytes is Uint8List ? bytes : Uint8List.fromList(bytes))) return false;
-    final port = RegExp(r'(?:_|^mcd|card)(\d+)\.mcd$').firstMatch(base)?.group(1);
-    return port == null || int.parse(port) == 1;
-  }
-
-  static const _ps1Slugs = {'psx', 'ps1', 'playstation'};
-
   @override
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     try {
@@ -1168,16 +1153,27 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
           final dir = io.Directory(fileTargetDir);
           if (!await dir.exists()) await dir.create(recursive: true);
 
-          String targetFilename = file.name;
+          final content = Uint8List.fromList(file.content as List<int>);
+          var outputs = [SaveBlob(file.name, content)];
           if (!isFileState && file.name.toLowerCase().endsWith('.sav')) {
-            targetFilename = '${p.basenameWithoutExtension(file.name)}.srm';
-          } else if (!isFileState && isPs1Port1Card(slug, file.name, file.content)) {
-            targetFilename = '${getRomStem(game)}.srm';
+            outputs = [SaveBlob('${p.basenameWithoutExtension(file.name)}.srm', content)];
+          } else if (!isFileState) {
+            // A save from another emulator in the bundle, e.g. a DuckStation
+            // PS1 card, in the format and under the name this core reads.
+            final conversion = convertSave(
+              platformSlug: slug,
+              files: [SaveBlob(p.basename(file.name), content)],
+              targetTag: coreIdFor(game) ?? '',
+              stem: getRomStem(game),
+            );
+            if (conversion is SaveConverted) outputs = conversion.files;
           }
 
-          final targetPath = p.normalize(p.join(fileTargetDir, targetFilename));
-          await backupSave(targetPath);
-          await io.File(targetPath).writeAsBytes(file.content);
+          for (final out in outputs) {
+            final targetPath = p.normalize(p.join(fileTargetDir, out.name));
+            await backupSave(targetPath);
+            await io.File(targetPath).writeAsBytes(out.bytes);
+          }
         }
         return true;
       }
@@ -1200,7 +1196,9 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
       final dir = io.Directory(targetDir);
       if (!await dir.exists()) await dir.create(recursive: true);
 
-      // Handle .sav to .srm renaming for RetroArch NDS cores
+      // Handle .sav to .srm renaming for RetroArch NDS cores. A save from
+      // another emulator (e.g. a DuckStation PS1 card) arrives already
+      // converted by SaveSyncService (save/formats).
       String targetFilename = filename;
       // RomM's web player names saves "<game> [timestamp].srm"; RetroArch only
       // opens "<rom>.srm", so a save it can't match by name is renamed to it.
@@ -1208,8 +1206,6 @@ class RetroArchSaveStrategy extends SaveStrategy with StateSyncCapable {
         targetFilename = '${p.basenameWithoutExtension(destPath)}.srm';
       } else if (!isState && filename.toLowerCase().endsWith('.sav')) {
         targetFilename = '${p.basenameWithoutExtension(filename)}.srm';
-      } else if (!isState && isPs1Port1Card(slug, filename, data)) {
-        targetFilename = '${getRomStem(game)}.srm';
       }
 
       final targetPath = p.normalize(p.join(targetDir, targetFilename));

@@ -5,6 +5,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -141,6 +142,13 @@ class Rpcs3SaveStrategy extends SaveStrategy {
       if (entity is Directory) allDirs.add(entity);
     }
     if (allDirs.isEmpty) return [];
+
+    // Method 0: RomM's title id (RomM 5.3+), read from the game itself. Its
+    // folders are the answer, even when there are none yet: no guessing.
+    final fromRomm = GameIdResolver.discFolderId('RPCS3 ${game.name}', game);
+    if (fromRomm != null) {
+      return allDirs.where((d) => p.basename(d.path).toUpperCase().startsWith(fromRomm)).toList();
+    }
 
     // Method 1: title ID from ROM filename
     final name = game.fsName ?? game.fileName ?? game.name;

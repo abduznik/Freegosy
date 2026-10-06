@@ -5,6 +5,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/directory_service.dart';
 import '../save_strategy.dart';
@@ -119,6 +120,65 @@ class PpssppSaveStrategy extends SaveStrategy {
     }
   }
 
+  /// Whether a SAVEDATA folder holds game data a game installed from its
+  /// disc rather than a save (PPSSPP's install dialog writes those under the
+  /// same id). Every save's PARAM.SFO names SAVEDATA_PARAMS and
+  /// SAVEDATA_FILE_LIST; an install's names neither. A folder with no
+  /// readable PARAM.SFO counts as a save, so nothing is dropped by mistake.
+  static Future<bool> _isGameDataInstall(String folderPath) async {
+    try {
+      final sfo = io.File(p.join(folderPath, 'PARAM.SFO'));
+      if (!await sfo.exists() || await sfo.length() > 64 * 1024) return false;
+      final text = latin1.decode(await sfo.readAsBytes());
+      return !text.contains('SAVEDATA_PARAMS') && !text.contains('SAVEDATA_FILE_LIST');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The save folder whose PARAM.SFO title best matches [game]'s name, else
+  /// the newest folder: the guess used when RomM doesn't know the game's id.
+  Future<List<io.Directory>> _foldersByTitle(List<io.Directory> allSubdirs, Game game) async {
+    final foldersWithTitles = <Map<String, dynamic>>[];
+    for (final dir in allSubdirs) {
+      final title = await _readParamSfoTitle(dir.path);
+      if (title != null) {
+        foldersWithTitles.add({'dir': dir, 'title': title, 'modified': (await dir.stat()).modified});
+      }
+    }
+
+    final gameWords = game.name.toLowerCase().replaceAll(RegExp(r"[^a-z0-9\s]"), '').split(' ').where((w) => w.length >= 2).toList();
+
+    // Score each folder by how many game name words appear in its PARAM.SFO title,
+    // then pick only the single best-scoring folder to avoid uploading saves from
+    // unrelated games that share a common word (e.g. "Grand", "Battle", "War").
+    List<io.Directory> foldersToBundle = [];
+    if (foldersWithTitles.isNotEmpty) {
+      int bestScore = 0;
+      io.Directory? bestDir;
+      DateTime? bestMtime;
+      for (final entry in foldersWithTitles) {
+        final title = (entry['title'] as String).toLowerCase();
+        final score = gameWords.where((w) => title.contains(w)).length;
+        if (score > bestScore ||
+            (score == bestScore && bestScore > 0 &&
+             (entry['modified'] as DateTime).isAfter(bestMtime!))) {
+          bestScore = score;
+          bestDir = entry['dir'] as io.Directory;
+          bestMtime = entry['modified'] as DateTime;
+        }
+      }
+      if (bestScore > 0 && bestDir != null) {
+        foldersToBundle.add(bestDir);
+      } else {
+        // No title match — fall back to most recently modified folder
+        foldersWithTitles.sort((a, b) => (b['modified'] as DateTime).compareTo(a['modified'] as DateTime));
+        foldersToBundle.add(foldersWithTitles.first['dir'] as io.Directory);
+      }
+    }
+    return foldersToBundle;
+  }
+
   @override
   Future<String?> getSaveDir(Game game, String romPath) async {
     final pspDir = await _getPspDir(platformSlug: game.platformSlug);
@@ -134,43 +194,13 @@ class PpssppSaveStrategy extends SaveStrategy {
     final saveDataDir = io.Directory(p.join(pspDir, 'SAVEDATA'));
     if (await saveDataDir.exists()) {
       final allSubdirs = await saveDataDir.list().where((e) => e is io.Directory).cast<io.Directory>().toList();
-      final foldersWithTitles = <Map<String, dynamic>>[];
-      for (final dir in allSubdirs) {
-        final title = await _readParamSfoTitle(dir.path);
-        if (title != null) {
-          foldersWithTitles.add({'dir': dir, 'title': title, 'modified': (await dir.stat()).modified});
-        }
-      }
-
-      final gameWords = game.name.toLowerCase().replaceAll(RegExp(r"[^a-z0-9\s]"), '').split(' ').where((w) => w.length >= 2).toList();
-
-      // Score each folder by how many game name words appear in its PARAM.SFO title,
-      // then pick only the single best-scoring folder to avoid uploading saves from
-      // unrelated games that share a common word (e.g. "Grand", "Battle", "War").
-      List<io.Directory> foldersToBundle = [];
-      if (foldersWithTitles.isNotEmpty) {
-        int bestScore = 0;
-        io.Directory? bestDir;
-        DateTime? bestMtime;
-        for (final entry in foldersWithTitles) {
-          final title = (entry['title'] as String).toLowerCase();
-          final score = gameWords.where((w) => title.contains(w)).length;
-          if (score > bestScore ||
-              (score == bestScore && bestScore > 0 &&
-               (entry['modified'] as DateTime).isAfter(bestMtime!))) {
-            bestScore = score;
-            bestDir = entry['dir'] as io.Directory;
-            bestMtime = entry['modified'] as DateTime;
-          }
-        }
-        if (bestScore > 0 && bestDir != null) {
-          foldersToBundle.add(bestDir);
-        } else {
-          // No title match — fall back to most recently modified folder
-          foldersWithTitles.sort((a, b) => (b['modified'] as DateTime).compareTo(a['modified'] as DateTime));
-          foldersToBundle.add(foldersWithTitles.first['dir'] as io.Directory);
-        }
-      }
+      final fromRomm = GameIdResolver.discFolderId('PPSSPP ${game.name}', game);
+      final foldersToBundle = fromRomm != null
+          ? [
+              for (final d in allSubdirs)
+                if (p.basename(d.path).toUpperCase().startsWith(fromRomm) && !await _isGameDataInstall(d.path)) d
+            ]
+          : await _foldersByTitle(allSubdirs, game);
 
       for (final dir in foldersToBundle) {
         result.add(io.File(dir.path));

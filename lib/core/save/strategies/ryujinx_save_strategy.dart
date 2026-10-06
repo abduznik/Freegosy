@@ -3,6 +3,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
+import '../../romm/game_id_resolver.dart';
 import '../../romm/romm_models.dart';
 import '../save_strategy.dart';
 import 'eden_save_strategy.dart'; // Reuse exceptions and some logic
@@ -41,7 +42,12 @@ class RyujinxSaveStrategy extends SaveStrategy {
   //  LAYER 1 — Title ID Resolution
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Future<String> _resolveTitleId(String romPath, Game game) async {
+  @visibleForTesting
+  Future<String> resolveTitleId(String romPath, Game game) async {
+    // RomM's id (RomM 5.3+) first: the header and file name are slower, and
+    // the cached mapping below can be stale.
+    final fromRomm = _rommTitleId(game);
+    if (fromRomm != null) return fromRomm;
     // 1. Header byte scan
     final (fromHeader, resolvedRomPath) = await _extractTitleIdFromHeader(romPath);
     if (fromHeader != null) {
@@ -105,6 +111,13 @@ class RyujinxSaveStrategy extends SaveStrategy {
       debugPrint('[Ryujinx][Scanner] ERROR: $e');
     }
     return (null, actualPath);
+  }
+
+  /// RomM's title id (RomM 5.3+) as the base game's, or null.
+  static String? _rommTitleId(Game game) {
+    final id = GameIdResolver.server('Ryujinx ${game.name}', game.titleId?.toUpperCase(),
+        shape: GameIdResolver.switchTitleId);
+    return id == null ? null : _normalizeToBaseId(id);
   }
 
   static String _normalizeToBaseId(String raw) {
@@ -253,7 +266,7 @@ class RyujinxSaveStrategy extends SaveStrategy {
   Future<String?> getSaveDir(Game game, String romPath) async {
     final base = await _getRyujinxSaveBase(platformSlug: game.platformSlug);
     final userId = await _resolveUserId(base);
-    final titleId = await _resolveTitleId(romPath, game);
+    final titleId = await resolveTitleId(romPath, game);
     final userDirPath = p.join(base, userId);
 
     debugPrint('[Ryujinx] getSaveDir: userDirPath=$userDirPath, targetTitleId=$titleId');
@@ -319,7 +332,7 @@ class RyujinxSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(Game game, String destPath, Uint8List data, String filename) async {
     final base = await _getRyujinxSaveBase(platformSlug: game.platformSlug);
     final userId = await _resolveUserId(base);
-    final titleId = await _resolveTitleId(destPath, game);
+    final titleId = await resolveTitleId(destPath, game);
     
     debugPrint('[Ryujinx] Restore: userId=$userId, titleId=$titleId');
 

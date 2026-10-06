@@ -175,9 +175,10 @@ void main() {
   });
 
   group('restoreSave directory creation', () {
-    test('returns false when Ares data dir cannot be resolved (Windows)', () async {
+    test('restores nothing when ares\' settings can\'t be found (Windows)', () async {
       // On Windows, _getAresDataDir requires findEmulatorExecutable to succeed.
-      // With no ares installed, it returns null and restoreSave returns false.
+      // With no ares found there is no settings.bml to set a saves folder in,
+      // and saves never go next to the ROM.
       SharedPreferences.setMockInitialValues({});
       final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
       final dirService = DirectoryService(prefs);
@@ -187,12 +188,12 @@ void main() {
       final game = _makeGame('Test Game.gba', 'gba');
       final result = await strategy.restoreSave(
         game,
-        'Test Game.gba',
+        p.join(tempDir.path, 'Test Game.gba'),
         Uint8List.fromList([1, 2, 3]),
         'Test Game.gba.ram',
       );
-      expect(result, isFalse,
-          reason: 'restoreSave returns false on Windows when Ares not installed');
+      expect(result, isFalse);
+      expect(tempDir.listSync(), isEmpty);
     });
 
     test('creates Saves/<Platform> subfolder when it does not exist yet', () async {
@@ -215,15 +216,19 @@ void main() {
       final strategy = AresSaveStrategy(dirService, platform: platform);
       final game = _makeGame('Test Game.gba', 'gba');
 
-      // The data dir should be <HOME>/.local/share/ares/ — does NOT exist yet
+      // ares' settings (<HOME>/.local/share/ares/) set a saves path, whose
+      // Game Boy Advance/ folder does NOT exist yet.
       final dataDir = p.join(homeDir.path, '.local', 'share', 'ares');
-      final savesGba = Directory(p.join(dataDir, 'Saves', 'Game Boy Advance'));
+      await Directory(dataDir).create(recursive: true);
+      final savesRoot = p.join(tempDir.path, 'Saves');
+      await File(p.join(dataDir, 'settings.bml')).writeAsString('Paths\n  Saves: $savesRoot/\n');
+      final savesGba = Directory(p.join(savesRoot, 'Game Boy Advance'));
       expect(await savesGba.exists(), isFalse,
           reason: 'Saves/Game Boy Advance/ should not exist before restoreSave');
 
       final result = await strategy.restoreSave(
         game,
-        'Test Game.gba',
+        p.join(tempDir.path, 'Test Game.gba'),
         Uint8List.fromList([1, 2, 3]),
         'Test Game.gba.ram',
       );
@@ -232,7 +237,7 @@ void main() {
       expect(await savesGba.exists(), isTrue,
           reason: 'restoreSave should create the Saves/<Platform> subfolder');
 
-      final saveFile = File(p.join(savesGba.path, 'test game.ram'));
+      final saveFile = File(p.join(savesGba.path, 'Test Game.ram'));
       expect(await saveFile.exists(), isTrue);
       final contents = await saveFile.readAsBytes();
       expect(contents, [1, 2, 3]);
@@ -256,8 +261,9 @@ void main() {
       await aresDir.create(recursive: true);
       fakeExe = File(p.join(aresDir.path, 'ares.exe'));
       await fakeExe.writeAsBytes([0]);
-      // Portable mode: settings.bml next to the exe.
-      await File(p.join(aresDir.path, 'settings.bml')).writeAsBytes([0]);
+      // Portable mode: settings.bml next to the exe, with a saves path.
+      await File(p.join(aresDir.path, 'settings.bml'))
+          .writeAsString('Paths\n  Saves: ${p.join(aresDir.path, 'Saves')}/\n');
 
       SharedPreferences.setMockInitialValues({});
       final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
@@ -278,7 +284,7 @@ void main() {
         archive.addFile(ArchiveFile(e.key, e.value.length, e.value));
       }
       final encoded = ZipEncoder().encode(archive);
-      await File(p.join(savesDir.path, 'ape escape.zip')).writeAsBytes(encoded);
+      await File(p.join(savesDir.path, 'Ape Escape.zip')).writeAsBytes(encoded);
     }
 
     test('getSaveFiles extracts only the .mcd entry, not .state.auto', () async {
@@ -322,13 +328,130 @@ void main() {
       );
       expect(ok, isTrue);
 
-      final zipBytes = await File(p.join(savesDir.path, 'ape escape.zip')).readAsBytes();
+      final zipBytes = await File(p.join(savesDir.path, 'Ape Escape.zip')).readAsBytes();
       final archive = ZipDecoder().decodeBytes(zipBytes);
       final mcdEntry = archive.files.firstWhere((f) => f.name == 'Ape Escape (USA)_1.mcd');
       final stateEntry = archive.files.firstWhere((f) => f.name == 'Ape Escape.state.auto');
 
       expect(mcdEntry.content, newMcd, reason: 'restoreSave should replace the .mcd entry with the new save data');
       expect(stateEntry.content, stateBytes, reason: 'restoreSave must not touch unrelated entries like .state.auto');
+    });
+  });
+
+  /// ares keeps a game's saves in `<Settings → Paths → Saves>/<system>/`,
+  /// named after the game file without its extension (desktop-ui
+  /// Emulator::locate); with no saves path, next to the game file. Freegosy
+  /// never writes in the ROM folder: it sets a saves path first.
+  group('Where ares keeps saves', () {
+    late Directory home;
+    late Directory roms;
+    late AresSaveStrategy strategy;
+    const rom = 'Mario Kart 64 (U) [!]';
+    final game = Game(id: '1', name: 'Mario Kart 64', fsName: '$rom.zip', fileSize: 0, platformSlug: 'n64');
+    String romPath() => p.join(roms.path, '$rom.zip');
+
+    Future<void> writeSettings(String paths) async {
+      final dataDir = Directory(p.join(home.path, '.local', 'share', 'ares'));
+      await dataDir.create(recursive: true);
+      await File(p.join(dataDir.path, 'settings.bml')).writeAsString(
+          'Boot\n  Fast: false\nPaths\n$paths  Screenshots\nNintendo64\n  ExpansionPak: true\n');
+    }
+
+    setUp(() async {
+      home = Directory(p.join(tempDir.path, 'home'));
+      roms = Directory(p.join(tempDir.path, 'roms', 'n64'));
+      await roms.create(recursive: true);
+      await File(romPath()).writeAsBytes(List.filled(64, 1));
+      SharedPreferences.setMockInitialValues({});
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+      strategy = AresSaveStrategy(DirectoryService(prefs),
+          platform: PlatformInfo('linux', environment: {'HOME': home.path}));
+    });
+
+    String aresDir() => p.join(home.path, '.local', 'share', 'ares');
+    List<String> romFolder() => roms.listSync().map((f) => p.basename(f.path)).toList()..sort();
+
+    test('with no saves path, Freegosy sets <ares folder>/Saves/ and restores there, under the ROM\'s exact name',
+        () async {
+      await writeSettings('  Home\n  Firmware\n  Saves\n');
+
+      expect(await strategy.restoreSave(game, romPath(), Uint8List.fromList([1, 2, 3]), '$rom.eeprom'), isTrue);
+
+      final saves = '${aresDir().replaceAll(r'\', '/')}/Saves/';
+      final settings = File(p.join(aresDir(), 'settings.bml')).readAsStringSync();
+      expect(AresSaveStrategy.parseSavesPath(settings), saves);
+      expect(settings, contains('  Screenshots\nNintendo64\n  ExpansionPak: true\n'), reason: 'the rest is kept');
+      expect(File(p.join(aresDir(), 'Saves', 'Nintendo 64', '$rom.eeprom')).readAsBytesSync(), [1, 2, 3]);
+      expect(romFolder(), ['$rom.zip'], reason: 'nothing but the ROM in the ROM folder');
+    });
+
+    test('with no settings.bml to set a saves path in, nothing is restored', () async {
+      expect(await strategy.restoreSave(game, romPath(), Uint8List.fromList([4]), 'x.ram'), isFalse);
+      expect(romFolder(), ['$rom.zip']);
+    });
+
+    test('in <Paths → Saves>/<system>/ when that is set', () async {
+      final saves = p.join(tempDir.path, 'ares saves');
+      await writeSettings('  Home\n  Saves: ${saves.replaceAll(r'\', '/')}/\n');
+
+      expect(await strategy.restoreSave(game, romPath(), Uint8List.fromList([5]), '$rom.eeprom'), isTrue);
+
+      expect(File(p.join(saves, 'Nintendo 64', '$rom.eeprom')).readAsBytesSync(), [5]);
+      expect(File(p.join(roms.path, '$rom.eeprom')).existsSync(), isFalse);
+    });
+
+    test('before a saves path is set, push finds ares\' saves next to the game, not the ROM or other games\' saves',
+        () async {
+      await writeSettings('  Saves\n');
+      await File(p.join(roms.path, '$rom.eeprom')).writeAsBytes([1]);
+      await File(p.join(roms.path, '$rom.pak')).writeAsBytes([2]);
+      await File(p.join(roms.path, 'Mario Kart 64 (U) [!] (Hack).eeprom')).writeAsBytes([3]);
+      await File(p.join(roms.path, 'Wave Race 64 (U).eeprom')).writeAsBytes([4]);
+
+      final files = await strategy.getSaveFiles(game, romPath());
+
+      expect(files.map((f) => p.basename(f.path)), ['$rom.eeprom']);
+    });
+
+    test('a save zip for a zipped ROM never touches the ROM', () async {
+      await writeSettings('  Saves\n');
+      final romBytes = File(romPath()).readAsBytesSync();
+
+      expect(await strategy.restoreSave(game, romPath(), Uint8List.fromList([9, 9]), 'save.zip'), isTrue);
+      expect(await strategy.restoreSave(game, romPath(), Uint8List.fromList([7]), '$rom.srm'), isTrue);
+
+      expect(File(romPath()).readAsBytesSync(), romBytes);
+      expect(romFolder(), ['$rom.zip']);
+      expect(File(p.join(aresDir(), 'Saves', 'Nintendo 64', '$rom.zip')).existsSync(), isTrue);
+    });
+
+    test('even when the saves folder holds the ROM, a save never replaces it', () async {
+      // Saves: <x>/ puts N64 saves in <x>/Nintendo 64/, here also the ROM's folder.
+      final shared = Directory(p.join(tempDir.path, 'shared', 'Nintendo 64'))..createSync(recursive: true);
+      final sharedRom = p.join(shared.path, '$rom.zip');
+      File(sharedRom).writeAsBytesSync(List.filled(64, 1));
+      await writeSettings('  Saves: ${p.dirname(shared.path).replaceAll(r'\', '/')}/\n');
+
+      expect(await strategy.restoreSave(game, sharedRom, Uint8List.fromList([9, 9]), 'save.zip'), isFalse);
+      expect(await strategy.restoreSave(game, sharedRom, Uint8List.fromList([7]), '$rom.srm'), isTrue);
+
+      expect(File(sharedRom).readAsBytesSync(), List.filled(64, 1), reason: 'not replaced, nothing injected');
+    });
+
+    test('setSavesPath fills an empty Saves line, or adds one, keeping everything else', () {
+      expect(AresSaveStrategy.setSavesPath('Boot\n  Fast: false\nPaths\n  Home\n  Saves\n  Screenshots\n', 'C:/s/'),
+          'Boot\n  Fast: false\nPaths\n  Home\n  Saves: C:/s/\n  Screenshots\n');
+      expect(AresSaveStrategy.setSavesPath('Paths\r\n  Home\r\nVideo\r\n  Driver: x\r\n', '/s/'),
+          'Paths\r\n  Home\r\n  Saves: /s/\r\nVideo\r\n  Driver: x\r\n');
+      expect(AresSaveStrategy.setSavesPath('Video\n  Driver: x\n', '/s/'), 'Video\n  Driver: x\nPaths\n  Saves: /s/\n');
+    });
+
+    test('parseSavesPath reads Paths → Saves, and nothing from other sections', () {
+      expect(AresSaveStrategy.parseSavesPath('Paths\n  Home\n  Saves\n  Screenshots\n'), isNull);
+      expect(AresSaveStrategy.parseSavesPath('Paths\n  Saves: C:/Saves/\n'), 'C:/Saves/');
+      expect(AresSaveStrategy.parseSavesPath('Paths\n  Saves: "C:/My Saves/"\n'), 'C:/My Saves/');
+      expect(AresSaveStrategy.parseSavesPath('Other\n  Saves: C:/x/\nPaths\n  Home\n'), isNull);
+      expect(AresSaveStrategy.parseSavesPath('Paths\r\n  Saves: /home/me/saves/\r\n'), '/home/me/saves/');
     });
   });
 

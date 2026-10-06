@@ -1,6 +1,6 @@
+import 'dart:convert';
 import 'dart:io' as io;
 import 'dart:developer' as dev;
-import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -74,8 +74,14 @@ bool _isLogOnlyPlatform(String platformName) {
 
 /// Save strategy for Ares emulator.
 ///
-/// Save directory layout:
-///   `<AresDataDir>/Saves/<Platform Full Name>/<ROM filename base>.<ext>`
+/// Save location:
+/// `<Saves path>/<Platform Full Name>/<ROM file name without extension>.<ext>`,
+/// in the Settings → Paths → Saves folder ares uses when it
+/// is set (desktop-ui `Emulator::locate`). Unset, ares keeps saves next to
+/// the game file; Freegosy never writes there (ROM folders hold ROMs), so
+/// before restoring a save it sets Paths → Saves to `<ares folder>/Saves/`.
+/// Until then, saves ares made next to the game file are still read, to be
+/// uploaded.
 ///
 /// Extension classification:
 ///   Battery saves: `.ram`, `.eeprom`, `.flash`, `.chr` (platform-dependent)
@@ -180,16 +186,118 @@ class AresSaveStrategy extends SaveStrategy {
     return null;
   }
 
-  @override
-  Future<String?> getSaveDir(Game game, String romPath) async {
-    final dataDir = await _getAresDataDir();
-    if (dataDir == null) return null;
+  /// The Settings → Paths → Saves value in ares' settings.bml, or null when
+  /// it is unset (ares' default) or unreadable.
+  Future<String?> _savesPathSetting() async {
+    try {
+      final dataDir = await _getAresDataDir();
+      if (dataDir == null) return null;
+      final settings = io.File(p.join(dataDir, 'settings.bml'));
+      if (!await settings.exists()) return null;
+      return parseSavesPath(await settings.readAsString());
+    } catch (e) {
+      dev.log('[Ares Save] Could not read ares\' settings.bml: $e');
+      return null;
+    }
+  }
 
+  /// The `Saves` value under `Paths` in a settings.bml (BML: a section name
+  /// at column 0, its settings indented two spaces as `Name: value`); null
+  /// when it has no value.
+  @visibleForTesting
+  static String? parseSavesPath(String bml) {
+    var inPaths = false;
+    for (final line in const LineSplitter().convert(bml)) {
+      if (!line.startsWith(' ')) {
+        inPaths = line.trim() == 'Paths';
+        continue;
+      }
+      if (!inPaths) continue;
+      final match = RegExp(r'^  Saves(?::(.*))?$').firstMatch(line.trimRight());
+      if (match == null) continue;
+      var value = (match.group(1) ?? '').trim();
+      if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+        value = value.substring(1, value.length - 1);
+      }
+      return value.isEmpty ? null : value;
+    }
+    return null;
+  }
+
+  /// [bml] with Paths → Saves set to [value], replacing an empty `Saves`
+  /// line or adding one (and the Paths section) when there is none.
+  @visibleForTesting
+  static String setSavesPath(String bml, String value) {
+    final lines = const LineSplitter().convert(bml).toList();
+    final newline = bml.contains('\r\n') ? '\r\n' : '\n';
+    final paths = lines.indexWhere((l) => l.trimRight() == 'Paths');
+    if (paths < 0) {
+      return [...lines, 'Paths', '  Saves: $value'].join(newline) + newline;
+    }
+    var end = paths + 1;
+    while (end < lines.length && lines[end].startsWith(' ')) {
+      end++;
+    }
+    final saves = [
+      for (var i = paths + 1; i < end; i++)
+        if (RegExp(r'^  Saves(?::.*)?$').hasMatch(lines[i].trimRight())) i,
+    ];
+    if (saves.isEmpty) {
+      lines.insert(end, '  Saves: $value');
+    } else {
+      lines[saves.first] = '  Saves: $value';
+    }
+    return lines.join(newline) + newline;
+  }
+
+  /// The saves path, set to `<ares folder>/Saves/` first when ares has none
+  /// (see the class comment); null when ares' settings.bml can't be found or
+  /// written, e.g. before ares has ever run. Called before ares starts too
+  /// (AresStrategy.preLaunch): ares reads its settings only at start, and
+  /// writes them back later.
+  Future<String?> ensureSavesPath() async {
+    final existing = await _savesPathSetting();
+    if (existing != null) return existing;
+    try {
+      final dataDir = await _getAresDataDir();
+      if (dataDir == null) return null;
+      final settings = io.File(p.join(dataDir, 'settings.bml'));
+      if (!await settings.exists()) return null;
+      final value = '${p.join(dataDir, 'Saves').replaceAll(r'\', '/')}/';
+      await settings.writeAsString(setSavesPath(await settings.readAsString(), value));
+      debugPrint('[Ares Save] Set ares\' Settings → Paths → Saves to $value, so saves stay out of the ROM folder');
+      return value;
+    } catch (e) {
+      debugPrint('[Ares Save] Could not set ares\' saves path: $e');
+      return null;
+    }
+  }
+
+  /// The folder ares keeps [game]'s saves in (see the class comment), whether
+  /// or not it exists yet; null for a platform ares doesn't run. For
+  /// [writing], never the ROM folder: the saves path is set first, and null
+  /// when that fails.
+  Future<String?> _savesDirFor(Game game, String romPath, {bool writing = false}) async {
     final folderName = _platformFolderNames[canonicalPlatformSlug(game.platformSlug?.toLowerCase() ?? '')];
     if (folderName == null) return null;
+    final savesPath = writing ? await ensureSavesPath() : await _savesPathSetting();
+    if (savesPath != null) return p.join(savesPath, folderName);
+    return writing ? null : p.dirname(romPath);
+  }
 
-    final savesDir = p.join(dataDir, 'Saves', folderName);
-    if (await io.Directory(savesDir).exists()) return savesDir;
+  /// Whether [path] is the game file [romPath] (compared case-insensitively:
+  /// Windows and macOS file names are).
+  static bool _isRom(String path, String romPath) =>
+      p.normalize(path).toLowerCase() == p.normalize(romPath).toLowerCase();
+
+  /// The name ares gives [romPath]'s saves: the file name without its
+  /// extension, in its own case.
+  static String _saveStem(String romPath) => p.basenameWithoutExtension(romPath);
+
+  @override
+  Future<String?> getSaveDir(Game game, String romPath) async {
+    final dir = await _savesDirFor(game, romPath);
+    if (dir != null && await io.Directory(dir).exists()) return dir;
     return null;
   }
 
@@ -208,7 +316,9 @@ class AresSaveStrategy extends SaveStrategy {
     try {
       final bytes = await zipFile.readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
-      final extractDir = io.Directory(p.join(p.dirname(zipFile.path), '.freegosy_ares_extract'));
+      // In the system temp folder: the zip may sit next to the ROMs.
+      final extractDir = io.Directory(p.join(io.Directory.systemTemp.path, 'freegosy_ares_extract',
+          p.basenameWithoutExtension(zipFile.path).replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')));
       await extractDir.create(recursive: true);
 
       final extracted = <io.File>[];
@@ -237,11 +347,12 @@ class AresSaveStrategy extends SaveStrategy {
       {DateTime? sessionStart, String syncMode = 'both'}) async {
     final saveDir = await getSaveDir(game, romPath);
     if (saveDir == null) return [];
+    final nextToRom = p.equals(p.normalize(saveDir), p.normalize(p.dirname(romPath)));
 
     final folderName = _platformFolderNames[canonicalPlatformSlug(game.platformSlug?.toLowerCase() ?? '')] ?? '';
     final platformExtensions = _getSaveExtensionsForPlatform(folderName);
     final logOnly = _isLogOnlyPlatform(folderName);
-    final romStem = getRomStem(game).toLowerCase();
+    final romStem = _saveStem(romPath).toLowerCase();
 
     final dir = io.Directory(saveDir);
     if (!await dir.exists()) return [];
@@ -249,17 +360,22 @@ class AresSaveStrategy extends SaveStrategy {
     final result = <io.File>[];
     await for (final entity in dir.list()) {
       if (entity is! io.File) continue;
+      // Saves kept next to the game: never the ROM itself (a zipped ROM has
+      // the name of a zip save bundle).
+      if (_isRom(entity.path, romPath)) continue;
       final fname = p.basename(entity.path).toLowerCase();
       final ext = p.extension(fname).toLowerCase();
       final fileStem = p.basenameWithoutExtension(fname).toLowerCase();
 
-      // Stem-prefix match: file must start with the ROM stem
-      if (!fileStem.startsWith(romStem)) continue;
+      // ares names a save exactly after the game file.
+      if (fileStem != romStem) continue;
 
       // Ares bundles the real save together with transient state files in
       // a single per-game .zip (e.g. PlayStation memory cards) — open it
       // and pull out just the recognized save entries.
       if (ext == '.zip') {
+        // Next to the game, a zip is a ROM, not a save bundle.
+        if (nextToRom) continue;
         final zipEntries = await _extractZipSaveEntries(entity);
         for (final f in zipEntries) {
           if (sessionStart != null) {
@@ -304,17 +420,15 @@ class AresSaveStrategy extends SaveStrategy {
   Future<bool> restoreSave(
       Game game, String destPath, Uint8List data, String filename) async {
     try {
-      // Compute the save path directly — do NOT use getSaveDir() which
-      // returns null when the folder doesn't exist yet (correct for read
-      // paths, but restoreSave must CREATE the directory).
-      final dataDir = await _getAresDataDir();
-      if (dataDir == null) return false;
-
-      final folderName = _platformFolderNames[canonicalPlatformSlug(game.platformSlug?.toLowerCase() ?? '')];
-      if (folderName == null) return false;
-
-      final savesDir = p.join(dataDir, 'Saves', folderName);
-      final romStem = p.basenameWithoutExtension(destPath).toLowerCase();
+      // Not getSaveDir(), which returns null when the folder doesn't exist
+      // yet (right for reading; restoreSave must CREATE it).
+      final savesDir = await _savesDirFor(game, destPath, writing: true);
+      if (savesDir == null) {
+        debugPrint('[Ares Save] Not restoring $filename: ares has no saves folder, and its settings.bml '
+            'could not be found to set one (saves never go in the ROM folder)');
+        return false;
+      }
+      final romStem = _saveStem(destPath);
       final ext = p.extension(filename).isNotEmpty ? p.extension(filename) : '.ram';
 
       // If Ares stores this game's save as a .zip bundle (memory card +
@@ -323,12 +437,18 @@ class AresSaveStrategy extends SaveStrategy {
       if (_zipSaveEntryExtensions.contains(ext.toLowerCase())) {
         final zipPath = p.normalize(p.join(savesDir, '$romStem.zip'));
         final zipFile = io.File(zipPath);
-        if (await zipFile.exists()) {
+        if (!_isRom(zipPath, destPath) && await zipFile.exists()) {
           return await _injectIntoZipSaveBundle(zipFile, filename, data);
         }
       }
 
       final targetPath = p.normalize(p.join(savesDir, '$romStem$ext'));
+      // Saves sit next to the ROM, named after it: a save with the ROM's
+      // extension (a .zip save for a zipped ROM) would replace the game.
+      if (_isRom(targetPath, destPath)) {
+        debugPrint('[Ares Save] Not restoring $filename: it would replace the game file $destPath');
+        return false;
+      }
       await io.Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);

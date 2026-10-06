@@ -135,7 +135,10 @@ class SerialExtractionService {
   /// Normalises a raw serial string to the standard folder-naming
   /// convention shared by PS1/PS2 tooling.
   /// "SLUS_123.45" → "SLUS-12345", "SLUS-123.45" → "SLUS-12345"
-  String normalizeSerial(String raw) {
+  String normalizeSerial(String raw) => normalizeSerialText(raw);
+
+  /// [normalizeSerial] for callers without a service.
+  static String normalizeSerialText(String raw) {
     var s = raw.toUpperCase().replaceAll('_', '-');
     s = s.replaceAllMapped(RegExp(r'(\d{3})\.(\d{2})'), (m) => '${m[1]}${m[2]}');
     return s;
