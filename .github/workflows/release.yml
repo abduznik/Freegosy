@@ -300,9 +300,57 @@ jobs:
             --body "Automated flake.nix hash/version bump from the release workflow." \
             || gh pr view "$BRANCH" --json url -q .url
 
+  update_pkgbuild:
+    name: Update Arch PKGBUILD
+    if: ${{ inputs.build_linux }}
+    needs: [build_linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Download AppImage from Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: dist/
+      - name: Compute hash and update PKGBUILD
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          VERSION="${VERSION#v}"
+          # pkgver can't contain '-', and pre-releases aren't packaged for Arch
+          VERSION="${VERSION%%-*}"
+          HASH=$(sha256sum dist/Freegosy-linux-x86_64.AppImage | awk '{print $1}')
+          sed -i "s|^pkgver=.*|pkgver=${VERSION}|; s|^pkgrel=.*|pkgrel=1|" packaging/arch/PKGBUILD
+          # first checksum is the AppImage, the second (LICENSE) stays put
+          sed -i "0,/^sha256sums=('[0-9a-f]*'/s||sha256sums=('${HASH}'|" packaging/arch/PKGBUILD
+          grep -n "pkgver=\|sha256sums" -A1 packaging/arch/PKGBUILD
+      - name: Open PR with updated PKGBUILD
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- packaging/arch/PKGBUILD; then
+            exit 0
+          fi
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="chore/pkgbuild-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add packaging/arch/PKGBUILD
+          git commit -m "chore: update PKGBUILD for ${VERSION}"
+          git push --force origin "$BRANCH"
+          gh pr create --base "${{ github.ref_name }}" --head "$BRANCH" \
+            --title "chore: update PKGBUILD for ${VERSION}" \
+            --body "Automated PKGBUILD version/checksum bump from the release workflow." \
+            || gh pr view "$BRANCH" --json url -q .url
+
   release:
     name: Create Release
-    needs: [build_linux, build_windows, build_macos, update_nix_flake]
+    needs: [build_linux, build_windows, build_macos, update_nix_flake, update_pkgbuild]
     if: always()
     runs-on: ubuntu-latest
     permissions:
