@@ -12,6 +12,7 @@ import 'ui/screens/library_screen.dart';
 import 'ui/screens/download_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
+import 'ui/widgets/update_launch_gate.dart';
 import 'providers/ui_provider.dart';
 import 'core/storage/file_sanity_service.dart';
 import 'core/input/gamepad_service.dart';
@@ -19,6 +20,9 @@ import 'core/input/input_action_bus.dart';
 import 'package:flutter/services.dart';
 import 'providers/theme_provider.dart';
 import 'core/platform/window_service.dart';
+import 'core/update/update_models.dart';
+import 'providers/update_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -186,6 +190,37 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       }
     });
 
+    // Tell the user when an update is ready (or found, when auto-download is off).
+    ref.listen(updateControllerProvider, (previous, next) {
+      if (previous?.status == next.status) return;
+      final info = next.info;
+      if (info == null) return;
+      final messenger = scaffoldMessengerKey.currentState;
+      if (messenger == null) return;
+      if (next.status == UpdateStatus.ready) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Freegosy ${info.version} is ready to install.'),
+          duration: const Duration(seconds: 30),
+          action: SnackBarAction(
+            label: 'Restart to update',
+            onPressed: () => ref.read(updateControllerProvider.notifier).restartToUpdate(),
+          ),
+        ));
+      } else if (next.status == UpdateStatus.available && previous?.status == UpdateStatus.checking) {
+        final manual = ref.read(updateServiceProvider).installKind == InstallKind.manual || !info.hasAsset;
+        messenger.showSnackBar(SnackBar(
+          content: Text('Freegosy ${info.version} is available.'),
+          duration: const Duration(seconds: 15),
+          action: SnackBarAction(
+            label: manual ? 'View release' : 'Download',
+            onPressed: () => manual
+                ? launchUrl(Uri.parse(info.pageUrl), mode: LaunchMode.externalApplication)
+                : ref.read(updateControllerProvider.notifier).download(),
+          ),
+        ));
+      }
+    });
+
     // Keep services alive in the background
     ref.watch(fileSanityServiceProvider);
     ref.watch(gamepadServiceProvider);
@@ -213,7 +248,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
                   return const OnboardingScreen();
                 }
 
-                return Scaffold(
+                return UpdateLaunchGate(child: Scaffold(
                   body: _screens[currentIndex],
                   bottomNavigationBar: NavigationBar(
                     selectedIndex: currentIndex,
@@ -235,7 +270,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
                       ),
                     ],
                   ),
-                );
+                ));
               },
               loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
               error: (e, s) => Scaffold(body: Center(child: Text('Error: $e'))),
