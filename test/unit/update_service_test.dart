@@ -28,6 +28,10 @@ void main() {
       expect(VersionCompare.isNewer('0.6.1-pre', '0.6.1'), isFalse);
       expect(VersionCompare.isNewer('0.6.2-pre', '0.6.1'), isTrue);
     });
+    test('build metadata is ignored; numeric suffix parts compare as numbers', () {
+      expect(VersionCompare.compare('0.6.1+1', '0.6.1'), 0);
+      expect(VersionCompare.isNewer('0.6.2-pre.10', '0.6.2-pre.9'), isTrue);
+    });
     test('garbage never counts as newer', () {
       expect(VersionCompare.isNewer('nightly', '0.6.1'), isFalse);
     });

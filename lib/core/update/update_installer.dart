@@ -52,10 +52,17 @@ class UpdateInstaller {
     // Same directory, so the final rename is atomic; replacing a running
     // AppImage this way is safe, the old process keeps its open inode.
     final staged = '$target.update';
-    await file.copy(staged);
-    final chmod = await io.Process.run('chmod', ['755', staged]);
-    if (chmod.exitCode != 0) throw StateError('Could not make the update executable: ${chmod.stderr}');
-    await io.File(staged).rename(target);
+    try {
+      await file.copy(staged);
+      final chmod = await io.Process.run('chmod', ['755', staged]);
+      if (chmod.exitCode != 0) throw StateError('Could not make the update executable: ${chmod.stderr}');
+      await io.File(staged).rename(target);
+    } catch (_) {
+      try {
+        await io.File(staged).delete();
+      } catch (_) {}
+      rethrow;
+    }
     await _spawnDetached('sh', ['-c', 'sleep 1; exec "\$0"', target]);
   }
 
@@ -66,6 +73,15 @@ class UpdateInstaller {
   }
 
   Future<void> _windowsPortable(io.File file) async {
+    final installDir = p.dirname(resolvedExecutable);
+    // Fail here, visibly, rather than in the script after the app has closed.
+    final probe = io.File(p.join(installDir, '.update_write_test'));
+    try {
+      await probe.writeAsString('');
+      await probe.delete();
+    } catch (_) {
+      throw StateError('Freegosy cannot write to $installDir; reinstall it somewhere writable or update manually');
+    }
     final bat = io.File(p.join(file.parent.path, 'apply_update.bat'));
     await bat.writeAsString(windowsPortableScript(
         pid: pid, zip: file.path, installDir: p.dirname(resolvedExecutable), exe: resolvedExecutable));
@@ -115,7 +131,9 @@ class UpdateInstaller {
         'ditto -x -k ${q(zip)} ${q(staging)} || exit 1\n'
         'NEW=\$(find ${q(staging)} -maxdepth 1 -name "*.app" | head -n 1)\n'
         '[ -n "\$NEW" ] || exit 1\n'
-        'rm -rf ${q(bundle)} && mv "\$NEW" ${q(bundle)} || exit 1\n'
+        'OLD=${q(bundle)}.old\n'
+        'rm -rf "\$OLD"; mv ${q(bundle)} "\$OLD" || exit 1\n'
+        'if mv "\$NEW" ${q(bundle)}; then rm -rf "\$OLD"; else mv "\$OLD" ${q(bundle)}; open ${q(bundle)}; exit 1; fi\n'
         'xattr -dr com.apple.quarantine ${q(bundle)} 2>/dev/null\n'
         'open ${q(bundle)}\n';
   }

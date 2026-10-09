@@ -77,6 +77,9 @@ class UpdateController extends StateNotifier<UpdateState> {
       state.status == UpdateStatus.downloading ||
       state.status == UpdateStatus.applying;
 
+  /// Set once the launch prompt/check ran, so a rebuilt widget tree can't repeat it.
+  bool launchHandled = false;
+
   /// Called once at startup; honours the "check on launch" setting.
   Future<void> checkOnLaunch() async {
     if (!_ref.read(updateCheckOnLaunchProvider)) return;
@@ -134,14 +137,16 @@ class UpdateController extends StateNotifier<UpdateState> {
     if (file == null || state.status != UpdateStatus.ready) return;
     state = state.copyWith(status: UpdateStatus.applying);
     try {
-      final prefs = _ref.read(sharedPreferencesProvider);
       final sha = state.info?.sha256;
+      await _ref.read(updateInstallerProvider)
+          .installAndRestart(_ref.read(updateServiceProvider).installKind, file);
+      // Only now is the new build really going to run; recording earlier would
+      // make a failed install look applied and hide the update from later checks.
       if (sha != null) {
+        final prefs = _ref.read(sharedPreferencesProvider);
         await prefs.setString(_appliedShaKey, sha);
         await prefs.setString(_appliedVersionKey, state.info!.version);
       }
-      await _ref.read(updateInstallerProvider)
-          .installAndRestart(_ref.read(updateServiceProvider).installKind, file);
       _exit(0);
     } catch (e) {
       debugPrint('Applying update failed: $e');

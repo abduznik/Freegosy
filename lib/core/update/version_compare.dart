@@ -3,13 +3,14 @@
 class VersionCompare {
   VersionCompare._();
 
-  static final _re = RegExp(r'^[vV]?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-.+]?([0-9A-Za-z.\-]+))?');
+  // Build metadata (`+1`) is dropped first; it never affects ordering.
+  static final _re = RegExp(r'^[vV]?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-.]([0-9A-Za-z.\-]+))?');
 
   /// Negative if [a] < [b], 0 if equal, positive if [a] > [b]. Unparseable
   /// versions compare as equal so a odd tag never triggers an update.
   static int compare(String a, String b) {
-    final pa = _re.firstMatch(a.trim());
-    final pb = _re.firstMatch(b.trim());
+    final pa = _re.firstMatch(a.trim().split('+').first);
+    final pb = _re.firstMatch(b.trim().split('+').first);
     if (pa == null || pb == null) return 0;
     for (var i = 1; i <= 3; i++) {
       final d = (int.tryParse(pa.group(i) ?? '') ?? 0) - (int.tryParse(pb.group(i) ?? '') ?? 0);
@@ -20,10 +21,20 @@ class VersionCompare {
     if (sa == null && sb == null) return 0;
     if (sa == null) return 1;
     if (sb == null) return -1;
-    return sa.compareTo(sb);
+    return _compareSuffix(sa, sb);
   }
 
-  /// Build metadata like `+1` is not a pre-release marker.
+  /// Dot-separated identifiers: numeric ones compare as numbers (`pre.9` < `pre.10`).
+  static int _compareSuffix(String a, String b) {
+    final xs = a.split('.'), ys = b.split('.');
+    for (var i = 0; i < xs.length && i < ys.length; i++) {
+      final nx = int.tryParse(xs[i]), ny = int.tryParse(ys[i]);
+      final c = (nx != null && ny != null) ? nx.compareTo(ny) : xs[i].compareTo(ys[i]);
+      if (c != 0) return c;
+    }
+    return xs.length.compareTo(ys.length);
+  }
+
   static String? _suffix(String? s) => (s == null || s.isEmpty) ? null : s;
 
   static bool isNewer(String candidate, String current) => compare(candidate, current) > 0;

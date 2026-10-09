@@ -145,6 +145,11 @@ class UpdateService {
   Future<io.File> download(UpdateInfo info, {void Function(double progress)? onProgress}) async {
     final url = info.assetUrl;
     final name = info.assetName;
+    if (info.sha256 == null) throw StateError('Release ${info.tag} publishes no checksum for its download; update manually');
+    final uri = Uri.tryParse(url ?? '');
+    if (uri == null || uri.scheme != 'https' || !(uri.host == 'github.com' || uri.host.endsWith('.githubusercontent.com'))) {
+      throw StateError('Refusing to download an update from an unexpected host');
+    }
     if (url == null || name == null) throw StateError('Release ${info.tag} has no download for this install type');
 
     final dir = io.Directory(p.join((await _supportDir()).path, 'updates', info.tag));
@@ -177,11 +182,8 @@ class UpdateService {
 
   Future<bool> _verified(io.File file, UpdateInfo info) async {
     final want = info.sha256;
-    if (want != null) {
-      final got = (await sha256.bind(file.openRead()).first).toString();
-      return got == want;
-    }
-    final size = info.assetSize;
-    return size == null || await file.length() == size;
+    if (want == null) return false;
+    final got = (await sha256.bind(file.openRead()).first).toString();
+    return got == want;
   }
 }

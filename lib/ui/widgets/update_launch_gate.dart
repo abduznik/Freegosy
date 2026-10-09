@@ -28,6 +28,9 @@ class _UpdateLaunchGateState extends ConsumerState<UpdateLaunchGate> {
   }
 
   Future<void> _run() async {
+    final controller = ref.read(updateControllerProvider.notifier);
+    if (controller.launchHandled) return;
+    controller.launchHandled = true;
     final prefs = ref.read(sharedPreferencesProvider);
     if (!prefs.containsKey(updateCheckPrefKey)) {
       final choice = await showDialog<UpdateConsent>(
@@ -40,7 +43,7 @@ class _UpdateLaunchGateState extends ConsumerState<UpdateLaunchGate> {
       ref.read(updateCheckOnLaunchProvider.notifier).update(c != UpdateConsent.never);
       ref.read(updateAutoDownloadProvider.notifier).update(c == UpdateConsent.auto);
     }
-    await ref.read(updateControllerProvider.notifier).checkOnLaunch();
+    await controller.checkOnLaunch();
   }
 
   @override
