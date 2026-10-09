@@ -52,6 +52,14 @@ Freegosy is a cross-platform Flutter app for browsing a RomM library, downloadin
 - `lib/core/save/strategies/ppsspp_save_strategy.dart` — PPSSPP save strategy (PSP).
 - `lib/core/save/strategies/cemu_save_strategy.dart` — Cemu save strategy (Wii U).
 
+### Core — Updates
+- `lib/core/update/update_service.dart` — Queries GitHub releases (stable / pre-release channel), detects install kind (AppImage, Windows installer, macOS .app, else manual), picks the matching asset, downloads with SHA-256 verification.
+- `lib/core/update/update_installer.dart` — Swaps in the downloaded update and relaunches (AppImage in-place replace; .bat for Inno installer; .sh for macOS bundle).
+- `lib/core/update/update_models.dart`, `version_compare.dart` — UpdateChannel/InstallKind/UpdateInfo and semver-ish comparison.
+- `lib/providers/update_provider.dart` — Prefs (`update_check_on_launch`, `update_auto_download`, `update_channel`) and UpdateController (check/download/restartToUpdate).
+- `lib/ui/widgets/update_launch_gate.dart` — First-launch consent dialog (when the pref is unset) + launch-time check.
+- `lib/ui/screens/settings_update_section.dart` — Settings "Updates" card.
+
 ### Core — Emulator
 - `lib/core/emulator/emulator_strategy.dart` — Abstract base class for launch logic. Has `launchWithHandle()` returning `Process?`. `preLaunch()`/`postLaunch()` hooks.
 - `lib/core/emulator/emulator_registry_data.dart` — Static definitions for emulator downloads and filters.

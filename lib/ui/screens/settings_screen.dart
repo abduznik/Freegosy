@@ -20,6 +20,7 @@ import 'settings_custom_emulators_section.dart';
 import 'settings_controller_section.dart';
 import 'settings_deadzone_section.dart';
 import 'settings_retroachievements_section.dart';
+import 'settings_update_section.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/emulator/retroarch_core_list.dart';
 import '../../core/emulator/strategy_registry.dart';
@@ -560,6 +561,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                    _buildRetroArchSettingsSection(context, ref),
+                  _buildSectionCard(
+                    context: context,
+                    title: 'Updates',
+                    icon: Icons.system_update,
+                    child: const SettingsUpdateSection(),
+                  ),
                    _buildLegalSection(context),
                 ],
               );
