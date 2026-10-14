@@ -262,7 +262,8 @@ jobs:
 
   update_nix_flake:
     name: Update Nix Flake
-    if: ${{ inputs.build_linux }}
+    # Nightlies are rebuilt every night; they must not open a flake PR each time.
+    if: ${{ inputs.build_linux && !contains(inputs.version, 'nightly') }}
     needs: [build_linux]
     runs-on: ubuntu-latest
     permissions:
@@ -341,11 +342,23 @@ jobs:
           path: artifacts/
         continue-on-error: true
 
+      - name: Move the nightly tag to this commit
+        if: ${{ contains(inputs.version, 'nightly') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The same tag is reused every night; point it at the commit just built.
+          REF="repos/${{ github.repository }}/git/refs/tags/${{ github.event.inputs.version }}"
+          gh api -X PATCH "$REF" -f sha="${{ github.sha }}" -F force=true \
+            || gh api -X POST "repos/${{ github.repository }}/git/refs" \
+                 -f ref="refs/tags/${{ github.event.inputs.version }}" -f sha="${{ github.sha }}"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
-          name: Release ${{ github.event.inputs.version }}
+          name: ${{ contains(inputs.version, 'nightly') && format('Nightly {0}', github.event.inputs.version) || format('Release {0}', github.event.inputs.version) }}
+          body: ${{ contains(inputs.version, 'nightly') && format('Nightly build of commit {0}. Built automatically from main; may be unstable.', github.sha) || '' }}
           files: |
             artifacts/freegosy-linux-x64.tar.gz
             artifacts/Freegosy-linux-x86_64.AppImage

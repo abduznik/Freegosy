@@ -1,12 +1,22 @@
 /// Which releases the updater considers.
 enum UpdateChannel {
   stable,
-  prerelease;
+  prerelease,
 
-  String get label => this == stable ? 'Stable releases only' : 'Stable + pre-releases';
+  /// Also the rolling nightly build of the latest commit on `main`.
+  nightly;
 
-  static UpdateChannel parse(String? raw) =>
-      raw == 'prerelease' ? UpdateChannel.prerelease : UpdateChannel.stable;
+  String get label => switch (this) {
+        stable => 'Stable releases only',
+        prerelease => 'Stable + pre-releases',
+        nightly => 'Nightly (latest commit, may be unstable)',
+      };
+
+  static UpdateChannel parse(String? raw) => switch (raw) {
+        'prerelease' => UpdateChannel.prerelease,
+        'nightly' => UpdateChannel.nightly,
+        _ => UpdateChannel.stable,
+      };
 }
 
 /// How this copy of Freegosy was installed, which decides how it can update.

@@ -37,6 +37,46 @@ void main() {
     });
   });
 
+  group('nightly channel', () {
+    List<dynamic> rels({String nightlyBase = 'v0.6.1', String? stable}) => [
+          release('$nightlyBase-nightly', pre: true, assets: ['Freegosy-linux-x86_64.AppImage']), // digest abc
+          if (stable != null) release(stable, assets: ['Freegosy-linux-x86_64.AppImage']),
+        ];
+    UpdateInfo? pick(List<dynamic> r, String current, UpdateChannel c, {String? installed}) =>
+        UpdateService.pickUpdate(r, current, c, InstallKind.appImage, installedSha: installed);
+
+    test('stable and pre-release channels never see the nightly', () {
+      expect(pick(rels(), '0.6.0', UpdateChannel.stable), isNull);
+      expect(pick(rels(), '0.6.0', UpdateChannel.prerelease), isNull);
+    });
+    test('nightly channel offers it when the digest differs, or is unknown', () {
+      final u = pick(rels(), '0.6.1', UpdateChannel.nightly, installed: 'old')!;
+      expect(u.tag, 'v0.6.1-nightly');
+      expect(u.version, '0.6.1-nightly');
+      expect(u.prerelease, isTrue);
+      expect(u.sha256, 'abc');
+      expect(pick(rels(), '0.6.1', UpdateChannel.nightly, installed: null), isNotNull);
+    });
+    test('nothing to do once this exact nightly is installed', () {
+      expect(pick(rels(), '0.6.1-nightly', UpdateChannel.nightly, installed: 'abc'), isNull);
+    });
+    test('a newer real release wins over the nightly of an older version', () {
+      expect(pick(rels(stable: 'v0.6.2'), '0.6.1', UpdateChannel.nightly, installed: 'old')!.tag, 'v0.6.2');
+    });
+    test('a nightly of an older version than the running build is no update', () {
+      expect(pick(rels(nightlyBase: 'v0.6.1'), '0.6.2', UpdateChannel.nightly, installed: 'old'), isNull);
+    });
+    test('a nightly build is offered the stable release of its own version', () {
+      final r = [release('v0.6.1', assets: ['Freegosy-linux-x86_64.AppImage'])];
+      expect(pick(r, '0.6.1-nightly', UpdateChannel.stable)!.tag, 'v0.6.1');
+    });
+    test('channel setting parses', () {
+      expect(UpdateChannel.parse('nightly'), UpdateChannel.nightly);
+      expect(UpdateChannel.parse('prerelease'), UpdateChannel.prerelease);
+      expect(UpdateChannel.parse(null), UpdateChannel.stable);
+    });
+  });
+
   group('pickUpdate', () {
     final releases = [
       release('v0.7.0-pre', pre: true, assets: ['Freegosy-linux-x86_64.AppImage']),
