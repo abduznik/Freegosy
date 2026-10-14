@@ -28,6 +28,7 @@ import '../../core/emulator/game_launch_service.dart' show LaunchResult;
 import '../../core/emulator/strategies/retroarch_strategy.dart';
 import '../widgets/retroarch_core_picker_dialog.dart';
 import '../widgets/windows_game_config_dialog.dart';
+import '../../core/disc/multi_disc_resolver.dart';
 import '../widgets/multi_disc_picker.dart';
 import '../../core/save/save_sync_service.dart';
 import '../../core/save/state_sync_service.dart';
@@ -411,6 +412,24 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
         }
       } else {
         debugPrint('[Launch] No files available for multi-file game, using romPath: $romPath');
+      }
+    }
+
+    // The ROM lookup resolves a multi-disc folder to one file (the .m3u, or disc 1),
+    // which skipped the picker above. Offer the other discs so a specific one
+    // can be started (#54). The playlist stays first: Dolphin changes discs from it.
+    if (!resumeUsesItsOwnRom && !isFolderGame && await io.File(romPath).exists()) {
+      final discs = await MultiDiscResolver.discsFor(romPath);
+      if (discs.length > 1) {
+        debugPrint('[Launch] ${discs.length} discs next to $romPath, showing picker');
+        if (!context.mounted) return;
+        String? selectedFilePath;
+        await MultiDiscPicker.show(context, game: game, files: discs, onSelect: (file) {
+          selectedFilePath = file['file_name']?.toString();
+        });
+        if (selectedFilePath == null) return;
+        romPath = p.join(p.dirname(romPath), selectedFilePath);
+        debugPrint('[Launch] Resolved romPath: $romPath');
       }
     }
 
