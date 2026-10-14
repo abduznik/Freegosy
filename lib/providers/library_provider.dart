@@ -55,6 +55,9 @@ final activePresetProvider = createPersistentProvider<String>('active_preset', '
 /// "Start in fullscreen"; read directly from SharedPreferences
 /// in main() before the first frame, so the key lives in [WindowService].
 final launchFullscreenProvider = createPersistentProvider<bool>(WindowService.launchFullscreenPrefKey, false);
+/// 'grid' (cover cards) or 'list' (one row per game with size, rating and status).
+final libraryLayoutProvider = createPersistentProvider<String>('library_layout', 'grid');
+
 final libraryHeaderTitleModeProvider = createPersistentProvider<String>('library_header_title_mode', 'daily');
 
 // Legacy compatibility - redirects for loaders (no longer needed but kept for minimal breaking changes)
