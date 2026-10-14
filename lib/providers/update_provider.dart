@@ -14,6 +14,7 @@ import 'shared_prefs_provider.dart';
 /// Absent from prefs until the user answers the first-launch prompt.
 const _appliedShaKey = 'update_applied_sha';
 const _appliedVersionKey = 'update_applied_version';
+const _skippedKey = 'update_skipped';
 const updateCheckPrefKey = 'update_check_on_launch';
 final updateCheckOnLaunchProvider = createPersistentProvider<bool>(updateCheckPrefKey, true);
 final updateAutoDownloadProvider = createPersistentProvider<bool>('update_auto_download', true);
@@ -99,6 +100,14 @@ class UpdateController extends StateNotifier<UpdateState> {
       final recorded = prefs.getString(_appliedVersionKey) == AppConstants.version ? prefs.getString(_appliedShaKey) : null;
       final info = await service.checkForUpdate(AppConstants.version, channel, recordedSha: recorded);
       if (!mounted) return;
+      // A skipped release stays out of launch checks; pressing "Check for
+      // updates" shows it again. A rebuilt release has a new digest, so it is
+      // offered again.
+      if (info != null && !manual && prefs.getString(_skippedKey) == skipKeyFor(info)) {
+        debugPrint('Update ${info.tag} was skipped by the user');
+        state = UpdateState(status: UpdateStatus.upToDate, lastChecked: DateTime.now());
+        return;
+      }
       if (info == null) {
         state = UpdateState(status: UpdateStatus.upToDate, lastChecked: DateTime.now());
         return;
@@ -114,6 +123,18 @@ class UpdateController extends StateNotifier<UpdateState> {
           ? UpdateState(status: UpdateStatus.error, error: _friendly(e), lastChecked: DateTime.now())
           : UpdateState(lastChecked: DateTime.now());
     }
+  }
+
+  /// What identifies a release for "skip": its tag and the digest of its asset.
+  static String skipKeyFor(UpdateInfo info) => '${info.tag}|${info.sha256 ?? ''}';
+
+  /// Hides the offered update from launch checks and the "available" banner
+  /// until a different release (or a rebuild of this one) appears.
+  Future<void> skip() async {
+    final info = state.info;
+    if (info == null || _busy || state.status == UpdateStatus.ready) return;
+    await _ref.read(sharedPreferencesProvider).setString(_skippedKey, skipKeyFor(info));
+    if (mounted) state = UpdateState(status: UpdateStatus.upToDate, lastChecked: state.lastChecked ?? DateTime.now());
   }
 
   Future<void> download() async {

@@ -75,13 +75,15 @@ class SettingsUpdateSection extends ConsumerWidget {
       case UpdateStatus.checking:
         text = 'Checking for updates…';
       case UpdateStatus.upToDate:
-        text = 'You are up to date.';
+        text = 'You are up to date. Press Check for updates to look again.';
       case UpdateStatus.available:
-        text = 'Version ${info?.version}${info?.isRebuild == true ? ' (updated build)' : ''} is available${manualInstall ? '.' : ' to download.'}';
+        text = info?.isNightly == true
+            ? 'A new nightly build (based on ${info?.version}) is available${manualInstall ? '.' : ' to download.'}'
+            : 'Version ${info?.version}${info?.isRebuild == true ? ' (updated build)' : ''} is available${manualInstall ? '.' : ' to download.'}';
       case UpdateStatus.downloading:
-        text = 'Downloading version ${info?.version}… ${(state.progress * 100).round()}%';
+        text = 'Downloading ${info?.isNightly == true ? 'the nightly build' : 'version ${info?.version}'}… ${(state.progress * 100).round()}%';
       case UpdateStatus.ready:
-        text = 'Version ${info?.version} is ready. Restart to finish updating.';
+        text = '${info?.isNightly == true ? 'The nightly build' : 'Version ${info?.version}'} is ready. Restart to finish updating.';
       case UpdateStatus.applying:
         text = 'Installing update…';
       case UpdateStatus.error:
@@ -121,7 +123,10 @@ class SettingsUpdateSection extends ConsumerWidget {
         children.add(_button(context, Icons.open_in_new, 'Open release page',
             () => launchUrl(Uri.parse(info.pageUrl), mode: LaunchMode.externalApplication), primary: true));
       } else if (!busy) {
-        children.add(_button(context, Icons.download, 'Download v${info.version}', controller.download, primary: true));
+        children.add(_button(context, Icons.download, info.isNightly ? 'Download nightly' : 'Download v${info.version}', controller.download, primary: true));
+      }
+      if (state.status == UpdateStatus.available && !busy) {
+        children.add(_button(context, Icons.notifications_off_outlined, 'Skip this version', controller.skip));
       }
     }
     return Wrap(spacing: 8, runSpacing: 8, children: children);

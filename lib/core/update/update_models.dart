@@ -46,6 +46,9 @@ class UpdateInfo {
 
   /// Same version as the running build, but the published files differ.
   final bool isRebuild;
+
+  /// The rolling nightly build ([version] is the release it is based on).
+  final bool isNightly;
   final String notes;
   final String pageUrl;
 
@@ -62,6 +65,7 @@ class UpdateInfo {
     required this.tag,
     required this.prerelease,
     this.isRebuild = false,
+    this.isNightly = false,
     required this.notes,
     required this.pageUrl,
     this.assetName,
