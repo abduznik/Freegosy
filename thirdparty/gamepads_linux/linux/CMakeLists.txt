@@ -20,6 +20,7 @@ add_library(${PLUGIN_NAME} SHARED
   "connection_listener.cc"
   "utils.h"
   "utils.cc"
+  "device_filter.h"
 )
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)

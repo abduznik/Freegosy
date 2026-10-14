@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "connection_listener.h"
+#include "device_filter.h"
 #include "utils.h"
 
 using namespace connection_listener;
@@ -51,6 +52,11 @@ std::vector<std::string> _list_devices() {
       continue;
     }
     if (!starts_with(entry->d_name, "js")) {
+      continue;
+    }
+    if (device_filter::is_sensor_device(entry->d_name)) {
+      std::cout << "Ignoring motion sensor device " << entry->d_name
+                << std::endl;
       continue;
     }
     devices.push_back(_input_dir + entry->d_name);
@@ -124,6 +130,13 @@ void _wait_for_connections(
     std::string device = _input_dir + name;
     std::optional<ConnectionEventType> type = _parseEventType(event);
     if (!type) {
+      ptr += sizeof(struct inotify_event) + event->len;
+      continue;
+    }
+
+    if (*type == ConnectionEventType::CONNECTED &&
+        device_filter::is_sensor_device(name)) {
+      std::cout << "Ignoring motion sensor device " << name << std::endl;
       ptr += sizeof(struct inotify_event) + event->len;
       continue;
     }
