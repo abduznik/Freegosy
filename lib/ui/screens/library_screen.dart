@@ -26,6 +26,8 @@ import '../../providers/download_provider.dart';
 import '../../providers/ui_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/cover_size_button.dart';
+import '../widgets/layout_toggle_button.dart';
+import '../widgets/game_list_row.dart';
 import '../widgets/controller_hints_bar.dart';
 
 final isHomeSelectedProvider = StateProvider<bool>((ref) => true);
@@ -347,7 +349,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     );
                   },
                 ),
-                const CoverSizeButton(),
+                const LayoutToggleButton(),
+                if (ref.watch(libraryLayoutProvider) != 'list') const CoverSizeButton(),
                 FocusEffectWrapper(borderRadius: 24, scaleFactor: 1.1, onTap: _handleRandomGame, child: IconButton(icon: const Icon(Icons.shuffle), tooltip: 'Random game', onPressed: _handleRandomGame)),
                 const SizedBox(width: 8),
               ],
@@ -498,6 +501,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                           return SliverMainAxisGroup(
                             slivers: [
                               SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Showing ${displayGames.length} of ${paginatedState.total} games', style: const TextStyle(fontSize: 12, color: Colors.grey)))),
+                              if (ref.watch(libraryLayoutProvider) == 'list')
+                                SliverPadding(
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                  sliver: SliverList.separated(
+                                    itemCount: displayGames.length + (paginatedState.isLoadingMore ? 1 : 0),
+                                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                                    itemBuilder: (context, index) {
+                                      if (index == displayGames.length) return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
+                                      final game = displayGames[index];
+                                      final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                                      final isDownloaded = (downloadedCache[game.id] ?? false) && !(ref.watch(downloadProvider)[game.id]?.isComplete == false);
+                                      return FocusEffectWrapper(
+                                        focusNode: index == 0 ? _firstContentItemFocusNode : null,
+                                        onTap: () => _handleGameTap(context, ref, game),
+                                        child: GameListRow(game: game, coverUrl: coverUrl, isDownloaded: isDownloaded),
+                                      );
+                                    },
+                                  ),
+                                )
+                              else
                               SliverPadding(
                                 padding: const EdgeInsets.all(12),
                                 sliver: SliverGrid(
