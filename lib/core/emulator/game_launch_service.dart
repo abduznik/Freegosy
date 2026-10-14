@@ -1,3 +1,4 @@
+import '../stats/play_time_store.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'dart:io' as io;
@@ -364,6 +365,12 @@ class GameLaunchService {
       }
     } catch (e) {
       dev.log('Post-exit backup failed', error: e);
+    }
+
+    try {
+      await PlayTimeStore(prefs).record(game.id, session.sessionStart, sessionEnd);
+    } catch (e) {
+      dev.log('Local play time record failed (non-fatal)', error: e);
     }
 
     var playSessionRecorded = false;
