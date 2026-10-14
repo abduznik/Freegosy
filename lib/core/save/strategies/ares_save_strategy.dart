@@ -314,21 +314,34 @@ class AresSaveStrategy extends SaveStrategy {
       if (folderName == null) return false;
 
       final savesDir = p.join(dataDir, 'Saves', folderName);
-      final romStem = p.basenameWithoutExtension(destPath).toLowerCase();
+      // Ares names a save after the game file with its case kept
+      // (`Location::prefix`), and Linux file systems are case-sensitive: use
+      // the name of a save already there, else the ROM's own case.
+      final romStem = p.basenameWithoutExtension(destPath);
       final ext = p.extension(filename).isNotEmpty ? p.extension(filename) : '.ram';
+      Future<String> existingName(String name) async {
+        try {
+          await for (final e in io.Directory(savesDir).list()) {
+            if (e is io.File && p.basename(e.path).toLowerCase() == name.toLowerCase()) {
+              return p.basename(e.path);
+            }
+          }
+        } catch (_) {}
+        return name;
+      }
 
       // If Ares stores this game's save as a .zip bundle (memory card +
       // state files together, e.g. PlayStation), the incoming save must be
       // injected into that zip — Ares never reads a loose .mcd/.mcr file.
       if (_zipSaveEntryExtensions.contains(ext.toLowerCase())) {
-        final zipPath = p.normalize(p.join(savesDir, '$romStem.zip'));
+        final zipPath = p.normalize(p.join(savesDir, await existingName('$romStem.zip')));
         final zipFile = io.File(zipPath);
         if (await zipFile.exists()) {
           return await _injectIntoZipSaveBundle(zipFile, filename, data);
         }
       }
 
-      final targetPath = p.normalize(p.join(savesDir, '$romStem$ext'));
+      final targetPath = p.normalize(p.join(savesDir, await existingName('$romStem$ext')));
       await io.Directory(p.dirname(targetPath)).create(recursive: true);
       await backupSave(targetPath);
       await io.File(targetPath).writeAsBytes(data);

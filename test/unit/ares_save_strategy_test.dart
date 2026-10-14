@@ -232,7 +232,7 @@ void main() {
       expect(await savesGba.exists(), isTrue,
           reason: 'restoreSave should create the Saves/<Platform> subfolder');
 
-      final saveFile = File(p.join(savesGba.path, 'test game.ram'));
+      final saveFile = File(p.join(savesGba.path, 'Test Game.ram'));
       expect(await saveFile.exists(), isTrue);
       final contents = await saveFile.readAsBytes();
       expect(contents, [1, 2, 3]);
