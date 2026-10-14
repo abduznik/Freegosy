@@ -129,8 +129,8 @@ void main() {
           tempDir.path,
         );
         expect(result, isNotNull);
-        // Should find the largest file in the folder
-        expect(result, contains('disc2.chd'));
+        // Numbered discs: boots disc 1, not the largest disc (#54)
+        expect(result, contains('disc1.chd'));
       });
 
       test('index hit on file returns path', () async {
@@ -247,7 +247,7 @@ void main() {
         expect(p.basename(result!), 'game.m3u');
       });
 
-      test('falls back to largest file when no .m3u present (gc)', () async {
+      test('boots disc 1 when no .m3u is present (gc)', () async {
         final folder = Directory(p.join(tempDir.path, 'GCNoM3u'));
         await folder.create();
         await File(p.join(folder.path, 'disc1.iso')).writeAsString('x' * 100);
@@ -259,7 +259,7 @@ void main() {
           folder.path,
         );
         expect(result, isNotNull);
-        expect(p.basename(result!), 'disc2.iso');
+        expect(p.basename(result!), 'disc1.iso');
       });
 
       // Regression test for issue #44: a single-file-foldered game whose
