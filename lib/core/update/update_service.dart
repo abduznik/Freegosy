@@ -75,8 +75,44 @@ class UpdateService {
         installedSha: await installedSha(recordedSha));
   }
 
+  /// The rolling nightly release is tagged `v<version>-nightly`; the same tag is
+  /// rebuilt every night, so it is picked by digest, never by version order.
+  static bool isNightlyTag(String? tag) => tag != null && tag.toLowerCase().endsWith('-nightly');
+
   /// Pure selection logic, split out for tests.
   static UpdateInfo? pickUpdate(List<dynamic> releases, String currentVersion, UpdateChannel channel, InstallKind kind,
+      {String? installedSha}) {
+    final normal = _pickNormal(releases, currentVersion, channel, kind, installedSha: installedSha);
+    if (channel != UpdateChannel.nightly) return normal;
+
+    // Nightly channel: the nightly build, unless a real release is newer than it.
+    for (final r in releases) {
+      if (r is! Map<String, dynamic> || r['draft'] == true) continue;
+      final tag = r['tag_name'] as String?;
+      if (!isNightlyTag(tag)) continue;
+      final base = tag!.replaceFirst(RegExp(r'-nightly$', caseSensitive: false), '');
+      if (normal != null && VersionCompare.compare(normal.tag, base) >= 0) return normal;
+      // A nightly of an older version than this build is not an update.
+      if (VersionCompare.compare(base, currentVersion.split('-').first) < 0) return normal;
+      final asset = _pickAsset((r['assets'] as List<dynamic>? ?? const []), kind);
+      final sha = _digest(asset);
+      if (sha != null && sha == installedSha) return normal;
+      return UpdateInfo(
+        version: '${base.replaceFirst(RegExp(r'^[vV]'), '')}-nightly',
+        tag: tag,
+        prerelease: true,
+        notes: (r['body'] as String?) ?? '',
+        pageUrl: (r['html_url'] as String?) ?? 'https://github.com/$repo/releases',
+        assetName: asset?['name'] as String?,
+        assetUrl: asset?['browser_download_url'] as String?,
+        assetSize: asset?['size'] as int?,
+        sha256: sha,
+      );
+    }
+    return normal;
+  }
+
+  static UpdateInfo? _pickNormal(List<dynamic> releases, String currentVersion, UpdateChannel channel, InstallKind kind,
       {String? installedSha}) {
     Map<String, dynamic>? best;
     String? bestVersion;
@@ -86,6 +122,8 @@ class UpdateService {
       if (r['prerelease'] == true && channel == UpdateChannel.stable) continue;
       final tag = r['tag_name'] as String?;
       if (tag == null) continue;
+      // The rolling nightly is only for the nightly channel, and handled above.
+      if (isNightlyTag(tag)) continue;
       if (!VersionCompare.isNewer(tag, currentVersion)) {
         // Same version rebuilt: only when both digests are known and differ.
         if (VersionCompare.compare(tag, currentVersion) != 0 || installedSha == null) continue;
