@@ -145,6 +145,16 @@ Freegosy is built to complement [RomM](https://github.com/rommapp/romm), a moder
 
 ## Installation
 
+### Arch Linux
+
+A `PKGBUILD` that repackages the release AppImage lives in [`packaging/arch`](packaging/arch). The release workflow keeps its version and checksum current.
+
+```bash
+git clone https://github.com/abduznik/Freegosy.git
+cd Freegosy/packaging/arch
+makepkg -si
+```
+
 ### Nix / NixOS
 
 Freegosy provides a flake for Nix-based systems. Add it as an input in your flake:
