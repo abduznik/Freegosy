@@ -1,3 +1,4 @@
+import '../core/stats/play_time_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:freegosy/core/storage/app_preferences.dart';
@@ -16,6 +17,8 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 final appPreferencesProvider = Provider<AppPreferences>((ref) {
   return SharedPreferencesAppPreferences(ref.watch(sharedPreferencesProvider));
 });
+
+final playTimeStoreProvider = Provider<PlayTimeStore>((ref) => PlayTimeStore(ref.watch(appPreferencesProvider)));
 
 /// A StateNotifier that automatically persists its state to SharedPreferences.
 class PersistentStateNotifier<T> extends StateNotifier<T> {

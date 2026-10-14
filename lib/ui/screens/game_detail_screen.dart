@@ -1,3 +1,4 @@
+import '../../core/stats/play_time_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -913,7 +914,10 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
   }
 
   Widget _buildMetadataChips() {
+    final play = ref.watch(playTimeStoreProvider).statsFor(_currentGame.id);
     return Wrap(spacing: 8, runSpacing: 8, children: [
+      if (play != null) GameMetadataChip(label: '${PlayTimeStore.format(play.total)} played', icon: Icons.timer_outlined),
+      if (play?.lastPlayed != null) GameMetadataChip(label: 'Last played ${PlayTimeStore.ago(play!.lastPlayed!.toLocal())}', icon: Icons.history),
       ..._currentGame.genres.take(2).map((g) => GameMetadataChip(label: g)),
       if (_currentGame.playerCount?.isNotEmpty ?? false) GameMetadataChip(label: _currentGame.playerCount!, icon: Icons.people_outline),
       if (_currentGame.averageRating != null) GameMetadataChip(label: '${_currentGame.averageRating!.toStringAsFixed(0)}/100', icon: Icons.star_outline),
