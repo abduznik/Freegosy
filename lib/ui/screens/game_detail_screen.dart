@@ -39,6 +39,7 @@ class GameDetailScreen extends ConsumerStatefulWidget {
   final Future<void> Function(Game game) onDownload;
   final dynamic onPushSaves;
   final dynamic onPullSaves;
+  final dynamic onCheckSync;
   final dynamic onSyncStates;
   final dynamic onDelete;
   final dynamic onConfigure;
@@ -56,6 +57,7 @@ class GameDetailScreen extends ConsumerStatefulWidget {
     required this.onDownload,
     required this.onPushSaves,
     required this.onPullSaves,
+    this.onCheckSync,
     this.onSyncStates,
     required this.onDelete,
     this.onConfigure,
@@ -814,6 +816,14 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                   ),
                 ],
               ),
+              if (widget.onCheckSync != null) ...[
+                const SizedBox(height: 12),
+                GameDetailActionButton(
+                  icon: Icons.fact_check_outlined,
+                  label: 'Check Save Sync',
+                  onTap: () async { if (_isDownloaded) await widget.onCheckSync(); },
+                ),
+              ],
               if (widget.onSyncStates != null &&
                   (ref.watch(stateSyncServiceProvider).asData?.value?.isAvailableFor(_currentGame) ?? false)) ...[
                 const SizedBox(height: 12),
