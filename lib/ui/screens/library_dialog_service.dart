@@ -2,11 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/save/save_sync_report.dart';
 import '../../core/save/save_sync_service.dart';
+import '../../core/storage/disk_space.dart';
 import '../../core/save/state_sync_service.dart';
 import '../widgets/save_conflict_dialog.dart';
 import '../widgets/focus_effect_wrapper.dart';
 
 class LibraryDialogService {
+  /// True when the user wants to download although the drive looks too full.
+  static Future<bool> showLowSpaceDialog(BuildContext context, String gameName, SpaceCheck check, String folder) async {
+    final choice = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.sd_storage_outlined, color: Colors.orangeAccent, size: 32),
+        title: const Text('Not enough free space'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$gameName needs about ${DiskSpace.format(check.needed)} on the drive it downloads to, and only ${DiskSpace.format(check.free ?? 0)} is free.'),
+              const SizedBox(height: 8),
+              Text(folder, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 8),
+              const Text('Archives (.zip, .7z, .rar) are counted twice, since they are extracted next to the download.', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Download anyway')),
+        ],
+      ),
+    );
+    return choice ?? false;
+  }
+
   static Future<void> showSyncReportDialog(BuildContext context, SaveSyncReport report) {
     IconData icon(FindingLevel l) => switch (l) {
           FindingLevel.ok => Icons.check_circle_outline,
