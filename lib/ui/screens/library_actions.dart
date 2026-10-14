@@ -631,6 +631,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
               );
             } finally {
               ref.invalidate(resumeEntriesProvider);
+              ref.invalidate(syncedGameIdsProvider);
             }
             if (!context.mounted || result == null) return;
             if (result.saveSyncBlocked != null) ErrorHandler.showInfo(context, 'Saves Not Synced', message: result.saveSyncBlocked!);
@@ -868,6 +869,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     try {
       ErrorHandler.showInfo(context, 'Syncing', message: 'Uploading saves for ${game.name}...');
       final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+      ref.invalidate(syncedGameIdsProvider);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves uploaded');
         else ErrorHandler.showInfo(context, 'No Saves Found', message: 'No save files found for ${game.name}. Have you played the game first?');
@@ -910,6 +912,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       // chosen cloud save, same as the auto-pull-before-launch path.
       await ref.read(backupServiceProvider).createImmediate(game, romPath, syncService);
       final ok = await syncService.pullSave(game, romPath, saveData: selectedSave);
+      ref.invalidate(syncedGameIdsProvider);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
         else {

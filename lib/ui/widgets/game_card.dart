@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/romm/romm_models.dart';
 import '../../providers/library_provider.dart';
+import '../../providers/shared_prefs_provider.dart';
 
 class GameCard extends ConsumerWidget {
   final Game game;
@@ -68,6 +69,23 @@ class GameCard extends ConsumerWidget {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.check, size: 14, color: Colors.white),
+                      ),
+                    ),
+                  if (isDownloaded && ref.watch(syncedGameIdsProvider).contains(game.id))
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Tooltip(
+                        message: 'Saves synced with RomM',
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: Colors.lightBlue.shade700,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.cloud_done_outlined, size: 14, color: Colors.white),
+                        ),
                       ),
                     ),
                   if (platformLogoUrl != null && platformLogoUrl!.isNotEmpty)

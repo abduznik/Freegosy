@@ -1,3 +1,4 @@
+import '../core/save/synced_games.dart';
 import '../core/stats/play_time_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +17,15 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 /// [AppPreferences] implementation instead.
 final appPreferencesProvider = Provider<AppPreferences>((ref) {
   return SharedPreferencesAppPreferences(ref.watch(sharedPreferencesProvider));
+});
+
+/// Games whose saves have synced on this machine (for the card badge). Invalidate after a sync.
+final syncedGameIdsProvider = Provider<Set<String>>((ref) {
+  try {
+    return syncedGameIds(ref.watch(sharedPreferencesProvider).getKeys());
+  } on UnimplementedError {
+    return const {}; // no preferences wired in (widget tests)
+  }
 });
 
 final playTimeStoreProvider = Provider<PlayTimeStore>((ref) => PlayTimeStore(ref.watch(appPreferencesProvider)));
