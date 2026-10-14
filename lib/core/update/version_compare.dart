@@ -1,5 +1,6 @@
 /// Semver-ish comparison for release tags like `v0.6.1` or `0.6.1-pre.2`.
-/// A version with a pre-release suffix sorts before the same version without.
+/// A version with a pre-release suffix sorts before the same version without;
+/// a `-nightly` suffix sorts after it (the build is newer than that release).
 class VersionCompare {
   VersionCompare._();
 
@@ -19,8 +20,12 @@ class VersionCompare {
     final sa = _suffix(pa.group(4));
     final sb = _suffix(pb.group(4));
     if (sa == null && sb == null) return 0;
-    if (sa == null) return 1;
-    if (sb == null) return -1;
+    // A nightly of X is built after release X, so it sorts above it (but below
+    // X's successor); every other suffix (`-pre`, `-rc.1`) sorts below X.
+    if (sa == null) return _isNightly(sb!) ? -1 : 1;
+    if (sb == null) return _isNightly(sa) ? 1 : -1;
+    final na = _isNightly(sa), nb = _isNightly(sb);
+    if (na != nb) return na ? 1 : -1;
     return _compareSuffix(sa, sb);
   }
 
@@ -34,6 +39,8 @@ class VersionCompare {
     }
     return xs.length.compareTo(ys.length);
   }
+
+  static bool _isNightly(String suffix) => suffix.toLowerCase().startsWith('nightly');
 
   static String? _suffix(String? s) => (s == null || s.isEmpty) ? null : s;
 

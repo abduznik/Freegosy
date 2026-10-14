@@ -54,7 +54,7 @@ class _FakeService extends UpdateService {
   @override
   InstallKind get installKind => kind;
   @override
-  Future<UpdateInfo?> checkForUpdate(String v, UpdateChannel c, {String? recordedSha}) async {
+  Future<UpdateInfo?> checkForUpdate(String v, UpdateChannel c, {String? recordedSha, bool? runningNightly}) async {
     checks++;
     lastRecordedSha = recordedSha;
     if (throwOnCheck) throw Exception('offline');
@@ -173,6 +173,40 @@ void main() {
       addTearDown(c.dispose);
       return c;
     }
+
+    test('Skip hides the update from later launch checks, but not from a manual check', () async {
+      final c = await build(initial: {'update_auto_download': false});
+      final ctl = c.read(updateControllerProvider.notifier);
+      await ctl.checkOnLaunch();
+      expect(c.read(updateControllerProvider).status, UpdateStatus.available);
+
+      await ctl.skip();
+      expect(c.read(updateControllerProvider).status, UpdateStatus.upToDate);
+
+      await ctl.checkOnLaunch(); // next start: same release, still skipped
+      expect(c.read(updateControllerProvider).status, UpdateStatus.upToDate);
+      expect(service.checks, 2);
+
+      await ctl.check(manual: true); // the user asks again
+      expect(c.read(updateControllerProvider).status, UpdateStatus.available);
+    });
+
+    test('a skipped release comes back when it is rebuilt or a newer one appears', () async {
+      final c = await build(initial: {'update_auto_download': false});
+      final ctl = c.read(updateControllerProvider.notifier);
+      await ctl.checkOnLaunch();
+      await ctl.skip();
+
+      service.next = infoFor([1], sha: 'beef'); // same tag, new build
+      await ctl.checkOnLaunch();
+      expect(c.read(updateControllerProvider).status, UpdateStatus.available);
+    });
+
+    test('Skip does nothing while there is no update offered', () async {
+      final c = await build(initial: {'update_auto_download': false});
+      await c.read(updateControllerProvider.notifier).skip();
+      expect(prefs.getString('update_skipped'), isNull);
+    });
 
     test('does nothing on launch when the check is disabled', () async {
       final c = await build(initial: {updateCheckPrefKey: false});

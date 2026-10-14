@@ -199,7 +199,7 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       if (messenger == null) return;
       if (next.status == UpdateStatus.ready) {
         messenger.showSnackBar(SnackBar(
-          content: Text('Freegosy ${info.version} is ready to install.'),
+          content: Text(info.isNightly ? 'The new Freegosy nightly is ready to install.' : 'Freegosy ${info.version} is ready to install.'),
           duration: const Duration(seconds: 30),
           action: SnackBarAction(
             label: 'Restart to update',
@@ -209,8 +209,9 @@ class _FreegosyAppState extends ConsumerState<FreegosyApp> {
       } else if (next.status == UpdateStatus.available && previous?.status == UpdateStatus.checking) {
         final manual = ref.read(updateServiceProvider).installKind == InstallKind.manual || !info.hasAsset;
         messenger.showSnackBar(SnackBar(
-          content: Text('Freegosy ${info.version} is available.'),
+          content: Text(info.isNightly ? 'A new Freegosy nightly is available.' : 'Freegosy ${info.version} is available.'),
           duration: const Duration(seconds: 15),
+          showCloseIcon: true,
           action: SnackBarAction(
             label: manual ? 'View release' : 'Download',
             onPressed: () => manual
