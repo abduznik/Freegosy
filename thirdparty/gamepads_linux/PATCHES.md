@@ -22,3 +22,11 @@ Changes (all in `linux/`):
 
 Drop this copy (and the `dependency_overrides` entry in the root
 `pubspec.yaml`) once upstream ships the same fix.
+
+## Ignore motion-sensor devices (#169)
+
+- `device_filter.h` (new) and `connection_listener.cc`: a DualSense exposes
+  "... Motion Sensors" as its own `/dev/input/js*` node that streams
+  accelerometer axes continuously. Those nodes (by name, or by the kernel's
+  INPUT_PROP_ACCELEROMETER property) are no longer reported as gamepads, so
+  the app is not flooded with events from them.

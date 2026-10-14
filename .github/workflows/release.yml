@@ -47,6 +47,44 @@ jobs:
           flutter pub get
       - name: Build Linux
         run: flutter build linux --release --build-name=${{ github.event.inputs.version }} --build-number=${{ github.run_number }}
+      - name: Bundle native libraries
+        run: |
+          # Done before packaging so the tarball and the AppImage ship the
+          # same libs. Bundling these only for the AppImage left the tarball
+          # unable to start on hosts without them (#75).
+          mkdir -p build/linux/x64/release/bundle/lib
+          # libflutter_secure_storage_linux_plugin.so is a hard link-time
+          # dependency of the freegosy binary (unlike the plugins that
+          # dlopen themselves lazily), and it in turn needs libsecret-1.so.0.
+          # Unlike the GTK stack, libsecret isn't guaranteed on every Linux
+          # desktop (it's tied to GNOME Keyring/secret-service and commonly
+          # absent on minimal or non-GNOME systems), so the dynamic linker
+          # refused to even start the process there - no window, instant
+          # exit. Bundle it so AppRun's LD_LIBRARY_PATH picks it up instead
+          # of relying on the host to have it.
+          SECRET_LIB=$(ldconfig -p | grep -F 'libsecret-1.so.0' | awk '{print $NF}' | head -n 1)
+          if [ -n "$SECRET_LIB" ] ; then
+            cp -L "$SECRET_LIB" build/linux/x64/release/bundle/lib/libsecret-1.so.0
+          else
+            echo "::error::libsecret-1.so.0 not found on the build image; cannot bundle it"
+            exit 1
+          fi
+
+          # libzstandard_linux_plugin.so itself needs libzstandard_linux.so
+          # (the native zstd wrapper it dlopen-links against), but the
+          # zstandard_linux pub package's CMakeLists sets its
+          # *_bundled_libraries to empty, so Flutter's own bundling step
+          # never copies it into bundle/ even though CMake still builds it
+          # somewhere under build/linux/. Find and bundle it ourselves.
+          ZSTD_LIB=$(find build/linux -name 'libzstandard_linux.so' -print -quit)
+          if [ -n "$ZSTD_LIB" ] ; then
+            cp -L "$ZSTD_LIB" build/linux/x64/release/bundle/lib/libzstandard_linux.so
+          else
+            echo "::error::libzstandard_linux.so not found anywhere under build/linux; the zstandard_linux plugin will fail to load"
+            exit 1
+          fi
+      - name: Verify bundle has no unresolved libraries
+        run: bash tool/check_bundle_libs.sh build/linux/x64/release/bundle
       - name: Package Linux
         run: |
           cd build/linux/x64/release/bundle
@@ -63,37 +101,6 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           
           cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
-
-          # libflutter_secure_storage_linux_plugin.so is a hard link-time
-          # dependency of the freegosy binary (unlike the plugins that
-          # dlopen themselves lazily), and it in turn needs libsecret-1.so.0.
-          # Unlike the GTK stack, libsecret isn't guaranteed on every Linux
-          # desktop (it's tied to GNOME Keyring/secret-service and commonly
-          # absent on minimal or non-GNOME systems), so the dynamic linker
-          # refused to even start the process there - no window, instant
-          # exit. Bundle it so AppRun's LD_LIBRARY_PATH picks it up instead
-          # of relying on the host to have it.
-          SECRET_LIB=$(ldconfig -p | grep -F 'libsecret-1.so.0' | awk '{print $NF}' | head -n 1)
-          if [ -n "$SECRET_LIB" ] ; then
-            cp -L "$SECRET_LIB" AppDir/usr/bin/lib/libsecret-1.so.0
-          else
-            echo "::error::libsecret-1.so.0 not found on the build image; cannot bundle it"
-            exit 1
-          fi
-
-          # libzstandard_linux_plugin.so itself needs libzstandard_linux.so
-          # (the native zstd wrapper it dlopen-links against), but the
-          # zstandard_linux pub package's CMakeLists sets its
-          # *_bundled_libraries to empty, so Flutter's own bundling step
-          # never copies it into bundle/ even though CMake still builds it
-          # somewhere under build/linux/. Find and bundle it ourselves.
-          ZSTD_LIB=$(find build/linux -name 'libzstandard_linux.so' -print -quit)
-          if [ -n "$ZSTD_LIB" ] ; then
-            cp -L "$ZSTD_LIB" AppDir/usr/bin/lib/libzstandard_linux.so
-          else
-            echo "::error::libzstandard_linux.so not found anywhere under build/linux; the zstandard_linux plugin will fail to load"
-            exit 1
-          fi
 
           # Create Desktop Entry
           cat > AppDir/usr/share/applications/freegosy.desktop <<EOF
