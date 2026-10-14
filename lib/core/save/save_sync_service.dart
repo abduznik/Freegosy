@@ -9,6 +9,7 @@ import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
 import 'save_strategy.dart';
+import 'save_sync_report.dart';
 import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
@@ -378,6 +379,60 @@ class SaveSyncService {
     }
     return _legacyPushSaves(game, romPath,
         sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride, emulatorId: emulatorId);
+  }
+
+  /// Looks at a game's save sync without changing anything: which emulator
+  /// strategy applies, where its saves are, what is there, and what RomM has.
+  Future<SaveSyncReport> checkSync(Game game, String romPath, {String? emulatorId}) async {
+    final strategy = getStrategyForGame(game, emulatorId: emulatorId);
+    if (strategy == null) {
+      return SaveSyncReport.analyze(
+          gameName: game.displayName, emulator: null, noStrategy: true,
+          saveDir: null, localSaves: const [], cloud: null);
+    }
+
+    String? blocked;
+    String? saveDir;
+    final local = <LocalSaveInfo>[];
+    try {
+      blocked = await strategy.saveSyncBlockedReason(game, romPath);
+      if (blocked == null) {
+        saveDir = await strategy.getSaveDir(game, romPath);
+        for (final file in await strategy.getSaveFiles(game, romPath)) {
+          final stat = io.FileStat.statSync(file.path);
+          local.add(LocalSaveInfo(p.basename(file.path), stat.size, stat.modified));
+        }
+      }
+    } catch (e) {
+      blocked = 'Could not read the local saves: $e';
+    }
+
+    CloudSaveInfo? cloud;
+    String? cloudError;
+    try {
+      final latest = await _rommService.getLatestSave(game.id);
+      if (latest != null) {
+        cloud = CloudSaveInfo(
+          latest['file_name']?.toString() ?? 'save',
+          int.tryParse(latest['file_size_bytes']?.toString() ?? ''),
+          DateTime.tryParse(latest['updated_at']?.toString() ?? ''),
+        );
+      }
+    } catch (e) {
+      cloudError = e.toString();
+    }
+
+    return SaveSyncReport.analyze(
+      gameName: game.displayName,
+      emulator: emulatorId ?? strategy.strategyId,
+      noStrategy: false,
+      blockedReason: blocked,
+      saveDir: saveDir,
+      localSaves: local,
+      cloud: cloud,
+      cloudError: cloudError,
+      minValidSaveBytes: minValidSaveSizeBytes,
+    );
   }
 
   /// In-memory cache of the last pull-check timestamp per game.

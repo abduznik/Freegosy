@@ -833,6 +833,20 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     } catch (e) { if (context.mounted) await _handleSyncError(context, e, game, romPath, syncService, syncMode, push: true); }
   }
 
+  /// "Check Save Sync": shows what sync would see for this game, changing nothing.
+  Future<void> handleCheckSync(BuildContext context, WidgetRef ref, Game game) async {
+    final syncService = await ref.read(saveSyncServiceProvider.future);
+    if (!context.mounted || syncService == null) { ErrorHandler.showInfo(context, 'Sync Unavailable', message: 'Save sync not available'); return; }
+    final dir = ref.read(directoryServiceProvider).asData?.value;
+    String romPath = '';
+    if (dir != null) {
+      romPath = await dir.findExistingRomPath(game) ?? await dir.getRomFilePath(game);
+    }
+    final report = await syncService.checkSync(game, romPath);
+    if (!context.mounted) return;
+    await LibraryDialogService.showSyncReportDialog(context, report);
+  }
+
   Future<void> handlePullSaves(BuildContext context, WidgetRef ref, Game game) async {
     final syncService = await ref.read(saveSyncServiceProvider.future);
     if (!context.mounted || syncService == null) { ErrorHandler.showInfo(context, 'Sync Unavailable', message: 'Save sync not available'); return; }
