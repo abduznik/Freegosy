@@ -1,3 +1,4 @@
+import '../../core/storage/disk_space.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:io' as io;
@@ -66,17 +67,38 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       return;
     }
 
-    final url = service.getDownloadUrl(game);
-    final headers = <String, String>{'Authorization': service.authHeader};
-    ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
-    if (context.mounted) {
+    _confirmSpace(context, ref, game).then((ok) {
+      if (!ok || !context.mounted) return;
+      final url = service.getDownloadUrl(game);
+      final headers = <String, String>{'Authorization': service.authHeader};
+      ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
       ErrorHandler.showInfo(context, 'Download Started', message: '${game.name} is downloading...');
-    }
-    final dirService = ref.read(directoryServiceProvider).asData?.value;
-    if (dirService != null) {
-      Future.delayed(const Duration(seconds: 2), () {
-        ref.read(downloadedGamesCacheProvider.notifier).refresh();
-      });
+      final dirService = ref.read(directoryServiceProvider).asData?.value;
+      if (dirService != null) {
+        Future.delayed(const Duration(seconds: 2), () {
+          ref.read(downloadedGamesCacheProvider.notifier).refresh();
+        });
+      }
+    });
+  }
+
+  /// Warns when the drive the game downloads to can't hold it. True to go ahead:
+  /// there is room, the free space is unknown, or the user chose to download anyway.
+  Future<bool> _confirmSpace(BuildContext context, WidgetRef ref, Game game) async {
+    try {
+      final dir = ref.read(directoryServiceProvider).asData?.value;
+      if (dir == null || game.fileSize <= 0) return true;
+      final target = await dir.getRomDirectory(game);
+      final check = SpaceCheck(
+        DiskSpace.neededFor(game.fileSize, fileName: game.fsName ?? game.fileName),
+        await DiskSpace.freeBytes(target),
+      );
+      if (check.enough || !context.mounted) return true;
+      debugPrint('[Download] low space for ${game.name}: needs ${check.needed}, free ${check.free}');
+      return await LibraryDialogService.showLowSpaceDialog(context, game.displayName, check, target);
+    } catch (e) {
+      debugPrint('[Download] space check failed (continuing): $e');
+      return true;
     }
   }
 
@@ -136,12 +158,13 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
   }
 
   void _downloadAllFiles(BuildContext context, WidgetRef ref, Game game, RommService service) {
-    final url = service.getDownloadUrl(game);
-    final headers = <String, String>{'Authorization': service.authHeader};
-    ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
-    if (context.mounted) {
+    _confirmSpace(context, ref, game).then((ok) {
+      if (!ok || !context.mounted) return;
+      final url = service.getDownloadUrl(game);
+      final headers = <String, String>{'Authorization': service.authHeader};
+      ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
       ErrorHandler.showInfo(context, 'Download Started', message: 'Downloading all files for ${game.name}...');
-    }
+    });
   }
 
   void _showFileSelectionDialog(BuildContext context, WidgetRef ref, Game game, RommService service) {
@@ -608,6 +631,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
               );
             } finally {
               ref.invalidate(resumeEntriesProvider);
+              ref.invalidate(syncedGameIdsProvider);
             }
             if (!context.mounted || result == null) return;
             if (result.saveSyncBlocked != null) ErrorHandler.showInfo(context, 'Saves Not Synced', message: result.saveSyncBlocked!);
@@ -845,6 +869,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     try {
       ErrorHandler.showInfo(context, 'Syncing', message: 'Uploading saves for ${game.name}...');
       final ok = await syncService.pushSaves(game, romPath, syncMode: syncMode, force: true);
+      ref.invalidate(syncedGameIdsProvider);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves uploaded');
         else ErrorHandler.showInfo(context, 'No Saves Found', message: 'No save files found for ${game.name}. Have you played the game first?');
@@ -887,6 +912,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       // chosen cloud save, same as the auto-pull-before-launch path.
       await ref.read(backupServiceProvider).createImmediate(game, romPath, syncService);
       final ok = await syncService.pullSave(game, romPath, saveData: selectedSave);
+      ref.invalidate(syncedGameIdsProvider);
       if (context.mounted) {
         if (ok) ErrorHandler.showSuccess(context, 'Save Synced', message: 'Saves downloaded');
         else {

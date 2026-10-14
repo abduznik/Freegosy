@@ -1035,6 +1035,13 @@ class RommService implements RommStatesApi {
     } catch (_) { return null; }
   }
 
+  /// Saves the user's own properties for a game (status, rating, ...).
+  ///
+  /// RomM 4.9 changed this endpoint: the fields are now the request body
+  /// itself and `update_last_played`/`remove_last_played` are query
+  /// parameters, where 4.8 and earlier read `{"data": {...}}`. A server given
+  /// the other shape answers 200 and saves nothing, so the reply is checked
+  /// against what was sent, and the other shape is tried when it doesn't match.
   Future<bool> updateRomProps(String romId, AppPreferences prefs, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
     try {
       await _ensureBearerToken(prefs);
@@ -1044,9 +1051,39 @@ class RommService implements RommStatesApi {
       if (rating != null) data['rating'] = rating;
       if (status != null) data['status'] = status.toLowerCase();
       if (completion != null) data['completion'] = completion;
-      final response = await _dio.put('/api/roms/$romId/props', data: {'data': data, 'update_last_played': false, 'remove_last_played': false}, options: Options(headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json', validateStatus: (status) => status != null && status < 500));
-      return response.statusCode == 200 || response.statusCode == 204;
+
+      Future<Response<dynamic>> put(bool flat) => _dio.put(
+            '/api/roms/$romId/props',
+            queryParameters: flat ? {'update_last_played': false, 'remove_last_played': false} : null,
+            data: flat ? data : {'data': data, 'update_last_played': false, 'remove_last_played': false},
+            options: Options(
+              headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json',
+              validateStatus: (code) => code != null && code < 500,
+            ),
+          );
+
+      final flatFirst = (await fetchCapabilities()).hasDeviceSaveSync;
+      var response = await put(flatFirst);
+      if (!propsApplied(response, data)) {
+        debugPrint('[RomM] props not applied (HTTP ${response.statusCode}); retrying with the ${flatFirst ? "4.8" : "4.9"} request shape');
+        response = await put(!flatFirst);
+      }
+      return propsApplied(response, data);
     } catch (_) { return false; }
+  }
+
+  /// True when [response] is a success whose body, if it echoes the user's
+  /// properties, matches what was [sent].
+  @visibleForTesting
+  static bool propsApplied(Response<dynamic> response, Map<String, dynamic> sent) {
+    final code = response.statusCode;
+    if (code != 200 && code != 204) return false;
+    final body = response.data;
+    if (body is! Map) return true;
+    for (final e in sent.entries) {
+      if (body.containsKey(e.key) && body[e.key] != e.value) return false;
+    }
+    return true;
   }
 
   Future<List<RomNote>> getRomNotes(String romId) async {
