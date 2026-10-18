@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'core/cli/cli_config.dart';
 import 'core/downloader/download_service.dart';
+import 'core/emulator/emulator_strategy.dart';
 import 'core/emulator/game_launch_service.dart';
 import 'core/emulator/strategies/windows_strategy.dart';
 import 'core/emulator/strategy_registry.dart';
@@ -27,7 +28,12 @@ import 'core/save/state_sync_service.dart';
 import 'core/storage/app_preferences.dart';
 import 'core/storage/directory_service.dart';
 import 'core/stats/play_time_store.dart';
+import 'core/storage/disk_space.dart';
+import 'core/windows/wine_launcher.dart';
+import 'package:path/path.dart' as p;
 import 'core/storage/shared_preferences_app_preferences.dart';
+
+part 'cli_tools.dart';
 
 /// Headless entry point for Freegosy — browse/search the RomM library and
 /// launch a game (with save sync verification) without the UI, so a person
@@ -78,6 +84,24 @@ Future<void> runHeadless(List<String> args) async {
     case 'values':
       await _runValues(rest);
       break;
+    case 'platforms':
+      await _runPlatforms(rest);
+      break;
+    case 'emulators':
+      await _runEmulators(rest);
+      break;
+    case 'doctor':
+      await _runDoctor(rest);
+      break;
+    case 'info':
+      await _runInfo(rest);
+      break;
+    case 'playtime':
+      await _runPlaytime(rest);
+      break;
+    case 'saves':
+      await _runSaves(rest);
+      break;
     case 'interactive':
       await _runInteractive();
       break;
@@ -96,6 +120,9 @@ Usage:
   freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
   freegosy.exe --headless random [filters] [--json]
   freegosy.exe --headless values [genres|franchises|player_counts|regions|languages|...] [--json]
+  freegosy.exe --headless platforms | emulators | doctor | playtime [--limit=N] [--json]
+  freegosy.exe --headless info (--game-id=ID | --name=TERM) [--json]
+  freegosy.exe --headless saves [check | push | pull | backups] (--game-id=ID | --name=TERM) [--emulator=ID] [--json]
   freegosy.exe --headless filters [list | save NAME [filters] | delete NAME] [--json]
   freegosy.exe --headless download (--game-id=ID | --name=TERM) [--json]
   freegosy.exe --headless launch (--game-id=ID | --name=TERM) [options]
@@ -116,6 +143,18 @@ list options:
 
   --saved=NAME             Start from a saved filter set (made in the app's filter sheet or with `filters save`);
                            other flags on the command line override it
+
+inspection commands (all take --json):
+  platforms    RomM platforms with id, slug, game count and the emulator that would launch them
+               (--platform= elsewhere accepts an id, a slug like "snes", or a platform name)
+  emulators    Every emulator Freegosy knows: installed or missing, where, which platforms, save/state sync
+  doctor       One-shot health check: RomM connection and version, ROM folder and free space, emulators found,
+               and on Linux umu-run / wine / flatpak / installed Proton. Exit 1 when something failed
+  info         Everything about one game: metadata, your rating and status, whether it is downloaded, which
+               emulator would run it, and play time recorded on this computer
+  playtime     Games ranked by play time measured on this computer
+  saves        check (default): local saves vs RomM and what looks wrong (exit 1 on a problem); push / pull:
+               sync now (--force on push); backups: list local backup zips
 
 filters command:
   filters / filters list     Show the saved filter sets
@@ -556,9 +595,10 @@ Future<void> _runList(List<String> args) async {
         await session.close();
         exit(2);
       }
+      final platformId = await _platformIdFromFlag(session.rommService, flags['platform']);
       page = await session.rommService.getGamesPage(
         search: flags['search'],
-        platformId: flags['platform'],
+        platformId: platformId,
         genres: filters.genres,
         regions: filters.regions,
         languages: filters.languages,
@@ -743,9 +783,10 @@ Future<void> _runRandom(List<String> args) async {
       await session.close();
       exit(2);
     }
+    final platformId = await _platformIdFromFlag(session.rommService, flags['platform']);
     Future<({List<Game> games, int total})> page(int offset, int limit) => session.rommService.getGamesPage(
           search: flags['search'],
-          platformId: flags['platform'],
+          platformId: platformId,
           genres: filters.genres,
           regions: filters.regions,
           languages: filters.languages,
