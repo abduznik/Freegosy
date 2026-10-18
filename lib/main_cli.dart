@@ -51,6 +51,8 @@ part 'cli_tools.dart';
 /// (the --headless flag is consumed by this file's caller; see main.dart)
 Future<void> runHeadless(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Log lines go to stderr so stdout carries only a command's result (and --json stays parseable).
+  debugPrint = (String? message, {int? wrapWidth}) => stderr.writeln(message ?? '');
 
   if (args.isNotEmpty && (args.first == '--help' || args.first == '-h')) {
     _printUsage();
