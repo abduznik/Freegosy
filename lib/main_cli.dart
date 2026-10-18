@@ -10,6 +10,7 @@ import 'package:dio/dio.dart';
 import 'core/cli/cli_config.dart';
 import 'core/downloader/download_service.dart';
 import 'core/emulator/game_launch_service.dart';
+import 'core/emulator/strategies/windows_strategy.dart';
 import 'core/emulator/strategy_registry.dart';
 import 'core/extraction/extraction_service.dart';
 import 'core/platform/platform_info.dart';
@@ -139,6 +140,12 @@ launch options:
   --timeout=SECONDS        Auto-terminate the emulator after N seconds instead of waiting for exit
                              (no effect for emulators that block until exit internally, e.g. MelonDS —
                              the timeout only applies once a process handle is available)
+  --runner=auto|umu|wine   Linux, Windows games: run through umu-run (Proton) or wine (default auto: umu-run first)
+  --proton=auto|installed|PATH|GE-Proton|UMU-Proton
+                           Linux, umu-run: which Proton to use. auto = one already installed (Steam's or GE-Proton),
+                           else GE-Proton downloaded by umu; installed = never download; a folder path; or a name
+                           umu downloads
+  --dry-run                Print what would run (command, environment, ROM path) and exit without launching
   --json                   Emit machine-readable JSON to stdout (default: human-readable)
 
 Credentials: reused from the account already configured in the Freegosy app
@@ -321,6 +328,7 @@ Future<void> _runLaunch(List<String> args) async {
   final timeoutSeconds = flags['timeout'] != null ? int.tryParse(flags['timeout']!) : null;
   final emulatorOverride = flags['emulator'];
   final coreOverride = flags['core'];
+  final dryRun = flags['dry-run'] == 'true';
 
   if (gameId == null && name == null) {
     stderr.writeln('Error: --game-id or --name is required\n');
@@ -345,6 +353,34 @@ Future<void> _runLaunch(List<String> args) async {
     }
     await session.close();
     exit(2);
+  }
+
+  final strategy = emulatorOverride != null
+      ? session.strategyRegistry.getStrategyById(emulatorOverride)
+      : session.strategyRegistry.getStrategyForSlug(game.platformSlug ?? '', gameId: game.id);
+  if (strategy is WindowsStrategy) {
+    strategy.runnerOverride = _nonEmpty(flags['runner']);
+    strategy.protonOverride = _nonEmpty(flags['proton']);
+  }
+
+  if (dryRun) {
+    final existing = await session.directoryService.findExistingRomPath(game);
+    final romPath = existing == null ? null : await session.launchService.resolveRomFileInDirectory(existing, game.platformSlug);
+    if (romPath == null) {
+      _emitResult(_LaunchReport.configError('ROM not found on disk for "${game.name}". Download it first.'), asJson);
+      await session.close();
+      exit(2);
+    }
+    final text = strategy == null
+        ? 'No emulator configured for platform "${game.platformSlug}".'
+        : await strategy.describeLaunch(game, romPath) ?? '${strategy.name} would be started with the game at $romPath.';
+    if (asJson) {
+      stdout.writeln(jsonEncode({'game': game.name, 'emulatorId': strategy?.emulatorId, 'romPath': romPath, 'plan': text}));
+    } else {
+      stdout.writeln('Game: ${game.name}\nEmulator: ${strategy?.name ?? 'none'}\nROM: $romPath\n$text');
+    }
+    await session.close();
+    exit(strategy == null ? 2 : 0);
   }
 
   await _launchGame(session, game, timeoutSeconds: timeoutSeconds, asJson: asJson, emulatorOverride: emulatorOverride, coreOverride: coreOverride);
