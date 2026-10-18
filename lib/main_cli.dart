@@ -444,7 +444,7 @@ Future<_LaunchReport> _launchGame(
         // sigterm (kill()'s default) can be caught/ignored by GUI emulators
         // (Qt/GLFW apps often intercept it for a "save before quit?"
         // prompt); sigkill forces immediate termination.
-        launched.process!.kill(ProcessSignal.sigkill);
+        _killProcessTree(launched.process!);
       });
     }
 
@@ -571,6 +571,34 @@ Future<void> _runValues(List<String> args) async {
     stderr.writeln('Error: failed to read filter values: $e');
     await session.close();
     exit(1);
+  }
+}
+
+/// Stops [process] and everything it started. A Proton game runs several layers deep (umu-run, pressure-vessel,
+/// proton, the game) and the inner ones leave the process's group, so the tree is collected from the process
+/// table first and then every member is killed; killing only [process] would leave the game running.
+void _killProcessTree(Process process) {
+  final pids = <int>{process.pid};
+  if (!PlatformInfo.current.isWindows) {
+    try {
+      final table = Process.runSync('ps', ['-eo', 'pid=,ppid=']).stdout.toString();
+      final children = <int, List<int>>{};
+      for (final line in table.split('\n')) {
+        final parts = line.trim().split(RegExp(r'\s+'));
+        if (parts.length != 2) continue;
+        final pid = int.tryParse(parts[0]), parent = int.tryParse(parts[1]);
+        if (pid != null && parent != null) children.putIfAbsent(parent, () => []).add(pid);
+      }
+      final queue = [process.pid];
+      while (queue.isNotEmpty) {
+        for (final child in children[queue.removeLast()] ?? const <int>[]) {
+          if (pids.add(child)) queue.add(child);
+        }
+      }
+    } catch (_) {}
+  }
+  for (final pid in pids) {
+    Process.killPid(pid, ProcessSignal.sigkill);
   }
 }
 
@@ -840,6 +868,7 @@ void _printGameList(List<Game> games, int total, bool asJson) {
                 'genres': g.genres,
                 'franchises': g.franchises,
                 'players': g.playerCount,
+                'sizeBytes': g.fileSize,
                 'rating': g.averageRating,
                 'lastPlayed': g.lastPlayed?.toIso8601String(),
               })

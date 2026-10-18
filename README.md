@@ -135,7 +135,7 @@ freegosy.exe --headless                 (same as interactive)
 | **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
 | **ScummVM** | 🟡 Partial | Games on the `scummvm` platform auto-detect and launch from their folder. Saves sync per game: Freegosy starts ScummVM with `--savepath` pointing at a folder of its own for each game, so saves from before this change (in ScummVM's shared folder) aren't picked up. Needs real-world testing. |
 | **Ares** | 🟡 Partial | Multi-system (GBA, SNES, N64, Genesis, PS1, MSX, etc.). PlayStation confirmed working on Windows — Ares bundles the memory card together with save-state files in a per-game `.zip`, now correctly unpacked/repacked on push and pull. Other systems still need real-world testing. |
-| **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
+| **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. On Linux they start through `umu-run` (Proton) or `wine`, one prefix per game; the Linux path is new and needs testing. |
 
 **Per-OS Notes:**
 - **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure. Ares save path: `~/Library/Application Support/ares/`.
