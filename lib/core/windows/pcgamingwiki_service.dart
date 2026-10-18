@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../platform/platform_info.dart';
+import 'windows_known_folders.dart';
 
 class PcGamingWikiService {
   final Dio _dio;
@@ -107,7 +108,13 @@ class PcGamingWikiService {
   }
 
   /// Returns expanded save locations for [gameTitle].
-  Future<List<Map<String, String>>> getSaveLocations(String gameTitle, {String gameDir = ''}) async {
+  ///
+  /// [gameRoots] are the folders `{{p|game}}` may mean (the extracted folder can hold the game one level down);
+  /// every location is expanded once per root, roots first. Defaults to [gameDir].
+  ///
+  /// [folders] says where Windows' well-known folders are on this computer (see [WindowsKnownFolders]); when
+  /// omitted the Windows environment is used. On Linux the paths are POSIX paths inside the Wine prefix.
+  Future<List<Map<String, String>>> getSaveLocations(String gameTitle, {String gameDir = '', List<String>? gameRoots, WindowsKnownFolders? folders}) async {
     try {
       debugPrint('[PcGamingWiki] Getting save locations for: $gameTitle (gameDir: $gameDir)');
       final pageTitle = await findPageTitle(gameTitle);
@@ -122,7 +129,13 @@ class PcGamingWikiService {
         return [];
       }
 
-      final locations = _parseSaveLocations(wikitext, gameTitle, gameDir);
+      final locations = <Map<String, String>>[];
+      final seen = <String>{};
+      for (final root in (gameRoots == null || gameRoots.isEmpty) ? [gameDir] : gameRoots) {
+        for (final loc in parseSaveLocations(wikitext, gameTitle, root, folders: folders)) {
+          if (seen.add(loc['path']!)) locations.add(loc);
+        }
+      }
       debugPrint('[PcGamingWiki] Parsed ${locations.length} save location(s) for $gameTitle');
       return locations;
     } catch (e) {
@@ -131,7 +144,8 @@ class PcGamingWikiService {
     }
   }
 
-  List<Map<String, String>> _parseSaveLocations(String wikitext, String gameTitle, String gameDir) {
+  @visibleForTesting
+  List<Map<String, String>> parseSaveLocations(String wikitext, String gameTitle, String gameDir, {WindowsKnownFolders? folders}) {
     final results = <Map<String, String>>[];
     final seen = <String>{};
 
@@ -153,7 +167,7 @@ class PcGamingWikiService {
             continue;
           }
           debugPrint("[PcGamingWiki] Raw path found: $lower");
-          final expanded = _expandWikiPath(trimmed, gameTitle, gameDir);
+          final expanded = _expandWikiPath(trimmed, gameTitle, gameDir, folders: folders);
           if (expanded == null) continue;
 
           final normalizedLower = expanded.toLowerCase();
@@ -213,26 +227,33 @@ class PcGamingWikiService {
     return parts.where((p) => p.isNotEmpty).toList();
   }
 
-  String? _expandWikiPath(String path, String gameTitle, String gameDir) {
-    final appData = _platform.environment['APPDATA'] ?? '';
-    final localAppData = _platform.environment['LOCALAPPDATA'] ?? '';
-    final userProfile = _platform.environment['USERPROFILE'] ?? '';
-    final programData = _platform.environment['PROGRAMDATA'] ?? '';
-    final public = _platform.environment['PUBLIC'] ?? '';
+  String? _expandWikiPath(String path, String gameTitle, String gameDir, {WindowsKnownFolders? folders}) {
+    final posix = !_platform.isWindows;
+    final Map<String, String> subs;
+    if (folders != null) {
+      subs = {...folders.byWikiTemplate};
+    } else {
+      final appData = _platform.environment['APPDATA'] ?? '';
+      final localAppData = _platform.environment['LOCALAPPDATA'] ?? '';
+      final userProfile = _platform.environment['USERPROFILE'] ?? '';
+      final programData = _platform.environment['PROGRAMDATA'] ?? '';
+      final public = _platform.environment['PUBLIC'] ?? '';
+      subs = {
+        '{{p|appdata}}': appData,
+        '{{p|localappdata}}': localAppData,
+        '{{p|userprofile}}': userProfile,
+        '{{p|programdata}}': programData,
+        '{{p|public}}': public,
+      };
+    }
+    // Use gameDir directly — it's already the game's install folder.
+    // Don't append gameTitle as it may contain invalid chars (e.g., colons).
+    subs['{{p|game}}'] = gameDir;
 
-    final subs = <String, String>{
-      '{{p|appdata}}': appData,
-      '{{p|localappdata}}': localAppData,
-      '{{p|userprofile}}': userProfile,
-      '{{p|programdata}}': programData,
-      '{{p|public}}': public,
-      // Use gameDir directly — it's already the game's install folder.
-      // Don't append gameTitle as it may contain invalid chars (e.g., colons).
-      '{{p|game}}': gameDir,
-    };
-
+    // Longest template first, so {{p|userprofile\documents}} is not cut short by {{p|userprofile}}.
+    final ordered = subs.entries.toList()..sort((a, b) => b.key.length.compareTo(a.key.length));
     String expanded = path;
-    for (final entry in subs.entries) {
+    for (final entry in ordered) {
       if (entry.value.isEmpty && expanded.toLowerCase().contains(entry.key)) {
         return null;
       }
@@ -241,6 +262,9 @@ class PcGamingWikiService {
         entry.value,
       );
     }
+
+    // The wiki writes Windows paths; on Linux everything below works on POSIX paths (File.parent included).
+    if (posix) expanded = expanded.replaceAll('\\', '/');
 
     // In case of a "User ID" folder, we consider the entirety of the parent save folder
     if (expanded.toLowerCase().contains('{{p|uid}}')) expanded = File(expanded).parent.path;
@@ -254,6 +278,12 @@ class PcGamingWikiService {
     // Strip bare filenames with extension at end
     if (RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(expanded)) {
       expanded = File(expanded).parent.path;
+    }
+
+    if (posix) {
+      // A POSIX path inside the Wine prefix (or the game folder): keep its '/', turn the wiki's '\' into '/'.
+      expanded = expanded.replaceAll('\\', '/').replaceAll(RegExp(r'/+'), '/');
+      return expanded.length > 1 ? expanded.replaceAll(RegExp(r'/+$'), '') : expanded;
     }
 
     // Strip invalid Windows characters from path segments (colons, etc.)
