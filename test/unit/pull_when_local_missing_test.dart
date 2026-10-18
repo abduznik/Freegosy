@@ -48,7 +48,7 @@ void main() {
   });
   tearDown(() => tmp.delete(recursive: true));
 
-  final saveFolder = () => p.join(tmp.path, 'freegosy_saves', '7');
+  String saveFolder() => p.join(tmp.path, 'freegosy_saves', '7');
 
   test('a save that is current on this device and still on disk is left alone', () async {
     Directory(saveFolder()).createSync(recursive: true);
