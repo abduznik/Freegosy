@@ -106,6 +106,19 @@ class Game {
     this.raAchievements = const [],
   });
 
+  static int _readSize(Map<String, dynamic> json) {
+    for (final key in ['fs_size_bytes', 'file_size_bytes']) {
+      final v = json[key];
+      if (v is num && v > 0) return v.toInt();
+    }
+    var sum = 0;
+    for (final f in (json['files'] as List?) ?? const []) {
+      final v = f is Map ? f['file_size_bytes'] : null;
+      if (v is num) sum += v.toInt();
+    }
+    return sum;
+  }
+
   factory Game.fromJson(Map<String, dynamic> json) {
     return Game(
       id: json['id']?.toString() ?? '',
@@ -120,7 +133,9 @@ class Game {
       fileName: json['file_name']?.toString(), // Mapped from JSON
       fsName: json['fs_name']?.toString(), // Mapped from JSON
       fsExtension: json['fs_extension']?.toString(),
-      fileSize: json['file_size_bytes'] is int ? json['file_size_bytes'] : 0,
+      // RomM names the total size `fs_size_bytes`; `file_size_bytes` is the per-file name (and what this app's own
+      // cache writes), so both are read, and the files' sizes are summed as a last resort.
+      fileSize: _readSize(json),
       multiFilePath: json['multi_file_path']?.toString(),
       hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
       files: (json['files'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ?? [],
