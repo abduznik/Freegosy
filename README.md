@@ -133,7 +133,7 @@ freegosy.exe --headless                 (same as interactive)
 | **Azahar** | 🟢 Full | 3DS — confirmed working by [@Ramza2k](https://github.com/Ramza2k). |
 | **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
 | **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
-| **ScummVM** | 🟡 Partial | Games on the `scummvm` platform auto-detect and launch from their folder. Save sync not yet supported. |
+| **ScummVM** | 🟡 Partial | Games on the `scummvm` platform auto-detect and launch from their folder. Saves sync per game: Freegosy starts ScummVM with `--savepath` pointing at a folder of its own for each game, so saves from before this change (in ScummVM's shared folder) aren't picked up. Needs real-world testing. |
 | **Ares** | 🟡 Partial | Multi-system (GBA, SNES, N64, Genesis, PS1, MSX, etc.). PlayStation confirmed working on Windows — Ares bundles the memory card together with save-state files in a per-game `.zip`, now correctly unpacked/repacked on push and pull. Other systems still need real-world testing. |
 | **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
 
