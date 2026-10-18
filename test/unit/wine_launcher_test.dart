@@ -52,4 +52,48 @@ void main() {
     // A gamescope/AppImage session without /usr/bin on PATH still finds system programs.
     expect(WineLauncher.find('sh', environment: {'PATH': ''}), isNotNull);
   });
+
+  group('findInstalledProton', () {
+    late Directory steam;
+    setUp(() => steam = Directory.systemTemp.createTempSync('steam_root'));
+    tearDown(() => steam.deleteSync(recursive: true));
+
+    void proton(String relative) {
+      Directory(p.join(steam.path, relative)).createSync(recursive: true);
+      File(p.join(steam.path, relative, 'proton')).writeAsStringSync('');
+    }
+
+    String? find() => WineLauncher.findInstalledProton(steamRoots: [steam.path]);
+
+    test('nothing installed means null, so umu downloads GE-Proton', () => expect(find(), isNull));
+
+    test('a custom GE-Proton beats Steam\'s own, newest first', () {
+      proton('steamapps/common/Proton 9.0');
+      proton('compatibilitytools.d/GE-Proton9-5');
+      proton('compatibilitytools.d/GE-Proton10-2');
+      expect(p.basename(find()!), 'GE-Proton10-2');
+    });
+
+    test('Steam\'s numbered versions come before Proton - Experimental, newest first', () {
+      proton('steamapps/common/Proton - Experimental');
+      proton('steamapps/common/Proton 8.0');
+      proton('steamapps/common/Proton 9.0');
+      expect(p.basename(find()!), 'Proton 9.0');
+    });
+
+    test('Experimental alone is used, and folders without the proton script are ignored', () {
+      Directory(p.join(steam.path, 'steamapps/common/Proton 10.0')).createSync(recursive: true); // no script
+      proton('steamapps/common/Proton - Experimental');
+      expect(p.basename(find()!), 'Proton - Experimental');
+    });
+
+    test('the found Proton goes into PROTONPATH unless the environment sets one', () {
+      File(p.join(bin.path, 'umu-run')).writeAsStringSync('#!/bin/sh\n');
+      final c = WineLauncher.build(exePath: '/g/a.exe', args: [], prefixDir: '/p', dirs: [bin.path], protonPath: '/steam/Proton 9.0')!;
+      expect(c.environment['PROTONPATH'], '/steam/Proton 9.0');
+      final own = WineLauncher.build(
+          exePath: '/g/a.exe', args: [], prefixDir: '/p', dirs: [bin.path], protonPath: '/steam/Proton 9.0', environment: {'PROTONPATH': '/mine'})!;
+      expect(own.environment['PROTONPATH'], '/mine');
+    });
+  });
 }

@@ -840,6 +840,7 @@ void _printGameList(List<Game> games, int total, bool asJson) {
                 'genres': g.genres,
                 'franchises': g.franchises,
                 'players': g.playerCount,
+                'sizeBytes': g.fileSize,
                 'rating': g.averageRating,
                 'lastPlayed': g.lastPlayed?.toIso8601String(),
               })

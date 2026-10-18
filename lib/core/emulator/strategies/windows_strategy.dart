@@ -118,6 +118,7 @@ class WindowsStrategy extends EmulatorStrategy {
         args: args,
         prefixDir: prefix,
         preference: _prefs.getString(runnerPrefKey) ?? 'auto',
+        protonPath: WineLauncher.findInstalledProton(),
       );
       if (command == null) {
         throw Exception(
