@@ -17,7 +17,7 @@ _appimage="Freegosy-linux-x86_64-${pkgver}.AppImage"
 source=("${_appimage}::${url}/releases/download/v${pkgver}/Freegosy-linux-x86_64.AppImage"
         "${pkgname}-LICENSE-${pkgver}::https://raw.githubusercontent.com/abduznik/Freegosy/v${pkgver}/LICENSE")
 noextract=("${_appimage}")
-sha256sums=('1bb75e4d83fb2e35e88318dedd52be8c44501786393d7066d2d51640e21503c2'
+sha256sums=('54adb6fb852b13667072d5758119cd4f560a55318390eed64b7590764c258589'
             '9b4fc05981216c6bafd837aa1e9568b49bdf2526d669fc864308af95e077b542')
 
 prepare() {
