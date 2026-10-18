@@ -481,6 +481,28 @@ class RommService implements RommStatesApi {
     } catch (_) { return []; }
   }
 
+  /// Games never launched, best rated first (RomM's `last_played` filter off).
+  Future<List<Game>> getTopUnplayed({int limit = 15}) async {
+    try {
+      final page = await getGamesPage(limit: limit, orderBy: 'average_rating', orderDir: 'desc', lastPlayed: false);
+      return page.games.where((g) => g.lastPlayed == null).toList();
+    } catch (_) { return []; }
+  }
+
+  Future<List<Game>> getTopRated({int limit = 15}) async {
+    try {
+      return (await getGamesPage(limit: limit, orderBy: 'average_rating', orderDir: 'desc')).games;
+    } catch (_) { return []; }
+  }
+
+  /// The games [ids] name, in that order; ids the server doesn't know are skipped.
+  Future<List<Game>> getGamesByIds(List<String> ids) async {
+    final games = await Future.wait(ids.map((id) async {
+      try { return await getGame(id); } catch (_) { return null; }
+    }));
+    return games.whereType<Game>().toList();
+  }
+
   Future<List<Game>> getRecentlyPlayed({int limit = 15}) async {
     try {
       final response = await _dio.get('/api/roms', queryParameters: {'limit': limit, 'order_by': 'last_played', 'order_dir': 'desc', 'last_played': true, 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
@@ -518,14 +540,16 @@ class RommService implements RommStatesApi {
     }
   }
 
-  Future<({List<Game> games, int total})> getGamesPage({int offset = 0, int limit = 50, String? platformId, String? search, List<String> genres = const [], List<String> regions = const [], List<String> languages = const [], List<String> collections = const [], List<String> statuses = const [], bool? lastPlayed, bool withCharIndex = false, bool withFilterValues = false}) async {
-    final params = <String, dynamic>{'limit': limit, 'offset': offset, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': withCharIndex, 'with_filter_values': withFilterValues};
+  Future<({List<Game> games, int total})> getGamesPage({int offset = 0, int limit = 50, String? platformId, String? search, List<String> genres = const [], List<String> regions = const [], List<String> languages = const [], List<String> collections = const [], List<String> statuses = const [], List<String> franchises = const [], List<String> playerCounts = const [], String orderBy = 'name', String orderDir = 'asc', bool? lastPlayed, bool withCharIndex = false, bool withFilterValues = false}) async {
+    final params = <String, dynamic>{'limit': limit, 'offset': offset, 'order_by': orderBy, 'order_dir': orderDir, 'with_char_index': withCharIndex, 'with_filter_values': withFilterValues};
     if (lastPlayed != null) params['last_played'] = lastPlayed;
     if (platformId != null) params['platform_ids'] = [int.parse(platformId)];
     if (search != null && search.isNotEmpty) params['search_term'] = search;
     if (genres.isNotEmpty) params['genres'] = genres;
     if (regions.isNotEmpty) params['regions'] = regions;
     if (languages.isNotEmpty) params['languages'] = languages;
+    if (franchises.isNotEmpty) params['franchises'] = franchises;
+    if (playerCounts.isNotEmpty) params['player_counts'] = playerCounts;
     if (collections.isNotEmpty) params['collection_id'] = int.tryParse(collections.first);
     if (statuses.isNotEmpty) { params['statuses'] = statuses; params['statuses_logic'] = 'any'; }
 

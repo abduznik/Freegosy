@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/romm/discover.dart';
 import '../../providers/paginated_games_provider.dart';
 
 class FilterBottomSheet extends StatefulWidget {
@@ -6,6 +7,8 @@ class FilterBottomSheet extends StatefulWidget {
   final List<String> availableGenres;
   final List<String> availableRegions;
   final List<String> availableLanguages;
+  final List<String> availableFranchises;
+  final List<String> availablePlayerCounts;
   final List<Map<String, dynamic>> availableCollections;
   final Function(ActiveFilters) onApply;
 
@@ -15,6 +18,8 @@ class FilterBottomSheet extends StatefulWidget {
     required this.availableGenres,
     required this.availableRegions,
     required this.availableLanguages,
+    this.availableFranchises = const [],
+    this.availablePlayerCounts = const [],
     required this.availableCollections,
     required this.onApply,
   });
@@ -25,6 +30,8 @@ class FilterBottomSheet extends StatefulWidget {
     required List<String> availableGenres,
     required List<String> availableRegions,
     required List<String> availableLanguages,
+    List<String> availableFranchises = const [],
+    List<String> availablePlayerCounts = const [],
     required List<Map<String, dynamic>> availableCollections,
     required Function(ActiveFilters) onApply,
   }) {
@@ -37,6 +44,8 @@ class FilterBottomSheet extends StatefulWidget {
         availableGenres: availableGenres,
         availableRegions: availableRegions,
         availableLanguages: availableLanguages,
+        availableFranchises: availableFranchises,
+        availablePlayerCounts: availablePlayerCounts,
         availableCollections: availableCollections,
         onApply: onApply,
       ),
@@ -53,6 +62,10 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   late List<String> _selectedLanguages;
   late List<String> _selectedCollections;
   late List<String> _selectedStatuses;
+  late List<String> _selectedFranchises;
+  late List<String> _selectedPlayerCounts;
+  late GameSort _sort;
+  late bool _sortDescending;
   bool _downloadedOnly = false;
   bool _notDownloadedOnly = false;
 
@@ -64,6 +77,10 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _selectedLanguages = List.from(widget.currentFilters.languages);
     _selectedCollections = List.from(widget.currentFilters.collections);
     _selectedStatuses = List.from(widget.currentFilters.statuses);
+    _selectedFranchises = List.from(widget.currentFilters.franchises);
+    _selectedPlayerCounts = List.from(widget.currentFilters.playerCounts);
+    _sort = widget.currentFilters.sort;
+    _sortDescending = widget.currentFilters.sortDescending;
     _downloadedOnly = widget.currentFilters.downloadedOnly;
     _notDownloadedOnly = widget.currentFilters.notDownloadedOnly;
   }
@@ -75,6 +92,10 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
       _selectedLanguages.clear();
       _selectedCollections.clear();
       _selectedStatuses.clear();
+      _selectedFranchises.clear();
+      _selectedPlayerCounts.clear();
+      _sort = GameSort.name;
+      _sortDescending = false;
       _downloadedOnly = false;
       _notDownloadedOnly = false;
     });
@@ -191,7 +212,8 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                           itemBuilder: (context, index) {
                             final collection = widget.availableCollections[index];
                             final name = collection['name']?.toString() ?? 'Unknown';
-                            final isSelected = _selectedCollections.contains(name);
+                            final id = collection['id']?.toString() ?? name;
+                            final isSelected = _selectedCollections.contains(id);
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: FilterChip(
@@ -199,16 +221,86 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                                 selected: isSelected,
                                 onSelected: (selected) {
                                   setState(() {
-                                    if (selected) {
-                                      _selectedCollections.add(name);
-                                    } else {
-                                      _selectedCollections.remove(name);
-                                    }
+                                    // The server filters by one collection id.
+                                    _selectedCollections.clear();
+                                    if (selected) _selectedCollections.add(id);
                                   });
                                 },
                               ),
                             );
                           },
+                        ),
+                      ),
+                    ],
+
+                    _buildSectionTitle('Sort by'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final option in GameSort.values)
+                            ChoiceChip(
+                              label: Text(option.label),
+                              selected: _sort == option,
+                              onSelected: (_) => setState(() {
+                                _sort = option;
+                                _sortDescending = option.newestFirst;
+                              }),
+                            ),
+                          FilterChip(
+                            label: Text(_sortDescending ? 'Descending' : 'Ascending'),
+                            avatar: Icon(_sortDescending ? Icons.arrow_downward : Icons.arrow_upward, size: 16),
+                            onSelected: (_) => setState(() => _sortDescending = !_sortDescending),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (widget.availableFranchises.isNotEmpty) ...[
+                      _buildSectionTitle('Franchises'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 0,
+                          children: widget.availableFranchises.map((value) {
+                            return FilterChip(
+                              label: Text(value),
+                              selected: _selectedFranchises.contains(value),
+                              onSelected: (selected) => setState(() {
+                                if (selected) {
+                                  _selectedFranchises.add(value);
+                                } else {
+                                  _selectedFranchises.remove(value);
+                                }
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+
+                    if (widget.availablePlayerCounts.isNotEmpty) ...[
+                      _buildSectionTitle('Players'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 0,
+                          children: widget.availablePlayerCounts.map((value) {
+                            return FilterChip(
+                              label: Text(value),
+                              selected: _selectedPlayerCounts.contains(value),
+                              onSelected: (selected) => setState(() {
+                                if (selected) {
+                                  _selectedPlayerCounts.add(value);
+                                } else {
+                                  _selectedPlayerCounts.remove(value);
+                                }
+                              }),
+                            );
+                          }).toList(),
                         ),
                       ),
                     ],
@@ -314,6 +406,10 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                         languages: _selectedLanguages,
                         collections: _selectedCollections,
                         statuses: _selectedStatuses,
+                        franchises: _selectedFranchises,
+                        playerCounts: _selectedPlayerCounts,
+                        sort: _sort,
+                        sortDescending: _sortDescending,
                         downloadedOnly: _downloadedOnly,
                         notDownloadedOnly: _notDownloadedOnly,
                       );

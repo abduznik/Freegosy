@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added
+- **Discover**: the library filter sheet can now sort (name, recently added, release date, rating, last played, with a direction toggle) and filter by **franchise** and **number of players**. The home screen gets two new shelves: **Most Played** (from the play time Freegosy measures on this computer) and **Top Unplayed** (best-rated games you never launched).
+- **Headless**: `list` takes `--genre`, `--region`, `--language`, `--franchise`, `--players`, `--sort`, `--desc`/`--asc` and `--preset` (`recent`, `continue`, `top-unplayed`, `top-rated`, `most-played`); the new `random` command picks one game matching the same filters. `--json` output now includes genres, franchises, players, rating and last played.
+
+### Fixed
+- **The collection filter did nothing**: the filter sheet sent the collection's name where RomM expects its id. It now sends the id (one collection at a time, as RomM filters by a single one).
+
 ## [0.6.1] - 2026-10-18
 
 ### Added

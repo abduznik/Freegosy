@@ -142,6 +142,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     ref.invalidate(platformsProvider);
     ref.invalidate(recentlyAddedProvider);
     ref.invalidate(recentlyPlayedProvider);
+    ref.invalidate(mostPlayedProvider);
+    ref.invalidate(topUnplayedProvider);
     ref.read(paginatedGamesProvider.notifier).reset();
     await ref.read(paginatedGamesProvider.notifier).loadInitial(
       platformId: ref.read(selectedPlatformIdProvider)?.toString(),
@@ -187,6 +189,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final genres = games.expand((g) => g.genres).toSet().toList()..sort();
     final regions = games.expand((g) => g.regions).toSet().toList()..sort();
     final languages = games.expand((g) => g.languages).toSet().toList()..sort();
+    final franchises = games.expand((g) => g.franchises).toSet().toList()..sort();
+    final playerCounts = games.map((g) => g.playerCount).whereType<String>().where((p) => p.isNotEmpty).toSet().toList()..sort();
 
     if (!context.mounted) return;
     setState(() => _isFilterSheetOpen = true);
@@ -196,6 +200,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       availableGenres: genres,
       availableRegions: regions,
       availableLanguages: languages,
+      availableFranchises: franchises,
+      availablePlayerCounts: playerCounts,
       availableCollections: collections,
       onApply: (newFilters) {
         ref.read(activeFiltersProvider.notifier).state = newFilters;
@@ -489,6 +495,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                               delegate: SliverChildListDelegate([
                                 ref.watch(recentlyPlayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Continue Playing', icon: Icons.play_circle_outline, games: games, ref: ref, isFirst: true), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
                                 ref.watch(recentlyAddedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Recently Added', icon: Icons.new_releases_outlined, games: games, ref: ref), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
+                                ref.watch(mostPlayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Most Played', icon: Icons.timer_outlined, games: games, ref: ref), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
+                                ref.watch(topUnplayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Top Unplayed', icon: Icons.star_outline, games: games, ref: ref), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
                                 ref.watch(metadataCacheServiceProvider).when(data: (cache) {
                                     final installed = cache.cachedGames.where((g) => downloadedCache[g.id] == true).toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
                                     return _buildHorizontalShelf(context: context, title: 'Installed Games (${installed.length})', icon: Icons.download_done, games: installed, ref: ref);
