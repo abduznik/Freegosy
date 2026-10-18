@@ -783,8 +783,17 @@ class SaveSyncService {
           orElse: () => null,
         );
         if (mySync != null && mySync['is_current'] == true) {
-          debugPrint('[SaveSync] [pull] Already current on this device — skipping');
-          return false;
+          // "Current" is RomM's record of what this device last synced. If the local save has since gone
+          // (folder deleted, game reinstalled), the cloud copy is the only one left: restore it.
+          var haveLocal = true;
+          try {
+            haveLocal = (await strategy.getSaveFiles(game, romPath)).isNotEmpty;
+          } catch (_) {}
+          if (haveLocal) {
+            debugPrint('[SaveSync] [pull] Already current on this device — skipping');
+            return false;
+          }
+          debugPrint('[SaveSync] [pull] RomM lists this device as current, but no local save exists — restoring it');
         }
       }
 
