@@ -13,6 +13,9 @@ void main() {
       expect(GameSort.parse('Release-Date'), GameSort.releaseDate);
       expect(GameSort.parse('first_release_date'), GameSort.releaseDate);
       expect(GameSort.parse('last_played'), GameSort.lastPlayed);
+      expect(GameSort.parse('added'), GameSort.recentlyAdded); // CLI aliases
+      expect(GameSort.parse('release'), GameSort.releaseDate);
+      expect(GameSort.parse('played'), GameSort.lastPlayed);
       expect(GameSort.parse('nope'), isNull);
       expect(GameSort.parse(null), isNull);
     });

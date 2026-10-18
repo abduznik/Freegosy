@@ -8,7 +8,12 @@
 - **Discover**: the library filter sheet can now sort (name, recently added, release date, rating, last played, with a direction toggle) and filter by **franchise** and **number of players**. The home screen gets two new shelves: **Most Played** (from the play time Freegosy measures on this computer) and **Top Unplayed** (best-rated games you never launched).
 - **Headless**: `list` takes `--genre`, `--region`, `--language`, `--franchise`, `--players`, `--sort`, `--desc`/`--asc` and `--preset` (`recent`, `continue`, `top-unplayed`, `top-rated`, `most-played`); the new `random` command picks one game matching the same filters. `--json` output now includes genres, franchises, players, rating and last played.
 
+- **Filter sheet shows everything the server knows**: genres, franchises, regions, languages and player counts now come from RomM's full lists, not just the games already loaded. Long lists (over a thousand franchises) get a search box and show only the selected values plus the first matches.
+- **Headless `values`** lists the exact genre, franchise, player-count, region and language spellings the server offers, for use with `--genre=` and friends.
+- **Saved filters**: the filter sheet has a **Save** button that stores the current filters and sort under a name; saved sets appear at the top of the sheet as chips (tap to load, × to delete). Headless mode shares them: `list --saved=NAME`, `random --saved=NAME`, and `filters list|save|delete`.
+
 ### Fixed
+- **Sorting by rating or release date together with a genre/franchise filter** made some RomM servers answer 500; Freegosy now retries in name order and sorts the page itself.
 - **The collection filter did nothing**: the filter sheet sent the collection's name where RomM expects its id. It now sends the id (one collection at a time, as RomM filters by a single one).
 
 ## [0.6.1] - 2026-10-18

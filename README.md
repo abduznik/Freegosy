@@ -103,6 +103,7 @@ freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N]
          [--genre=A,B] [--region=A,B] [--language=A,B] [--franchise=A,B] [--players=1,2]
          [--sort=name|added|release|rating|played] [--desc|--asc] [--preset=recent|continue|top-unplayed|top-rated|most-played]
 freegosy.exe --headless random [same filters as list] [--json]
+freegosy.exe --headless filters [list | save NAME [filters] | delete NAME]
 freegosy.exe --headless download (--game-id=ID | --name=TERM) [--all-files] [--json]
 freegosy.exe --headless launch (--game-id=ID | --name=TERM) [--emulator=ID] [--core=ID] [--timeout=SECONDS] [--json]
 freegosy.exe --headless interactive
