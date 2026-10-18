@@ -1,0 +1,51 @@
+# Maintainer: abduznik
+# Repackages the AppImage from the GitHub release. The release workflow bumps
+# pkgver and sha256sums on every release (see update_pkgbuild in release.yml).
+pkgname=freegosy-bin
+pkgver=0.6.1
+pkgrel=1
+pkgdesc='All-in-one game manager for RomM: browse, download, launch, and sync saves'
+arch=('x86_64')
+url='https://github.com/abduznik/Freegosy'
+license=('MIT')
+depends=('gtk3' 'glib2' 'libepoxy')
+optdepends=('libsecret: store credentials in the system keyring')
+provides=('freegosy')
+conflicts=('freegosy')
+options=('!strip')
+_appimage="Freegosy-linux-x86_64-${pkgver}.AppImage"
+source=("${_appimage}::${url}/releases/download/v${pkgver}/Freegosy-linux-x86_64.AppImage"
+        "${pkgname}-LICENSE-${pkgver}::https://raw.githubusercontent.com/abduznik/Freegosy/v${pkgver}/LICENSE")
+noextract=("${_appimage}")
+sha256sums=('1bb75e4d83fb2e35e88318dedd52be8c44501786393d7066d2d51640e21503c2'
+            '9b4fc05981216c6bafd837aa1e9568b49bdf2526d669fc864308af95e077b542')
+
+prepare() {
+  chmod +x "${_appimage}"
+  # Unpacks the squashfs without running the app or needing FUSE.
+  ./"${_appimage}" --appimage-extract >/dev/null
+}
+
+package() {
+  cd squashfs-root
+
+  install -d "${pkgdir}/opt/freegosy"
+  cp -r usr/bin/. "${pkgdir}/opt/freegosy/"
+
+  # Plugins dlopen their libs by bare name, so the bundle's lib/ dir has to be
+  # on LD_LIBRARY_PATH (same as the AppImage's AppRun).
+  install -d "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/freegosy" <<'LAUNCHER'
+#!/bin/sh
+export LD_LIBRARY_PATH="/opt/freegosy/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+exec /opt/freegosy/freegosy "$@"
+LAUNCHER
+  chmod 755 "${pkgdir}/usr/bin/freegosy"
+
+  install -Dm644 usr/share/applications/freegosy.desktop \
+    "${pkgdir}/usr/share/applications/freegosy.desktop"
+  install -Dm644 usr/share/icons/hicolor/256x256/apps/freegosy.png \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/freegosy.png"
+  install -Dm644 "${srcdir}/${pkgname}-LICENSE-${pkgver}" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}
