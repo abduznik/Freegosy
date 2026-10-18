@@ -83,6 +83,10 @@ abstract class SaveStrategy {
   /// pull otherwise runs alongside the launch.
   Future<bool> pullMustFinishBeforeLaunch(Game game, String romPath) async => false;
 
+  /// A note on where this strategy looked for [game]'s saves when it found none (e.g. a location a wiki
+  /// lists that the game hasn't created yet), shown by "Check save sync". Null when there is nothing to add.
+  String? saveLocationHint(Game game) => null;
+
   /// Returns the local save directory for [game] given its [romPath].
   Future<String?> getSaveDir(Game game, String romPath);
 

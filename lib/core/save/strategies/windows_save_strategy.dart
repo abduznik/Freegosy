@@ -21,6 +21,15 @@ class WindowsSaveStrategy extends SaveStrategy {
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
+  // Where PCGamingWiki says a game saves when nothing is there yet (for the save check's hint)
+  final Map<String, String> _wikiExpected = {};
+
+  @override
+  String? saveLocationHint(Game game) {
+    final path = _wikiExpected[game.id];
+    return path == null ? null : 'PCGamingWiki lists this game\'s saves at $path, which has no saves yet.';
+  }
+
   // Saved PCGW path
   final Map<String, String> _pcGamingWikiSavePath = {};
 
@@ -180,11 +189,13 @@ class WindowsSaveStrategy extends SaveStrategy {
               return resolved;
             }
             debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');
+            _wikiExpected[game.id] = resolved;
           } else {
             // Try to create it
             try {
               await dir.create(recursive: true);
               debugPrint('[WindowsSave] Created PCGamingWiki dir: $resolved');
+              _wikiExpected[game.id] = resolved;
             } catch (e) {
               debugPrint('[WindowsSave] Failed to create dir: $e');
             }

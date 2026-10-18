@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/save/save_sync_report.dart';
 import 'package:freegosy/core/save/strategies/windows_save_strategy.dart';
 import 'package:freegosy/core/storage/shared_preferences_app_preferences.dart';
 import 'package:freegosy/core/windows/pcgamingwiki_service.dart';
@@ -125,6 +126,22 @@ void main() {
       // The bug this replaces made a folder literally named '\\home\\...\\Profiles' in the working directory.
       expect(Directory.current.listSync().any((e) => p.basename(e.path).contains(r'\')), isFalse);
     });
+  });
+
+  test('a game that has not saved yet gets a hint naming the place PCGamingWiki expects', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+    final game = Directory(p.join(tmp.path, 'Psychonauts'))..createSync();
+    final strategy = WindowsSaveStrategy(prefs, platform: _linux, prefixDirFor: (_) async => prefix, wikiService: _FakeWiki(_psychonauts, folders));
+    final g = Game(id: '123', name: 'Psychonauts', fileSize: 0, platformSlug: 'windows');
+
+    expect(await strategy.getSaveDir(g, game.path), isNull);
+    final hint = strategy.saveLocationHint(g)!;
+    expect(hint, contains(p.join(game.path, 'Profiles')));
+
+    final report = SaveSyncReport.analyze(
+        gameName: 'Psychonauts', emulator: 'windows', noStrategy: false, saveDir: null, localSaves: const [], cloud: null, locationHint: hint);
+    expect(report.toText(), contains('PCGamingWiki lists this game'));
   });
 }
 

@@ -440,6 +440,7 @@ class SaveSyncService {
       localSaves: local,
       cloud: cloud,
       cloudError: cloudError,
+      locationHint: strategy.saveLocationHint(game),
       minValidSaveBytes: minValidSaveSizeBytes,
     );
   }

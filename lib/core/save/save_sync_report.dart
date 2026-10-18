@@ -58,6 +58,7 @@ class SaveSyncReport {
     required List<LocalSaveInfo> localSaves,
     required CloudSaveInfo? cloud,
     String? cloudError,
+    String? locationHint,
     int minValidSaveBytes = 100,
   }) {
     final f = <SyncFinding>[];
@@ -72,6 +73,7 @@ class SaveSyncReport {
         f.add(const SyncFinding(FindingLevel.warning,
             'The emulator\'s save folder was not found. Play the game once and close the emulator normally so it creates its saves.'));
       }
+      if (locationHint != null && localSaves.isEmpty) f.add(SyncFinding(FindingLevel.info, locationHint));
       if (localSaves.isEmpty) {
         if (saveDir != null) {
           f.add(const SyncFinding(FindingLevel.warning, 'No save file for this game was found in the save folder.'));
