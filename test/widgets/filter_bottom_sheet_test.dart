@@ -107,4 +107,59 @@ void main() {
     await _reveal(tester, find.widgetWithText(ChoiceChip, 'Name'));
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Name')).selected, isTrue);
   });
+
+  testWidgets('saved filters load into the sheet and can be saved and deleted', (tester) async {
+    ActiveFilters? applied;
+    final saved = <String, ActiveFilters>{'Co-op RPGs': const ActiveFilters(genres: ['RPG'], playerCounts: ['2'])};
+    final deleted = <String>[];
+    String? savedName;
+    await tester.binding.setSurfaceSize(const Size(500, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: ElevatedButton(
+            onPressed: () => FilterBottomSheet.show(
+              context,
+              currentFilters: const ActiveFilters(),
+              availableGenres: const ['RPG'],
+              availableRegions: const [],
+              availableLanguages: const [],
+              availablePlayerCounts: const ['2'],
+              availableCollections: const [],
+              savedFilters: saved,
+              onSaveFilter: (name, f) async => savedName = name,
+              onDeleteSavedFilter: (name) async => deleted.add(name),
+              onApply: (f) => applied = f,
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Co-op RPGs'));
+    await tester.pump();
+    await tester.tap(find.text('Apply Filters'));
+    await tester.pumpAndSettle();
+    expect(applied!.genres, ['RPG']);
+    expect(applied!.playerCounts, ['2']);
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Mine');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(savedName, 'Mine');
+    expect(find.text('Mine'), findsOneWidget);
+
+    await tester.tap(find.descendant(of: find.widgetWithText(InputChip, 'Mine'), matching: find.byTooltip('Delete')));
+    await tester.pumpAndSettle();
+    expect(deleted, ['Mine']);
+    expect(find.text('Mine'), findsNothing);
+  });
 }

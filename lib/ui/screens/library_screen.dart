@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/paginated_games_provider.dart';
+import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
@@ -203,6 +204,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       availableFranchises: franchises,
       availablePlayerCounts: playerCounts,
       availableCollections: collections,
+      savedFilters: ref.read(savedFiltersProvider).all(),
+      onSaveFilter: (name, filters) async {
+        await ref.read(savedFiltersProvider).save(name, filters);
+      },
+      onDeleteSavedFilter: (name) => ref.read(savedFiltersProvider).delete(name),
       onApply: (newFilters) {
         ref.read(activeFiltersProvider.notifier).state = newFilters;
         ref.read(paginatedGamesProvider.notifier).reset();

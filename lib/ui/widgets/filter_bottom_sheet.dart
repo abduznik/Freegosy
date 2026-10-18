@@ -10,6 +10,9 @@ class FilterBottomSheet extends StatefulWidget {
   final List<String> availableFranchises;
   final List<String> availablePlayerCounts;
   final List<Map<String, dynamic>> availableCollections;
+  final Map<String, ActiveFilters> savedFilters;
+  final Future<void> Function(String name, ActiveFilters filters)? onSaveFilter;
+  final Future<void> Function(String name)? onDeleteSavedFilter;
   final Function(ActiveFilters) onApply;
 
   const FilterBottomSheet({
@@ -21,6 +24,9 @@ class FilterBottomSheet extends StatefulWidget {
     this.availableFranchises = const [],
     this.availablePlayerCounts = const [],
     required this.availableCollections,
+    this.savedFilters = const {},
+    this.onSaveFilter,
+    this.onDeleteSavedFilter,
     required this.onApply,
   });
 
@@ -33,6 +39,9 @@ class FilterBottomSheet extends StatefulWidget {
     List<String> availableFranchises = const [],
     List<String> availablePlayerCounts = const [],
     required List<Map<String, dynamic>> availableCollections,
+    Map<String, ActiveFilters> savedFilters = const {},
+    Future<void> Function(String name, ActiveFilters filters)? onSaveFilter,
+    Future<void> Function(String name)? onDeleteSavedFilter,
     required Function(ActiveFilters) onApply,
   }) {
     return showModalBottomSheet(
@@ -47,6 +56,9 @@ class FilterBottomSheet extends StatefulWidget {
         availableFranchises: availableFranchises,
         availablePlayerCounts: availablePlayerCounts,
         availableCollections: availableCollections,
+        savedFilters: savedFilters,
+        onSaveFilter: onSaveFilter,
+        onDeleteSavedFilter: onDeleteSavedFilter,
         onApply: onApply,
       ),
     );
@@ -66,6 +78,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
   late List<String> _selectedPlayerCounts;
   late GameSort _sort;
   late bool _sortDescending;
+  late Map<String, ActiveFilters> _saved;
   bool _downloadedOnly = false;
   bool _notDownloadedOnly = false;
 
@@ -81,8 +94,68 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
     _selectedPlayerCounts = List.from(widget.currentFilters.playerCounts);
     _sort = widget.currentFilters.sort;
     _sortDescending = widget.currentFilters.sortDescending;
+    _saved = Map.of(widget.savedFilters);
     _downloadedOnly = widget.currentFilters.downloadedOnly;
     _notDownloadedOnly = widget.currentFilters.notDownloadedOnly;
+  }
+
+  ActiveFilters _collect() => ActiveFilters(
+        genres: _selectedGenres,
+        regions: _selectedRegions,
+        languages: _selectedLanguages,
+        collections: _selectedCollections,
+        statuses: _selectedStatuses,
+        franchises: _selectedFranchises,
+        playerCounts: _selectedPlayerCounts,
+        sort: _sort,
+        sortDescending: _sortDescending,
+        downloadedOnly: _downloadedOnly,
+        notDownloadedOnly: _notDownloadedOnly,
+      );
+
+  void _load(ActiveFilters f) {
+    setState(() {
+      _selectedGenres = List.from(f.genres);
+      _selectedRegions = List.from(f.regions);
+      _selectedLanguages = List.from(f.languages);
+      _selectedCollections = List.from(f.collections);
+      _selectedStatuses = List.from(f.statuses);
+      _selectedFranchises = List.from(f.franchises);
+      _selectedPlayerCounts = List.from(f.playerCounts);
+      _sort = f.sort;
+      _sortDescending = f.sortDescending;
+      _downloadedOnly = f.downloadedOnly;
+      _notDownloadedOnly = f.notDownloadedOnly;
+    });
+  }
+
+  Future<void> _saveCurrent() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save these filters'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Name'),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty) return;
+    final filters = _collect();
+    await widget.onSaveFilter!(trimmed, filters);
+    if (!mounted) return;
+    setState(() {
+      _saved.removeWhere((k, _) => k.toLowerCase() == trimmed.toLowerCase());
+      _saved[trimmed] = filters;
+    });
   }
 
   void _clearAll() {
@@ -130,9 +203,16 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       'Filters',
                       style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
-                    TextButton(
-                      onPressed: _clearAll,
-                      child: const Text('Clear All'),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.onSaveFilter != null)
+                          TextButton(onPressed: _saveCurrent, child: const Text('Save')),
+                        TextButton(
+                          onPressed: _clearAll,
+                          child: const Text('Clear All'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -143,6 +223,29 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   children: [
+                    if (_saved.isNotEmpty) ...[
+                      _buildSectionTitle('Saved filters'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Wrap(
+                          spacing: 8,
+                          children: [
+                            for (final entry in _saved.entries)
+                              InputChip(
+                                label: Text(entry.key),
+                                onPressed: () => _load(entry.value),
+                                onDeleted: widget.onDeleteSavedFilter == null
+                                    ? null
+                                    : () async {
+                                        await widget.onDeleteSavedFilter!(entry.key);
+                                        if (mounted) setState(() => _saved.remove(entry.key));
+                                      },
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     // SECTION 2 - Quick toggles
                     _buildSectionTitle('Quick Toggles'),
                     Padding(
@@ -400,19 +503,7 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                   height: 50,
                   child: ElevatedButton(
                     onPressed: () {
-                      final newFilters = ActiveFilters(
-                        genres: _selectedGenres,
-                        regions: _selectedRegions,
-                        languages: _selectedLanguages,
-                        collections: _selectedCollections,
-                        statuses: _selectedStatuses,
-                        franchises: _selectedFranchises,
-                        playerCounts: _selectedPlayerCounts,
-                        sort: _sort,
-                        sortDescending: _sortDescending,
-                        downloadedOnly: _downloadedOnly,
-                        notDownloadedOnly: _notDownloadedOnly,
-                      );
+                      final newFilters = _collect();
                       widget.onApply(newFilters);
                       Navigator.pop(context);
                     },
