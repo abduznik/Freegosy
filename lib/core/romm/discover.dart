@@ -18,6 +18,8 @@ enum GameSort {
   static GameSort? parse(String? value) {
     if (value == null) return null;
     final v = value.toLowerCase().replaceAll(RegExp(r'[-_ ]'), '');
+    const aliases = {'added': recentlyAdded, 'release': releaseDate, 'played': lastPlayed};
+    if (aliases.containsKey(v)) return aliases[v];
     for (final s in GameSort.values) {
       if (s.name.toLowerCase() == v || s.apiField.replaceAll('_', '') == v) return s;
     }

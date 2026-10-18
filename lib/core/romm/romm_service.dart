@@ -553,14 +553,43 @@ class RommService implements RommStatesApi {
     if (collections.isNotEmpty) params['collection_id'] = int.tryParse(collections.first);
     if (statuses.isNotEmpty) { params['statuses'] = statuses; params['statuses_logic'] = 'any'; }
 
-    final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+    // Some RomM servers answer 500 when a metadata filter (genre, franchise...) is combined with a sort
+    // on a metadata column (rating, release date). Fall back to name order and sort what came back.
+    final sortedOnMetadata = orderBy == 'average_rating' || orderBy == 'first_release_date';
+    var sortLocally = false;
+    Response<dynamic> response;
+    try {
+      response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 500 || !sortedOnMetadata) rethrow;
+      response = await _dio.get('/api/roms', queryParameters: {...params, 'order_by': 'name', 'order_dir': 'asc'}, options: _authOptions);
+      sortLocally = true;
+    }
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
       final List<dynamic> items = data['items'] ?? [];
       final int totalCount = (data['total'] as num?)?.toInt() ?? items.length;
-      return (games: items.map((e) => Game.fromJson(e)).toList(), total: totalCount);
+      final games = items.map((e) => Game.fromJson(e)).toList();
+      if (sortLocally) {
+        num key(Game g) => (orderBy == 'average_rating' ? g.averageRating : g.firstReleaseDate) ?? -1;
+        games.sort((a, b) => orderDir == 'desc' ? key(b).compareTo(key(a)) : key(a).compareTo(key(b)));
+      }
+      return (games: games, total: totalCount);
     }
     throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
+  }
+
+  /// Every value RomM knows for each filter ("genres", "franchises", "player_counts", "regions",
+  /// "languages", "collections"...), so callers can offer real choices instead of guessing spellings.
+  Future<Map<String, List<String>>> getFilterValues() async {
+    final response = await _dio.get('/api/roms', queryParameters: {'limit': 1, 'with_filter_values': true, 'with_char_index': false}, options: _authOptions);
+    final data = response.data;
+    final raw = data is Map ? data['filter_values'] : null;
+    if (raw is! Map) return {};
+    return {
+      for (final e in raw.entries)
+        if (e.value is List) e.key.toString(): (e.value as List).map((v) => v.toString()).toList()..sort(),
+    };
   }
 
   Future<List<Game>> _fetchPaginatedGames(Map<String, dynamic> params) async {

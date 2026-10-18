@@ -74,6 +74,9 @@ Future<void> runHeadless(List<String> args) async {
     case 'filters':
       await _runFilters(rest);
       break;
+    case 'values':
+      await _runValues(rest);
+      break;
     case 'interactive':
       await _runInteractive();
       break;
@@ -91,6 +94,7 @@ Freegosy headless mode — browse, search, and launch games without the UI.
 Usage:
   freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
   freegosy.exe --headless random [filters] [--json]
+  freegosy.exe --headless values [genres|franchises|player_counts|regions|languages|...] [--json]
   freegosy.exe --headless filters [list | save NAME [filters] | delete NAME] [--json]
   freegosy.exe --headless download (--game-id=ID | --name=TERM) [--json]
   freegosy.exe --headless launch (--game-id=ID | --name=TERM) [options]
@@ -536,6 +540,35 @@ Future<void> _runList(List<String> args) async {
     exit(0);
   } catch (e) {
     stderr.writeln('Error: failed to list games: $e');
+    await session.close();
+    exit(1);
+  }
+}
+
+/// Prints the values RomM offers for each filter, so `--genre=`/`--franchise=` can use the exact spelling.
+Future<void> _runValues(List<String> args) async {
+  final flags = _parseFlags(args);
+  final asJson = flags['json'] == 'true';
+  final wanted = args.where((a) => !a.startsWith('--')).map((a) => a.toLowerCase()).toSet();
+  final session = await _HeadlessSession.start(asJson: asJson);
+  if (session == null) exit(2);
+  try {
+    final all = await session.rommService.getFilterValues();
+    final shown = {for (final e in all.entries) if (wanted.isEmpty || wanted.contains(e.key.toLowerCase())) e.key: e.value};
+    if (asJson) {
+      stdout.writeln(jsonEncode(shown));
+    } else {
+      for (final e in shown.entries) {
+        stdout.writeln('${e.key} (${e.value.length}):');
+        for (final v in e.value) {
+          stdout.writeln('  $v');
+        }
+      }
+    }
+    await session.close();
+    exit(shown.isEmpty ? 2 : 0);
+  } catch (e) {
+    stderr.writeln('Error: failed to read filter values: $e');
     await session.close();
     exit(1);
   }
