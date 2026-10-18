@@ -1,4 +1,5 @@
 import '../core/save/synced_games.dart';
+import '../core/romm/saved_filters.dart';
 import '../core/stats/play_time_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +28,8 @@ final syncedGameIdsProvider = Provider<Set<String>>((ref) {
     return const {}; // no preferences wired in (widget tests)
   }
 });
+
+final savedFiltersProvider = Provider<SavedFilterStore>((ref) => SavedFilterStore(ref.watch(appPreferencesProvider)));
 
 final playTimeStoreProvider = Provider<PlayTimeStore>((ref) => PlayTimeStore(ref.watch(appPreferencesProvider)));
 

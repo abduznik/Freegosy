@@ -1,78 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/romm/active_filters.dart';
+export '../core/romm/active_filters.dart';
 import '../core/romm/discover.dart';
 import '../core/romm/romm_models.dart';
 import 'shared_prefs_provider.dart';
 import 'romm_provider.dart';
 import 'downloaded_games_cache_provider.dart';
-
-class ActiveFilters {
-  final List<String> genres;
-  final List<String> regions;
-  final List<String> languages;
-  final List<String> collections;
-  final List<String> statuses;
-  final List<String> franchises;
-  final List<String> playerCounts;
-  final GameSort sort;
-  final bool sortDescending;
-  final bool downloadedOnly;
-  final bool notDownloadedOnly;
-
-  const ActiveFilters({
-    this.genres = const [],
-    this.regions = const [],
-    this.languages = const [],
-    this.collections = const [],
-    this.statuses = const [],
-    this.franchises = const [],
-    this.playerCounts = const [],
-    this.sort = GameSort.name,
-    this.sortDescending = false,
-    this.downloadedOnly = false,
-    this.notDownloadedOnly = false,
-  });
-
-  bool get hasActiveFilters =>
-      genres.isNotEmpty ||
-      regions.isNotEmpty ||
-      languages.isNotEmpty ||
-      collections.isNotEmpty ||
-      statuses.isNotEmpty ||
-      franchises.isNotEmpty ||
-      playerCounts.isNotEmpty ||
-      sort != GameSort.name ||
-      downloadedOnly ||
-      notDownloadedOnly;
-
-  ActiveFilters copyWith({
-    List<String>? genres,
-    List<String>? regions,
-    List<String>? languages,
-    List<String>? collections,
-    List<String>? statuses,
-    List<String>? franchises,
-    List<String>? playerCounts,
-    GameSort? sort,
-    bool? sortDescending,
-    bool? downloadedOnly,
-    bool? notDownloadedOnly,
-  }) {
-    return ActiveFilters(
-      genres: genres ?? this.genres,
-      regions: regions ?? this.regions,
-      languages: languages ?? this.languages,
-      collections: collections ?? this.collections,
-      statuses: statuses ?? this.statuses,
-      franchises: franchises ?? this.franchises,
-      playerCounts: playerCounts ?? this.playerCounts,
-      sort: sort ?? this.sort,
-      sortDescending: sortDescending ?? this.sortDescending,
-      downloadedOnly: downloadedOnly ?? this.downloadedOnly,
-      notDownloadedOnly: notDownloadedOnly ?? this.notDownloadedOnly,
-    );
-  }
-}
 
 class PaginatedGamesState {
   final List<Game> games;
