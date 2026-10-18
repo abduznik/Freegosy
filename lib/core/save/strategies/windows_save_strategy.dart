@@ -8,6 +8,7 @@ import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
 import '../../windows/windows_known_folders.dart';
 import '../../windows/pcgamingwiki_service.dart';
+import '../../windows/windows_game_service.dart';
 import '../save_strategy.dart';
 import 'package:dio/dio.dart';
 
@@ -168,39 +169,32 @@ class WindowsSaveStrategy extends SaveStrategy {
     // Try Searching PCGamingWiki
     try {
       debugPrint('[WindowsSave] Querying PCGamingWiki for ${game.name}...');
-      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir, folders: await knownFolders(game));
+      final roots = await gameRoots(gameDir);
+      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir, gameRoots: roots, folders: await knownFolders(game));
       if (locations.isNotEmpty) {
-        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s):');
+        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s) (game folders tried: ${roots.join(', ')}):');
         for (final loc in locations) {
           debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
         }
-        final resolved = locations.first['path'];
-        var resolvedFileFilter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(locations.first['raw']!) ? locations.first['raw']?.split('\\').last : '';
-        // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
-        if (resolvedFileFilter!.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
-        if (resolved != null) {
+        for (final loc in locations) {
+          final candidate = loc['path'];
+          if (candidate == null) continue;
+          // Linux paths are case-sensitive and the wiki's are not ("Profiles" vs "profiles").
+          final resolved = _platform.isWindows ? candidate : (await resolveCaseInsensitive(candidate) ?? candidate);
           final dir = Directory(resolved);
-          if (await dir.exists()) {
-            // Check if this directory actually has save files
-            if (await _hasSaveFiles(dir)) {
-              debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
-              setPcGamingWikiSavePath(game.id, resolved);
-              if (resolvedFileFilter.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
-              return resolved;
-            }
-            debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');
-            _wikiExpected[game.id] = resolved;
-          } else {
-            // Try to create it
-            try {
-              await dir.create(recursive: true);
-              debugPrint('[WindowsSave] Created PCGamingWiki dir: $resolved');
-              _wikiExpected[game.id] = resolved;
-            } catch (e) {
-              debugPrint('[WindowsSave] Failed to create dir: $e');
-            }
-          }
+          if (!await dir.exists() || !await _hasSaveFiles(dir)) continue;
+          var filter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(loc['raw']!) ? loc['raw']!.split('\\').last : '';
+          // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
+          if (filter.contains('file*')) filter = filter.replaceFirst('file*', '*');
+          debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
+          setPcGamingWikiSavePath(game.id, resolved);
+          if (filter.isNotEmpty) setWikiSaveFilter(game.id, filter);
+          return resolved;
         }
+        // Nothing saved there yet: remember where the wiki says to look, but don't create it (a guess at the
+        // wrong folder would only leave an empty directory behind).
+        _wikiExpected[game.id] = locations.first['path']!;
+        debugPrint('[WindowsSave] PCGamingWiki locations have no saves yet; expecting ${locations.first['path']}');
       }
     } catch (e) {
       debugPrint('[WindowsSave] PCGamingWiki lookup failed: $e');
@@ -250,6 +244,60 @@ class WindowsSaveStrategy extends SaveStrategy {
 
     await walk(dir, 1);
     return found;
+  }
+
+  /// The folders a wiki's "the game's folder" may mean for [gameDir], the extracted download: every folder up
+  /// to three levels down that holds the game's own executable (not an installer or redistributable), nearest
+  /// first, then [gameDir] itself. A zip often holds the game one level down (`Game/game/Game.exe`).
+  static Future<List<String>> gameRoots(String gameDir) async {
+    final found = <String, int>{};
+    Future<void> walk(Directory d, int depth) async {
+      try {
+        var hasExe = false;
+        await for (final e in d.list(followLinks: false)) {
+          final name = p.basename(e.path).toLowerCase();
+          if (e is File) {
+            if (WindowsGameService.launchableExtensions.any(name.endsWith) && !WindowsGameService.shouldSkipExe(name) && !name.startsWith('._')) hasExe = true;
+          } else if (e is Directory && depth < 3 && !name.contains('redist') && !name.startsWith('__macosx')) {
+            await walk(e, depth + 1);
+          }
+        }
+        if (hasExe) found[d.path] = depth;
+      } catch (_) {}
+    }
+
+    await walk(Directory(gameDir), 0);
+    final ordered = found.keys.toList()..sort((a, b) => found[a]!.compareTo(found[b]!));
+    return {...ordered.take(5), gameDir}.toList();
+  }
+
+  /// [path] with each segment matched case-insensitively against what is on disk, or null when some segment
+  /// is missing. Used on Linux, where "Profiles" and "profiles" are different folders but a wiki writes one.
+  static Future<String?> resolveCaseInsensitive(String path) async {
+    if (await FileSystemEntity.type(path) != FileSystemEntityType.notFound) return path;
+    final segments = p.split(path);
+    var current = segments.first; // '/'
+    for (final segment in segments.skip(1)) {
+      final direct = p.join(current, segment);
+      if (await FileSystemEntity.type(direct) != FileSystemEntityType.notFound) {
+        current = direct;
+        continue;
+      }
+      try {
+        String? match;
+        await for (final e in Directory(current).list(followLinks: false)) {
+          if (p.basename(e.path).toLowerCase() == segment.toLowerCase()) {
+            match = e.path;
+            break;
+          }
+        }
+        if (match == null) return null;
+        current = match;
+      } catch (_) {
+        return null;
+      }
+    }
+    return current;
   }
 
   /// Checks if a directory contains any save-like files (non-empty).

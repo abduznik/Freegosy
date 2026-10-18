@@ -143,6 +143,50 @@ void main() {
         gameName: 'Psychonauts', emulator: 'windows', noStrategy: false, saveDir: null, localSaves: const [], cloud: null, locationHint: hint);
     expect(report.toText(), contains('PCGamingWiki lists this game'));
   });
+
+  group('a game extracted one folder down (Psychonauts/psychonauts/Psychonauts.exe)', () {
+    late Directory outer;
+    late Directory inner;
+    late WindowsSaveStrategy strategy;
+    final g = Game(id: '122', name: 'Psychonauts', fileSize: 0, platformSlug: 'windows');
+
+    setUp(() async {
+      outer = Directory(p.join(tmp.path, 'Psychonauts'))..createSync();
+      inner = Directory(p.join(outer.path, 'psychonauts'))..createSync();
+      File(p.join(inner.path, 'Psychonauts.exe')).writeAsStringSync('exe');
+      Directory(p.join(inner.path, 'redist')).createSync();
+      File(p.join(inner.path, 'redist', 'vcredist_x86.exe')).writeAsStringSync('installer');
+      SharedPreferences.setMockInitialValues({});
+      final prefs = SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+      strategy = WindowsSaveStrategy(prefs, platform: _linux, prefixDirFor: (_) async => prefix, wikiService: _FakeWiki(_psychonauts, folders));
+    });
+
+    test('the game folder is the one holding the executable, not the installer folders', () async {
+      expect(await WindowsSaveStrategy.gameRoots(outer.path), [inner.path, outer.path]);
+    });
+
+    test('the save is found in the inner folder where the game wrote it, and nothing is created', () async {
+      final profile = Directory(p.join(inner.path, 'Profiles', 'Profile 1'))..createSync(recursive: true);
+      File(p.join(profile.path, 'SavedGame0')).writeAsStringSync('slot');
+      expect(await strategy.getSaveDir(g, outer.path), p.join(inner.path, 'Profiles'));
+      expect(Directory(p.join(outer.path, 'Profiles')).existsSync(), isFalse);
+    });
+
+    test('a differently-cased folder on disk still matches the wiki path', () async {
+      final profile = Directory(p.join(inner.path, 'profiles', 'Profile 1'))..createSync(recursive: true); // wiki says "Profiles"
+      File(p.join(profile.path, 'SavedGame0')).writeAsStringSync('slot');
+      expect(await strategy.getSaveDir(g, outer.path), p.join(inner.path, 'profiles'));
+      expect(await WindowsSaveStrategy.resolveCaseInsensitive(p.join(inner.path, 'PROFILES', 'profile 1')), p.join(inner.path, 'profiles', 'Profile 1'));
+      expect(await WindowsSaveStrategy.resolveCaseInsensitive(p.join(inner.path, 'nope')), isNull);
+    });
+
+    test('before any save: nothing is created, and the hint points at the executable folder', () async {
+      expect(await strategy.getSaveDir(g, outer.path), isNull);
+      expect(Directory(p.join(outer.path, 'Profiles')).existsSync(), isFalse);
+      expect(Directory(p.join(inner.path, 'Profiles')).existsSync(), isFalse);
+      expect(strategy.saveLocationHint(g), contains(p.join(inner.path, 'Profiles')));
+    });
+  });
 }
 
 class _FakeWiki extends PcGamingWikiService {
@@ -151,8 +195,11 @@ class _FakeWiki extends PcGamingWikiService {
   _FakeWiki(this.wikitext, this.expected) : super(Dio(), platform: _linux);
 
   @override
-  Future<List<Map<String, String>>> getSaveLocations(String gameTitle, {String gameDir = '', WindowsKnownFolders? folders}) async {
+  Future<List<Map<String, String>>> getSaveLocations(String gameTitle,
+      {String gameDir = '', List<String>? gameRoots, WindowsKnownFolders? folders}) async {
     expect(folders?.byToken, expected.byToken); // the strategy hands over the prefix's folders
-    return parseSaveLocations(wikitext, gameTitle, gameDir, folders: folders);
+    return [
+      for (final root in (gameRoots == null || gameRoots.isEmpty) ? [gameDir] : gameRoots) ...parseSaveLocations(wikitext, gameTitle, root, folders: folders),
+    ];
   }
 }

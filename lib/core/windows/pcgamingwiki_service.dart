@@ -109,9 +109,12 @@ class PcGamingWikiService {
 
   /// Returns expanded save locations for [gameTitle].
   ///
+  /// [gameRoots] are the folders `{{p|game}}` may mean (the extracted folder can hold the game one level down);
+  /// every location is expanded once per root, roots first. Defaults to [gameDir].
+  ///
   /// [folders] says where Windows' well-known folders are on this computer (see [WindowsKnownFolders]); when
   /// omitted the Windows environment is used. On Linux the paths are POSIX paths inside the Wine prefix.
-  Future<List<Map<String, String>>> getSaveLocations(String gameTitle, {String gameDir = '', WindowsKnownFolders? folders}) async {
+  Future<List<Map<String, String>>> getSaveLocations(String gameTitle, {String gameDir = '', List<String>? gameRoots, WindowsKnownFolders? folders}) async {
     try {
       debugPrint('[PcGamingWiki] Getting save locations for: $gameTitle (gameDir: $gameDir)');
       final pageTitle = await findPageTitle(gameTitle);
@@ -126,7 +129,13 @@ class PcGamingWikiService {
         return [];
       }
 
-      final locations = parseSaveLocations(wikitext, gameTitle, gameDir, folders: folders);
+      final locations = <Map<String, String>>[];
+      final seen = <String>{};
+      for (final root in (gameRoots == null || gameRoots.isEmpty) ? [gameDir] : gameRoots) {
+        for (final loc in parseSaveLocations(wikitext, gameTitle, root, folders: folders)) {
+          if (seen.add(loc['path']!)) locations.add(loc);
+        }
+      }
       debugPrint('[PcGamingWiki] Parsed ${locations.length} save location(s) for $gameTitle');
       return locations;
     } catch (e) {
