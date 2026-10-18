@@ -13,9 +13,11 @@ import 'core/emulator/game_launch_service.dart';
 import 'core/emulator/strategy_registry.dart';
 import 'core/extraction/extraction_service.dart';
 import 'core/platform/platform_info.dart';
+import 'core/romm/active_filters.dart';
 import 'core/romm/discover.dart';
 import 'core/romm/romm_models.dart';
 import 'core/romm/romm_service.dart';
+import 'core/romm/saved_filters.dart';
 import 'core/save/backup_entry.dart';
 import 'core/save/backup_repository.dart';
 import 'core/save/backup_service.dart';
@@ -69,6 +71,9 @@ Future<void> runHeadless(List<String> args) async {
     case 'random':
       await _runRandom(rest);
       break;
+    case 'filters':
+      await _runFilters(rest);
+      break;
     case 'interactive':
       await _runInteractive();
       break;
@@ -86,6 +91,7 @@ Freegosy headless mode — browse, search, and launch games without the UI.
 Usage:
   freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
   freegosy.exe --headless random [filters] [--json]
+  freegosy.exe --headless filters [list | save NAME [filters] | delete NAME] [--json]
   freegosy.exe --headless download (--game-id=ID | --name=TERM) [--json]
   freegosy.exe --headless launch (--game-id=ID | --name=TERM) [options]
   freegosy.exe --headless interactive
@@ -102,6 +108,14 @@ list options:
   --desc | --asc           Sort direction (default: newest/best first for all but name)
   --preset=NAME            A ready-made list instead of the filters: recent, continue,
                            top-unplayed, top-rated, most-played (from this computer's play time)
+
+  --saved=NAME             Start from a saved filter set (made in the app's filter sheet or with `filters save`);
+                           other flags on the command line override it
+
+filters command:
+  filters / filters list     Show the saved filter sets
+  filters save NAME [flags]  Save the given --genre/--region/--language/--franchise/--players/--sort/--desc flags as NAME
+  filters delete NAME        Remove one
 
 random options:
   Picks one random game that matches the same --platform/--search/--genre/--region/
@@ -497,18 +511,23 @@ Future<void> _runList(List<String> args) async {
       final games = await _presetGames(session, preset, limit);
       page = (games: games, total: games.length);
     } else {
-      final sortOrDefault = sort ?? GameSort.name;
-      final descending = flags['desc'] == 'true' || (flags['asc'] != 'true' && sortOrDefault.newestFirst);
+      final filters = _filtersFromFlags(flags, session.prefs);
+      if (filters == null) {
+        await session.close();
+        exit(2);
+      }
       page = await session.rommService.getGamesPage(
         search: flags['search'],
         platformId: flags['platform'],
-        genres: _csv(flags['genre']),
-        regions: _csv(flags['region']),
-        languages: _csv(flags['language']),
-        franchises: _csv(flags['franchise']),
-        playerCounts: _csv(flags['players']),
-        orderBy: sortOrDefault.apiField,
-        orderDir: descending ? 'desc' : 'asc',
+        genres: filters.genres,
+        regions: filters.regions,
+        languages: filters.languages,
+        franchises: filters.franchises,
+        playerCounts: filters.playerCounts,
+        collections: filters.collections,
+        statuses: filters.statuses,
+        orderBy: filters.sort.apiField,
+        orderDir: filters.sortDescending ? 'desc' : 'asc',
         limit: limit,
       );
     }
@@ -519,6 +538,81 @@ Future<void> _runList(List<String> args) async {
     stderr.writeln('Error: failed to list games: $e');
     await session.close();
     exit(1);
+  }
+}
+
+Future<AppPreferences> _openPrefs() async => SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+
+/// The filters a command asked for: `--saved=NAME` first, then each explicit
+/// flag on top of it. Null (after printing why) when the saved set is unknown.
+ActiveFilters? _filtersFromFlags(Map<String, String> flags, AppPreferences prefs) {
+  var base = const ActiveFilters();
+  final saved = flags['saved'];
+  if (saved != null) {
+    final found = SavedFilterStore(prefs).find(saved);
+    if (found == null) {
+      stderr.writeln('Error: no saved filter set called "$saved" (see `filters list`)');
+      return null;
+    }
+    base = found;
+  }
+  final sort = GameSort.parse(flags['sort']);
+  return base.copyWith(
+    genres: flags.containsKey('genre') ? _csv(flags['genre']) : null,
+    regions: flags.containsKey('region') ? _csv(flags['region']) : null,
+    languages: flags.containsKey('language') ? _csv(flags['language']) : null,
+    franchises: flags.containsKey('franchise') ? _csv(flags['franchise']) : null,
+    playerCounts: flags.containsKey('players') ? _csv(flags['players']) : null,
+    sort: sort,
+    sortDescending: flags['desc'] == 'true'
+        ? true
+        : flags['asc'] == 'true'
+            ? false
+            : sort?.newestFirst,
+  );
+}
+
+Future<void> _runFilters(List<String> args) async {
+  final positional = args.where((a) => !a.startsWith('--')).toList();
+  final flags = _parseFlags(args);
+  final asJson = flags['json'] == 'true';
+  final action = positional.isEmpty ? 'list' : positional.first;
+  final name = positional.length > 1 ? positional.sublist(1).join(' ') : null;
+  final prefs = await _openPrefs();
+  final store = SavedFilterStore(prefs);
+  switch (action) {
+    case 'list':
+      final all = store.all();
+      if (asJson) {
+        stdout.writeln(jsonEncode({for (final e in all.entries) e.key: e.value.toJson()}));
+      } else if (all.isEmpty) {
+        stdout.writeln('No saved filter sets.');
+      } else {
+        for (final e in all.entries) {
+          stdout.writeln('${e.key}\t${jsonEncode(e.value.toJson())}');
+        }
+      }
+      exit(0);
+    case 'save':
+      if (name == null) {
+        stderr.writeln('Error: filters save needs a NAME');
+        exit(2);
+      }
+      final filters = _filtersFromFlags(flags, prefs);
+      if (filters == null || !await store.save(name, filters)) exit(2);
+      stdout.writeln(asJson ? jsonEncode({'saved': name, 'filters': filters.toJson()}) : 'Saved "$name".');
+      exit(0);
+    case 'delete':
+      if (name == null) {
+        stderr.writeln('Error: filters delete needs a NAME');
+        exit(2);
+      }
+      await store.delete(name);
+      stdout.writeln(asJson ? jsonEncode({'deleted': name}) : 'Deleted "$name".');
+      exit(0);
+    default:
+      stderr.writeln('Unknown filters action: $action (use list, save, delete)');
+      exit(64);
   }
 }
 
@@ -547,14 +641,21 @@ Future<void> _runRandom(List<String> args) async {
   final session = await _HeadlessSession.start(asJson: asJson);
   if (session == null) exit(2);
   try {
+    final filters = _filtersFromFlags(flags, session.prefs);
+    if (filters == null) {
+      await session.close();
+      exit(2);
+    }
     Future<({List<Game> games, int total})> page(int offset, int limit) => session.rommService.getGamesPage(
           search: flags['search'],
           platformId: flags['platform'],
-          genres: _csv(flags['genre']),
-          regions: _csv(flags['region']),
-          languages: _csv(flags['language']),
-          franchises: _csv(flags['franchise']),
-          playerCounts: _csv(flags['players']),
+          genres: filters.genres,
+          regions: filters.regions,
+          languages: filters.languages,
+          franchises: filters.franchises,
+          playerCounts: filters.playerCounts,
+          collections: filters.collections,
+          statuses: filters.statuses,
           offset: offset,
           limit: limit,
         );
