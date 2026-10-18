@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-18
+
+### Added
+- **Project website** (`site/`, published with GitHub Pages) with downloads, features and emulator support.
+
 ### Fixed
 - **"Freegosy 0.6.1 is available" stayed forever on a nightly build**: a nightly built after v0.6.1 reports version 0.6.1, so the updater kept offering the v0.6.1 release (a "rebuild" with a different checksum). A nightly build now only counts a strictly newer release or a newer nightly as an update.
 - **Updates can be dismissed**: Settings → Updates has a new **Skip this version** button. The skipped release stays out of the launch notice until a different release (or a rebuild of it) appears; pressing **Check for updates** still shows it. The "update available" notice also has a close button now.
