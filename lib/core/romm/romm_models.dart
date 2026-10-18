@@ -22,6 +22,7 @@ class Game {
   final String? summary;
   final List<String> genres;
   final List<String> companies;
+  final List<String> franchises;
   final String? playerCount;
   final int? firstReleaseDate; // unix timestamp in milliseconds
   final double? averageRating;
@@ -84,6 +85,7 @@ class Game {
     this.summary,
     this.genres = const [],
     this.companies = const [],
+    this.franchises = const [],
     this.playerCount,
     this.firstReleaseDate,
     this.averageRating,
@@ -125,6 +127,7 @@ class Game {
       summary: json['summary']?.toString(),
       genres: (json['metadatum']?['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       companies: (json['metadatum']?['companies'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      franchises: (json['metadatum']?['franchises'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       playerCount: json['metadatum']?['player_count']?.toString(),
       firstReleaseDate: json['metadatum']?['first_release_date'] as int?,
       averageRating: (json['metadatum']?['average_rating'] as num?)?.toDouble(),
@@ -171,6 +174,7 @@ class Game {
       'metadatum': {
         'genres': genres,
         'companies': companies,
+        'franchises': franchises,
         'player_count': playerCount,
         'first_release_date': firstReleaseDate,
         'average_rating': averageRating,

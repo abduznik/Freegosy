@@ -36,6 +36,19 @@ class PlayTimeStore {
     );
   }
 
+  /// Every game with recorded play time, keyed by game id.
+  Map<String, PlayStats> allStats() {
+    const prefix = 'playtime_';
+    final out = <String, PlayStats>{};
+    for (final key in _prefs.getKeys()) {
+      if (!key.startsWith(prefix)) continue;
+      final id = key.substring(prefix.length);
+      final stats = statsFor(id);
+      if (stats != null) out[id] = stats;
+    }
+    return out;
+  }
+
   PlayStats? statsFor(String gameId) {
     final raw = _prefs.getString(_key(gameId));
     if (raw == null) return null;

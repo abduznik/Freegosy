@@ -93,6 +93,8 @@ class MetadataCacheService {
     List<String>? genres,
     List<String>? regions,
     List<String>? languages,
+    List<String>? franchises,
+    List<String>? playerCounts,
   }) {
     return _cachedGames.where((game) {
       // Platform filter
@@ -122,6 +124,14 @@ class MetadataCacheService {
       // Language filter
       if (languages != null && languages.isNotEmpty) {
         if (!languages.any((l) => game.languages.contains(l))) return false;
+      }
+
+      if (franchises != null && franchises.isNotEmpty) {
+        if (!franchises.any((f) => game.franchises.contains(f))) return false;
+      }
+
+      if (playerCounts != null && playerCounts.isNotEmpty) {
+        if (!playerCounts.contains(game.playerCount)) return false;
       }
 
       return true;
