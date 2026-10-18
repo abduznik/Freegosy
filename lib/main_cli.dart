@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -12,6 +13,7 @@ import 'core/emulator/game_launch_service.dart';
 import 'core/emulator/strategy_registry.dart';
 import 'core/extraction/extraction_service.dart';
 import 'core/platform/platform_info.dart';
+import 'core/romm/discover.dart';
 import 'core/romm/romm_models.dart';
 import 'core/romm/romm_service.dart';
 import 'core/save/backup_entry.dart';
@@ -21,6 +23,7 @@ import 'core/save/save_sync_service.dart';
 import 'core/save/state_sync_service.dart';
 import 'core/storage/app_preferences.dart';
 import 'core/storage/directory_service.dart';
+import 'core/stats/play_time_store.dart';
 import 'core/storage/shared_preferences_app_preferences.dart';
 
 /// Headless entry point for Freegosy — browse/search the RomM library and
@@ -63,6 +66,9 @@ Future<void> runHeadless(List<String> args) async {
     case 'download':
       await _runDownload(rest);
       break;
+    case 'random':
+      await _runRandom(rest);
+      break;
     case 'interactive':
       await _runInteractive();
       break;
@@ -79,6 +85,7 @@ Freegosy headless mode — browse, search, and launch games without the UI.
 
 Usage:
   freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
+  freegosy.exe --headless random [filters] [--json]
   freegosy.exe --headless download (--game-id=ID | --name=TERM) [--json]
   freegosy.exe --headless launch (--game-id=ID | --name=TERM) [options]
   freegosy.exe --headless interactive
@@ -89,6 +96,16 @@ list options:
   --platform=SLUG_OR_ID    Filter by platform
   --limit=N                Max results (default 25)
   --json                   Emit a JSON array to stdout
+  --genre=A,B  --region=A,B  --language=A,B  --franchise=A,B  --players=1,2
+                           Filter (comma separated; a game matches any value of a filter)
+  --sort=name|added|release|rating|played   Order of the results (default name)
+  --desc | --asc           Sort direction (default: newest/best first for all but name)
+  --preset=NAME            A ready-made list instead of the filters: recent, continue,
+                           top-unplayed, top-rated, most-played (from this computer's play time)
+
+random options:
+  Picks one random game that matches the same --platform/--search/--genre/--region/
+  --language/--franchise/--players filters as list.
 
 download options:
   --game-id=ID            RomM game ID to download
@@ -463,16 +480,96 @@ Future<void> _runList(List<String> args) async {
   if (session == null) exit(2);
 
   try {
-    final page = await session.rommService.getGamesPage(
-      search: flags['search'],
-      platformId: flags['platform'],
-      limit: limit,
-    );
+    final preset = DiscoverPreset.parse(flags['preset']);
+    if (flags.containsKey('preset') && preset == null) {
+      stderr.writeln('Error: unknown --preset "${flags['preset']}" (use ${DiscoverPreset.cliNames})');
+      await session.close();
+      exit(2);
+    }
+    final sort = GameSort.parse(flags['sort']);
+    if (flags.containsKey('sort') && sort == null) {
+      stderr.writeln('Error: unknown --sort "${flags['sort']}" (use name, added, release, rating, played)');
+      await session.close();
+      exit(2);
+    }
+    final ({List<Game> games, int total}) page;
+    if (preset != null) {
+      final games = await _presetGames(session, preset, limit);
+      page = (games: games, total: games.length);
+    } else {
+      final sortOrDefault = sort ?? GameSort.name;
+      final descending = flags['desc'] == 'true' || (flags['asc'] != 'true' && sortOrDefault.newestFirst);
+      page = await session.rommService.getGamesPage(
+        search: flags['search'],
+        platformId: flags['platform'],
+        genres: _csv(flags['genre']),
+        regions: _csv(flags['region']),
+        languages: _csv(flags['language']),
+        franchises: _csv(flags['franchise']),
+        playerCounts: _csv(flags['players']),
+        orderBy: sortOrDefault.apiField,
+        orderDir: descending ? 'desc' : 'asc',
+        limit: limit,
+      );
+    }
     _printGameList(page.games, page.total, asJson);
     await session.close();
     exit(0);
   } catch (e) {
     stderr.writeln('Error: failed to list games: $e');
+    await session.close();
+    exit(1);
+  }
+}
+
+List<String> _csv(String? value) =>
+    value == null ? const [] : value.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
+
+Future<List<Game>> _presetGames(_HeadlessSession session, DiscoverPreset preset, int limit) {
+  final romm = session.rommService;
+  switch (preset) {
+    case DiscoverPreset.recentlyAdded:
+      return romm.getRecentlyAdded(limit: limit);
+    case DiscoverPreset.recentlyPlayed:
+      return romm.getRecentlyPlayed(limit: limit);
+    case DiscoverPreset.topUnplayed:
+      return romm.getTopUnplayed(limit: limit);
+    case DiscoverPreset.topRated:
+      return romm.getTopRated(limit: limit);
+    case DiscoverPreset.mostPlayed:
+      return romm.getGamesByIds(mostPlayedGameIds(PlayTimeStore(session.prefs), limit: limit));
+  }
+}
+
+Future<void> _runRandom(List<String> args) async {
+  final flags = _parseFlags(args);
+  final asJson = flags['json'] == 'true';
+  final session = await _HeadlessSession.start(asJson: asJson);
+  if (session == null) exit(2);
+  try {
+    Future<({List<Game> games, int total})> page(int offset, int limit) => session.rommService.getGamesPage(
+          search: flags['search'],
+          platformId: flags['platform'],
+          genres: _csv(flags['genre']),
+          regions: _csv(flags['region']),
+          languages: _csv(flags['language']),
+          franchises: _csv(flags['franchise']),
+          playerCounts: _csv(flags['players']),
+          offset: offset,
+          limit: limit,
+        );
+    final first = await page(0, 1);
+    if (first.total == 0) {
+      stderr.writeln('No games match those filters.');
+      await session.close();
+      exit(2);
+    }
+    final pick = (await page(Random().nextInt(first.total), 1)).games;
+    _printGameList(pick, first.total, asJson);
+    await session.close();
+    exit(0);
+  } catch (e) {
+    stderr.writeln('Error: failed to pick a random game: $e');
     await session.close();
     exit(1);
   }
@@ -602,7 +699,16 @@ void _printGameList(List<Game> games, int total, bool asJson) {
     stdout.writeln(jsonEncode({
       'total': total,
       'games': games
-          .map((g) => {'id': g.id, 'name': g.name, 'platform': g.platformDisplayName ?? g.platformSlug})
+          .map((g) => {
+                'id': g.id,
+                'name': g.name,
+                'platform': g.platformDisplayName ?? g.platformSlug,
+                'genres': g.genres,
+                'franchises': g.franchises,
+                'players': g.playerCount,
+                'rating': g.averageRating,
+                'lastPlayed': g.lastPlayed?.toIso8601String(),
+              })
           .toList(),
     }));
     return;
