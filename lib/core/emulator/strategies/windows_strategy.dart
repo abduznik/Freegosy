@@ -4,6 +4,7 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 import 'package:freegosy/core/windows/windows_game_service.dart';
+import 'package:freegosy/core/windows/wine_launcher.dart';
 import 'package:freegosy/core/storage/app_preferences.dart';
 
 class WindowsStrategy extends EmulatorStrategy {
@@ -15,7 +16,10 @@ class WindowsStrategy extends EmulatorStrategy {
   // Launch arguments per game id
   final Map<String, List<String>> _launchArgsOverrides = {};
 
-  WindowsStrategy(this._directoryService, this._prefs);
+  WindowsStrategy(this._directoryService, this._prefs, {super.platform});
+
+  /// Which runner starts Windows games on Linux: `auto` (umu-run/Proton, then wine), `umu` or `wine`.
+  static const runnerPrefKey = 'windows_linux_runner';
 
   @override
   DirectoryService get directoryService => _directoryService;
@@ -86,11 +90,7 @@ class WindowsStrategy extends EmulatorStrategy {
     }
 
     final args = getLaunchArgs(game.id);
-    final process = await Process.start(
-      exePath,
-      args,
-      workingDirectory: File(exePath).parent.path,
-    );
+    final process = await _start(game, exePath, args, ProcessStartMode.normal);
 
     // Wait up to 5 seconds — if process exits that fast it crashed
     final exitCode = await process.exitCode
@@ -103,6 +103,37 @@ class WindowsStrategy extends EmulatorStrategy {
         'This is likely due to missing DirectX, Visual C++ redistributables, or other dependencies.',
       );
     }
+  }
+
+
+  /// Starts [exePath]: directly on Windows, through Proton/Wine on Linux (a `.exe` can't run natively there).
+  Future<Process> _start(Game game, String exePath, List<String> args, ProcessStartMode mode) async {
+    final workingDirectory = File(exePath).parent.path;
+    if (platform.isLinux && WineLauncher.needsWine(exePath)) {
+      final base = await _directoryService.getEmulatorAppSupportDirectory('proton');
+      final prefix = p.join(base, 'prefixes', game.id);
+      await Directory(prefix).create(recursive: true);
+      final command = WineLauncher.build(
+        exePath: exePath,
+        args: args,
+        prefixDir: prefix,
+        preference: _prefs.getString(runnerPrefKey) ?? 'auto',
+      );
+      if (command == null) {
+        throw Exception(
+          'Running ${game.name} on Linux needs umu-launcher (umu-run, uses Proton) or Wine. '
+          'Install one of them (for example `sudo dnf install umu-launcher` or `sudo apt install wine`).',
+        );
+      }
+      return Process.start(
+        command.executable,
+        command.args,
+        mode: mode,
+        workingDirectory: workingDirectory,
+        environment: command.environment,
+      );
+    }
+    return Process.start(exePath, args, mode: mode, workingDirectory: workingDirectory);
   }
 
   /// Resolves the executable path for a Windows game.
@@ -209,12 +240,7 @@ class WindowsStrategy extends EmulatorStrategy {
     }
 
     final args = getLaunchArgs(game.id);
-    final process = await Process.start(
-      exePath,
-      args,
-      mode: ProcessStartMode.normal,
-      workingDirectory: File(exePath).parent.path,
-    );
+    final process = await _start(game, exePath, args, ProcessStartMode.normal);
     // Drain stdout/stderr to avoid pipe-buffer deadlock — same reasoning as
     // DirectoryService.launchGameWithHandle's drain() calls.
     process.stdout.drain();
