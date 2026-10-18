@@ -89,6 +89,16 @@ class ScummVMStrategy extends EmulatorStrategy {
     return process;
   }
 
+  @override
+  Future<String?> describeLaunch(Game game, String romPath) async {
+    final exePath = await findExecutable();
+    if (exePath == null) return '$name is not installed.';
+    final folder = gameFolderFor(p.absolute(p.normalize(romPath)));
+    final savePath = await ScummVMSaveStrategy.saveDirFor(_directoryService, game);
+    final (exe, args) = commandFor(exePath, [...launchArgs, ...gameArgs(folder, savePath: savePath)], platform: platform);
+    return 'Command: ${[exe, ...args].join(' ')}\nSaves: $savePath';
+  }
+
   Future<io.Process> _start(Game game, String romPath, List<String> extraArgs, io.ProcessStartMode mode) async {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');

@@ -113,6 +113,21 @@ freegosy.exe --headless                 (same as interactive)
 - `list`/`download`/`launch` accept `--game-id` (RomM game ID) or `--name` (best match by title; ambiguous matches are listed instead of guessing).
 - `launch` waits for the emulator to exit, then runs the same save-push/backup pipeline as launching from the UI, and reports the result (pass/fail, sync status, backup path) as JSON with `--json` or human-readable text otherwise.
 - `--timeout` force-terminates the emulator after N seconds instead of waiting for you to close it — handy for automated checks. Some emulators (e.g. MelonDS) manage the process internally until it exits, so the timeout only takes effect once a process handle becomes available.
+- **Inspection commands** (all take `--json`; log output goes to stderr so stdout is only the result):
+
+```
+freegosy --headless doctor                      health check: RomM, folders, free space, emulators, umu-run/wine/Proton
+freegosy --headless platforms                   platforms with id, slug, game count and the emulator that runs them
+freegosy --headless emulators                   every emulator: installed or missing, path, platforms, save/state sync
+freegosy --headless info --name="Game"          metadata, your rating/status, on-disk path, emulator, play time
+freegosy --headless playtime [--limit=N]        games ranked by play time measured on this computer
+freegosy --headless saves [check|push|pull|backups] --game-id=ID   save sync, from the CLI
+freegosy --headless values genres               the exact genre/franchise/player-count spellings the server knows
+freegosy --headless filters list|save|delete    saved filter sets
+freegosy --headless launch --game-id=ID --dry-run [--runner=umu|wine] [--proton=installed|PATH|GE-Proton]
+```
+
+`--platform=` accepts an id, a slug (`snes`) or a platform name.
 - Credentials are reused from the account already configured in the app (server URL, username, password/API key/token) — log in once via the normal UI first.
 - Exit codes: `0` success, `1` launch/sync failed, `2` invalid arguments or game/config not found.
 

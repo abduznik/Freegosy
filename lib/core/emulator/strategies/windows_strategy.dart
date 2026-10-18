@@ -21,6 +21,53 @@ class WindowsStrategy extends EmulatorStrategy {
   /// Which runner starts Windows games on Linux: `auto` (umu-run/Proton, then wine), `umu` or `wine`.
   static const runnerPrefKey = 'windows_linux_runner';
 
+  /// Per-process overrides for one headless run (`launch --runner= --proton=`); the app never sets them.
+  /// [protonOverride] is `auto`, `installed` (never download), a Proton folder, or a name umu downloads
+  /// (`GE-Proton`, `UMU-Proton`).
+  String? runnerOverride;
+  String? protonOverride;
+
+  String? _protonFor(String? installed) {
+    switch (protonOverride) {
+      case null:
+      case 'auto':
+        return installed;
+      case 'installed':
+        return installed ?? (throw Exception('No installed Proton found (looked in Steam\'s compatibilitytools.d and steamapps/common).'));
+      default:
+        return protonOverride;
+    }
+  }
+
+  /// The Wine/Proton command for [exePath], and the prefix it uses; null command when no runner is installed.
+  ({WineCommand? command, String prefix}) planWine(Game game, String prefixBase, String exePath, List<String> args) {
+    final prefix = p.join(prefixBase, 'prefixes', game.id);
+    final command = WineLauncher.build(
+      exePath: exePath,
+      args: args,
+      prefixDir: prefix,
+      preference: runnerOverride ?? _prefs.getString(runnerPrefKey) ?? 'auto',
+      protonPath: _protonFor(WineLauncher.findInstalledProton()),
+    );
+    return (command: command, prefix: prefix);
+  }
+
+  @override
+  Future<String?> describeLaunch(Game game, String romPath) async {
+    final exePath = _resolveExePath(game, romPath);
+    if (exePath == null) return 'No executable found in $romPath (set one with the app\'s game settings).';
+    final args = getLaunchArgs(game.id);
+    if (!(platform.isLinux && WineLauncher.needsWine(exePath))) {
+      return 'Runs directly: ${[exePath, ...args].join(' ')}\nWorking directory: ${File(exePath).parent.path}';
+    }
+    final base = await _directoryService.getEmulatorAppSupportDirectory('proton');
+    final plan = planWine(game, base, exePath, args);
+    final c = plan.command;
+    if (c == null) return 'No Wine runner found: neither umu-run nor wine is installed.';
+    final env = c.environment.entries.map((e) => '${e.key}=${e.value}').join('\n  ');
+    return 'Runner: ${c.runner}\nCommand: ${[c.executable, ...c.args].join(' ')}\nWorking directory: ${File(exePath).parent.path}\nEnvironment:\n  $env';
+  }
+
   @override
   DirectoryService get directoryService => _directoryService;
 
@@ -111,15 +158,9 @@ class WindowsStrategy extends EmulatorStrategy {
     final workingDirectory = File(exePath).parent.path;
     if (platform.isLinux && WineLauncher.needsWine(exePath)) {
       final base = await _directoryService.getEmulatorAppSupportDirectory('proton');
-      final prefix = p.join(base, 'prefixes', game.id);
-      await Directory(prefix).create(recursive: true);
-      final command = WineLauncher.build(
-        exePath: exePath,
-        args: args,
-        prefixDir: prefix,
-        preference: _prefs.getString(runnerPrefKey) ?? 'auto',
-        protonPath: WineLauncher.findInstalledProton(),
-      );
+      final plan = planWine(game, base, exePath, args);
+      await Directory(plan.prefix).create(recursive: true);
+      final command = plan.command;
       if (command == null) {
         throw Exception(
           'Running ${game.name} on Linux needs umu-launcher (umu-run, uses Proton) or Wine. '

@@ -180,13 +180,42 @@ class WindowsSaveStrategy extends SaveStrategy {
     }
 
     // Fallback: check if saves are alongside the exe (e.g. Perfect Dark with eeprom.bin)
-    if (await _hasSaveFiles(Directory(gameDir))) {
+    if ((await saveLikeFilesIn(Directory(gameDir))).isNotEmpty) {
       debugPrint('[WindowsSave] Saves found alongside executable: $gameDir');
       return gameDir;
     }
 
     debugPrint('[WindowsSave] No save directory found for ${game.name}');
     return null;
+  }
+
+  static const _saveExtensions = {
+    '.sav', '.save', '.sv', '.srm', '.sra', '.eep', '.eeprom', '.fla', '.mpk', '.dsv', '.slot', '.sgm', '.gsv', '.rsv',
+  };
+
+  /// Whether [path] is named like a save: a save extension, or "save"/"eeprom" in the name (Perfect Dark's
+  /// `eeprom.bin`, `save01.dat`). Used where the only clue to a save's place is the game folder itself, so
+  /// the game's own data files are never mistaken for saves.
+  static bool looksLikeSaveFile(String path) {
+    final name = p.basename(path).toLowerCase();
+    if (_saveExtensions.contains(p.extension(name))) return true;
+    return name.contains('save') || name.contains('eeprom');
+  }
+
+  /// The save-like files in [dir] and the folders below it (to a depth of 3).
+  static Future<List<File>> saveLikeFilesIn(Directory dir, {int maxDepth = 3}) async {
+    final found = <File>[];
+    Future<void> walk(Directory d, int depth) async {
+      try {
+        await for (final e in d.list(followLinks: false)) {
+          if (e is File && looksLikeSaveFile(e.path) && await e.length() > 0) found.add(e);
+          if (e is Directory && depth < maxDepth) await walk(e, depth + 1);
+        }
+      } catch (_) {}
+    }
+
+    await walk(dir, 1);
+    return found;
   }
 
   /// Checks if a directory contains any save-like files (non-empty).
@@ -301,6 +330,20 @@ class WindowsSaveStrategy extends SaveStrategy {
         }
       }
       return matchedFiles;
+    }
+
+    // The game folder itself stands in for the save folder (nothing better was found): only its
+    // save-like files count, never the game's own data, or every launch would back up and upload the game.
+    final isDirRom = await Directory(romPath).exists();
+    final gameDir = isDirRom ? romPath : File(romPath).parent.path;
+    if (p.equals(p.normalize(saveDir), p.normalize(gameDir))) {
+      final saves = await saveLikeFilesIn(dir);
+      if (sessionStart == null) return saves;
+      final recent = <File>[];
+      for (final f in saves) {
+        if (!(await f.stat()).modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) recent.add(f);
+      }
+      return recent;
     }
 
     // No filter: check if any files exist, then return the directory.

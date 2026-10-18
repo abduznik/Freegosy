@@ -57,4 +57,20 @@ void main() {
     expect(const ActiveFilters(franchises: ['Zelda']).hasActiveFilters, isTrue);
     expect(const ActiveFilters(playerCounts: ['2']).hasActiveFilters, isTrue);
   });
+
+  test('Game size comes from fs_size_bytes, with the old name and the files as fallbacks', () {
+    expect(Game.fromJson({'id': 1, 'name': 'a', 'fs_size_bytes': 5000, 'file_size_bytes': 1}).fileSize, 5000);
+    expect(Game.fromJson({'id': 1, 'name': 'a', 'file_size_bytes': 42}).fileSize, 42); // this app's own cache
+    expect(
+        Game.fromJson({
+          'id': 1,
+          'name': 'a',
+          'files': [
+            {'file_size_bytes': 10},
+            {'file_size_bytes': 20},
+          ],
+        }).fileSize,
+        30);
+    expect(Game.fromJson({'id': 1, 'name': 'a'}).fileSize, 0);
+  });
 }
