@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 
+import '../constants/app_constants.dart';
 import '../platform/platform_info.dart';
 import 'update_models.dart';
 import 'version_compare.dart';
@@ -66,54 +67,69 @@ class UpdateService {
   /// null when already up to date. A release with the *same* version but a
   /// different asset digest than [recordedSha]/the installed file counts too:
   /// pre-releases get rebuilt under the same tag. Throws on network/parse failure.
-  Future<UpdateInfo?> checkForUpdate(String currentVersion, UpdateChannel channel, {String? recordedSha}) async {
+  Future<UpdateInfo?> checkForUpdate(String currentVersion, UpdateChannel channel, {String? recordedSha, bool? runningNightly}) async {
     final res = await _dio.get<List<dynamic>>(
       releasesUrl,
       options: Options(headers: {'Accept': 'application/vnd.github+json'}, responseType: ResponseType.json),
     );
     return pickUpdate(res.data ?? const [], currentVersion, channel, installKind,
-        installedSha: await installedSha(recordedSha));
+        installedSha: await installedSha(recordedSha), runningNightly: runningNightly ?? AppConstants.isNightlyBuild);
   }
 
-  /// The rolling nightly release is tagged `v<version>-nightly`; the same tag is
-  /// rebuilt every night, so it is picked by digest, never by version order.
-  static bool isNightlyTag(String? tag) => tag != null && tag.toLowerCase().endsWith('-nightly');
+  /// The rolling nightly release is tagged `nightly` (older ones `v<version>-nightly`).
+  /// The same tag is rebuilt every night, so it is picked by digest, never by version order.
+  static bool isNightlyTag(String? tag) {
+    final t = (tag ?? '').toLowerCase();
+    return t == 'nightly' || t.endsWith('-nightly');
+  }
+
+  /// The release a nightly is based on, from "Based on version 0.6.1" in its notes.
+  static String? nightlyBaseVersion(String? notes) =>
+      RegExp(r'based on version v?(\d+\.\d+\.\d+)', caseSensitive: false).firstMatch(notes ?? '')?.group(1);
 
   /// Pure selection logic, split out for tests.
+  ///
+  /// [runningNightly]: this build is a nightly. It carries its base release's
+  /// plain version number, so it only counts that release (and older) as
+  /// already installed; only a strictly newer release, or a newer nightly, is an update.
   static UpdateInfo? pickUpdate(List<dynamic> releases, String currentVersion, UpdateChannel channel, InstallKind kind,
-      {String? installedSha}) {
-    final normal = _pickNormal(releases, currentVersion, channel, kind, installedSha: installedSha);
+      {String? installedSha, bool runningNightly = false}) {
+    final normal = _pickNormal(releases, currentVersion, channel, kind, installedSha: installedSha, runningNightly: runningNightly);
     if (channel != UpdateChannel.nightly) return normal;
 
-    // Nightly channel: the nightly build, unless a real release is newer than it.
+    // Nightly channel: the newest nightly, unless a real release is newer than it.
+    Map<String, dynamic>? nightly;
     for (final r in releases) {
-      if (r is! Map<String, dynamic> || r['draft'] == true) continue;
-      final tag = r['tag_name'] as String?;
-      if (!isNightlyTag(tag)) continue;
-      final base = tag!.replaceFirst(RegExp(r'-nightly$', caseSensitive: false), '');
-      if (normal != null && VersionCompare.compare(normal.tag, base) >= 0) return normal;
-      // A nightly of an older version than this build is not an update.
-      if (VersionCompare.compare(base, currentVersion.split('-').first) < 0) return normal;
-      final asset = _pickAsset((r['assets'] as List<dynamic>? ?? const []), kind);
-      final sha = _digest(asset);
-      if (sha != null && sha == installedSha) return normal;
-      return UpdateInfo(
-        version: '${base.replaceFirst(RegExp(r'^[vV]'), '')}-nightly',
-        tag: tag,
-        prerelease: true,
-        notes: (r['body'] as String?) ?? '',
-        pageUrl: (r['html_url'] as String?) ?? 'https://github.com/$repo/releases',
-        assetName: asset?['name'] as String?,
-        assetUrl: asset?['browser_download_url'] as String?,
-        assetSize: asset?['size'] as int?,
-        sha256: sha,
-      );
+      if (r is! Map<String, dynamic> || r['draft'] == true || !isNightlyTag(r['tag_name'] as String?)) continue;
+      if (nightly == null || '${r['published_at'] ?? ''}'.compareTo('${nightly['published_at'] ?? ''}') > 0) nightly = r;
     }
-    return normal;
+    if (nightly == null) return normal;
+
+    final base = nightlyBaseVersion(nightly['body'] as String?);
+    if (base != null) {
+      if (normal != null && VersionCompare.compare(normal.tag, base) >= 0) return normal;
+      // A nightly based on an older release than this build is not an update.
+      if (VersionCompare.compare(base, currentVersion.split('-').first) < 0) return normal;
+    }
+    final asset = _pickAsset((nightly['assets'] as List<dynamic>? ?? const []), kind);
+    final sha = _digest(asset);
+    if (sha != null && sha == installedSha) return normal;
+    return UpdateInfo(
+      version: base ?? 'nightly',
+      tag: nightly['tag_name'] as String,
+      prerelease: true,
+      isNightly: true,
+      notes: (nightly['body'] as String?) ?? '',
+      pageUrl: (nightly['html_url'] as String?) ?? 'https://github.com/$repo/releases',
+      assetName: asset?['name'] as String?,
+      assetUrl: asset?['browser_download_url'] as String?,
+      assetSize: asset?['size'] as int?,
+      sha256: sha,
+    );
   }
 
   static UpdateInfo? _pickNormal(List<dynamic> releases, String currentVersion, UpdateChannel channel, InstallKind kind,
-      {String? installedSha}) {
+      {String? installedSha, bool runningNightly = false}) {
     Map<String, dynamic>? best;
     String? bestVersion;
     for (final r in releases) {
@@ -126,7 +142,8 @@ class UpdateService {
       if (isNightlyTag(tag)) continue;
       if (!VersionCompare.isNewer(tag, currentVersion)) {
         // Same version rebuilt: only when both digests are known and differ.
-        if (VersionCompare.compare(tag, currentVersion) != 0 || installedSha == null) continue;
+        // Never for a nightly build, which is newer than its own release.
+        if (runningNightly || VersionCompare.compare(tag, currentVersion) != 0 || installedSha == null) continue;
         final digest = _digest(_pickAsset((r['assets'] as List<dynamic>? ?? const []), kind));
         if (digest == null || digest == installedSha) continue;
       }

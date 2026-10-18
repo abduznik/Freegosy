@@ -37,39 +37,85 @@ void main() {
     });
   });
 
-  group('nightly channel', () {
-    List<dynamic> rels({String nightlyBase = 'v0.6.1', String? stable}) => [
-          release('$nightlyBase-nightly', pre: true, assets: ['Freegosy-linux-x86_64.AppImage']), // digest abc
-          if (stable != null) release(stable, assets: ['Freegosy-linux-x86_64.AppImage']),
-        ];
-    UpdateInfo? pick(List<dynamic> r, String current, UpdateChannel c, {String? installed}) =>
-        UpdateService.pickUpdate(r, current, c, InstallKind.appImage, installedSha: installed);
+  group('nightly', () {
+    // The rolling nightly: tag `nightly`, notes name the release it is based on.
+    Map<String, dynamic> nightly({String base = '0.6.1', String sha = 'abc', String published = '2026-10-14T10:00:00Z'}) => {
+          ...release('nightly', pre: true, assets: ['Freegosy-linux-x86_64.AppImage']),
+          'body': 'Nightly build of commit 1234567. Based on version $base.',
+          'published_at': published,
+          'assets': [
+            {'name': 'Freegosy-linux-x86_64.AppImage', 'browser_download_url': 'https://x/nightly/a', 'size': 10, 'digest': 'sha256:$sha'},
+          ],
+        };
+    final pre061 = release('v0.6.1', pre: true, assets: ['Freegosy-linux-x86_64.AppImage']); // digest abc
 
-    test('stable and pre-release channels never see the nightly', () {
-      expect(pick(rels(), '0.6.0', UpdateChannel.stable), isNull);
-      expect(pick(rels(), '0.6.0', UpdateChannel.prerelease), isNull);
+    UpdateInfo? pick(List<dynamic> r, String current, UpdateChannel c, {String? installed, bool running = false}) =>
+        UpdateService.pickUpdate(r, current, c, InstallKind.appImage, installedSha: installed, runningNightly: running);
+
+    test('stable and pre-release channels never see it', () {
+      expect(pick([nightly()], '0.6.0', UpdateChannel.stable), isNull);
+      expect(pick([nightly()], '0.6.0', UpdateChannel.prerelease), isNull);
     });
+
     test('nightly channel offers it when the digest differs, or is unknown', () {
-      final u = pick(rels(), '0.6.1', UpdateChannel.nightly, installed: 'old')!;
-      expect(u.tag, 'v0.6.1-nightly');
-      expect(u.version, '0.6.1-nightly');
-      expect(u.prerelease, isTrue);
+      final u = pick([nightly()], '0.6.1', UpdateChannel.nightly, installed: 'old')!;
+      expect(u.tag, 'nightly');
+      expect(u.isNightly, isTrue);
+      expect(u.version, '0.6.1'); // what the build will report, so a recorded install matches it
       expect(u.sha256, 'abc');
-      expect(pick(rels(), '0.6.1', UpdateChannel.nightly, installed: null), isNotNull);
+      expect(pick([nightly()], '0.6.1', UpdateChannel.nightly), isNotNull);
     });
-    test('nothing to do once this exact nightly is installed', () {
-      expect(pick(rels(), '0.6.1-nightly', UpdateChannel.nightly, installed: 'abc'), isNull);
+
+    test('nothing more to do once this exact nightly is installed; the next night is offered', () {
+      expect(pick([nightly()], '0.6.1', UpdateChannel.nightly, installed: 'abc', running: true), isNull);
+      expect(pick([nightly(sha: 'def')], '0.6.1', UpdateChannel.nightly, installed: 'abc', running: true)!.sha256, 'def');
     });
-    test('a newer real release wins over the nightly of an older version', () {
-      expect(pick(rels(stable: 'v0.6.2'), '0.6.1', UpdateChannel.nightly, installed: 'old')!.tag, 'v0.6.2');
+
+    test('a nightly build is not offered the release it was built after (the stuck "0.6.1 is available")', () {
+      // Running a nightly that reports 0.6.1; the v0.6.1 pre-release has a different digest.
+      for (final c in UpdateChannel.values) {
+        expect(pick([pre061], '0.6.1', c, installed: 'mine', running: true), isNull, reason: '$c');
+      }
+      // Without the nightly flag the same situation is a genuine same-version rebuild.
+      expect(pick([pre061], '0.6.1', UpdateChannel.prerelease, installed: 'mine')?.isRebuild, isTrue);
     });
-    test('a nightly of an older version than the running build is no update', () {
-      expect(pick(rels(nightlyBase: 'v0.6.1'), '0.6.2', UpdateChannel.nightly, installed: 'old'), isNull);
+
+    test('on the nightly channel only the nightly is offered, not v0.6.1', () {
+      final u = pick([pre061, nightly(sha: 'def')], '0.6.1', UpdateChannel.nightly, installed: 'abc', running: true)!;
+      expect(u.tag, 'nightly');
     });
-    test('a nightly build is offered the stable release of its own version', () {
-      final r = [release('v0.6.1', assets: ['Freegosy-linux-x86_64.AppImage'])];
-      expect(pick(r, '0.6.1-nightly', UpdateChannel.stable)!.tag, 'v0.6.1');
+
+    test('a newer real release is offered to a nightly build, and wins over the nightly', () {
+      final r = [release('v0.6.2', assets: ['Freegosy-linux-x86_64.AppImage']), nightly()];
+      expect(pick(r, '0.6.1', UpdateChannel.stable, installed: 'abc', running: true)!.tag, 'v0.6.2');
+      expect(pick(r, '0.6.1', UpdateChannel.nightly, installed: 'old', running: true)!.tag, 'v0.6.2');
     });
+
+    test('a nightly based on an older release than the running build is no update', () {
+      expect(pick([nightly(base: '0.6.1')], '0.6.2', UpdateChannel.nightly, installed: 'old'), isNull);
+    });
+
+    test('with several nightly releases the newest is used', () {
+      final old = nightly(sha: 'old1', published: '2026-10-10T00:00:00Z');
+      final newer = nightly(sha: 'new1', published: '2026-10-14T00:00:00Z');
+      expect(pick([old, newer], '0.6.1', UpdateChannel.nightly, installed: 'x')!.sha256, 'new1');
+      expect(pick([newer, old], '0.6.1', UpdateChannel.nightly, installed: 'x')!.sha256, 'new1');
+    });
+
+    test('base version is read from the notes', () {
+      expect(UpdateService.nightlyBaseVersion('Nightly build of commit abc. Based on version 0.6.1.'), '0.6.1');
+      expect(UpdateService.nightlyBaseVersion('based on version v1.2.3'), '1.2.3');
+      expect(UpdateService.nightlyBaseVersion('no version here'), isNull);
+      expect(UpdateService.nightlyBaseVersion(null), isNull);
+    });
+
+    test('tags: nightly, and the older v<version>-nightly', () {
+      expect(UpdateService.isNightlyTag('nightly'), isTrue);
+      expect(UpdateService.isNightlyTag('v0.6.1-nightly'), isTrue);
+      expect(UpdateService.isNightlyTag('v0.6.1'), isFalse);
+      expect(UpdateService.isNightlyTag(null), isFalse);
+    });
+
     test('channel setting parses', () {
       expect(UpdateChannel.parse('nightly'), UpdateChannel.nightly);
       expect(UpdateChannel.parse('prerelease'), UpdateChannel.prerelease);

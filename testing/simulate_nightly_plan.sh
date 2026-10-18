@@ -17,4 +17,4 @@ run() { echo "--- $1"; env PATH="$work/bin:$PATH" "${@:2}" bash tool/nightly_pla
 SHA=aaaaaaa1111111111111111111111111111111aa
 run "night 1: no nightly release exists yet"
 run "night 2: nightly exists but for an older commit" FAKE_RELEASE=1 FAKE_BODY="Nightly build of commit bbbbbbb22222222222222222222222222222bbbb."
-run "night 3: nightly already built from this commit (no new commits)" FAKE_RELEASE=1 FAKE_BODY="Nightly build of commit $SHA. Built automatically."
+run "night 3: nightly already built from this commit (no new commits)" FAKE_RELEASE=1 FAKE_BODY="Nightly build of commit $SHA. Based on version 0.6.1."

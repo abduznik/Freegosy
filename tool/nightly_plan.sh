@@ -5,8 +5,8 @@
 # build leaves no body and is retried the next night.
 set -eu
 sha="${1:?usage: nightly_plan.sh <commit sha>}"
-version=$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//' | tr -d '[:cntrl:]')
-tag="v${version}-nightly"
+# One rolling release, always overwritten, with no version of its own.
+tag="nightly"
 body=$(gh release view "$tag" --json body -q .body 2>/dev/null || true)
 if [ -n "$body" ] && printf '%s' "$body" | grep -qF "$sha"; then
   echo "A nightly for ${sha:0:7} already exists; nothing to build." >&2
