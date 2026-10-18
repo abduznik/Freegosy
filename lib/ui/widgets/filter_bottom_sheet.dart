@@ -360,29 +360,13 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                       ),
                     ),
 
-                    if (widget.availableFranchises.isNotEmpty) ...[
-                      _buildSectionTitle('Franchises'),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 0,
-                          children: widget.availableFranchises.map((value) {
-                            return FilterChip(
-                              label: Text(value),
-                              selected: _selectedFranchises.contains(value),
-                              onSelected: (selected) => setState(() {
-                                if (selected) {
-                                  _selectedFranchises.add(value);
-                                } else {
-                                  _selectedFranchises.remove(value);
-                                }
-                              }),
-                            );
-                          }).toList(),
-                        ),
+                    if (widget.availableFranchises.isNotEmpty)
+                      _SearchableChips(
+                        title: 'Franchises',
+                        values: widget.availableFranchises,
+                        selected: _selectedFranchises,
+                        onToggle: (v, on) => setState(() => on ? _selectedFranchises.add(v) : _selectedFranchises.remove(v)),
                       ),
-                    ],
 
                     if (widget.availablePlayerCounts.isNotEmpty) ...[
                       _buildSectionTitle('Players'),
@@ -409,32 +393,13 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
                     ],
 
                     // SECTION 4 - Genres
-                    if (widget.availableGenres.isNotEmpty) ...[
-                      _buildSectionTitle('Genres'),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 0,
-                          children: widget.availableGenres.map((genre) {
-                            final isSelected = _selectedGenres.contains(genre);
-                            return FilterChip(
-                              label: Text(genre),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedGenres.add(genre);
-                                  } else {
-                                    _selectedGenres.remove(genre);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
+                    if (widget.availableGenres.isNotEmpty)
+                      _SearchableChips(
+                        title: 'Genres',
+                        values: widget.availableGenres,
+                        selected: _selectedGenres,
+                        onToggle: (v, on) => setState(() => on ? _selectedGenres.add(v) : _selectedGenres.remove(v)),
                       ),
-                    ],
 
                     // SECTION 5 - Regions
                     if (widget.availableRegions.isNotEmpty) ...[
@@ -530,6 +495,81 @@ class _FilterBottomSheetState extends State<FilterBottomSheet> {
         title,
         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
       ),
+    );
+  }
+}
+
+/// A titled wrap of filter chips. Long lists (RomM knows over a thousand franchises) get a search box
+/// and show only the selected values plus the first matches, so the sheet stays quick to scroll.
+class _SearchableChips extends StatefulWidget {
+  final String title;
+  final List<String> values;
+  final List<String> selected;
+  final void Function(String value, bool selected) onToggle;
+
+  const _SearchableChips({required this.title, required this.values, required this.selected, required this.onToggle});
+
+  @override
+  State<_SearchableChips> createState() => _SearchableChipsState();
+}
+
+class _SearchableChipsState extends State<_SearchableChips> {
+  static const _searchAbove = 24;
+  static const _maxShown = 60;
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final searchable = widget.values.length > _searchAbove;
+    final query = _query.trim().toLowerCase();
+    final matches = widget.values.where((v) => query.isEmpty || v.toLowerCase().contains(query)).toList();
+    final shown = searchable
+        ? <String>{...widget.selected.where(widget.values.contains), ...matches.take(_maxShown)}.toList()
+        : widget.values;
+    final hidden = searchable ? matches.length - matches.take(_maxShown).length : 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            '${widget.title}${searchable ? ' (${widget.values.length})' : ''}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ),
+        if (searchable)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: TextField(
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 18),
+                hintText: 'Search ${widget.title.toLowerCase()}',
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Wrap(
+            spacing: 8,
+            children: [
+              for (final value in shown)
+                FilterChip(
+                  label: Text(value),
+                  selected: widget.selected.contains(value),
+                  onSelected: (on) => widget.onToggle(value, on),
+                ),
+            ],
+          ),
+        ),
+        if (hidden > 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('$hidden more - type to narrow', style: Theme.of(context).textTheme.bodySmall),
+          ),
+      ],
     );
   }
 }

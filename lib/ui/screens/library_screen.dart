@@ -187,11 +187,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final currentFilters = ref.read(activeFiltersProvider);
     final collections = await ref.read(rommServiceProvider)?.getCollections() ?? [];
     final games = ref.read(paginatedGamesProvider).games;
-    final genres = games.expand((g) => g.genres).toSet().toList()..sort();
-    final regions = games.expand((g) => g.regions).toSet().toList()..sort();
-    final languages = games.expand((g) => g.languages).toSet().toList()..sort();
-    final franchises = games.expand((g) => g.franchises).toSet().toList()..sort();
-    final playerCounts = games.map((g) => g.playerCount).whereType<String>().where((p) => p.isNotEmpty).toSet().toList()..sort();
+    // The server's full lists when reachable (the loaded page only knows its own games); otherwise what is on screen.
+    var server = <String, List<String>>{};
+    try {
+      server = await ref.read(rommServiceProvider)?.getFilterValues() ?? server;
+    } catch (_) {}
+    List<String> merged(String key, Iterable<String> local) =>
+        {...?server[key], ...local}.toList()..sort();
+    final genres = merged('genres', games.expand((g) => g.genres));
+    final regions = merged('regions', games.expand((g) => g.regions));
+    final languages = merged('languages', games.expand((g) => g.languages));
+    final franchises = merged('franchises', games.expand((g) => g.franchises));
+    final playerCounts = merged('player_counts', games.map((g) => g.playerCount).whereType<String>().where((p) => p.isNotEmpty));
 
     if (!context.mounted) return;
     setState(() => _isFilterSheetOpen = true);
