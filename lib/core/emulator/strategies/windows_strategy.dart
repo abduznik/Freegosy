@@ -41,7 +41,7 @@ class WindowsStrategy extends EmulatorStrategy {
 
   /// The Wine/Proton command for [exePath], and the prefix it uses; null command when no runner is installed.
   ({WineCommand? command, String prefix}) planWine(Game game, String prefixBase, String exePath, List<String> args) {
-    final prefix = p.join(prefixBase, 'prefixes', game.id);
+    final prefix = WineLauncher.prefixDirFor(prefixBase, game.id);
     final command = WineLauncher.build(
       exePath: exePath,
       args: args,

@@ -22,6 +22,7 @@ import 'strategies/rpcs3_save_strategy.dart';
 import 'strategies/xenia_save_strategy.dart';
 import 'strategies/duckstation_save_strategy.dart';
 import 'strategies/ares_save_strategy.dart';
+import '../windows/wine_launcher.dart';
 import 'strategies/scummvm_save_strategy.dart';
 import 'strategies/melonds_save_strategy.dart';
 import 'strategies/mgba_save_strategy.dart';
@@ -84,7 +85,11 @@ class SaveSyncService {
     _dolphin = DolphinSaveStrategy(_directoryService);
     _eden = EdenSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
     _ryujinx = RyujinxSaveStrategy(onMappingResolved: saveMappedFolder);
-    _windows = WindowsSaveStrategy(_prefs);
+    _windows = WindowsSaveStrategy(_prefs, prefixDirFor: (game) async {
+      // Linux: Windows games run in a per-game Wine/Proton prefix (see WindowsStrategy).
+      final base = await _directoryService.getEmulatorAppSupportDirectory('proton');
+      return WineLauncher.prefixDirFor(base, game.id);
+    });
     _pcsx2 = Pcsx2SaveStrategy(_directoryService, _prefs);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
     _xenia = XeniaSaveStrategy(_directoryService);
@@ -648,21 +653,11 @@ class SaveSyncService {
         else {
           final timeStamp = DateTime.now().toIso8601String();
           final saveAbsolutePath = await strategy.getSaveDir(game, romPath);
-          final winLocalAbsolutepath = <String, String>{
-            "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
-            "['LOCALAPPDATA']": PlatformInfo.current.environment['LOCALAPPDATA'] ?? '',
-            "['USERPROFILE']": PlatformInfo.current.environment['USERPROFILE'] ?? '',
-            "['PROGRAMDATA']": PlatformInfo.current.environment['PROGRAMDATA'] ?? '',
-            "['PUBLIC']": PlatformInfo.current.environment['PUBLIC'] ?? '',
-            "[GAMEDIR]": romPath,
-          };
-
-          String envPath = '';
-          for (final entry in winLocalAbsolutepath.entries) {
-            if (saveAbsolutePath!.contains(entry.value)) {
-              envPath = saveAbsolutePath.replaceFirst(entry.value, entry.key);
-              break;
-            }
+          // A save under none of the Windows folders has no portable form; it is restored where it is looked up.
+          var envPath = '';
+          if (saveAbsolutePath != null) {
+            final portable = await (strategy as WindowsSaveStrategy).toPortablePath(game, romPath, saveAbsolutePath);
+            if (portable != saveAbsolutePath) envPath = portable;
           }
           await metaFile.writeAsString(jsonEncode({'timeStamp': timeStamp, 'savePath': envPath}));
         }

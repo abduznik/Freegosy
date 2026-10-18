@@ -25,6 +25,9 @@ class WineLauncher {
   /// Where programs live when the PATH Freegosy inherited (an AppImage, a gamescope session) omits them.
   static const fallbackDirs = ['/usr/bin', '/usr/local/bin', '/bin'];
 
+  /// The prefix a Windows game runs in: one folder per game under [supportBase] (see WindowsStrategy).
+  static String prefixDirFor(String supportBase, String gameId) => p.join(supportBase, 'prefixes', gameId);
+
   /// Windows programs that go through Wine/Proton rather than being started directly.
   static bool needsWine(String exePath) {
     final lower = exePath.toLowerCase();

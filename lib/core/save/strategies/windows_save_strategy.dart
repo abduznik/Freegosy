@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
+import '../../windows/windows_known_folders.dart';
 import '../../windows/pcgamingwiki_service.dart';
 import '../save_strategy.dart';
 import 'package:dio/dio.dart';
@@ -13,8 +14,10 @@ import 'package:dio/dio.dart';
 class WindowsSaveStrategy extends SaveStrategy {
   final PcGamingWikiService _wikiService;
   final AppPreferences _prefs;
-  // ignore: unused_field
   final PlatformInfo _platform;
+
+  /// The Wine/Proton prefix a game runs in (Linux), or null when it has none yet.
+  final Future<String?> Function(Game game)? _prefixDirFor;
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
@@ -26,9 +29,29 @@ class WindowsSaveStrategy extends SaveStrategy {
   // Same, but for file filters retrieved from PCGamingWiki
   final Map<String, String> _wikiSaveFilters = {};
 
-  WindowsSaveStrategy(this._prefs, {PlatformInfo? platform})
-      : _wikiService = PcGamingWikiService(Dio()),
-        _platform = platform ?? PlatformInfo.current;
+  WindowsSaveStrategy(this._prefs, {PlatformInfo? platform, Future<String?> Function(Game game)? prefixDirFor, PcGamingWikiService? wikiService})
+      : _platform = platform ?? PlatformInfo.current,
+        _prefixDirFor = prefixDirFor,
+        _wikiService = wikiService ?? PcGamingWikiService(Dio(), platform: platform);
+
+  /// Windows' well-known folders for [game] on this computer: the environment on Windows, the game's
+  /// Wine/Proton prefix on Linux.
+  Future<WindowsKnownFolders> knownFolders(Game game) async {
+    if (_platform.isWindows) return WindowsKnownFolders.forPlatform(_platform);
+    final prefix = await _prefixDirFor?.call(game);
+    return WindowsKnownFolders.forPlatform(_platform, prefixDir: prefix != null && Directory(prefix).existsSync() ? prefix : null);
+  }
+
+  static String _gameDirOf(String romPath) => Directory(romPath).existsSync() ? romPath : File(romPath).parent.path;
+
+  /// [absolute] as stored in a synced save's metadata: relative to a Windows folder, so another computer
+  /// (Windows, or Linux with its own prefix) can put it back in the matching place.
+  Future<String> toPortablePath(Game game, String romPath, String absolute) async =>
+      (await knownFolders(game)).toPortable(absolute, gameDir: _gameDirOf(romPath));
+
+  /// The local path a stored [portable] save path stands for here.
+  Future<String> fromPortablePath(Game game, String destPath, String portable) async =>
+      (await knownFolders(game)).fromPortable(portable, gameDir: _gameDirOf(destPath), posix: !_platform.isWindows);
 
   @override
   String get strategyId => 'windows';
@@ -136,7 +159,7 @@ class WindowsSaveStrategy extends SaveStrategy {
     // Try Searching PCGamingWiki
     try {
       debugPrint('[WindowsSave] Querying PCGamingWiki for ${game.name}...');
-      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir);
+      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir, folders: await knownFolders(game));
       if (locations.isNotEmpty) {
         debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s):');
         for (final loc in locations) {
@@ -377,24 +400,12 @@ class WindowsSaveStrategy extends SaveStrategy {
       }
     }
 
-    if (envDestPath != null)
-    {
-          final winLocalAbsolutepath = <String, String>{
-            "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
-            "['LOCALAPPDATA']": PlatformInfo.current.environment['LOCALAPPDATA'] ?? '',
-            "['USERPROFILE']": PlatformInfo.current.environment['USERPROFILE'] ?? '',
-            "['PROGRAMDATA']": PlatformInfo.current.environment['PROGRAMDATA'] ?? '',
-            "['PUBLIC']": PlatformInfo.current.environment['PUBLIC'] ?? '',
-            "[GAMEDIR]": destPath,
-          };
-
-          for (final entry in winLocalAbsolutepath.entries) {
-            if (envDestPath!.contains(entry.key)) envDestPath = envDestPath.replaceFirst(entry.key, entry.value); else continue;
-          }
+    if (envDestPath != null && envDestPath.isNotEmpty) {
+      envDestPath = await fromPortablePath(game, destPath, envDestPath);
     }
 
     try {
-      final saveDir = await getSaveDir(game, destPath, metadataSavePath: envDestPath!);
+      final saveDir = await getSaveDir(game, destPath, metadataSavePath: (envDestPath != null && envDestPath.isNotEmpty) ? envDestPath : null);
       if (saveDir == null) {
         throw Exception('No save location found for ${game.name}. Set one manually in game settings.');
       }
