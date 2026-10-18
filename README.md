@@ -6,6 +6,8 @@
 
 # Freegosy
 
+**Website: https://abduznik.github.io/Freegosy/**
+
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
 [**Watch the Feature Walkthrough on YouTube**](https://youtu.be/SYbO4I-p1hg)
@@ -32,6 +34,15 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 No pressure at all — the app is and will always be free.
 
 ## Current Features (v0.6.1)
+
+- **New in 0.6.1**:
+    - **Library list layout** (one row per game with rating, status and last played) next to the cover grid, and a **cloud badge** on games whose saves have synced.
+    - **Play time** on the game page, free-space check before big downloads, and `.rar` games extracted automatically.
+    - **RetroAchievements** sign-in now also covers PCSX2, PPSSPP and Dolphin.
+    - **RetroArch save-state sync** and Resume Game, `.chd` serials read natively (no `chdman` needed), and RetroArch's PS2 core (LRPS2) saves.
+    - **Nightly update channel**, a *Skip this version* button, and a Linux/NVIDIA/Wayland fix for Dolphin.
+    - Status and rating now save correctly on RomM 4.9+, and a startup crash on Linux (inotify limit) is fixed.
+    - See the [changelog](CHANGELOG.md) for everything.
 
 - **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** and **RetroDECK** integration).
 - **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
