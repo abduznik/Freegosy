@@ -27,6 +27,7 @@ import '../../core/emulator/strategy_registry.dart';
 import '../../providers/theme_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/dialog_back_bridge.dart';
+import '../widgets/portable_mode_settings.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -999,6 +1000,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
           ),
+          const PortableModeSettings(),
           const SizedBox(height: 16),
           const Divider(),
           const SizedBox(height: 16),

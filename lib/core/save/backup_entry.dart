@@ -1,3 +1,4 @@
+import '../portable/portable_paths.dart';
 import 'package:hive/hive.dart';
 
 /// A single local save backup checkpoint for a game.
@@ -35,7 +36,7 @@ class BackupEntryAdapter extends TypeAdapter<BackupEntry> {
     return BackupEntry(
       timestamp: fields[0] as DateTime,
       md5Hash: fields[1] as String,
-      localZipPath: fields[2] as String,
+      localZipPath: PortablePaths.resolve(fields[2] as String),
       isSynced: fields.containsKey(3) ? fields[3] as bool : true,
     );
   }
@@ -49,7 +50,7 @@ class BackupEntryAdapter extends TypeAdapter<BackupEntry> {
       ..writeByte(1)
       ..write(obj.md5Hash)
       ..writeByte(2)
-      ..write(obj.localZipPath)
+      ..write(PortablePaths.store(obj.localZipPath))
       ..writeByte(3)
       ..write(obj.isSynced);
   }
