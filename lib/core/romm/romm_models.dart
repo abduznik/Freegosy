@@ -22,6 +22,7 @@ class Game {
   final String? summary;
   final List<String> genres;
   final List<String> companies;
+  final List<String> franchises;
   final String? playerCount;
   final int? firstReleaseDate; // unix timestamp in milliseconds
   final double? averageRating;
@@ -84,6 +85,7 @@ class Game {
     this.summary,
     this.genres = const [],
     this.companies = const [],
+    this.franchises = const [],
     this.playerCount,
     this.firstReleaseDate,
     this.averageRating,
@@ -104,6 +106,19 @@ class Game {
     this.raAchievements = const [],
   });
 
+  static int _readSize(Map<String, dynamic> json) {
+    for (final key in ['fs_size_bytes', 'file_size_bytes']) {
+      final v = json[key];
+      if (v is num && v > 0) return v.toInt();
+    }
+    var sum = 0;
+    for (final f in (json['files'] as List?) ?? const []) {
+      final v = f is Map ? f['file_size_bytes'] : null;
+      if (v is num) sum += v.toInt();
+    }
+    return sum;
+  }
+
   factory Game.fromJson(Map<String, dynamic> json) {
     return Game(
       id: json['id']?.toString() ?? '',
@@ -118,13 +133,16 @@ class Game {
       fileName: json['file_name']?.toString(), // Mapped from JSON
       fsName: json['fs_name']?.toString(), // Mapped from JSON
       fsExtension: json['fs_extension']?.toString(),
-      fileSize: json['file_size_bytes'] is int ? json['file_size_bytes'] : 0,
+      // RomM names the total size `fs_size_bytes`; `file_size_bytes` is the per-file name (and what this app's own
+      // cache writes), so both are read, and the files' sizes are summed as a last resort.
+      fileSize: _readSize(json),
       multiFilePath: json['multi_file_path']?.toString(),
       hasMultipleFiles: json['has_multiple_files'] as bool? ?? false,
       files: (json['files'] as List<dynamic>?)?.map((e) => e as Map<String, dynamic>).toList() ?? [],
       summary: json['summary']?.toString(),
       genres: (json['metadatum']?['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       companies: (json['metadatum']?['companies'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      franchises: (json['metadatum']?['franchises'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       playerCount: json['metadatum']?['player_count']?.toString(),
       firstReleaseDate: json['metadatum']?['first_release_date'] as int?,
       averageRating: (json['metadatum']?['average_rating'] as num?)?.toDouble(),
@@ -171,6 +189,7 @@ class Game {
       'metadatum': {
         'genres': genres,
         'companies': companies,
+        'franchises': franchises,
         'player_count': playerCount,
         'first_release_date': firstReleaseDate,
         'average_rating': averageRating,

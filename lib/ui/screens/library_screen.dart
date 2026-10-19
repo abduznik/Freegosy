@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/romm_provider.dart';
 import '../../providers/paginated_games_provider.dart';
+import '../../providers/shared_prefs_provider.dart';
 import '../../providers/downloaded_games_cache_provider.dart';
 import '../../core/storage/directory_service.dart';
 import '../../core/romm/romm_models.dart';
@@ -26,6 +27,8 @@ import '../../providers/download_provider.dart';
 import '../../providers/ui_provider.dart';
 import '../widgets/focus_effect_wrapper.dart';
 import '../widgets/cover_size_button.dart';
+import '../widgets/layout_toggle_button.dart';
+import '../widgets/game_list_row.dart';
 import '../widgets/controller_hints_bar.dart';
 
 final isHomeSelectedProvider = StateProvider<bool>((ref) => true);
@@ -140,6 +143,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     ref.invalidate(platformsProvider);
     ref.invalidate(recentlyAddedProvider);
     ref.invalidate(recentlyPlayedProvider);
+    ref.invalidate(mostPlayedProvider);
+    ref.invalidate(topUnplayedProvider);
     ref.read(paginatedGamesProvider.notifier).reset();
     await ref.read(paginatedGamesProvider.notifier).loadInitial(
       platformId: ref.read(selectedPlatformIdProvider)?.toString(),
@@ -168,6 +173,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
           onDownload: (freshGame) async => startDownload(context, ref, freshGame),
           onPushSaves: () => handlePushSaves(context, ref, game),
           onPullSaves: () => handlePullSaves(context, ref, game),
+          onCheckSync: () => handleCheckSync(context, ref, game),
           onSyncStates: () => handleSyncStates(context, ref, game),
           onDelete: () => handleDeleteRom(context, ref, game),
           onConfigure: () => handleWindowsConfig(context, ref, game),
@@ -181,9 +187,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
     final currentFilters = ref.read(activeFiltersProvider);
     final collections = await ref.read(rommServiceProvider)?.getCollections() ?? [];
     final games = ref.read(paginatedGamesProvider).games;
-    final genres = games.expand((g) => g.genres).toSet().toList()..sort();
-    final regions = games.expand((g) => g.regions).toSet().toList()..sort();
-    final languages = games.expand((g) => g.languages).toSet().toList()..sort();
+    // The server's full lists when reachable (the loaded page only knows its own games); otherwise what is on screen.
+    var server = <String, List<String>>{};
+    try {
+      server = await ref.read(rommServiceProvider)?.getFilterValues() ?? server;
+    } catch (_) {}
+    List<String> merged(String key, Iterable<String> local) =>
+        {...?server[key], ...local}.toList()..sort();
+    final genres = merged('genres', games.expand((g) => g.genres));
+    final regions = merged('regions', games.expand((g) => g.regions));
+    final languages = merged('languages', games.expand((g) => g.languages));
+    final franchises = merged('franchises', games.expand((g) => g.franchises));
+    final playerCounts = merged('player_counts', games.map((g) => g.playerCount).whereType<String>().where((p) => p.isNotEmpty));
 
     if (!context.mounted) return;
     setState(() => _isFilterSheetOpen = true);
@@ -193,7 +208,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
       availableGenres: genres,
       availableRegions: regions,
       availableLanguages: languages,
+      availableFranchises: franchises,
+      availablePlayerCounts: playerCounts,
       availableCollections: collections,
+      savedFilters: ref.read(savedFiltersProvider).all(),
+      onSaveFilter: (name, filters) async {
+        await ref.read(savedFiltersProvider).save(name, filters);
+      },
+      onDeleteSavedFilter: (name) => ref.read(savedFiltersProvider).delete(name),
       onApply: (newFilters) {
         ref.read(activeFiltersProvider.notifier).state = newFilters;
         ref.read(paginatedGamesProvider.notifier).reset();
@@ -346,7 +368,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                     );
                   },
                 ),
-                const CoverSizeButton(),
+                const LayoutToggleButton(),
+                if (ref.watch(libraryLayoutProvider) != 'list') const CoverSizeButton(),
                 FocusEffectWrapper(borderRadius: 24, scaleFactor: 1.1, onTap: _handleRandomGame, child: IconButton(icon: const Icon(Icons.shuffle), tooltip: 'Random game', onPressed: _handleRandomGame)),
                 const SizedBox(width: 8),
               ],
@@ -485,6 +508,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                               delegate: SliverChildListDelegate([
                                 ref.watch(recentlyPlayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Continue Playing', icon: Icons.play_circle_outline, games: games, ref: ref, isFirst: true), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
                                 ref.watch(recentlyAddedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Recently Added', icon: Icons.new_releases_outlined, games: games, ref: ref), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
+                                ref.watch(mostPlayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Most Played', icon: Icons.timer_outlined, games: games, ref: ref), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
+                                ref.watch(topUnplayedProvider).when(data: (games) => _buildHorizontalShelf(context: context, title: 'Top Unplayed', icon: Icons.star_outline, games: games, ref: ref), error: (e, s) => const SizedBox.shrink(), loading: () => const SizedBox.shrink()),
                                 ref.watch(metadataCacheServiceProvider).when(data: (cache) {
                                     final installed = cache.cachedGames.where((g) => downloadedCache[g.id] == true).toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
                                     return _buildHorizontalShelf(context: context, title: 'Installed Games (${installed.length})', icon: Icons.download_done, games: installed, ref: ref);
@@ -497,6 +522,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with LibraryActio
                           return SliverMainAxisGroup(
                             slivers: [
                               SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16.0), child: Text('Showing ${displayGames.length} of ${paginatedState.total} games', style: const TextStyle(fontSize: 12, color: Colors.grey)))),
+                              if (ref.watch(libraryLayoutProvider) == 'list')
+                                SliverPadding(
+                                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                  sliver: SliverList.separated(
+                                    itemCount: displayGames.length + (paginatedState.isLoadingMore ? 1 : 0),
+                                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                                    itemBuilder: (context, index) {
+                                      if (index == displayGames.length) return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()));
+                                      final game = displayGames[index];
+                                      final coverUrl = ref.read(rommServiceProvider)?.resolveCoverUrl(game);
+                                      final isDownloaded = (downloadedCache[game.id] ?? false) && !(ref.watch(downloadProvider)[game.id]?.isComplete == false);
+                                      return FocusEffectWrapper(
+                                        focusNode: index == 0 ? _firstContentItemFocusNode : null,
+                                        onTap: () => _handleGameTap(context, ref, game),
+                                        child: GameListRow(game: game, coverUrl: coverUrl, isDownloaded: isDownloaded),
+                                      );
+                                    },
+                                  ),
+                                )
+                              else
                               SliverPadding(
                                 padding: const EdgeInsets.all(12),
                                 sliver: SliverGrid(

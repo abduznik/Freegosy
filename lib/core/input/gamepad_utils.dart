@@ -156,6 +156,18 @@ class GamepadUtils {
     return (key, 0);
   }
 
+  /// True for the extra devices a controller exposes for its motion sensors
+  /// or touchpad (a DualSense lists "... Motion Sensors" next to the pad).
+  /// They stream axis values constantly and are not controller input, so
+  /// they must not be handled as a gamepad (#169).
+  static bool isSensorDevice(String name) {
+    final lower = name.toLowerCase();
+    return lower.contains('motion sensors') ||
+        lower.contains('accelerometer') ||
+        lower.contains('gyroscope') ||
+        lower.contains('touchpad');
+  }
+
   /// Splits a controller name into meaningful lowercase tokens, stripping
   /// noise words so fuzzy matching isn't thrown off by common filler terms.
   static Set<String> tokenize(String name) {

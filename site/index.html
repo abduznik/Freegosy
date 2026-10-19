@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freegosy – your RomM library on every desktop</title>
+<meta name="description" content="Freegosy is a free, cross-platform app for browsing your RomM library, downloading ROMs and launching them in your emulators, with cloud save sync.">
+<link rel="icon" href="freegosy_logo.png">
+<style>
+:root{--bg:#121014;--surface:#1d1a22;--surface2:#262230;--text:#e8e3ee;--muted:#a79fb3;--primary:#b69df8;--primary-ink:#2b1a5c;--border:#352f40}
+@media (prefers-color-scheme:light){:root{--bg:#fbf9ff;--surface:#f3eefb;--surface2:#e9e1f6;--text:#1c1826;--muted:#5d546b;--primary:#5b3fc4;--primary-ink:#fff;--border:#d9cfee}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--primary)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+nav{display:flex;align-items:center;gap:20px;padding:18px 0}
+nav .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem;color:var(--text);text-decoration:none;margin-right:auto}
+nav img{width:32px;height:32px;border-radius:8px}
+nav a.l{color:var(--muted);text-decoration:none;font-size:.95rem}
+nav a.l:hover{color:var(--text)}
+.hero{text-align:center;padding:56px 0 40px}
+.hero h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.15;margin:0 0 14px}
+.hero p{color:var(--muted);max-width:620px;margin:0 auto 28px;font-size:1.1rem}
+.btn{display:inline-block;padding:12px 22px;border-radius:12px;background:var(--primary);color:var(--primary-ink);font-weight:600;text-decoration:none;margin:4px}
+.btn.alt{background:var(--surface2);color:var(--text)}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0 8px}
+.shots img{width:100%;border-radius:14px;border:1px solid var(--border);display:block}
+@media(max-width:640px){.shots{grid-template-columns:1fr}}
+h2{font-size:1.6rem;margin:56px 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px}
+.card h3{margin:0 0 6px;font-size:1.05rem}
+.card p{margin:0;color:var(--muted);font-size:.95rem}
+table{width:100%;border-collapse:collapse;background:var(--surface);border-radius:16px;overflow:hidden;border:1px solid var(--border)}
+td,th{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);font-size:.95rem}
+th{color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:0}
+.tbl{overflow-x:auto}
+footer{margin:64px 0 32px;color:var(--muted);text-align:center;font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#"><img src="freegosy_logo.png" alt="">Freegosy</a>
+    <a class="l" href="#features">Features</a>
+    <a class="l" href="#emulators">Emulators</a>
+    <a class="l" href="https://github.com/abduznik/Freegosy">GitHub</a>
+    <a class="l" href="https://discord.gg/PEBUzGNMaw">Discord</a>
+  </nav>
+
+  <header class="hero">
+    <h1>Your RomM library,<br>on every desktop.</h1>
+    <p>Browse, download and launch your games in the emulator of your choice, with saves that follow you between machines. Free for Windows, macOS and Linux (including Steam Deck).</p>
+    <a class="btn" href="https://github.com/abduznik/Freegosy/releases/latest">Download latest release</a>
+    <a class="btn alt" href="https://github.com/abduznik/Freegosy#installation">Install guide</a>
+  </header>
+
+  <div class="shots">
+    <img src="screenshot1.png" alt="Freegosy library view with game cards">
+    <img src="screenshot2.png" alt="Freegosy game page with metadata and screenshots">
+  </div>
+
+  <h2 id="features">What it does</h2>
+  <div class="grid">
+    <div class="card"><h3>RomM native</h3><p>Browse your whole library with server-side pagination, filters, offline metadata cache, and RomM 4.9 per-device saves and play sessions.</p></div>
+    <div class="card"><h3>Cloud save sync</h3><p>Saves and optional save states sync both ways, with backups, conflict prompts and a Resume Game button.</p></div>
+    <div class="card"><h3>Emulator management</h3><p>Download, update and launch emulators from Settings. 197 RetroArch cores with per-platform and per-game choice.</p></div>
+    <div class="card"><h3>BIOS handling</h3><p>BIOS files come from RomM and land in the right folder for every installed emulator.</p></div>
+    <div class="card"><h3>RetroAchievements</h3><p>Connect once and RetroArch, PCSX2, PPSSPP and Dolphin sign in automatically.</p></div>
+    <div class="card"><h3>Built for couch and desk</h3><p>Controller support, fullscreen mode, cover size slider, grid and list layouts, EmuDeck and RetroDECK presets.</p></div>
+    <div class="card"><h3>Scriptable</h3><p>A headless mode lists, downloads and launches games from the command line, with JSON output.</p></div>
+    <div class="card"><h3>Stays up to date</h3><p>Built-in updates with Stable, pre-release and nightly channels.</p></div>
+  </div>
+
+  <h2 id="emulators">Emulator support</h2>
+  <div class="tbl"><table>
+    <tr><th>Emulator</th><th>Platforms</th><th>Save sync</th></tr>
+    <tr><td>RetroArch</td><td>197 cores</td><td>Full</td></tr>
+    <tr><td>DuckStation, PCSX2, PPSSPP</td><td>PS1, PS2, PSP</td><td>Full</td></tr>
+    <tr><td>Ryujinx, Eden</td><td>Switch</td><td>Full</td></tr>
+    <tr><td>mGBA, Azahar</td><td>GBA, 3DS</td><td>Full</td></tr>
+    <tr><td>Dolphin, melonDS, Cemu, RPCS3, Xenia, Ares</td><td>GameCube/Wii, DS, Wii U, PS3, Xbox 360, multi</td><td>Partial</td></tr>
+    <tr><td>ScummVM, Windows native</td><td>Point-and-click, PC</td><td>Launch only / partial</td></tr>
+  </table></div>
+
+  <h2>Get it</h2>
+  <p>Windows installer, macOS disk image, Linux AppImage and tarball, an Arch PKGBUILD and a Nix flake are on the <a href="https://github.com/abduznik/Freegosy/releases/latest">releases page</a>. Freegosy is open source and always free; if it helps you, you can <a href="https://github.com/sponsors/abduznik">sponsor the project</a>.</p>
+
+  <footer>Freegosy is the successor to Wingosy and is inspired by Argosy. Not affiliated with RomM.</footer>
+</div>
+</body>
+</html>

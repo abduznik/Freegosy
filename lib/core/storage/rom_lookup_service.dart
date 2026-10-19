@@ -1,6 +1,7 @@
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../disc/multi_disc_resolver.dart';
 import '../romm/romm_models.dart';
 import '../romm/rom_constants.dart';
 import 'file_system_index.dart';
@@ -183,12 +184,14 @@ class RomLookupService {
 
     io.File? largestFile;
     int largestSize = 0;
+    final candidates = <io.File>[];
 
     try {
       await for (final entity in io.Directory(folderPath).list(recursive: true)) {
         if (entity is io.File) {
           final ext = p.extension(entity.path).toLowerCase();
           if (extensions.isEmpty || extensions.contains(ext)) {
+            candidates.add(entity);
             final size = await entity.length();
             if (size > largestSize) {
               largestSize = size;
@@ -198,6 +201,13 @@ class RomLookupService {
         }
       }
     } catch (_) {}
+
+    // Several numbered discs and no playlist: boot disc 1, not whichever disc
+    // is biggest (#54).
+    final numbered = candidates.where((f) => MultiDiscResolver.discNumber(f.path) != null).toList();
+    if (numbered.length > 1) {
+      return p.absolute(MultiDiscResolver.pickFirstDisc(numbered.map((f) => f.path)));
+    }
 
     if (largestFile != null) {
       return p.absolute(largestFile.path);

@@ -1,57 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/romm/active_filters.dart';
+export '../core/romm/active_filters.dart';
+import '../core/romm/discover.dart';
 import '../core/romm/romm_models.dart';
+import 'shared_prefs_provider.dart';
 import 'romm_provider.dart';
 import 'downloaded_games_cache_provider.dart';
-
-class ActiveFilters {
-  final List<String> genres;
-  final List<String> regions;
-  final List<String> languages;
-  final List<String> collections;
-  final List<String> statuses;
-  final bool downloadedOnly;
-  final bool notDownloadedOnly;
-
-  const ActiveFilters({
-    this.genres = const [],
-    this.regions = const [],
-    this.languages = const [],
-    this.collections = const [],
-    this.statuses = const [],
-    this.downloadedOnly = false,
-    this.notDownloadedOnly = false,
-  });
-
-  bool get hasActiveFilters =>
-      genres.isNotEmpty ||
-      regions.isNotEmpty ||
-      languages.isNotEmpty ||
-      collections.isNotEmpty ||
-      statuses.isNotEmpty ||
-      downloadedOnly ||
-      notDownloadedOnly;
-
-  ActiveFilters copyWith({
-    List<String>? genres,
-    List<String>? regions,
-    List<String>? languages,
-    List<String>? collections,
-    List<String>? statuses,
-    bool? downloadedOnly,
-    bool? notDownloadedOnly,
-  }) {
-    return ActiveFilters(
-      genres: genres ?? this.genres,
-      regions: regions ?? this.regions,
-      languages: languages ?? this.languages,
-      collections: collections ?? this.collections,
-      statuses: statuses ?? this.statuses,
-      downloadedOnly: downloadedOnly ?? this.downloadedOnly,
-      notDownloadedOnly: notDownloadedOnly ?? this.notDownloadedOnly,
-    );
-  }
-}
 
 class PaginatedGamesState {
   final List<Game> games;
@@ -114,6 +69,9 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
       ..._activeFilters.languages,
       ..._activeFilters.collections,
       if (_activeFilters.statuses.isNotEmpty) ..._activeFilters.statuses,
+      ..._activeFilters.franchises,
+      ..._activeFilters.playerCounts,
+      '${_activeFilters.sort.name}${_activeFilters.sortDescending}',
     ].join(',');
     return '${platformId ?? "all"}|${search ?? ""}|$filterKey';
   }
@@ -147,6 +105,8 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         genres: _activeFilters.genres,
         regions: _activeFilters.regions,
         languages: _activeFilters.languages,
+        franchises: _activeFilters.franchises,
+        playerCounts: _activeFilters.playerCounts,
       );
       
       if (offline.isNotEmpty) {
@@ -218,6 +178,10 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         languages: _activeFilters.languages,
         collections: _activeFilters.collections,
         statuses: _activeFilters.statuses,
+        franchises: _activeFilters.franchises,
+        playerCounts: _activeFilters.playerCounts,
+        orderBy: _activeFilters.sort.apiField,
+        orderDir: _activeFilters.sortDescending ? 'desc' : 'asc',
       );
       
       // Filter locally for instant response
@@ -268,6 +232,8 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
       genres: _activeFilters.genres,
       regions: _activeFilters.regions,
       languages: _activeFilters.languages,
+      franchises: _activeFilters.franchises,
+      playerCounts: _activeFilters.playerCounts,
     );
 
     // Filter by download status locally
@@ -310,6 +276,10 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         languages: _activeFilters.languages,
         collections: _activeFilters.collections,
         statuses: _activeFilters.statuses,
+        franchises: _activeFilters.franchises,
+        playerCounts: _activeFilters.playerCounts,
+        orderBy: _activeFilters.sort.apiField,
+        orderDir: _activeFilters.sortDescending ? 'desc' : 'asc',
       );
       // Only update if still on same key
       if (_key(_currentPlatformId, _currentSearch) == key) {
@@ -350,6 +320,10 @@ class PaginatedGamesNotifier extends StateNotifier<PaginatedGamesState> {
         languages: _activeFilters.languages,
         collections: _activeFilters.collections,
         statuses: _activeFilters.statuses,
+        franchises: _activeFilters.franchises,
+        playerCounts: _activeFilters.playerCounts,
+        orderBy: _activeFilters.sort.apiField,
+        orderDir: _activeFilters.sortDescending ? 'desc' : 'asc',
       );
       final merged = [...state.games, ...result.games];
       _cache[key] = merged;
@@ -412,4 +386,17 @@ final recentlyAddedProvider = FutureProvider<List<Game>>((ref) async {
   final service = ref.watch(rommServiceProvider);
   if (service == null) return [];
   return service.getRecentlyAdded(limit: 15);
+});
+
+final topUnplayedProvider = FutureProvider<List<Game>>((ref) async {
+  final service = ref.watch(rommServiceProvider);
+  if (service == null) return [];
+  return service.getTopUnplayed(limit: 15);
+});
+
+final mostPlayedProvider = FutureProvider<List<Game>>((ref) async {
+  final service = ref.watch(rommServiceProvider);
+  if (service == null) return [];
+  final ids = mostPlayedGameIds(ref.watch(playTimeStoreProvider), limit: 15);
+  return service.getGamesByIds(ids);
 });

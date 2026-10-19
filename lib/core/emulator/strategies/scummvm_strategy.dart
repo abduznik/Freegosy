@@ -4,6 +4,7 @@ import 'package:freegosy/core/emulator/emulator_strategy.dart';
 import 'package:freegosy/core/emulator/linux_strategies/linux_environment_strategy.dart';
 import 'package:freegosy/core/platform/platform_info.dart';
 import 'package:freegosy/core/romm/romm_models.dart';
+import 'package:freegosy/core/save/strategies/scummvm_save_strategy.dart';
 import 'package:freegosy/core/storage/directory_service.dart';
 
 /// ScummVM. A ScummVM game is a folder of data files, not a ROM:
@@ -46,7 +47,7 @@ class ScummVMStrategy extends EmulatorStrategy {
   String get macosExecutable => 'ScummVM.app/Contents/MacOS/scummvm';
 
   @override
-  bool get supportsSaveSync => false;
+  bool get supportsSaveSync => true;
 
   @override
   String resolveSavePath(Game game) => '';
@@ -57,7 +58,10 @@ class ScummVMStrategy extends EmulatorStrategy {
       io.Directory(romPath).existsSync() ? romPath : p.dirname(romPath);
 
   /// Arguments that make ScummVM detect and start the game in [gameFolder].
-  static List<String> gameArgs(String gameFolder) => ['--auto-detect', '--path=$gameFolder'];
+  /// With [savePath], ScummVM saves there instead of its shared save folder, which
+  /// is what lets one game's saves sync on their own (see [ScummVMSaveStrategy]).
+  static List<String> gameArgs(String gameFolder, {String? savePath}) =>
+      ['--auto-detect', '--path=$gameFolder', if (savePath != null) '--savepath=$savePath'];
 
   @override
   Future<String?> findExecutable() async {
@@ -71,12 +75,12 @@ class ScummVMStrategy extends EmulatorStrategy {
 
   @override
   Future<void> launchWithExtraArgs(Game game, String romPath, {List<String> extraArgs = const []}) async {
-    await _start(romPath, extraArgs, io.ProcessStartMode.detached);
+    await _start(game, romPath, extraArgs, io.ProcessStartMode.detached);
   }
 
   @override
   Future<io.Process?> launchWithHandleAndExtraArgs(Game game, String romPath, {List<String> extraArgs = const []}) async {
-    final process = await _start(romPath, extraArgs, io.ProcessStartMode.normal);
+    final process = await _start(game, romPath, extraArgs, io.ProcessStartMode.normal);
     // Pipes must be drained or ScummVM blocks once they fill up (see
     // DirectoryService.launchGameWithHandle).
     process.stdout.drain<void>();
@@ -85,11 +89,23 @@ class ScummVMStrategy extends EmulatorStrategy {
     return process;
   }
 
-  Future<io.Process> _start(String romPath, List<String> extraArgs, io.ProcessStartMode mode) async {
+  @override
+  Future<String?> describeLaunch(Game game, String romPath) async {
+    final exePath = await findExecutable();
+    if (exePath == null) return '$name is not installed.';
+    final folder = gameFolderFor(p.absolute(p.normalize(romPath)));
+    final savePath = await ScummVMSaveStrategy.saveDirFor(_directoryService, game);
+    final (exe, args) = commandFor(exePath, [...launchArgs, ...gameArgs(folder, savePath: savePath)], platform: platform);
+    return 'Command: ${[exe, ...args].join(' ')}\nSaves: $savePath';
+  }
+
+  Future<io.Process> _start(Game game, String romPath, List<String> extraArgs, io.ProcessStartMode mode) async {
     final exePath = await findExecutable();
     if (exePath == null) throw Exception('$name not found. Please download it first.');
     final folder = gameFolderFor(p.absolute(p.normalize(romPath)));
-    final (exe, args) = commandFor(exePath, [...launchArgs, ...extraArgs, ...gameArgs(folder)], platform: platform);
+    final savePath = await ScummVMSaveStrategy.saveDirFor(_directoryService, game);
+    await io.Directory(savePath).create(recursive: true);
+    final (exe, args) = commandFor(exePath, [...launchArgs, ...extraArgs, ...gameArgs(folder, savePath: savePath)], platform: platform);
     final workingDirectory = p.isAbsolute(exe) && !LinuxEnvironmentStrategy.isFlatpakExecutable(exe) ? p.dirname(exe) : null;
     return io.Process.start(exe, args, mode: mode, workingDirectory: workingDirectory, runInShell: exe == 'flatpak');
   }

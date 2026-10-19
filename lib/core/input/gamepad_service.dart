@@ -42,6 +42,10 @@ class GamepadService extends WidgetsBindingObserver {
   StreamSubscription<GamepadEvent>? _subscription;
   final Map<String, String> _controllerNames = {};
   final Map<String, AxisState> _axisStates = {};
+  // Motion-sensor / touchpad devices: their events are dropped unhandled.
+  final Set<String> _ignoredIds = {};
+  // Unmapped (controller, key) pairs already logged, so a noisy axis logs once.
+  final Set<String> _loggedUnmapped = {};
   final _rawEventController = StreamController<GamepadEvent>.broadcast();
   // Tracks every raw key seen per controller — used to detect backend-handled axes
   final Map<String, Set<String>> _seenRawKeys = {};
@@ -116,17 +120,25 @@ class GamepadService extends WidgetsBindingObserver {
       final currentIds = <String>{};
       for (var c in controllers) {
         currentIds.add(c.id);
+        if (GamepadUtils.isSensorDevice(c.name)) {
+          if (_ignoredIds.add(c.id)) {
+            debugPrint('[Controller] ignoring sensor device: [${c.id}] ${c.name}');
+          }
+          continue;
+        }
         if (!_controllerNames.containsKey(c.id)) {
           debugPrint('[Controller] new controller: [${c.id}] ${c.name}');
           _controllerNames[c.id] = c.name;
         }
       }
+      _ignoredIds.removeWhere((id) => !currentIds.contains(id));
       final staleIds = _controllerNames.keys.where((id) => !currentIds.contains(id)).toList();
       for (final id in staleIds) {
         debugPrint('[Controller] disconnected: [${_controllerNames[id]}]');
         _controllerNames.remove(id);
         _axisStates.remove(id);
         _seenRawKeys.remove(id);
+        _loggedUnmapped.removeWhere((k) => k.startsWith('$id|'));
       }
       if (staleIds.isNotEmpty) {
         debugPrint('[Controller] cleaned up ${staleIds.length} stale controller(s)');
@@ -363,7 +375,9 @@ class GamepadService extends WidgetsBindingObserver {
       );
     }
 
-    debugPrint('[Controller] normalize: unmapped key "${event.key}" (value=${event.value})');
+    if (_loggedUnmapped.add('${event.gamepadId}|${event.key}')) {
+      debugPrint('[Controller] normalize: unmapped key "${event.key}" (value=${event.value}); not logging it again');
+    }
     return null;
   }
 
@@ -373,6 +387,8 @@ class GamepadService extends WidgetsBindingObserver {
   final Set<GameAction> _activePovDirections = {};
 
   void _handleGamepadEvent(GamepadEvent event) {
+    // Sensor devices are not input: drop before any work (no broadcast, no logging).
+    if (_ignoredIds.contains(event.gamepadId)) return;
     // Broadcast raw event for sniffing/configuration dialogs (always allow, for setup dialogs)
     if (_rawEventController.isClosed) return;
     _rawEventController.add(event);

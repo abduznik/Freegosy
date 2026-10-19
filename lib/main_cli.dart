@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -8,12 +9,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'core/cli/cli_config.dart';
 import 'core/downloader/download_service.dart';
+import 'core/emulator/emulator_strategy.dart';
 import 'core/emulator/game_launch_service.dart';
+import 'core/emulator/strategies/windows_strategy.dart';
 import 'core/emulator/strategy_registry.dart';
 import 'core/extraction/extraction_service.dart';
 import 'core/platform/platform_info.dart';
+import 'core/romm/active_filters.dart';
+import 'core/romm/discover.dart';
 import 'core/romm/romm_models.dart';
 import 'core/romm/romm_service.dart';
+import 'core/romm/saved_filters.dart';
 import 'core/save/backup_entry.dart';
 import 'core/save/backup_repository.dart';
 import 'core/save/backup_service.dart';
@@ -21,7 +27,13 @@ import 'core/save/save_sync_service.dart';
 import 'core/save/state_sync_service.dart';
 import 'core/storage/app_preferences.dart';
 import 'core/storage/directory_service.dart';
+import 'core/stats/play_time_store.dart';
+import 'core/storage/disk_space.dart';
+import 'core/windows/wine_launcher.dart';
+import 'package:path/path.dart' as p;
 import 'core/storage/shared_preferences_app_preferences.dart';
+
+part 'cli_tools.dart';
 
 /// Headless entry point for Freegosy — browse/search the RomM library and
 /// launch a game (with save sync verification) without the UI, so a person
@@ -39,6 +51,8 @@ import 'core/storage/shared_preferences_app_preferences.dart';
 /// (the --headless flag is consumed by this file's caller; see main.dart)
 Future<void> runHeadless(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Log lines go to stderr so stdout carries only a command's result (and --json stays parseable).
+  debugPrint = (String? message, {int? wrapWidth}) => stderr.writeln(message ?? '');
 
   if (args.isNotEmpty && (args.first == '--help' || args.first == '-h')) {
     _printUsage();
@@ -63,6 +77,33 @@ Future<void> runHeadless(List<String> args) async {
     case 'download':
       await _runDownload(rest);
       break;
+    case 'random':
+      await _runRandom(rest);
+      break;
+    case 'filters':
+      await _runFilters(rest);
+      break;
+    case 'values':
+      await _runValues(rest);
+      break;
+    case 'platforms':
+      await _runPlatforms(rest);
+      break;
+    case 'emulators':
+      await _runEmulators(rest);
+      break;
+    case 'doctor':
+      await _runDoctor(rest);
+      break;
+    case 'info':
+      await _runInfo(rest);
+      break;
+    case 'playtime':
+      await _runPlaytime(rest);
+      break;
+    case 'saves':
+      await _runSaves(rest);
+      break;
     case 'interactive':
       await _runInteractive();
       break;
@@ -79,6 +120,12 @@ Freegosy headless mode — browse, search, and launch games without the UI.
 
 Usage:
   freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
+  freegosy.exe --headless random [filters] [--json]
+  freegosy.exe --headless values [genres|franchises|player_counts|regions|languages|...] [--json]
+  freegosy.exe --headless platforms | emulators | doctor | playtime [--limit=N] [--json]
+  freegosy.exe --headless info (--game-id=ID | --name=TERM) [--json]
+  freegosy.exe --headless saves [check | push | pull | backups] (--game-id=ID | --name=TERM) [--emulator=ID] [--json]
+  freegosy.exe --headless filters [list | save NAME [filters] | delete NAME] [--json]
   freegosy.exe --headless download (--game-id=ID | --name=TERM) [--json]
   freegosy.exe --headless launch (--game-id=ID | --name=TERM) [options]
   freegosy.exe --headless interactive
@@ -89,6 +136,36 @@ list options:
   --platform=SLUG_OR_ID    Filter by platform
   --limit=N                Max results (default 25)
   --json                   Emit a JSON array to stdout
+  --genre=A,B  --region=A,B  --language=A,B  --franchise=A,B  --players=1,2
+                           Filter (comma separated; a game matches any value of a filter)
+  --sort=name|added|release|rating|played   Order of the results (default name)
+  --desc | --asc           Sort direction (default: newest/best first for all but name)
+  --preset=NAME            A ready-made list instead of the filters: recent, continue,
+                           top-unplayed, top-rated, most-played (from this computer's play time)
+
+  --saved=NAME             Start from a saved filter set (made in the app's filter sheet or with `filters save`);
+                           other flags on the command line override it
+
+inspection commands (all take --json):
+  platforms    RomM platforms with id, slug, game count and the emulator that would launch them
+               (--platform= elsewhere accepts an id, a slug like "snes", or a platform name)
+  emulators    Every emulator Freegosy knows: installed or missing, where, which platforms, save/state sync
+  doctor       One-shot health check: RomM connection and version, ROM folder and free space, emulators found,
+               and on Linux umu-run / wine / flatpak / installed Proton. Exit 1 when something failed
+  info         Everything about one game: metadata, your rating and status, whether it is downloaded, which
+               emulator would run it, and play time recorded on this computer
+  playtime     Games ranked by play time measured on this computer
+  saves        check (default): local saves vs RomM and what looks wrong (exit 1 on a problem); push / pull:
+               sync now (--force on push); backups: list local backup zips
+
+filters command:
+  filters / filters list     Show the saved filter sets
+  filters save NAME [flags]  Save the given --genre/--region/--language/--franchise/--players/--sort/--desc flags as NAME
+  filters delete NAME        Remove one
+
+random options:
+  Picks one random game that matches the same --platform/--search/--genre/--region/
+  --language/--franchise/--players filters as list.
 
 download options:
   --game-id=ID            RomM game ID to download
@@ -104,6 +181,12 @@ launch options:
   --timeout=SECONDS        Auto-terminate the emulator after N seconds instead of waiting for exit
                              (no effect for emulators that block until exit internally, e.g. MelonDS —
                              the timeout only applies once a process handle is available)
+  --runner=auto|umu|wine   Linux, Windows games: run through umu-run (Proton) or wine (default auto: umu-run first)
+  --proton=auto|installed|PATH|GE-Proton|UMU-Proton
+                           Linux, umu-run: which Proton to use. auto = one already installed (Steam's or GE-Proton),
+                           else GE-Proton downloaded by umu; installed = never download; a folder path; or a name
+                           umu downloads
+  --dry-run                Print what would run (command, environment, ROM path) and exit without launching
   --json                   Emit machine-readable JSON to stdout (default: human-readable)
 
 Credentials: reused from the account already configured in the Freegosy app
@@ -286,6 +369,7 @@ Future<void> _runLaunch(List<String> args) async {
   final timeoutSeconds = flags['timeout'] != null ? int.tryParse(flags['timeout']!) : null;
   final emulatorOverride = flags['emulator'];
   final coreOverride = flags['core'];
+  final dryRun = flags['dry-run'] == 'true';
 
   if (gameId == null && name == null) {
     stderr.writeln('Error: --game-id or --name is required\n');
@@ -310,6 +394,34 @@ Future<void> _runLaunch(List<String> args) async {
     }
     await session.close();
     exit(2);
+  }
+
+  final strategy = emulatorOverride != null
+      ? session.strategyRegistry.getStrategyById(emulatorOverride)
+      : session.strategyRegistry.getStrategyForSlug(game.platformSlug ?? '', gameId: game.id);
+  if (strategy is WindowsStrategy) {
+    strategy.runnerOverride = _nonEmpty(flags['runner']);
+    strategy.protonOverride = _nonEmpty(flags['proton']);
+  }
+
+  if (dryRun) {
+    final existing = await session.directoryService.findExistingRomPath(game);
+    final romPath = existing == null ? null : await session.launchService.resolveRomFileInDirectory(existing, game.platformSlug);
+    if (romPath == null) {
+      _emitResult(_LaunchReport.configError('ROM not found on disk for "${game.name}". Download it first.'), asJson);
+      await session.close();
+      exit(2);
+    }
+    final text = strategy == null
+        ? 'No emulator configured for platform "${game.platformSlug}".'
+        : await strategy.describeLaunch(game, romPath) ?? '${strategy.name} would be started with the game at $romPath.';
+    if (asJson) {
+      stdout.writeln(jsonEncode({'game': game.name, 'emulatorId': strategy?.emulatorId, 'romPath': romPath, 'plan': text}));
+    } else {
+      stdout.writeln('Game: ${game.name}\nEmulator: ${strategy?.name ?? 'none'}\nROM: $romPath\n$text');
+    }
+    await session.close();
+    exit(strategy == null ? 2 : 0);
   }
 
   await _launchGame(session, game, timeoutSeconds: timeoutSeconds, asJson: asJson, emulatorOverride: emulatorOverride, coreOverride: coreOverride);
@@ -409,7 +521,7 @@ Future<_LaunchReport> _launchGame(
         // sigterm (kill()'s default) can be caught/ignored by GUI emulators
         // (Qt/GLFW apps often intercept it for a "save before quit?"
         // prompt); sigkill forces immediate termination.
-        launched.process!.kill(ProcessSignal.sigkill);
+        _killProcessTree(launched.process!);
       });
     }
 
@@ -463,16 +575,242 @@ Future<void> _runList(List<String> args) async {
   if (session == null) exit(2);
 
   try {
-    final page = await session.rommService.getGamesPage(
-      search: flags['search'],
-      platformId: flags['platform'],
-      limit: limit,
-    );
+    final preset = DiscoverPreset.parse(flags['preset']);
+    if (flags.containsKey('preset') && preset == null) {
+      stderr.writeln('Error: unknown --preset "${flags['preset']}" (use ${DiscoverPreset.cliNames})');
+      await session.close();
+      exit(2);
+    }
+    final sort = GameSort.parse(flags['sort']);
+    if (flags.containsKey('sort') && sort == null) {
+      stderr.writeln('Error: unknown --sort "${flags['sort']}" (use name, added, release, rating, played)');
+      await session.close();
+      exit(2);
+    }
+    final ({List<Game> games, int total}) page;
+    if (preset != null) {
+      final games = await _presetGames(session, preset, limit);
+      page = (games: games, total: games.length);
+    } else {
+      final filters = _filtersFromFlags(flags, session.prefs);
+      if (filters == null) {
+        await session.close();
+        exit(2);
+      }
+      final platformId = await _platformIdFromFlag(session.rommService, flags['platform']);
+      page = await session.rommService.getGamesPage(
+        search: flags['search'],
+        platformId: platformId,
+        genres: filters.genres,
+        regions: filters.regions,
+        languages: filters.languages,
+        franchises: filters.franchises,
+        playerCounts: filters.playerCounts,
+        collections: filters.collections,
+        statuses: filters.statuses,
+        orderBy: filters.sort.apiField,
+        orderDir: filters.sortDescending ? 'desc' : 'asc',
+        limit: limit,
+      );
+    }
     _printGameList(page.games, page.total, asJson);
     await session.close();
     exit(0);
   } catch (e) {
     stderr.writeln('Error: failed to list games: $e');
+    await session.close();
+    exit(1);
+  }
+}
+
+/// Prints the values RomM offers for each filter, so `--genre=`/`--franchise=` can use the exact spelling.
+Future<void> _runValues(List<String> args) async {
+  final flags = _parseFlags(args);
+  final asJson = flags['json'] == 'true';
+  final wanted = args.where((a) => !a.startsWith('--')).map((a) => a.toLowerCase()).toSet();
+  final session = await _HeadlessSession.start(asJson: asJson);
+  if (session == null) exit(2);
+  try {
+    final all = await session.rommService.getFilterValues();
+    final shown = {for (final e in all.entries) if (wanted.isEmpty || wanted.contains(e.key.toLowerCase())) e.key: e.value};
+    if (asJson) {
+      stdout.writeln(jsonEncode(shown));
+    } else {
+      for (final e in shown.entries) {
+        stdout.writeln('${e.key} (${e.value.length}):');
+        for (final v in e.value) {
+          stdout.writeln('  $v');
+        }
+      }
+    }
+    await session.close();
+    exit(shown.isEmpty ? 2 : 0);
+  } catch (e) {
+    stderr.writeln('Error: failed to read filter values: $e');
+    await session.close();
+    exit(1);
+  }
+}
+
+/// Stops [process] and everything it started. A Proton game runs several layers deep (umu-run, pressure-vessel,
+/// proton, the game) and the inner ones leave the process's group, so the tree is collected from the process
+/// table first and then every member is killed; killing only [process] would leave the game running.
+void _killProcessTree(Process process) {
+  final pids = <int>{process.pid};
+  if (!PlatformInfo.current.isWindows) {
+    try {
+      final table = Process.runSync('ps', ['-eo', 'pid=,ppid=']).stdout.toString();
+      final children = <int, List<int>>{};
+      for (final line in table.split('\n')) {
+        final parts = line.trim().split(RegExp(r'\s+'));
+        if (parts.length != 2) continue;
+        final pid = int.tryParse(parts[0]), parent = int.tryParse(parts[1]);
+        if (pid != null && parent != null) children.putIfAbsent(parent, () => []).add(pid);
+      }
+      final queue = [process.pid];
+      while (queue.isNotEmpty) {
+        for (final child in children[queue.removeLast()] ?? const <int>[]) {
+          if (pids.add(child)) queue.add(child);
+        }
+      }
+    } catch (_) {}
+  }
+  for (final pid in pids) {
+    Process.killPid(pid, ProcessSignal.sigkill);
+  }
+}
+
+Future<AppPreferences> _openPrefs() async => SharedPreferencesAppPreferences(await SharedPreferences.getInstance());
+
+/// The filters a command asked for: `--saved=NAME` first, then each explicit
+/// flag on top of it. Null (after printing why) when the saved set is unknown.
+ActiveFilters? _filtersFromFlags(Map<String, String> flags, AppPreferences prefs) {
+  var base = const ActiveFilters();
+  final saved = flags['saved'];
+  if (saved != null) {
+    final found = SavedFilterStore(prefs).find(saved);
+    if (found == null) {
+      stderr.writeln('Error: no saved filter set called "$saved" (see `filters list`)');
+      return null;
+    }
+    base = found;
+  }
+  final sort = GameSort.parse(flags['sort']);
+  return base.copyWith(
+    genres: flags.containsKey('genre') ? _csv(flags['genre']) : null,
+    regions: flags.containsKey('region') ? _csv(flags['region']) : null,
+    languages: flags.containsKey('language') ? _csv(flags['language']) : null,
+    franchises: flags.containsKey('franchise') ? _csv(flags['franchise']) : null,
+    playerCounts: flags.containsKey('players') ? _csv(flags['players']) : null,
+    sort: sort,
+    sortDescending: flags['desc'] == 'true'
+        ? true
+        : flags['asc'] == 'true'
+            ? false
+            : sort?.newestFirst,
+  );
+}
+
+Future<void> _runFilters(List<String> args) async {
+  final positional = args.where((a) => !a.startsWith('--')).toList();
+  final flags = _parseFlags(args);
+  final asJson = flags['json'] == 'true';
+  final action = positional.isEmpty ? 'list' : positional.first;
+  final name = positional.length > 1 ? positional.sublist(1).join(' ') : null;
+  final prefs = await _openPrefs();
+  final store = SavedFilterStore(prefs);
+  switch (action) {
+    case 'list':
+      final all = store.all();
+      if (asJson) {
+        stdout.writeln(jsonEncode({for (final e in all.entries) e.key: e.value.toJson()}));
+      } else if (all.isEmpty) {
+        stdout.writeln('No saved filter sets.');
+      } else {
+        for (final e in all.entries) {
+          stdout.writeln('${e.key}\t${jsonEncode(e.value.toJson())}');
+        }
+      }
+      exit(0);
+    case 'save':
+      if (name == null) {
+        stderr.writeln('Error: filters save needs a NAME');
+        exit(2);
+      }
+      final filters = _filtersFromFlags(flags, prefs);
+      if (filters == null || !await store.save(name, filters)) exit(2);
+      stdout.writeln(asJson ? jsonEncode({'saved': name, 'filters': filters.toJson()}) : 'Saved "$name".');
+      exit(0);
+    case 'delete':
+      if (name == null) {
+        stderr.writeln('Error: filters delete needs a NAME');
+        exit(2);
+      }
+      await store.delete(name);
+      stdout.writeln(asJson ? jsonEncode({'deleted': name}) : 'Deleted "$name".');
+      exit(0);
+    default:
+      stderr.writeln('Unknown filters action: $action (use list, save, delete)');
+      exit(64);
+  }
+}
+
+List<String> _csv(String? value) =>
+    value == null ? const [] : value.split(',').map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
+
+Future<List<Game>> _presetGames(_HeadlessSession session, DiscoverPreset preset, int limit) {
+  final romm = session.rommService;
+  switch (preset) {
+    case DiscoverPreset.recentlyAdded:
+      return romm.getRecentlyAdded(limit: limit);
+    case DiscoverPreset.recentlyPlayed:
+      return romm.getRecentlyPlayed(limit: limit);
+    case DiscoverPreset.topUnplayed:
+      return romm.getTopUnplayed(limit: limit);
+    case DiscoverPreset.topRated:
+      return romm.getTopRated(limit: limit);
+    case DiscoverPreset.mostPlayed:
+      return romm.getGamesByIds(mostPlayedGameIds(PlayTimeStore(session.prefs), limit: limit));
+  }
+}
+
+Future<void> _runRandom(List<String> args) async {
+  final flags = _parseFlags(args);
+  final asJson = flags['json'] == 'true';
+  final session = await _HeadlessSession.start(asJson: asJson);
+  if (session == null) exit(2);
+  try {
+    final filters = _filtersFromFlags(flags, session.prefs);
+    if (filters == null) {
+      await session.close();
+      exit(2);
+    }
+    final platformId = await _platformIdFromFlag(session.rommService, flags['platform']);
+    Future<({List<Game> games, int total})> page(int offset, int limit) => session.rommService.getGamesPage(
+          search: flags['search'],
+          platformId: platformId,
+          genres: filters.genres,
+          regions: filters.regions,
+          languages: filters.languages,
+          franchises: filters.franchises,
+          playerCounts: filters.playerCounts,
+          collections: filters.collections,
+          statuses: filters.statuses,
+          offset: offset,
+          limit: limit,
+        );
+    final first = await page(0, 1);
+    if (first.total == 0) {
+      stderr.writeln('No games match those filters.');
+      await session.close();
+      exit(2);
+    }
+    final pick = (await page(Random().nextInt(first.total), 1)).games;
+    _printGameList(pick, first.total, asJson);
+    await session.close();
+    exit(0);
+  } catch (e) {
+    stderr.writeln('Error: failed to pick a random game: $e');
     await session.close();
     exit(1);
   }
@@ -602,7 +940,17 @@ void _printGameList(List<Game> games, int total, bool asJson) {
     stdout.writeln(jsonEncode({
       'total': total,
       'games': games
-          .map((g) => {'id': g.id, 'name': g.name, 'platform': g.platformDisplayName ?? g.platformSlug})
+          .map((g) => {
+                'id': g.id,
+                'name': g.name,
+                'platform': g.platformDisplayName ?? g.platformSlug,
+                'genres': g.genres,
+                'franchises': g.franchises,
+                'players': g.playerCount,
+                'sizeBytes': g.fileSize,
+                'rating': g.averageRating,
+                'lastPlayed': g.lastPlayed?.toIso8601String(),
+              })
           .toList(),
     }));
     return;

@@ -10,7 +10,7 @@ import '../widgets/gamepad_slider.dart';
 
 bool _isDesktop(PlatformInfo platform) => platform.isWindows || platform.isLinux || platform.isMacOS;
 
-Widget _buildCustomDropdown<T>({
+Widget buildCustomDropdown<T>({
   required BuildContext context,
   required String label,
   required T currentValue,
@@ -123,7 +123,7 @@ Widget _buildCustomDropdown<T>({
   );
 }
 
-Widget _buildCustomToggleRow(
+Widget buildCustomToggleRow(
   BuildContext context, {
   required String title,
   required String subtitle,
@@ -222,7 +222,7 @@ Widget buildDisplaySection(
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _buildCustomDropdown<String>(
+      buildCustomDropdown<String>(
         context: context,
         label: 'Preset Layout',
         currentValue: activePreset,
@@ -246,7 +246,7 @@ Widget buildDisplaySection(
         },
       ),
       const SizedBox(height: 12),
-      _buildCustomDropdown<double>(
+      buildCustomDropdown<double>(
         context: context,
         label: 'Card Shape',
         currentValue: selectedShape,
@@ -262,7 +262,7 @@ Widget buildDisplaySection(
         },
       ),
       const SizedBox(height: 12),
-      _buildCustomDropdown<double>(
+      buildCustomDropdown<double>(
         context: context,
         label: 'Card Spacing',
         currentValue: selectedSpacing,
@@ -327,7 +327,7 @@ Widget buildDisplaySection(
         ),
       ),
       const SizedBox(height: 8),
-      _buildCustomToggleRow(
+      buildCustomToggleRow(
         context,
         title: 'Show game title',
         subtitle: 'Display title text below cover art',
@@ -339,7 +339,7 @@ Widget buildDisplaySection(
       ),
       if (_isDesktop(ref.watch(platformInfoProvider))) ...[
         const SizedBox(height: 8),
-        _buildCustomToggleRow(
+        buildCustomToggleRow(
           context,
           title: 'Start in fullscreen',
           subtitle: 'Open Freegosy fullscreen. Press F11 to toggle at any time, or launch with --fullscreen',

@@ -53,6 +53,11 @@ abstract class EmulatorStrategy {
   /// different build. Must never throw.
   Future<String?> installedVersion() async => null;
 
+  /// A human-readable account of what launching [game] from [romPath] would run (the command line and the
+  /// environment that matters), without starting anything; null when this strategy can't say. Backs the
+  /// headless `launch --dry-run`.
+  Future<String?> describeLaunch(Game game, String romPath) async => null;
+
   /// The directory service used for finding and launching emulators.
   DirectoryService get directoryService;
 

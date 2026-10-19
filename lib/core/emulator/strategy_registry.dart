@@ -70,7 +70,7 @@ class StrategyRegistry {
       XemuStrategy(_directoryService),
       XeniaStrategy(_directoryService),
       ScummVMStrategy(_directoryService, platform: _platform),
-      WindowsStrategy(_directoryService, _prefs),
+      WindowsStrategy(_directoryService, _prefs, platform: _platform),
       ..._customEmulatorConfigs.map((config) => CustomEmulatorStrategy(config, _directoryService)),
     ];
 

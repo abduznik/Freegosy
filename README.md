@@ -6,6 +6,8 @@
 
 # Freegosy
 
+**Website: https://abduznik.github.io/Freegosy/**
+
 A cross-platform Flutter app for browsing your RomM library, downloading ROMs, and launching games directly in emulators—all from one intuitive interface.
 
 [**Watch the Feature Walkthrough on YouTube**](https://youtu.be/SYbO4I-p1hg)
@@ -31,7 +33,16 @@ Freegosy is a solo passion project — built and maintained in my spare time, wi
 
 No pressure at all — the app is and will always be free.
 
-## Current Features (v0.6.0)
+## Current Features (v0.6.1)
+
+- **New in 0.6.1**:
+    - **Library list layout** (one row per game with rating, status and last played) next to the cover grid, and a **cloud badge** on games whose saves have synced.
+    - **Play time** on the game page, free-space check before big downloads, and `.rar` games extracted automatically.
+    - **RetroAchievements** sign-in now also covers PCSX2, PPSSPP and Dolphin.
+    - **RetroArch save-state sync** and Resume Game, `.chd` serials read natively (no `chdman` needed), and RetroArch's PS2 core (LRPS2) saves.
+    - **Nightly update channel**, a *Skip this version* button, and a Linux/NVIDIA/Wayland fix for Dolphin.
+    - Status and rating now save correctly on RomM 4.9+, and a startup crash on Linux (inotify limit) is fixed.
+    - See the [changelog](CHANGELOG.md) for everything.
 
 - **Native Multi-Platform Support**: Full support for **macOS** (ARM64/Intel), **Windows**, and **Linux** (including **Steam Deck/EmuDeck** and **RetroDECK** integration).
 - **Enhanced Offline Mode**: Persistent metadata caching for browsing and launching your collection without a connection.
@@ -89,6 +100,10 @@ Freegosy can run without opening a window — useful for scripting a launch/sync
 
 ```
 freegosy.exe --headless list [--search=TERM] [--platform=SLUG_OR_ID] [--limit=N] [--json]
+         [--genre=A,B] [--region=A,B] [--language=A,B] [--franchise=A,B] [--players=1,2]
+         [--sort=name|added|release|rating|played] [--desc|--asc] [--preset=recent|continue|top-unplayed|top-rated|most-played]
+freegosy.exe --headless random [same filters as list] [--json]
+freegosy.exe --headless filters [list | save NAME [filters] | delete NAME]
 freegosy.exe --headless download (--game-id=ID | --name=TERM) [--all-files] [--json]
 freegosy.exe --headless launch (--game-id=ID | --name=TERM) [--emulator=ID] [--core=ID] [--timeout=SECONDS] [--json]
 freegosy.exe --headless interactive
@@ -98,6 +113,21 @@ freegosy.exe --headless                 (same as interactive)
 - `list`/`download`/`launch` accept `--game-id` (RomM game ID) or `--name` (best match by title; ambiguous matches are listed instead of guessing).
 - `launch` waits for the emulator to exit, then runs the same save-push/backup pipeline as launching from the UI, and reports the result (pass/fail, sync status, backup path) as JSON with `--json` or human-readable text otherwise.
 - `--timeout` force-terminates the emulator after N seconds instead of waiting for you to close it — handy for automated checks. Some emulators (e.g. MelonDS) manage the process internally until it exits, so the timeout only takes effect once a process handle becomes available.
+- **Inspection commands** (all take `--json`; log output goes to stderr so stdout is only the result):
+
+```
+freegosy --headless doctor                      health check: RomM, folders, free space, emulators, umu-run/wine/Proton
+freegosy --headless platforms                   platforms with id, slug, game count and the emulator that runs them
+freegosy --headless emulators                   every emulator: installed or missing, path, platforms, save/state sync
+freegosy --headless info --name="Game"          metadata, your rating/status, on-disk path, emulator, play time
+freegosy --headless playtime [--limit=N]        games ranked by play time measured on this computer
+freegosy --headless saves [check|push|pull|backups] --game-id=ID   save sync, from the CLI
+freegosy --headless values genres               the exact genre/franchise/player-count spellings the server knows
+freegosy --headless filters list|save|delete    saved filter sets
+freegosy --headless launch --game-id=ID --dry-run [--runner=umu|wine] [--proton=installed|PATH|GE-Proton]
+```
+
+`--platform=` accepts an id, a slug (`snes`) or a platform name.
 - Credentials are reused from the account already configured in the app (server URL, username, password/API key/token) — log in once via the normal UI first.
 - Exit codes: `0` success, `1` launch/sync failed, `2` invalid arguments or game/config not found.
 
@@ -118,9 +148,9 @@ freegosy.exe --headless                 (same as interactive)
 | **Azahar** | 🟢 Full | 3DS — confirmed working by [@Ramza2k](https://github.com/Ramza2k). |
 | **RPCS3** | 🟡 Partial | PS3 — confirmed working on Windows, needs macOS/Linux testing. |
 | **Xenia** | 🟡 Partial | Xbox 360 — confirmed working on Windows, needs macOS/Linux testing. |
-| **ScummVM** | 🟡 Partial | Games on the `scummvm` platform auto-detect and launch from their folder. Save sync not yet supported. |
+| **ScummVM** | 🟡 Partial | Games on the `scummvm` platform auto-detect and launch from their folder. Saves sync per game: Freegosy starts ScummVM with `--savepath` pointing at a folder of its own for each game, so saves from before this change (in ScummVM's shared folder) aren't picked up. Needs real-world testing. |
 | **Ares** | 🟡 Partial | Multi-system (GBA, SNES, N64, Genesis, PS1, MSX, etc.). PlayStation confirmed working on Windows — Ares bundles the memory card together with save-state files in a per-game `.zip`, now correctly unpacked/repacked on push and pull. Other systems still need real-world testing. |
-| **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. |
+| **Windows Native** | 🟡 Partial | PC games — confirmed working on Windows. On Linux they start through `umu-run` (Proton) or `wine`, one prefix per game; the Linux path is new and needs testing. |
 
 **Per-OS Notes:**
 - **macOS** (ARM64/Intel): RetroArch, DuckStation, Ryujinx, Eden, mGBA all verified. App bundle path resolution handles `.app` package structure. Ares save path: `~/Library/Application Support/ares/`.
@@ -144,6 +174,16 @@ I am currently searching for testers on **macOS**, **Windows**, and **Linux (Ste
 Freegosy is built to complement [RomM](https://github.com/rommapp/romm), a modern ROM manager. It connects to your RomM instance to provide a lightweight, portable way to access and play your games.
 
 ## Installation
+
+### Arch Linux
+
+A `PKGBUILD` that repackages the release AppImage lives in [`packaging/arch`](packaging/arch). The release workflow keeps its version and checksum current.
+
+```bash
+git clone https://github.com/abduznik/Freegosy.git
+cd Freegosy/packaging/arch
+makepkg -si
+```
 
 ### Nix / NixOS
 

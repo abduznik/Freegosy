@@ -1,0 +1,32 @@
+name: Nightly
+
+# Builds the latest commit on main as a rolling pre-release (v<version>-nightly)
+# by dispatching the normal release workflow. Skips nights with no new commit.
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  nightly:
+    name: Dispatch nightly build
+    if: github.repository == 'abduznik/Freegosy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Check whether a nightly is due
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash tool/nightly_plan.sh "$(git rev-parse HEAD)" | tee -a "$GITHUB_OUTPUT"
+      - name: Start the release workflow
+        if: steps.plan.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --ref main -f version="${{ steps.plan.outputs.tag }}" -f prerelease=true

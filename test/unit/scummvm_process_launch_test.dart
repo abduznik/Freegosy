@@ -38,11 +38,21 @@ void main() {
     argsFile = File(p.join(tmp.path, 'args.txt'));
     cwdFile = File(p.join(tmp.path, 'cwd.txt'));
     dirService = MockDirectoryService();
+    when(dirService.getEmulatorAppSupportDirectory(any, platformSlug: anyNamed('platformSlug')))
+        .thenAnswer((_) async => p.join(tmp.path, 'support'));
   });
 
   tearDown(() => tmp.delete(recursive: true));
 
   List<String> recordedArgs() => argsFile.readAsLinesSync();
+
+  /// ScummVM also gets a --savepath of its own for the game, so its saves can sync.
+  void expectLaunchArgs() {
+    final args = recordedArgs();
+    expect(args.take(2), ['--auto-detect', '--path=${gameDir.path}']);
+    expect(args, hasLength(3));
+    expect(args[2], startsWith('--savepath='));
+  }
 
   test('passes --auto-detect and --path=<game folder>, with no trailing ROM argument', () async {
     final exe = await writeFakeScummVM('scummvm');
@@ -52,7 +62,7 @@ void main() {
     final process = await strategy.launchWithHandle(game, gameDir.path);
 
     expect(await process!.exitCode, 0);
-    expect(recordedArgs(), ['--auto-detect', '--path=${gameDir.path}']);
+    expectLaunchArgs();
   }, skip: !canRunShellScripts);
 
   test('a file picked inside the game folder still launches the folder', () async {
@@ -62,7 +72,7 @@ void main() {
 
     await strategy.launchWithHandle(game, p.join(gameDir.path, 'packet.001'));
 
-    expect(recordedArgs(), ['--auto-detect', '--path=${gameDir.path}']);
+    expectLaunchArgs();
   }, skip: !canRunShellScripts);
 
   test('runs from the emulator folder, even when its path has spaces', () async {
@@ -84,7 +94,7 @@ void main() {
     final process = await strategy.launchWithHandle(game, gameDir.path);
 
     expect(await process!.exitCode, 0);
-    expect(recordedArgs(), ['--auto-detect', '--path=${gameDir.path}']);
+    expectLaunchArgs();
   }, skip: !PlatformInfo.current.isLinux);
 
   test('the detached launch passes the same arguments', () async {
@@ -97,7 +107,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
 
-    expect(recordedArgs(), ['--auto-detect', '--path=${gameDir.path}']);
+    expectLaunchArgs();
   }, skip: !canRunShellScripts);
 
   test('throws a clear error when ScummVM is not installed', () async {

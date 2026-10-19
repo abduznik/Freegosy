@@ -481,6 +481,28 @@ class RommService implements RommStatesApi {
     } catch (_) { return []; }
   }
 
+  /// Games never launched, best rated first (RomM's `last_played` filter off).
+  Future<List<Game>> getTopUnplayed({int limit = 15}) async {
+    try {
+      final page = await getGamesPage(limit: limit, orderBy: 'average_rating', orderDir: 'desc', lastPlayed: false);
+      return page.games.where((g) => g.lastPlayed == null).toList();
+    } catch (_) { return []; }
+  }
+
+  Future<List<Game>> getTopRated({int limit = 15}) async {
+    try {
+      return (await getGamesPage(limit: limit, orderBy: 'average_rating', orderDir: 'desc')).games;
+    } catch (_) { return []; }
+  }
+
+  /// The games [ids] name, in that order; ids the server doesn't know are skipped.
+  Future<List<Game>> getGamesByIds(List<String> ids) async {
+    final games = await Future.wait(ids.map((id) async {
+      try { return await getGame(id); } catch (_) { return null; }
+    }));
+    return games.whereType<Game>().toList();
+  }
+
   Future<List<Game>> getRecentlyPlayed({int limit = 15}) async {
     try {
       final response = await _dio.get('/api/roms', queryParameters: {'limit': limit, 'order_by': 'last_played', 'order_dir': 'desc', 'last_played': true, 'with_char_index': false, 'with_filter_values': false}, options: _authOptions);
@@ -518,25 +540,56 @@ class RommService implements RommStatesApi {
     }
   }
 
-  Future<({List<Game> games, int total})> getGamesPage({int offset = 0, int limit = 50, String? platformId, String? search, List<String> genres = const [], List<String> regions = const [], List<String> languages = const [], List<String> collections = const [], List<String> statuses = const [], bool? lastPlayed, bool withCharIndex = false, bool withFilterValues = false}) async {
-    final params = <String, dynamic>{'limit': limit, 'offset': offset, 'order_by': 'name', 'order_dir': 'asc', 'with_char_index': withCharIndex, 'with_filter_values': withFilterValues};
+  Future<({List<Game> games, int total})> getGamesPage({int offset = 0, int limit = 50, String? platformId, String? search, List<String> genres = const [], List<String> regions = const [], List<String> languages = const [], List<String> collections = const [], List<String> statuses = const [], List<String> franchises = const [], List<String> playerCounts = const [], String orderBy = 'name', String orderDir = 'asc', bool? lastPlayed, bool withCharIndex = false, bool withFilterValues = false}) async {
+    final params = <String, dynamic>{'limit': limit, 'offset': offset, 'order_by': orderBy, 'order_dir': orderDir, 'with_char_index': withCharIndex, 'with_filter_values': withFilterValues};
     if (lastPlayed != null) params['last_played'] = lastPlayed;
     if (platformId != null) params['platform_ids'] = [int.parse(platformId)];
     if (search != null && search.isNotEmpty) params['search_term'] = search;
     if (genres.isNotEmpty) params['genres'] = genres;
     if (regions.isNotEmpty) params['regions'] = regions;
     if (languages.isNotEmpty) params['languages'] = languages;
+    if (franchises.isNotEmpty) params['franchises'] = franchises;
+    if (playerCounts.isNotEmpty) params['player_counts'] = playerCounts;
     if (collections.isNotEmpty) params['collection_id'] = int.tryParse(collections.first);
     if (statuses.isNotEmpty) { params['statuses'] = statuses; params['statuses_logic'] = 'any'; }
 
-    final response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+    // Some RomM servers answer 500 when a metadata filter (genre, franchise...) is combined with a sort
+    // on a metadata column (rating, release date). Fall back to name order and sort what came back.
+    final sortedOnMetadata = orderBy == 'average_rating' || orderBy == 'first_release_date';
+    var sortLocally = false;
+    Response<dynamic> response;
+    try {
+      response = await _dio.get('/api/roms', queryParameters: params, options: _authOptions);
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 500 || !sortedOnMetadata) rethrow;
+      response = await _dio.get('/api/roms', queryParameters: {...params, 'order_by': 'name', 'order_dir': 'asc'}, options: _authOptions);
+      sortLocally = true;
+    }
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = response.data is Map ? response.data : {'items': response.data};
       final List<dynamic> items = data['items'] ?? [];
       final int totalCount = (data['total'] as num?)?.toInt() ?? items.length;
-      return (games: items.map((e) => Game.fromJson(e)).toList(), total: totalCount);
+      final games = items.map((e) => Game.fromJson(e)).toList();
+      if (sortLocally) {
+        num key(Game g) => (orderBy == 'average_rating' ? g.averageRating : g.firstReleaseDate) ?? -1;
+        games.sort((a, b) => orderDir == 'desc' ? key(b).compareTo(key(a)) : key(a).compareTo(key(b)));
+      }
+      return (games: games, total: totalCount);
     }
     throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
+  }
+
+  /// Every value RomM knows for each filter ("genres", "franchises", "player_counts", "regions",
+  /// "languages", "collections"...), so callers can offer real choices instead of guessing spellings.
+  Future<Map<String, List<String>>> getFilterValues() async {
+    final response = await _dio.get('/api/roms', queryParameters: {'limit': 1, 'with_filter_values': true, 'with_char_index': false}, options: _authOptions);
+    final data = response.data;
+    final raw = data is Map ? data['filter_values'] : null;
+    if (raw is! Map) return {};
+    return {
+      for (final e in raw.entries)
+        if (e.value is List) e.key.toString(): (e.value as List).map((v) => v.toString()).toList()..sort(),
+    };
   }
 
   Future<List<Game>> _fetchPaginatedGames(Map<String, dynamic> params) async {
@@ -1035,6 +1088,13 @@ class RommService implements RommStatesApi {
     } catch (_) { return null; }
   }
 
+  /// Saves the user's own properties for a game (status, rating, ...).
+  ///
+  /// RomM 4.9 changed this endpoint: the fields are now the request body
+  /// itself and `update_last_played`/`remove_last_played` are query
+  /// parameters, where 4.8 and earlier read `{"data": {...}}`. A server given
+  /// the other shape answers 200 and saves nothing, so the reply is checked
+  /// against what was sent, and the other shape is tried when it doesn't match.
   Future<bool> updateRomProps(String romId, AppPreferences prefs, {bool? backlogged, bool? nowPlaying, int? rating, String? status, int? completion}) async {
     try {
       await _ensureBearerToken(prefs);
@@ -1044,9 +1104,39 @@ class RommService implements RommStatesApi {
       if (rating != null) data['rating'] = rating;
       if (status != null) data['status'] = status.toLowerCase();
       if (completion != null) data['completion'] = completion;
-      final response = await _dio.put('/api/roms/$romId/props', data: {'data': data, 'update_last_played': false, 'remove_last_played': false}, options: Options(headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json', validateStatus: (status) => status != null && status < 500));
-      return response.statusCode == 200 || response.statusCode == 204;
+
+      Future<Response<dynamic>> put(bool flat) => _dio.put(
+            '/api/roms/$romId/props',
+            queryParameters: flat ? {'update_last_played': false, 'remove_last_played': false} : null,
+            data: flat ? data : {'data': data, 'update_last_played': false, 'remove_last_played': false},
+            options: Options(
+              headers: Map<String, dynamic>.from(_authOptions.headers ?? {})..['Content-Type'] = 'application/json',
+              validateStatus: (code) => code != null && code < 500,
+            ),
+          );
+
+      final flatFirst = (await fetchCapabilities()).hasDeviceSaveSync;
+      var response = await put(flatFirst);
+      if (!propsApplied(response, data)) {
+        debugPrint('[RomM] props not applied (HTTP ${response.statusCode}); retrying with the ${flatFirst ? "4.8" : "4.9"} request shape');
+        response = await put(!flatFirst);
+      }
+      return propsApplied(response, data);
     } catch (_) { return false; }
+  }
+
+  /// True when [response] is a success whose body, if it echoes the user's
+  /// properties, matches what was [sent].
+  @visibleForTesting
+  static bool propsApplied(Response<dynamic> response, Map<String, dynamic> sent) {
+    final code = response.statusCode;
+    if (code != 200 && code != 204) return false;
+    final body = response.data;
+    if (body is! Map) return true;
+    for (final e in sent.entries) {
+      if (body.containsKey(e.key) && body[e.key] != e.value) return false;
+    }
+    return true;
   }
 
   Future<List<RomNote>> getRomNotes(String romId) async {

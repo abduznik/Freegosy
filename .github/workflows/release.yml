@@ -45,8 +45,63 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev
           flutter pub get
+      - name: Resolve build version
+        shell: bash
+        # The rolling nightly (version input `nightly`) is built with the plain
+        # pubspec version, not a version of its own, and marked with a build flag so
+        # the app knows it is a nightly (FREEGOSY_CHANNEL).
+        run: |
+          V="${{ github.event.inputs.version }}"
+          NIGHTLY=false
+          if [ "$V" = "nightly" ]; then
+            V="v$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//' | tr -d '[:cntrl:]')"
+            NIGHTLY=true
+          fi
+          echo "BUILD_NAME=$V" >> "$GITHUB_ENV"
+          echo "IS_NIGHTLY=$NIGHTLY" >> "$GITHUB_ENV"
       - name: Build Linux
-        run: flutter build linux --release --build-name=${{ github.event.inputs.version }} --build-number=${{ github.run_number }}
+        run: |
+          DEFINE=""
+          if [ "$IS_NIGHTLY" = "true" ]; then DEFINE="--dart-define=FREEGOSY_CHANNEL=nightly"; fi
+          flutter build linux --release --build-name="$BUILD_NAME" --build-number=${{ github.run_number }} $DEFINE
+      - name: Bundle native libraries
+        run: |
+          # Done before packaging so the tarball and the AppImage ship the
+          # same libs. Bundling these only for the AppImage left the tarball
+          # unable to start on hosts without them (#75).
+          mkdir -p build/linux/x64/release/bundle/lib
+          # libflutter_secure_storage_linux_plugin.so is a hard link-time
+          # dependency of the freegosy binary (unlike the plugins that
+          # dlopen themselves lazily), and it in turn needs libsecret-1.so.0.
+          # Unlike the GTK stack, libsecret isn't guaranteed on every Linux
+          # desktop (it's tied to GNOME Keyring/secret-service and commonly
+          # absent on minimal or non-GNOME systems), so the dynamic linker
+          # refused to even start the process there - no window, instant
+          # exit. Bundle it so AppRun's LD_LIBRARY_PATH picks it up instead
+          # of relying on the host to have it.
+          SECRET_LIB=$(ldconfig -p | grep -F 'libsecret-1.so.0' | awk '{print $NF}' | head -n 1)
+          if [ -n "$SECRET_LIB" ] ; then
+            cp -L "$SECRET_LIB" build/linux/x64/release/bundle/lib/libsecret-1.so.0
+          else
+            echo "::error::libsecret-1.so.0 not found on the build image; cannot bundle it"
+            exit 1
+          fi
+
+          # libzstandard_linux_plugin.so itself needs libzstandard_linux.so
+          # (the native zstd wrapper it dlopen-links against), but the
+          # zstandard_linux pub package's CMakeLists sets its
+          # *_bundled_libraries to empty, so Flutter's own bundling step
+          # never copies it into bundle/ even though CMake still builds it
+          # somewhere under build/linux/. Find and bundle it ourselves.
+          ZSTD_LIB=$(find build/linux -name 'libzstandard_linux.so' -print -quit)
+          if [ -n "$ZSTD_LIB" ] ; then
+            cp -L "$ZSTD_LIB" build/linux/x64/release/bundle/lib/libzstandard_linux.so
+          else
+            echo "::error::libzstandard_linux.so not found anywhere under build/linux; the zstandard_linux plugin will fail to load"
+            exit 1
+          fi
+      - name: Verify bundle has no unresolved libraries
+        run: bash tool/check_bundle_libs.sh build/linux/x64/release/bundle
       - name: Package Linux
         run: |
           cd build/linux/x64/release/bundle
@@ -63,37 +118,6 @@ jobs:
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           
           cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
-
-          # libflutter_secure_storage_linux_plugin.so is a hard link-time
-          # dependency of the freegosy binary (unlike the plugins that
-          # dlopen themselves lazily), and it in turn needs libsecret-1.so.0.
-          # Unlike the GTK stack, libsecret isn't guaranteed on every Linux
-          # desktop (it's tied to GNOME Keyring/secret-service and commonly
-          # absent on minimal or non-GNOME systems), so the dynamic linker
-          # refused to even start the process there - no window, instant
-          # exit. Bundle it so AppRun's LD_LIBRARY_PATH picks it up instead
-          # of relying on the host to have it.
-          SECRET_LIB=$(ldconfig -p | grep -F 'libsecret-1.so.0' | awk '{print $NF}' | head -n 1)
-          if [ -n "$SECRET_LIB" ] ; then
-            cp -L "$SECRET_LIB" AppDir/usr/bin/lib/libsecret-1.so.0
-          else
-            echo "::error::libsecret-1.so.0 not found on the build image; cannot bundle it"
-            exit 1
-          fi
-
-          # libzstandard_linux_plugin.so itself needs libzstandard_linux.so
-          # (the native zstd wrapper it dlopen-links against), but the
-          # zstandard_linux pub package's CMakeLists sets its
-          # *_bundled_libraries to empty, so Flutter's own bundling step
-          # never copies it into bundle/ even though CMake still builds it
-          # somewhere under build/linux/. Find and bundle it ourselves.
-          ZSTD_LIB=$(find build/linux -name 'libzstandard_linux.so' -print -quit)
-          if [ -n "$ZSTD_LIB" ] ; then
-            cp -L "$ZSTD_LIB" AppDir/usr/bin/lib/libzstandard_linux.so
-          else
-            echo "::error::libzstandard_linux.so not found anywhere under build/linux; the zstandard_linux plugin will fail to load"
-            exit 1
-          fi
 
           # Create Desktop Entry
           cat > AppDir/usr/share/applications/freegosy.desktop <<EOF
@@ -167,13 +191,26 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
+      - name: Resolve build version
+        shell: bash
+        # The rolling nightly (version input `nightly`) is built with the plain
+        # pubspec version, not a version of its own, and marked with a build flag so
+        # the app knows it is a nightly (FREEGOSY_CHANNEL).
+        run: |
+          V="${{ github.event.inputs.version }}"
+          NIGHTLY=false
+          if [ "$V" = "nightly" ]; then
+            V="v$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//' | tr -d '[:cntrl:]')"
+            NIGHTLY=true
+          fi
+          echo "BUILD_NAME=$V" >> "$GITHUB_ENV"
+          echo "IS_NIGHTLY=$NIGHTLY" >> "$GITHUB_ENV"
       - name: Check pubspec version matches release version
         shell: bash
         # inno_bundle takes the installer version from pubspec.yaml, not from the
         # workflow input (v0.6.0 shipped as 0.5.11).
         run: |
-          WANT="${{ github.event.inputs.version }}"
-          WANT="${WANT#v}"
+          WANT="${BUILD_NAME#v}"
           HAVE=$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//' | tr -d '[:cntrl:]')
           # pre-release suffixes (0.6.1-pre) are not part of pubspec's version
           if [ "${WANT%%-*}" != "$HAVE" ]; then
@@ -181,7 +218,13 @@ jobs:
             exit 1
           fi
       - name: Build Windows Installer
-        run: dart run inno_bundle:build --release
+        shell: bash
+        run: |
+          if [ "$IS_NIGHTLY" = "true" ]; then
+            dart run inno_bundle:build --release "--build-args=--dart-define=FREEGOSY_CHANNEL=nightly"
+          else
+            dart run inno_bundle:build --release
+          fi
       - name: Stage Windows Artifacts
         shell: pwsh
         run: |
@@ -228,15 +271,31 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
+      - name: Resolve build version
+        shell: bash
+        # The rolling nightly (version input `nightly`) is built with the plain
+        # pubspec version, not a version of its own, and marked with a build flag so
+        # the app knows it is a nightly (FREEGOSY_CHANNEL).
+        run: |
+          V="${{ github.event.inputs.version }}"
+          NIGHTLY=false
+          if [ "$V" = "nightly" ]; then
+            V="v$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//' | tr -d '[:cntrl:]')"
+            NIGHTLY=true
+          fi
+          echo "BUILD_NAME=$V" >> "$GITHUB_ENV"
+          echo "IS_NIGHTLY=$NIGHTLY" >> "$GITHUB_ENV"
       - name: Build macOS
         env:
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
           FLUTTER_XCODE_CODE_SIGN_REQUIRED: "NO"
           FLUTTER_XCODE_CODE_SIGN_IDENTITY: ""
         run: |
+          DEFINE=""
+          if [ "$IS_NIGHTLY" = "true" ]; then DEFINE="--dart-define=FREEGOSY_CHANNEL=nightly"; fi
           flutter build macos --release \
-            --build-name=${{ github.event.inputs.version }} \
-            --build-number=${{ github.run_number }}
+            --build-name="$BUILD_NAME" \
+            --build-number=${{ github.run_number }} $DEFINE
       - name: Ad-hoc sign macOS app
         run: |
           # Ad-hoc sign all frameworks and the app itself
@@ -262,7 +321,8 @@ jobs:
 
   update_nix_flake:
     name: Update Nix Flake
-    if: ${{ inputs.build_linux }}
+    # Nightlies are rebuilt every night; they must not open a flake PR each time.
+    if: ${{ inputs.build_linux && !contains(inputs.version, 'nightly') }}
     needs: [build_linux]
     runs-on: ubuntu-latest
     permissions:
@@ -307,9 +367,57 @@ jobs:
             --body "Automated flake.nix hash/version bump from the release workflow." \
             || gh pr view "$BRANCH" --json url -q .url
 
+  update_pkgbuild:
+    name: Update Arch PKGBUILD
+    if: ${{ inputs.build_linux }}
+    needs: [build_linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Download AppImage from Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release
+          path: dist/
+      - name: Compute hash and update PKGBUILD
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          VERSION="${VERSION#v}"
+          # pkgver can't contain '-', and pre-releases aren't packaged for Arch
+          VERSION="${VERSION%%-*}"
+          HASH=$(sha256sum dist/Freegosy-linux-x86_64.AppImage | awk '{print $1}')
+          sed -i "s|^pkgver=.*|pkgver=${VERSION}|; s|^pkgrel=.*|pkgrel=1|" packaging/arch/PKGBUILD
+          # first checksum is the AppImage, the second (LICENSE) stays put
+          sed -i "0,/^sha256sums=('[0-9a-f]*'/s||sha256sums=('${HASH}'|" packaging/arch/PKGBUILD
+          grep -n "pkgver=\|sha256sums" -A1 packaging/arch/PKGBUILD
+      - name: Open PR with updated PKGBUILD
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- packaging/arch/PKGBUILD; then
+            exit 0
+          fi
+          VERSION="${{ github.event.inputs.version }}"
+          BRANCH="chore/pkgbuild-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add packaging/arch/PKGBUILD
+          git commit -m "chore: update PKGBUILD for ${VERSION}"
+          git push --force origin "$BRANCH"
+          gh pr create --base "${{ github.ref_name }}" --head "$BRANCH" \
+            --title "chore: update PKGBUILD for ${VERSION}" \
+            --body "Automated PKGBUILD version/checksum bump from the release workflow." \
+            || gh pr view "$BRANCH" --json url -q .url
+
   release:
     name: Create Release
-    needs: [build_linux, build_windows, build_macos, update_nix_flake]
+    needs: [build_linux, build_windows, build_macos, update_nix_flake, update_pkgbuild]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -341,11 +449,30 @@ jobs:
           path: artifacts/
         continue-on-error: true
 
+      - uses: actions/checkout@v4
+        if: ${{ contains(inputs.version, 'nightly') }}
+      - name: Read the version the nightly is based on
+        if: ${{ contains(inputs.version, 'nightly') }}
+        run: |
+          echo "BASE_VERSION=$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//' | tr -d '[:cntrl:]')" >> "$GITHUB_ENV"
+
+      - name: Move the nightly tag to this commit
+        if: ${{ contains(inputs.version, 'nightly') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The same tag is reused every night; point it at the commit just built.
+          REF="repos/${{ github.repository }}/git/refs/tags/${{ github.event.inputs.version }}"
+          gh api -X PATCH "$REF" -f sha="${{ github.sha }}" -F force=true \
+            || gh api -X POST "repos/${{ github.repository }}/git/refs" \
+                 -f ref="refs/tags/${{ github.event.inputs.version }}" -f sha="${{ github.sha }}"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
-          name: Release ${{ github.event.inputs.version }}
+          name: ${{ contains(inputs.version, 'nightly') && 'Nightly' || format('Release {0}', github.event.inputs.version) }}
+          body: ${{ contains(inputs.version, 'nightly') && format('Nightly build of commit {0}. Based on version {1}. Built automatically from main; may be unstable.', github.sha, env.BASE_VERSION) || '' }}
           files: |
             artifacts/freegosy-linux-x64.tar.gz
             artifacts/Freegosy-linux-x86_64.AppImage

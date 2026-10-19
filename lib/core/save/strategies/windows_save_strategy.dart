@@ -6,18 +6,31 @@ import 'package:path/path.dart' as p;
 import '../../platform/platform_info.dart';
 import '../../romm/romm_models.dart';
 import '../../storage/app_preferences.dart';
+import '../../windows/windows_known_folders.dart';
 import '../../windows/pcgamingwiki_service.dart';
+import '../../windows/windows_game_service.dart';
 import '../save_strategy.dart';
 import 'package:dio/dio.dart';
 
 class WindowsSaveStrategy extends SaveStrategy {
   final PcGamingWikiService _wikiService;
   final AppPreferences _prefs;
-  // ignore: unused_field
   final PlatformInfo _platform;
+
+  /// The Wine/Proton prefix a game runs in (Linux), or null when it has none yet.
+  final Future<String?> Function(Game game)? _prefixDirFor;
 
   // Manual override paths set by user per game id
   final Map<String, String> _manualOverrides = {};
+  // Where PCGamingWiki says a game saves when nothing is there yet (for the save check's hint)
+  final Map<String, String> _wikiExpected = {};
+
+  @override
+  String? saveLocationHint(Game game) {
+    final path = _wikiExpected[game.id];
+    return path == null ? null : 'PCGamingWiki lists this game\'s saves at $path, which has no saves yet.';
+  }
+
   // Saved PCGW path
   final Map<String, String> _pcGamingWikiSavePath = {};
 
@@ -26,9 +39,29 @@ class WindowsSaveStrategy extends SaveStrategy {
   // Same, but for file filters retrieved from PCGamingWiki
   final Map<String, String> _wikiSaveFilters = {};
 
-  WindowsSaveStrategy(this._prefs, {PlatformInfo? platform})
-      : _wikiService = PcGamingWikiService(Dio()),
-        _platform = platform ?? PlatformInfo.current;
+  WindowsSaveStrategy(this._prefs, {PlatformInfo? platform, Future<String?> Function(Game game)? prefixDirFor, PcGamingWikiService? wikiService})
+      : _platform = platform ?? PlatformInfo.current,
+        _prefixDirFor = prefixDirFor,
+        _wikiService = wikiService ?? PcGamingWikiService(Dio(), platform: platform);
+
+  /// Windows' well-known folders for [game] on this computer: the environment on Windows, the game's
+  /// Wine/Proton prefix on Linux.
+  Future<WindowsKnownFolders> knownFolders(Game game) async {
+    if (_platform.isWindows) return WindowsKnownFolders.forPlatform(_platform);
+    final prefix = await _prefixDirFor?.call(game);
+    return WindowsKnownFolders.forPlatform(_platform, prefixDir: prefix != null && Directory(prefix).existsSync() ? prefix : null);
+  }
+
+  static String _gameDirOf(String romPath) => Directory(romPath).existsSync() ? romPath : File(romPath).parent.path;
+
+  /// [absolute] as stored in a synced save's metadata: relative to a Windows folder, so another computer
+  /// (Windows, or Linux with its own prefix) can put it back in the matching place.
+  Future<String> toPortablePath(Game game, String romPath, String absolute) async =>
+      (await knownFolders(game)).toPortable(absolute, gameDir: _gameDirOf(romPath));
+
+  /// The local path a stored [portable] save path stands for here.
+  Future<String> fromPortablePath(Game game, String destPath, String portable) async =>
+      (await knownFolders(game)).fromPortable(portable, gameDir: _gameDirOf(destPath), posix: !_platform.isWindows);
 
   @override
   String get strategyId => 'windows';
@@ -136,37 +169,32 @@ class WindowsSaveStrategy extends SaveStrategy {
     // Try Searching PCGamingWiki
     try {
       debugPrint('[WindowsSave] Querying PCGamingWiki for ${game.name}...');
-      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir);
+      final roots = await gameRoots(gameDir);
+      final locations = await _wikiService.getSaveLocations(game.name, gameDir: gameDir, gameRoots: roots, folders: await knownFolders(game));
       if (locations.isNotEmpty) {
-        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s):');
+        debugPrint('[WindowsSave] PCGamingWiki found ${locations.length} save location(s) (game folders tried: ${roots.join(', ')}):');
         for (final loc in locations) {
           debugPrint('[WindowsSave]   raw: ${loc['raw']} → path: ${loc['path']}');
         }
-        final resolved = locations.first['path'];
-        var resolvedFileFilter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(locations.first['raw']!) ? locations.first['raw']?.split('\\').last : '';
-        // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
-        if (resolvedFileFilter!.contains('file*')) resolvedFileFilter = resolvedFileFilter.replaceFirst('file*', '*');
-        if (resolved != null) {
+        for (final loc in locations) {
+          final candidate = loc['path'];
+          if (candidate == null) continue;
+          // Linux paths are case-sensitive and the wiki's are not ("Profiles" vs "profiles").
+          final resolved = _platform.isWindows ? candidate : (await resolveCaseInsensitive(candidate) ?? candidate);
           final dir = Directory(resolved);
-          if (await dir.exists()) {
-            // Check if this directory actually has save files
-            if (await _hasSaveFiles(dir)) {
-              debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
-              setPcGamingWikiSavePath(game.id, resolved);
-              if (resolvedFileFilter.isNotEmpty) setWikiSaveFilter(game.id, resolvedFileFilter);
-              return resolved;
-            }
-            debugPrint('[WindowsSave] PCGamingWiki dir exists but is empty: $resolved');
-          } else {
-            // Try to create it
-            try {
-              await dir.create(recursive: true);
-              debugPrint('[WindowsSave] Created PCGamingWiki dir: $resolved');
-            } catch (e) {
-              debugPrint('[WindowsSave] Failed to create dir: $e');
-            }
-          }
+          if (!await dir.exists() || !await _hasSaveFiles(dir)) continue;
+          var filter = RegExp(r'\.[a-zA-Z0-9]{2,4}$').hasMatch(loc['raw']!) ? loc['raw']!.split('\\').last : '';
+          // PCGW Pages sometimes describes wild cards as "file*.ext", we need to change it into "*.ext"
+          if (filter.contains('file*')) filter = filter.replaceFirst('file*', '*');
+          debugPrint('[WindowsSave] PCGamingWiki dir has save files: $resolved');
+          setPcGamingWikiSavePath(game.id, resolved);
+          if (filter.isNotEmpty) setWikiSaveFilter(game.id, filter);
+          return resolved;
         }
+        // Nothing saved there yet: remember where the wiki says to look, but don't create it (a guess at the
+        // wrong folder would only leave an empty directory behind).
+        _wikiExpected[game.id] = locations.first['path']!;
+        debugPrint('[WindowsSave] PCGamingWiki locations have no saves yet; expecting ${locations.first['path']}');
       }
     } catch (e) {
       debugPrint('[WindowsSave] PCGamingWiki lookup failed: $e');
@@ -180,13 +208,96 @@ class WindowsSaveStrategy extends SaveStrategy {
     }
 
     // Fallback: check if saves are alongside the exe (e.g. Perfect Dark with eeprom.bin)
-    if (await _hasSaveFiles(Directory(gameDir))) {
+    if ((await saveLikeFilesIn(Directory(gameDir))).isNotEmpty) {
       debugPrint('[WindowsSave] Saves found alongside executable: $gameDir');
       return gameDir;
     }
 
     debugPrint('[WindowsSave] No save directory found for ${game.name}');
     return null;
+  }
+
+  static const _saveExtensions = {
+    '.sav', '.save', '.sv', '.srm', '.sra', '.eep', '.eeprom', '.fla', '.mpk', '.dsv', '.slot', '.sgm', '.gsv', '.rsv',
+  };
+
+  /// Whether [path] is named like a save: a save extension, or "save"/"eeprom" in the name (Perfect Dark's
+  /// `eeprom.bin`, `save01.dat`). Used where the only clue to a save's place is the game folder itself, so
+  /// the game's own data files are never mistaken for saves.
+  static bool looksLikeSaveFile(String path) {
+    final name = p.basename(path).toLowerCase();
+    if (_saveExtensions.contains(p.extension(name))) return true;
+    return name.contains('save') || name.contains('eeprom');
+  }
+
+  /// The save-like files in [dir] and the folders below it (to a depth of 3).
+  static Future<List<File>> saveLikeFilesIn(Directory dir, {int maxDepth = 3}) async {
+    final found = <File>[];
+    Future<void> walk(Directory d, int depth) async {
+      try {
+        await for (final e in d.list(followLinks: false)) {
+          if (e is File && looksLikeSaveFile(e.path) && await e.length() > 0) found.add(e);
+          if (e is Directory && depth < maxDepth) await walk(e, depth + 1);
+        }
+      } catch (_) {}
+    }
+
+    await walk(dir, 1);
+    return found;
+  }
+
+  /// The folders a wiki's "the game's folder" may mean for [gameDir], the extracted download: every folder up
+  /// to three levels down that holds the game's own executable (not an installer or redistributable), nearest
+  /// first, then [gameDir] itself. A zip often holds the game one level down (`Game/game/Game.exe`).
+  static Future<List<String>> gameRoots(String gameDir) async {
+    final found = <String, int>{};
+    Future<void> walk(Directory d, int depth) async {
+      try {
+        var hasExe = false;
+        await for (final e in d.list(followLinks: false)) {
+          final name = p.basename(e.path).toLowerCase();
+          if (e is File) {
+            if (WindowsGameService.launchableExtensions.any(name.endsWith) && !WindowsGameService.shouldSkipExe(name) && !name.startsWith('._')) hasExe = true;
+          } else if (e is Directory && depth < 3 && !name.contains('redist') && !name.startsWith('__macosx')) {
+            await walk(e, depth + 1);
+          }
+        }
+        if (hasExe) found[d.path] = depth;
+      } catch (_) {}
+    }
+
+    await walk(Directory(gameDir), 0);
+    final ordered = found.keys.toList()..sort((a, b) => found[a]!.compareTo(found[b]!));
+    return {...ordered.take(5), gameDir}.toList();
+  }
+
+  /// [path] with each segment matched case-insensitively against what is on disk, or null when some segment
+  /// is missing. Used on Linux, where "Profiles" and "profiles" are different folders but a wiki writes one.
+  static Future<String?> resolveCaseInsensitive(String path) async {
+    if (await FileSystemEntity.type(path) != FileSystemEntityType.notFound) return path;
+    final segments = p.split(path);
+    var current = segments.first; // '/'
+    for (final segment in segments.skip(1)) {
+      final direct = p.join(current, segment);
+      if (await FileSystemEntity.type(direct) != FileSystemEntityType.notFound) {
+        current = direct;
+        continue;
+      }
+      try {
+        String? match;
+        await for (final e in Directory(current).list(followLinks: false)) {
+          if (p.basename(e.path).toLowerCase() == segment.toLowerCase()) {
+            match = e.path;
+            break;
+          }
+        }
+        if (match == null) return null;
+        current = match;
+      } catch (_) {
+        return null;
+      }
+    }
+    return current;
   }
 
   /// Checks if a directory contains any save-like files (non-empty).
@@ -303,6 +414,20 @@ class WindowsSaveStrategy extends SaveStrategy {
       return matchedFiles;
     }
 
+    // The game folder itself stands in for the save folder (nothing better was found): only its
+    // save-like files count, never the game's own data, or every launch would back up and upload the game.
+    final isDirRom = await Directory(romPath).exists();
+    final gameDir = isDirRom ? romPath : File(romPath).parent.path;
+    if (p.equals(p.normalize(saveDir), p.normalize(gameDir))) {
+      final saves = await saveLikeFilesIn(dir);
+      if (sessionStart == null) return saves;
+      final recent = <File>[];
+      for (final f in saves) {
+        if (!(await f.stat()).modified.isBefore(sessionStart.subtract(const Duration(seconds: 2)))) recent.add(f);
+      }
+      return recent;
+    }
+
     // No filter: check if any files exist, then return the directory.
     bool hasFiles = false;
     await for (final entity in dir.list(recursive: true)) {
@@ -334,24 +459,12 @@ class WindowsSaveStrategy extends SaveStrategy {
       }
     }
 
-    if (envDestPath != null)
-    {
-          final winLocalAbsolutepath = <String, String>{
-            "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
-            "['LOCALAPPDATA']": PlatformInfo.current.environment['LOCALAPPDATA'] ?? '',
-            "['USERPROFILE']": PlatformInfo.current.environment['USERPROFILE'] ?? '',
-            "['PROGRAMDATA']": PlatformInfo.current.environment['PROGRAMDATA'] ?? '',
-            "['PUBLIC']": PlatformInfo.current.environment['PUBLIC'] ?? '',
-            "[GAMEDIR]": destPath,
-          };
-
-          for (final entry in winLocalAbsolutepath.entries) {
-            if (envDestPath!.contains(entry.key)) envDestPath = envDestPath.replaceFirst(entry.key, entry.value); else continue;
-          }
+    if (envDestPath != null && envDestPath.isNotEmpty) {
+      envDestPath = await fromPortablePath(game, destPath, envDestPath);
     }
 
     try {
-      final saveDir = await getSaveDir(game, destPath, metadataSavePath: envDestPath!);
+      final saveDir = await getSaveDir(game, destPath, metadataSavePath: (envDestPath != null && envDestPath.isNotEmpty) ? envDestPath : null);
       if (saveDir == null) {
         throw Exception('No save location found for ${game.name}. Set one manually in game settings.');
       }

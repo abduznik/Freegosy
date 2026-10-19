@@ -9,6 +9,7 @@ import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../storage/directory_service.dart';
 import 'save_strategy.dart';
+import 'save_sync_report.dart';
 import 'strategies/retroarch_save_strategy.dart';
 import 'strategies/dolphin_save_strategy.dart';
 import 'strategies/eden_save_strategy.dart';
@@ -21,6 +22,8 @@ import 'strategies/rpcs3_save_strategy.dart';
 import 'strategies/xenia_save_strategy.dart';
 import 'strategies/duckstation_save_strategy.dart';
 import 'strategies/ares_save_strategy.dart';
+import '../windows/wine_launcher.dart';
+import 'strategies/scummvm_save_strategy.dart';
 import 'strategies/melonds_save_strategy.dart';
 import 'strategies/mgba_save_strategy.dart';
 import 'strategies/ppsspp_save_strategy.dart';
@@ -75,13 +78,18 @@ class SaveSyncService {
   late final CemuSaveStrategy _cemu;
   late final AzaharSaveStrategy _azahar;
   late final AresSaveStrategy _ares;
+  late final ScummVMSaveStrategy _scummvm;
 
   SaveSyncService(this._rommService, this._directoryService, this._strategyRegistry, this._prefs) {
     _retroarch = RetroArchSaveStrategy(_directoryService, prefs: _prefs);
     _dolphin = DolphinSaveStrategy(_directoryService);
     _eden = EdenSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
     _ryujinx = RyujinxSaveStrategy(onMappingResolved: saveMappedFolder);
-    _windows = WindowsSaveStrategy(_prefs);
+    _windows = WindowsSaveStrategy(_prefs, prefixDirFor: (game) async {
+      // Linux: Windows games run in a per-game Wine/Proton prefix (see WindowsStrategy).
+      final base = await _directoryService.getEmulatorAppSupportDirectory('proton');
+      return WineLauncher.prefixDirFor(base, game.id);
+    });
     _pcsx2 = Pcsx2SaveStrategy(_directoryService, _prefs);
     _rpcs3 = Rpcs3SaveStrategy(_directoryService);
     _xenia = XeniaSaveStrategy(_directoryService);
@@ -92,6 +100,7 @@ class SaveSyncService {
     _cemu = CemuSaveStrategy(_directoryService);
     _azahar = AzaharSaveStrategy(_directoryService, onMappingResolved: saveMappedFolder);
     _ares = AresSaveStrategy(_directoryService);
+    _scummvm = ScummVMSaveStrategy(_directoryService);
   }
 
   /// Returns the manual Title ID mapping for a given game.
@@ -254,6 +263,7 @@ class SaveSyncService {
     if (id == 'windows_native') return _windows;
     if (id == 'azahar') return _azahar;
     if (id == 'ares') return _ares;
+    if (id == 'scummvm') return _scummvm;
     return null;
   }
 
@@ -378,6 +388,61 @@ class SaveSyncService {
     }
     return _legacyPushSaves(game, romPath,
         sessionStart: sessionStart, syncMode: syncMode, force: force, coreOverride: coreOverride, emulatorId: emulatorId);
+  }
+
+  /// Looks at a game's save sync without changing anything: which emulator
+  /// strategy applies, where its saves are, what is there, and what RomM has.
+  Future<SaveSyncReport> checkSync(Game game, String romPath, {String? emulatorId}) async {
+    final strategy = getStrategyForGame(game, emulatorId: emulatorId);
+    if (strategy == null) {
+      return SaveSyncReport.analyze(
+          gameName: game.displayName, emulator: null, noStrategy: true,
+          saveDir: null, localSaves: const [], cloud: null);
+    }
+
+    String? blocked;
+    String? saveDir;
+    final local = <LocalSaveInfo>[];
+    try {
+      blocked = await strategy.saveSyncBlockedReason(game, romPath);
+      if (blocked == null) {
+        saveDir = await strategy.getSaveDir(game, romPath);
+        for (final file in await strategy.getSaveFiles(game, romPath)) {
+          final stat = io.FileStat.statSync(file.path);
+          local.add(LocalSaveInfo(p.basename(file.path), stat.size, stat.modified));
+        }
+      }
+    } catch (e) {
+      blocked = 'Could not read the local saves: $e';
+    }
+
+    CloudSaveInfo? cloud;
+    String? cloudError;
+    try {
+      final latest = await _rommService.getLatestSave(game.id);
+      if (latest != null) {
+        cloud = CloudSaveInfo(
+          latest['file_name']?.toString() ?? 'save',
+          int.tryParse(latest['file_size_bytes']?.toString() ?? ''),
+          DateTime.tryParse(latest['updated_at']?.toString() ?? ''),
+        );
+      }
+    } catch (e) {
+      cloudError = e.toString();
+    }
+
+    return SaveSyncReport.analyze(
+      gameName: game.displayName,
+      emulator: emulatorId ?? strategy.strategyId,
+      noStrategy: false,
+      blockedReason: blocked,
+      saveDir: saveDir,
+      localSaves: local,
+      cloud: cloud,
+      cloudError: cloudError,
+      locationHint: strategy.saveLocationHint(game),
+      minValidSaveBytes: minValidSaveSizeBytes,
+    );
   }
 
   /// In-memory cache of the last pull-check timestamp per game.
@@ -589,21 +654,11 @@ class SaveSyncService {
         else {
           final timeStamp = DateTime.now().toIso8601String();
           final saveAbsolutePath = await strategy.getSaveDir(game, romPath);
-          final winLocalAbsolutepath = <String, String>{
-            "['APPDATA']": PlatformInfo.current.environment['APPDATA'] ?? '',
-            "['LOCALAPPDATA']": PlatformInfo.current.environment['LOCALAPPDATA'] ?? '',
-            "['USERPROFILE']": PlatformInfo.current.environment['USERPROFILE'] ?? '',
-            "['PROGRAMDATA']": PlatformInfo.current.environment['PROGRAMDATA'] ?? '',
-            "['PUBLIC']": PlatformInfo.current.environment['PUBLIC'] ?? '',
-            "[GAMEDIR]": romPath,
-          };
-
-          String envPath = '';
-          for (final entry in winLocalAbsolutepath.entries) {
-            if (saveAbsolutePath!.contains(entry.value)) {
-              envPath = saveAbsolutePath.replaceFirst(entry.value, entry.key);
-              break;
-            }
+          // A save under none of the Windows folders has no portable form; it is restored where it is looked up.
+          var envPath = '';
+          if (saveAbsolutePath != null) {
+            final portable = await (strategy as WindowsSaveStrategy).toPortablePath(game, romPath, saveAbsolutePath);
+            if (portable != saveAbsolutePath) envPath = portable;
           }
           await metaFile.writeAsString(jsonEncode({'timeStamp': timeStamp, 'savePath': envPath}));
         }
@@ -728,8 +783,17 @@ class SaveSyncService {
           orElse: () => null,
         );
         if (mySync != null && mySync['is_current'] == true) {
-          debugPrint('[SaveSync] [pull] Already current on this device — skipping');
-          return false;
+          // "Current" is RomM's record of what this device last synced. If the local save has since gone
+          // (folder deleted, game reinstalled), the cloud copy is the only one left: restore it.
+          var haveLocal = true;
+          try {
+            haveLocal = (await strategy.getSaveFiles(game, romPath)).isNotEmpty;
+          } catch (_) {}
+          if (haveLocal) {
+            debugPrint('[SaveSync] [pull] Already current on this device — skipping');
+            return false;
+          }
+          debugPrint('[SaveSync] [pull] RomM lists this device as current, but no local save exists — restoring it');
         }
       }
 

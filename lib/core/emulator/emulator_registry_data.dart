@@ -303,7 +303,8 @@ const List<Map<String, dynamic>> kEmulatorDefinitions = [
     'windows_executable': '',
     'linux_executable': '',
     'platform_slugs': ['windows', 'pc', 'win'],
-    'supported_platforms': ['windows'],
+    // On Linux Windows games start through umu-run (Proton) or Wine (see WineLauncher).
+    'supported_platforms': ['windows', 'linux'],
   },
 ];
 
