@@ -2,7 +2,7 @@
 # Repackages the AppImage from the GitHub release. The release workflow bumps
 # pkgver and sha256sums on every release (see update_pkgbuild in release.yml).
 pkgname=freegosy-bin
-pkgver=0.6.1
+pkgver=nightly
 pkgrel=1
 pkgdesc='All-in-one game manager for RomM: browse, download, launch, and sync saves'
 arch=('x86_64')
@@ -17,7 +17,7 @@ _appimage="Freegosy-linux-x86_64-${pkgver}.AppImage"
 source=("${_appimage}::${url}/releases/download/v${pkgver}/Freegosy-linux-x86_64.AppImage"
         "${pkgname}-LICENSE-${pkgver}::https://raw.githubusercontent.com/abduznik/Freegosy/v${pkgver}/LICENSE")
 noextract=("${_appimage}")
-sha256sums=('1bb75e4d83fb2e35e88318dedd52be8c44501786393d7066d2d51640e21503c2'
+sha256sums=('f66691331cec966557b69ffb56c1df43091a988d955fafdf1d36f911fd37b7ab'
             '9b4fc05981216c6bafd837aa1e9568b49bdf2526d669fc864308af95e077b542')
 
 prepare() {
