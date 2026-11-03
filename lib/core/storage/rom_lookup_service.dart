@@ -168,6 +168,11 @@ class RomLookupService {
       return p.absolute(folderPath);
     }
     
+    if (platform == 'dos') {
+      final entry = await pickDosEntryPoint(folderPath);
+      if (entry != null) return entry;
+    }
+
     final extensions = RomConstants.platformExtensions[game.platformSlug?.toLowerCase()] ?? [];
 
     // Prefer an .m3u playlist over any individual disc image, if present.
@@ -229,6 +234,47 @@ class RomLookupService {
     } catch (_) {}
 
     return null;
+  }
+
+  static const _dosHelperNames = ['setup', 'install', 'uninst', 'uninstall', 'config', 'readme', 'cwsdpmi', 'dos4gw'];
+
+  /// The file to start a DOS game folder from: a launcher script at the top
+  /// (PLAY.BAT, START.BAT, ...), else a game program, never a data file and
+  /// never a setup or install tool. The size of a resource file says nothing
+  /// about which file starts the game (#194).
+  static Future<String?> pickDosEntryPoint(String folderPath) async {
+    final programs = <io.File>[];
+    try {
+      await for (final entity in io.Directory(folderPath).list(recursive: true)) {
+        if (entity is! io.File) continue;
+        final ext = p.extension(entity.path).toLowerCase();
+        if (ext == '.bat' || ext == '.exe' || ext == '.com') programs.add(entity);
+      }
+    } catch (_) {}
+    if (programs.isEmpty) return null;
+
+    bool isHelper(io.File f) {
+      final stem = p.basenameWithoutExtension(f.path).toLowerCase();
+      return _dosHelperNames.any(stem.contains);
+    }
+
+    int depth(io.File f) => p.split(p.relative(f.path, from: folderPath)).length;
+    int rank(io.File f) {
+      final ext = p.extension(f.path).toLowerCase();
+      if (isHelper(f)) return 3;
+      return ext == '.bat' ? 0 : (ext == '.exe' ? 1 : 2);
+    }
+
+    // Launcher scripts first, then programs; shallower first, then larger.
+    final sizes = {for (final f in programs) f.path: f.lengthSync()};
+    programs.sort((a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      if (byRank != 0) return byRank;
+      final byDepth = depth(a).compareTo(depth(b));
+      if (byDepth != 0) return byDepth;
+      return sizes[b.path]!.compareTo(sizes[a.path]!);
+    });
+    return p.absolute(programs.first.path);
   }
 
   /// Returns the path of the first `.m3u` playlist file found directly

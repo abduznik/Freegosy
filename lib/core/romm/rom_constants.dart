@@ -55,6 +55,9 @@ class RomConstants {
     'windows': ['.exe', '.bat', '.cmd'],
     'pc': ['.exe', '.bat', '.cmd'],
     'win': ['.exe', '.bat', '.cmd'],
+    // DOS: what a DOS core starts from; game data (.son, .dat, ...) is not content.
+    // No .zip: DOS archives are still unpacked after download, as before.
+    'dos': ['.bat', '.exe', '.com', '.dosz', '.conf', '.iso', '.cue', '.img'],
   };
 
   /// Platforms whose games are a folder of data files started as a whole
