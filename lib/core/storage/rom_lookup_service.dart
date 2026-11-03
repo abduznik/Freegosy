@@ -236,6 +236,20 @@ class RomLookupService {
     return null;
   }
 
+  /// Returns the path of the first `.m3u` playlist file found directly
+  /// inside [folderPath] (non-recursive — playlists live alongside their
+  /// discs), or null if none exists.
+  static Future<String?> _findM3uInFolder(String folderPath) async {
+    try {
+      await for (final entity in io.Directory(folderPath).list()) {
+        if (entity is io.File && p.extension(entity.path).toLowerCase() == '.m3u') {
+          return entity.path;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static const _dosHelperNames = ['setup', 'install', 'uninst', 'uninstall', 'config', 'readme', 'cwsdpmi', 'dos4gw'];
 
   /// The file to start a DOS game folder from: a launcher script at the top
@@ -275,20 +289,6 @@ class RomLookupService {
       return sizes[b.path]!.compareTo(sizes[a.path]!);
     });
     return p.absolute(programs.first.path);
-  }
-
-  /// Returns the path of the first `.m3u` playlist file found directly
-  /// inside [folderPath] (non-recursive — playlists live alongside their
-  /// discs), or null if none exists.
-  static Future<String?> _findM3uInFolder(String folderPath) async {
-    try {
-      await for (final entity in io.Directory(folderPath).list()) {
-        if (entity is io.File && p.extension(entity.path).toLowerCase() == '.m3u') {
-          return entity.path;
-        }
-      }
-    } catch (_) {}
-    return null;
   }
 
   /// Fuzzy resolver specifically for platform strategies (like Eden).
