@@ -80,4 +80,20 @@ void main() {
     await pumpEventQueue();
     expect(service.getDetectedControllers().map((c) => c['name']), ['8BitDo Pro 2']);
   });
+
+  test('Refresh finds a pad that appeared after start-up without any input (#195)', () async {
+    expect(service.getDetectedControllers(), isEmpty);
+    fake.pads = [('pad1', 'GPD WIN 5 Controller')];
+    await service.refreshControllers();
+    expect(service.getDetectedControllers().map((c) => c['name']), ['GPD WIN 5 Controller']);
+  });
+
+  test('overlapping refreshes share one scan', () async {
+    fake.pads = [('pad1', 'Pad')];
+    final a = service.refreshControllers();
+    final b = service.refreshControllers();
+    expect(identical(a, b), isTrue);
+    await Future.wait([a, b]);
+    expect(service.getDetectedControllers(), hasLength(1));
+  });
 }

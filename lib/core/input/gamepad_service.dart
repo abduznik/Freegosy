@@ -80,7 +80,7 @@ class GamepadService extends WidgetsBindingObserver {
 
     // Do one initial scan to pick up already-connected controllers, then rely
     // on the GameInput event callbacks in the native plugin for connect/disconnect.
-    _scan();
+    refreshControllers();
 
     _subscription = Gamepads.events.listen(
       (event) {
@@ -98,6 +98,7 @@ class GamepadService extends WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appHasFocus = state == AppLifecycleState.resumed;
     debugPrint('[Controller] app focus changed: $_appHasFocus');
+    if (_appHasFocus) refreshControllers();
   }
 
   /// Input from a controller the last scan didn't list: on Windows the
@@ -110,10 +111,17 @@ class GamepadService extends WidgetsBindingObserver {
     if (_lastUnknownScan != null && now.difference(_lastUnknownScan!) < const Duration(seconds: 2)) return;
     _lastUnknownScan = now;
     debugPrint('[Controller] input from unlisted controller $gamepadId — rescanning');
-    _scan();
+    refreshControllers();
   }
 
-  void _scan() async {
+  Future<void>? _scanInFlight;
+
+  /// Asks the plugin for the connected controllers now (the Refresh button, a
+  /// resume) instead of reading what the last scan found. Overlapping calls
+  /// share one scan.
+  Future<void> refreshControllers() => _scanInFlight ??= _scan().whenComplete(() => _scanInFlight = null);
+
+  Future<void> _scan() async {
     try {
       final controllers = await Gamepads.list();
       debugPrint('[Controller] scan: found ${controllers.length} controller(s)');

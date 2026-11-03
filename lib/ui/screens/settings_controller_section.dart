@@ -59,8 +59,11 @@ class _SettingsControllerSectionState
     _scanControllers();
   }
 
-  void _scanControllers() {
+  Future<void> _scanControllers() async {
     final service = ref.read(gamepadServiceProvider);
+    setState(() => _isScanning = true);
+    await service.refreshControllers();
+    if (!mounted) return;
     setState(() {
       _controllers = service.getDetectedControllers();
       _isScanning = false;
