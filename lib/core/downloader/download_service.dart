@@ -337,8 +337,16 @@ class DownloadService {
         if (isMultiFile && !isZipSignature && multiFileFolder.isNotEmpty) {
           final destDir = Directory(p.join(romDir, multiFileFolder));
           await destDir.create(recursive: true);
-          final name = p.basename(cdFileName ?? singleFileName ?? game.fileName ?? multiFileFolder);
+          // A file from a subfolder of the game keeps that subfolder.
+          final String name;
+          final hint = singleFileName;
+          if (hint != null && hint.isNotEmpty) {
+            name = p.joinAll(p.split(hint).where((part) => part != '..' && part != '.' && part != p.separator));
+          } else {
+            name = p.basename(cdFileName ?? game.fileName ?? multiFileFolder);
+          }
           final target = p.join(destDir.path, name);
+          await Directory(p.dirname(target)).create(recursive: true);
           if (await File(target).exists()) await File(target).delete();
           try {
             await file.rename(target);

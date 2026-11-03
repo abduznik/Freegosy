@@ -175,6 +175,20 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
     _downloadSelectedFiles(context, ref, game, service, picked);
   }
 
+  /// The file's name inside the game's folder: RomM's `file_path` is the folder
+  /// the file sits in, so whatever follows the game's own folder is kept.
+  String? _relativeFileName(Game game, Map<String, dynamic> file) {
+    final name = file['file_name']?.toString();
+    if (name == null || name.isEmpty) return null;
+    final dir = file['file_path']?.toString();
+    final root = game.fsName;
+    if (dir == null || root == null || root.isEmpty) return name;
+    final parts = p.posix.split(dir.replaceAll('\\', '/'));
+    final at = parts.lastIndexOf(root);
+    if (at < 0 || at == parts.length - 1) return name;
+    return p.posix.joinAll([...parts.sublist(at + 1), name]);
+  }
+
   /// Downloads only the chosen files of [game] into the game's own folder, so
   /// the game is still one entry in the library (playable, deletable) and can
   /// be topped up with more files later.
@@ -193,7 +207,7 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
           url,
           headers: headers,
           force: true,
-          singleFileName: chosen.length == 1 ? chosen.first['file_name']?.toString() : null,
+          singleFileName: chosen.length == 1 ? _relativeFileName(game, chosen.first) : null,
         );
     Future.delayed(const Duration(seconds: 2), () {
       ref.read(downloadedGamesCacheProvider.notifier).refresh();

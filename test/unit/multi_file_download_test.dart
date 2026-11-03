@@ -109,4 +109,13 @@ void main() {
     await dirs.deleteRom(g);
     expect(tree(), ['switch']);
   });
+
+  test('a single file from a subfolder keeps the subfolder, and cannot escape the game folder', () async {
+    final g = game();
+    await svc.download(g, url('13'), force: true, singleFileName: 'media/alt.nsp').last;
+    expect(tree(), contains('switch/Zelda Bundle/media/alt.nsp'));
+    await svc.download(g, url('12'), force: true, singleFileName: '../../escape.nsp').last;
+    expect(tree(), contains('switch/Zelda Bundle/escape.nsp'));
+    expect(tree().where((e) => e.contains('escape')).length, 1);
+  });
 }
