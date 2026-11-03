@@ -847,6 +847,16 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                       },
                     ),
                   ),
+                  if (_currentGame.hasMultipleFiles && _currentGame.files.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GameDetailActionButton(
+                        icon: Icons.library_add_outlined,
+                        label: 'Files',
+                        onTap: () async { await widget.onDownload(_currentGame); _checkDownloadStatus(); },
+                      ),
+                    ),
+                  ],
                   if (['windows', 'pc', 'win'].contains(_currentGame.platformSlug?.toLowerCase())) ...[
                     const SizedBox(width: 12),
                     Expanded(

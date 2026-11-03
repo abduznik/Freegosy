@@ -628,8 +628,15 @@ class RommService implements RommStatesApi {
     throw DioException(requestOptions: response.requestOptions, response: response, type: DioExceptionType.badResponse);
   }
 
-  String getDownloadUrl(Game game) {
-    if (game.fileUrl != null && game.fileUrl!.isNotEmpty) {
+  String getDownloadUrl(Game game) => _downloadUrl(game);
+
+  /// URL that downloads only the files of [game] with these RomM ids.
+  String getSelectedFilesDownloadUrl(Game game, List<String> fileIds) => _downloadUrl(game, fileIds: fileIds);
+
+  /// [fileIds] limits the download to those of the game's files (RomM's
+  /// `file_ids`); by default every file of the game is requested.
+  String _downloadUrl(Game game, {List<String>? fileIds}) {
+    if (fileIds == null && game.fileUrl != null && game.fileUrl!.isNotEmpty) {
       final host = _normalizeBaseUrl(_config.baseUrl);
       return game.fileUrl!.startsWith('http') ? game.fileUrl! : '$host${game.fileUrl}';
     }
@@ -654,12 +661,13 @@ class RommService implements RommStatesApi {
     // id). Passing it explicitly avoids relying on the server to guess the
     // right file from a reconstructed name, which is unreliable for
     // single-file-foldered roms (see issue #44).
-    if (game.files.isNotEmpty) {
-      final ids = game.files
-          .map((f) => f['id'])
-          .where((id) => id != null)
-          .map((id) => id.toString())
-          .toList();
+    if (fileIds != null || game.files.isNotEmpty) {
+      final ids = fileIds ??
+          game.files
+              .map((f) => f['id'])
+              .where((id) => id != null)
+              .map((id) => id.toString())
+              .toList();
       if (ids.isNotEmpty) {
         return '$url?file_ids=${ids.join(',')}';
       }

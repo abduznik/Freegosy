@@ -31,6 +31,7 @@ import '../widgets/retroarch_core_picker_dialog.dart';
 import '../widgets/windows_game_config_dialog.dart';
 import '../../core/disc/multi_disc_resolver.dart';
 import '../widgets/multi_disc_picker.dart';
+import '../widgets/file_selection_dialog.dart';
 import '../../core/save/save_sync_service.dart';
 import '../../core/save/state_sync_service.dart';
 import '../../core/save/resume_service.dart';
@@ -162,114 +163,61 @@ mixin LibraryActionsMixin<T extends ConsumerStatefulWidget> on ConsumerState<T> 
       if (!ok || !context.mounted) return;
       final url = service.getDownloadUrl(game);
       final headers = <String, String>{'Authorization': service.authHeader};
-      ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers);
+      // force: asked for explicitly, also when some files are already on disk.
+      ref.read(downloadProvider.notifier).startDownload(game, url, headers: headers, force: true);
       ErrorHandler.showInfo(context, 'Download Started', message: 'Downloading all files for ${game.name}...');
     });
   }
 
-  void _showFileSelectionDialog(BuildContext context, WidgetRef ref, Game game, RommService service) {
-    final selectedFiles = <int>{};
-    final theme = Theme.of(context);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text('Select Files'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Select which files to download:',
-                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 8),
-                ...game.files.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final file = entry.value;
-                  final isSelected = selectedFiles.contains(i);
-                  final sizeMB = ((file['file_size_bytes'] ?? 0) / (1024 * 1024)).toStringAsFixed(1);
-                  return CheckboxListTile(
-                    dense: true,
-                    value: isSelected,
-                    onChanged: (val) {
-                      setDialogState(() {
-                        if (val == true) {
-                          selectedFiles.add(i);
-                        } else {
-                          selectedFiles.remove(i);
-                        }
-                      });
-                    },
-                    title: Text(
-                      file['file_name'] ?? 'Unknown',
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '$sizeMB MB',
-                      style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  );
-                }),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: selectedFiles.isEmpty
-                  ? null
-                  : () {
-                      Navigator.pop(ctx);
-                      _downloadSelectedFiles(context, ref, game, service, selectedFiles.toList());
-                    },
-              child: Text('Download ${selectedFiles.length} File${selectedFiles.length == 1 ? '' : 's'}'),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _showFileSelectionDialog(BuildContext context, WidgetRef ref, Game game, RommService service) async {
+    final picked = await FileSelectionDialog.show(context, game);
+    if (picked == null || picked.isEmpty || !context.mounted) return;
+    _downloadSelectedFiles(context, ref, game, service, picked);
   }
 
+  /// The file's name inside the game's folder: RomM's `file_path` is the folder
+  /// the file sits in, so whatever follows the game's own folder is kept.
+  String? _relativeFileName(Game game, Map<String, dynamic> file) {
+    final name = file['file_name']?.toString();
+    if (name == null || name.isEmpty) return null;
+    final dir = file['file_path']?.toString();
+    final root = game.fsName;
+    if (dir == null || root == null || root.isEmpty) return name;
+    final parts = p.posix.split(dir.replaceAll('\\', '/'));
+    final at = parts.lastIndexOf(root);
+    if (at < 0 || at == parts.length - 1) return name;
+    return p.posix.joinAll([...parts.sublist(at + 1), name]);
+  }
+
+  /// Downloads only the chosen files of [game] into the game's own folder, so
+  /// the game is still one entry in the library (playable, deletable) and can
+  /// be topped up with more files later.
   void _downloadSelectedFiles(BuildContext context, WidgetRef ref, Game game, RommService service, List<int> fileIndices) {
+    final chosen = [for (final i in fileIndices) game.files[i]];
+    final ids = [for (final f in chosen) if (f['id'] != null) f['id'].toString()];
+    if (ids.length != chosen.length) {
+      ErrorHandler.showInfo(context, 'Cannot Download', message: 'RomM did not report an id for every selected file.');
+      return;
+    }
+
     final headers = <String, String>{'Authorization': service.authHeader};
-    final baseUrl = service.config.baseUrl;
+    final url = service.getSelectedFilesDownloadUrl(game, ids);
+    ref.read(downloadProvider.notifier).startDownload(
+          game,
+          url,
+          headers: headers,
+          force: true,
+          singleFileName: chosen.length == 1 ? _relativeFileName(game, chosen.first) : null,
+        );
+    Future.delayed(const Duration(seconds: 2), () {
+      ref.read(downloadedGamesCacheProvider.notifier).refresh();
+    });
 
-    for (final i in fileIndices) {
-      final file = game.files[i];
-      final fileName = file['file_name'] ?? '';
-      if (fileName.isEmpty) continue;
-
-      final encoded = Uri.encodeComponent(fileName);
-      final url = '$baseUrl/api/roms/${game.id}/content/$encoded';
-
-      // Create a temporary game-like object for the download
-      final tempGame = Game(
-        id: '${game.id}_$i',
-        name: fileName,
-        fileSize: file['file_size_bytes'] ?? 0,
-        platformSlug: game.platformSlug,
-        hasMultipleFiles: false,
-      );
-
-      ref.read(downloadProvider.notifier).startDownload(tempGame, url, headers: headers);
-    }
-
-    if (context.mounted) {
-      ErrorHandler.showInfo(
-        context,
-        'Download Started',
-        message: 'Downloading ${fileIndices.length} file${fileIndices.length == 1 ? '' : 's'} for ${game.name}...',
-      );
-    }
+    ErrorHandler.showInfo(
+      context,
+      'Download Started',
+      message: 'Downloading ${ids.length} file${ids.length == 1 ? '' : 's'} for ${game.name}...',
+    );
   }
 
   Future<void> handleLaunch(BuildContext context, WidgetRef ref, Game game, {ResumeEntry? resume}) async {

@@ -82,6 +82,11 @@ class DownloadService {
     return lower.endsWith('.zip') || lower.endsWith('.7z') || lower.endsWith('.rar');
   }
 
+  /// Name of the folder a multi-file game's files are unpacked into. The
+  /// library lookup and delete find the game by this same name.
+  static String multiFileFolderName(Game game) =>
+      game.name.replaceAll(RegExp(r'[<>:"/\\|?]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+
   final Dio dio;
   final DirectoryService directoryService;
   final ExtractionService extractionService;
@@ -119,12 +124,15 @@ class DownloadService {
     return null;
   }
 
-  Stream<DownloadProgress> download(Game game, String downloadUrl, {Map<String, String>? headers, CancelToken? cancelToken}) async* {
-    if (await directoryService.isRomDownloaded(game)) {
-      yield DownloadProgress(id: game.id, gameName: game.name, percent: 1.0, isComplete: true);
-      return;
-    }
-
+  /// [force] downloads even when the game is already on disk (adding files to
+  /// a multi-file game). [singleFileName] names the file a partial download of
+  /// a multi-file game is saved as when the server sends it bare, not zipped.
+  Stream<DownloadProgress> download(Game game, String downloadUrl, {
+    Map<String, String>? headers,
+    CancelToken? cancelToken,
+    bool force = false,
+    String? singleFileName,
+  }) async* {
 
     // `fsExtension` is empty/null for "single-file-foldered" games — RomM
     // stores these as a per-game folder containing one file, rather than a
@@ -161,14 +169,29 @@ class DownloadService {
         finalPath = '$finalPath$metaExt';
       }
     }
+    // A multi-file game arrives as one archive that is unpacked into its own
+    // folder. The archive waits beside that folder, not in a folder named after
+    // RomM's file name, which would be left behind empty.
+    final isMultiFile = game.isMultiFile;
+    final romDir = await directoryService.getRomDirectory(game);
+    final multiFileFolder = multiFileFolderName(game);
+    if (isMultiFile && multiFileFolder.isNotEmpty) {
+      finalPath = p.join(romDir, '$multiFileFolder.download');
+    }
     final partPath = '$finalPath.part';
     final partFile = File(partPath);
-    await partFile.parent.create(recursive: true);
 
     int existingBytes = 0;
     if (await partFile.exists()) {
       existingBytes = await partFile.length();
     }
+
+    // A leftover .part means this is a resume, never a finished game.
+    if (!force && existingBytes == 0 && await directoryService.isRomDownloaded(game)) {
+      yield DownloadProgress(id: game.id, gameName: game.name, percent: 1.0, isComplete: true);
+      return;
+    }
+    await partFile.parent.create(recursive: true);
 
 
 
@@ -224,8 +247,8 @@ class DownloadService {
       // response's Content-Disposition header is the authoritative source
       // (it reflects the actual file on disk), so use it to fix up the
       // extension when our best-effort guess above came up empty.
-      if (!hasRealExtension(finalPath)) {
-        final cdFileName = parseContentDispositionFileName(response.headers.value('content-disposition'));
+      final cdFileName = parseContentDispositionFileName(response.headers.value('content-disposition'));
+      if (!isMultiFile && !hasRealExtension(finalPath)) {
         final cdExt = cdFileName != null ? p.extension(cdFileName) : '';
         if (cdExt.isNotEmpty) {
           debugPrint("[DownloadService] Correcting extension from Content-Disposition: $cdFileName");
@@ -309,6 +332,32 @@ class DownloadService {
           }
         }
 
+        // A partial download of a multi-file game can come back as the bare
+        // file, not an archive: put it in the game's folder.
+        if (isMultiFile && !isZipSignature && multiFileFolder.isNotEmpty) {
+          final destDir = Directory(p.join(romDir, multiFileFolder));
+          await destDir.create(recursive: true);
+          // A file from a subfolder of the game keeps that subfolder.
+          final String name;
+          final hint = singleFileName;
+          if (hint != null && hint.isNotEmpty) {
+            name = p.joinAll(p.split(hint).where((part) => part != '..' && part != '.' && part != p.separator));
+          } else {
+            name = p.basename(cdFileName ?? game.fileName ?? multiFileFolder);
+          }
+          final target = p.join(destDir.path, name);
+          await Directory(p.dirname(target)).create(recursive: true);
+          if (await File(target).exists()) await File(target).delete();
+          try {
+            await file.rename(target);
+          } catch (_) {
+            await file.copy(target);
+            await file.delete();
+          }
+          yield DownloadProgress(id: game.id, gameName: game.name, percent: 1.0, isComplete: true, status: 'Done!');
+          return;
+        }
+
         final isWindowsGame = ['windows', 'pc', 'win'].contains(game.platformSlug?.toLowerCase() ?? '');
         final isArchive = isExtractableArchive(currentPath);
         
@@ -374,7 +423,7 @@ class DownloadService {
   Future<void> _extractMultiFile(Game game, String zipPath, {void Function(double fraction)? onProgress}) async {
     final romDir = await directoryService.getRomDirectory(game);
     // Sanitize game name for use as folder name - matches DirectoryService sanitization
-    final folderName = game.name.replaceAll(RegExp(r'[<>:"/\\|?]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final folderName = multiFileFolderName(game);
     String extractDir = p.join(romDir, folderName);
 
     debugPrint('[DownloadService] Extraction starting...');
