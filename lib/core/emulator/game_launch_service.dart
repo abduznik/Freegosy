@@ -10,6 +10,7 @@ import '../romm/romm_models.dart';
 import '../romm/romm_service.dart';
 import '../romm/rom_constants.dart';
 import '../storage/directory_service.dart';
+import '../storage/rom_lookup_service.dart';
 import '../save/backup_entry.dart';
 import '../save/backup_repository.dart';
 import '../save/backup_service.dart';
@@ -163,6 +164,10 @@ class GameLaunchService {
     final lowerPlatformSlug = (platformSlug ?? '').toLowerCase();
     if (['windows', 'pc', 'win'].contains(lowerPlatformSlug)) return romPath;
     if (RomConstants.isFolderGamePlatform(lowerPlatformSlug)) return romPath;
+
+    if (lowerPlatformSlug == 'dos') {
+      return await RomLookupService.pickDosEntryPoint(romPath) ?? romPath;
+    }
 
     final knownExtensions = RomConstants.platformExtensions[lowerPlatformSlug] ?? [];
     final dir = io.Directory(romPath);
