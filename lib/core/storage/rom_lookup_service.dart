@@ -158,6 +158,10 @@ class RomLookupService {
   /// directly — the emulator strategy handles finding the executable inside.
   /// For other platforms, finds the largest file matching the platform's extensions.
   static Future<String?> findMainRomInFolder(Game game, String folderPath) async {
+    // A folder with no files is not a game (a failed or older download can
+    // leave one behind); matching it would hide the real folder.
+    if (!await _hasAnyFile(folderPath)) return null;
+
     final platform = game.platformSlug?.toLowerCase() ?? '';
     final isFolderBased = ['windows', 'pc', 'win', 'ps3', 'switch', 'nintendo-switch'].contains(platform) ||
         RomConstants.isFolderGamePlatform(platform);
@@ -229,6 +233,15 @@ class RomLookupService {
     } catch (_) {}
 
     return null;
+  }
+
+  static Future<bool> _hasAnyFile(String folderPath) async {
+    try {
+      await for (final entity in io.Directory(folderPath).list(recursive: true)) {
+        if (entity is io.File) return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   /// Returns the path of the first `.m3u` playlist file found directly

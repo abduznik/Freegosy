@@ -545,13 +545,45 @@ class DirectoryService {
     if (await directory.exists()) await directory.delete(recursive: true);
   }
 
+  /// Deletes everything on disk that belongs to [game]: its file or folder,
+  /// and any folder named after it (an older download can leave one next to the
+  /// real files).
   Future<void> deleteRom(Game game) async {
+    final romDir = await getRomDirectory(game);
+    final names = <String>{
+      if (game.fsName != null) game.fsName!.toLowerCase(),
+      if (game.fileName != null) game.fileName!.toLowerCase(),
+      game.name.replaceAll(RegExp(r'[<>:"/\\|?]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase(),
+    };
+
+    final doomed = <String>{};
     final path = await findExistingRomPath(game);
     if (path != null) {
-      final file = io.File(path);
+      final relative = p.relative(path, from: romDir);
+      final segments = p.split(relative);
+      final insideRomDir = !p.isAbsolute(relative) && !relative.startsWith('..');
+      if (insideRomDir && segments.length > 1 && names.contains(segments.first.toLowerCase())) {
+        // The ROM sits in the game's own folder: remove the folder, not one file.
+        doomed.add(p.join(romDir, segments.first));
+      } else {
+        doomed.add(path);
+      }
+    }
+
+    final dir = io.Directory(romDir);
+    if (await dir.exists()) {
+      await for (final entity in dir.list()) {
+        if (entity is io.Directory && names.contains(p.basename(entity.path).toLowerCase())) {
+          doomed.add(entity.path);
+        }
+      }
+    }
+
+    for (final target in doomed) {
+      final file = io.File(target);
       if (await file.exists()) await file.delete();
-      final dir = io.Directory(path);
-      if (await dir.exists()) await dir.delete(recursive: true);
+      final directory = io.Directory(target);
+      if (await directory.exists()) await directory.delete(recursive: true);
     }
   }
 

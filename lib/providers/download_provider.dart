@@ -111,7 +111,8 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
           game: item['game'] != null ? Game.fromJson(item['game']) : null,
           downloadUrl: item['downloadUrl'],
           isPaused: true,
-          status: 'Paused',
+          // Keep why it stopped visible; the Resume button stays available.
+          status: item['error'] != null ? 'Paused: ${item['error']}' : 'Paused',
         );
         loaded[p.id] = p;
       }
@@ -134,6 +135,7 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
                 'totalBytes': p.totalBytes,
                 'game': p.game?.toJson(),
                 'downloadUrl': p.downloadUrl,
+                if (p.error != null) 'error': p.error,
               })
           .toList();
       await prefs.setString('active_downloads', jsonEncode(downloadsJson));
@@ -173,8 +175,10 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
     }
   }
 
+  /// [force] and [singleFileName] are passed to [DownloadService.download]
+  /// (adding files to a multi-file game that is already on disk).
   Future<void> startDownload(Game game, String downloadUrl,
-      {Map<String, String>? headers}) async {
+      {Map<String, String>? headers, bool force = false, String? singleFileName}) async {
     // If already downloading and not paused, do nothing
     if (state[game.id] != null && !state[game.id]!.isPaused && _cancelTokens.containsKey(game.id)) {
       return;
@@ -190,7 +194,27 @@ class DownloadNotifier extends StateNotifier<Map<String, DownloadProgress>> {
     final cancelToken = CancelToken();
     _cancelTokens[game.id] = cancelToken;
 
-    service.download(game, downloadUrl, headers: effectiveHeaders, cancelToken: cancelToken).listen(
+    // Resuming: leave the paused state, or the guard in _updateProgress drops
+    // every progress update and the item looks stuck until it finishes.
+    final previous = state[game.id];
+    if (previous != null && previous.isPaused) {
+      state = {
+        ...state,
+        game.id: DownloadProgress(
+          id: previous.id,
+          gameName: previous.gameName,
+          percent: previous.percent,
+          bytesReceived: previous.bytesReceived,
+          totalBytes: previous.totalBytes,
+          game: previous.game,
+          downloadUrl: previous.downloadUrl,
+        ),
+      };
+    }
+
+    service.download(game, downloadUrl,
+            headers: effectiveHeaders, cancelToken: cancelToken, force: force, singleFileName: singleFileName)
+        .listen(
       (progress) {
         _updateProgress(game.id, progress.copyWith(game: game, downloadUrl: downloadUrl));
       },
