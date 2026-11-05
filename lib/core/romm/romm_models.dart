@@ -8,6 +8,8 @@ class Game {
   final String? platformDisplayName;
   final String? pathCoverLarge;
   final String? pathCoverSmall;
+  final String? pathManual; // maps to 'path_manual' in JSON: the game's manual on the RomM server
+  final String? urlManual; // maps to 'url_manual' in JSON
   final String? urlCover;
   final String? fileUrl; // Now nullable, to be replaced by constructed URL
   final String? fileName; // Added: maps to 'file_name' in JSON
@@ -44,6 +46,20 @@ class Game {
 
   bool get isMultiFile => hasMultipleFiles;
 
+  /// Where the game's manual can be read, served by RomM at [baseUrl] (or the
+  /// metadata provider's link), or null when the game has none.
+  String? manualLink(String baseUrl) {
+    final path = pathManual;
+    if (path != null && path.isNotEmpty) {
+      if (path.startsWith('http')) return path;
+      final host = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+      return '$host${path.startsWith('/') ? path : '/$path'}';
+    }
+    final url = urlManual;
+    if (url != null && url.isNotEmpty) return url.startsWith('//') ? 'https:$url' : url;
+    return null;
+  }
+
   String get displayName {
     String cleaned = name;
 
@@ -73,6 +89,8 @@ class Game {
     this.platformDisplayName,
     this.pathCoverLarge,
     this.pathCoverSmall,
+    this.pathManual,
+    this.urlManual,
     this.urlCover,
     this.fileUrl, // Now nullable
     this.fileName, // Added
@@ -128,6 +146,8 @@ class Game {
       platformDisplayName: json['platform_display_name']?.toString(),
       pathCoverLarge: json['path_cover_large']?.toString(),
       pathCoverSmall: json['path_cover_small']?.toString(),
+      pathManual: json['path_manual']?.toString(),
+      urlManual: json['url_manual']?.toString(),
       urlCover: json['url_cover']?.toString(),
       fileUrl: json['url_download']?.toString(), // Maps to original download URL, if present
       fileName: json['file_name']?.toString(), // Mapped from JSON
@@ -177,6 +197,8 @@ class Game {
       'platform_display_name': platformDisplayName,
       'path_cover_large': pathCoverLarge,
       'path_cover_small': pathCoverSmall,
+      'path_manual': pathManual,
+      'url_manual': urlManual,
       'url_cover': urlCover,
       'url_download': fileUrl,
       'file_name': fileName,

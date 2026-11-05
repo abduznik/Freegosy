@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:developer' as dev;
 import '../../core/storage/system_utils.dart';
 import '../../core/romm/romm_models.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/romm/romm_service.dart';
 import '../../core/error/error_handler.dart';
 import '../../core/save/backup_entry.dart';
@@ -591,6 +592,16 @@ class _GameDetailScreenState extends ConsumerState<GameDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildActionsRow(),
+                  if (_currentGame.manualLink(widget.rommBaseUrl) != null) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: OutlinedButton.icon(
+                        onPressed: () => launchUrl(Uri.parse(_currentGame.manualLink(widget.rommBaseUrl)!), mode: LaunchMode.externalApplication),
+                        icon: const Icon(Icons.menu_book_outlined, size: 18),
+                        label: const Text('Open Manual'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   _buildMetadataChips(),
                   const SizedBox(height: 24),
