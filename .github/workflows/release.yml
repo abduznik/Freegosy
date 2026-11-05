@@ -423,6 +423,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Before the downloads: checkout cleans the workspace, which would delete artifacts/.
+      - uses: actions/checkout@v4
+        if: ${{ contains(inputs.version, 'nightly') }}
+
       - name: Create artifacts directory
         run: mkdir artifacts
 
@@ -449,8 +453,6 @@ jobs:
           path: artifacts/
         continue-on-error: true
 
-      - uses: actions/checkout@v4
-        if: ${{ contains(inputs.version, 'nightly') }}
       - name: Read the version the nightly is based on
         if: ${{ contains(inputs.version, 'nightly') }}
         run: |
