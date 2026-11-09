@@ -101,5 +101,19 @@ void main() {
 
       expect(await directoryService.getEffectiveFlatpakPackage('retroarch'), isNull);
     });
+
+    test('resetStorageOverrides forgets saved folders and per-emulator overrides', () async {
+      expect(directoryService.hasSavedStorageOverrides, isFalse);
+      await directoryService.setEmulatorsRoot(p.join(tempDir.path, 'old_tools'));
+      await directoryService.setEmulatorPathOverride('dolphin', p.join(tempDir.path, 'dolphin'));
+      await directoryService.setEmulatorFlatpakOverride('retroarch', 'org.libretro.RetroArch');
+      expect(directoryService.hasSavedStorageOverrides, isTrue);
+
+      await directoryService.resetStorageOverrides();
+
+      expect(directoryService.hasSavedStorageOverrides, isFalse);
+      expect(directoryService.getEmulatorPathOverride('dolphin'), isNull);
+      expect(directoryService.getEmulatorFlatpakOverride('retroarch'), isNull);
+    });
   });
 }

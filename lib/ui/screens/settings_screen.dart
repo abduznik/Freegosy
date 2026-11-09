@@ -890,7 +890,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 {'value': 'retrodeck', 'label': 'RetroDECK'},
               ],
               onChanged: (val) async {
+                final switching = val != (preset == 'default' ? 'native' : preset);
                 await directoryService.setLinuxSyncPreset(val);
+                if (switching && directoryService.hasSavedStorageOverrides && context.mounted) {
+                  if (await _confirmResetStorage(context, afterLayoutSwitch: true)) {
+                    await directoryService.resetStorageOverrides();
+                  }
+                }
                 ref.invalidate(directoryServiceProvider);
               },
             ),
@@ -1037,9 +1043,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _buildActionButton(
+            context,
+            icon: Icons.restart_alt,
+            label: 'Reset Saved Folders & Emulator Paths',
+            isDestructive: true,
+            onTap: () async {
+              if (!await _confirmResetStorage(context)) return;
+              await directoryService.resetStorageOverrides();
+              ref.invalidate(directoryServiceProvider);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved folders and emulator paths reset.')));
+              }
+            },
+          ),
         ],
       ),
     );
+  }
+
+  Future<bool> _confirmResetStorage(BuildContext context, {bool afterLayoutSwitch = false}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => DialogBackBridge(
+        child: AlertDialog(
+          title: const Text('Reset saved folders?'),
+          content: Text(
+            '${afterLayoutSwitch ? 'Folders and emulator paths saved under the previous layout are still in use. ' : ''}'
+            'This forgets the custom ROMs and Emulators folders and every per-emulator path and Flatpak override, '
+            'so the selected layout\'s own locations apply. Your games, emulators and layout choice are not deleted.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset')),
+          ],
+        ),
+      ),
+    );
+    return ok ?? false;
   }
 
   void _showLogsDialog(BuildContext context) {
