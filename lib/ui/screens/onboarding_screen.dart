@@ -87,7 +87,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _apiKeyController.text = apiKey;
       if (romsRoot != null) _romsRoot = romsRoot;
       if (emusRoot != null) _emusRoot = emusRoot;
-      _linuxPreset = linuxPreset;
+      _linuxPreset = linuxPreset == 'native' ? 'default' : linuxPreset;
       if (presetRoot != null) _presetRoot = presetRoot;
       if (romsRoot != null || emusRoot != null) {
         _isStorageInitialized = true;
@@ -209,7 +209,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       await prefs.remove('romsRootPath');
       await prefs.remove('emulatorsRootPath');
     } else if (platform.isLinux) {
-      await prefs.setString('linuxSyncPreset', 'default');
+      await prefs.setString('linuxSyncPreset', 'native');
       if (_romsRoot != null) await prefs.setString('romsRootPath', _romsRoot!);
       if (_emusRoot != null) await prefs.setString('emulatorsRootPath', _emusRoot!);
     } else {

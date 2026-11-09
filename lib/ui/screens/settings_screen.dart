@@ -880,12 +880,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _buildCustomDropdown<String>(
               context: context,
               label: 'Linux App Layout',
-              currentValue: preset,
-              currentValueLabel: preset == 'default'
+              currentValue: preset == 'default' ? 'native' : preset,
+              currentValueLabel: (preset == 'native' || preset == 'default')
                   ? 'Manual / Native'
                   : (preset == 'emudeck' ? 'EmuDeck' : 'RetroDECK'),
               items: const [
-                {'value': 'default', 'label': 'Manual / Native'},
+                {'value': 'native', 'label': 'Manual / Native'},
                 {'value': 'emudeck', 'label': 'EmuDeck'},
                 {'value': 'retrodeck', 'label': 'RetroDECK'},
               ],

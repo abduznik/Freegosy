@@ -63,6 +63,8 @@ class DirectoryService {
   final AppPathResolver _pathResolver;
   late String romsRootPath;
   late String emulatorsRootPath;
+  /// 'emudeck', 'retrodeck', 'native' (an explicit Manual / Native choice), or
+  /// 'default' / 'auto' (not chosen yet: EmuDeck / RetroDECK are auto-detected).
   String linuxSyncPreset = 'default';
   String? linuxPresetRootPath;
   bool useFlatEmulatorLayout = false;
