@@ -101,5 +101,20 @@ void main() {
 
       expect(await directoryService.getEffectiveFlatpakPackage('retroarch'), isNull);
     });
+
+    test('resetStorageOverrides forgets saved folders and per-emulator overrides', () async {
+      // A web platform makes initialize() a no-op, so the test never touches the real home folder.
+      final service = DirectoryService(directoryService.prefs, platform: const PlatformInfo('web'));
+      expect(service.hasSavedStorageOverrides, isFalse);
+      await service.setEmulatorPathOverride('dolphin', '/old/retrodeck/dolphin');
+      await service.setEmulatorFlatpakOverride('retroarch', 'org.libretro.RetroArch');
+      expect(service.hasSavedStorageOverrides, isTrue);
+
+      await service.resetStorageOverrides();
+
+      expect(service.hasSavedStorageOverrides, isFalse);
+      expect(service.getEmulatorPathOverride('dolphin'), isNull);
+      expect(service.getEmulatorFlatpakOverride('retroarch'), isNull);
+    });
   });
 }

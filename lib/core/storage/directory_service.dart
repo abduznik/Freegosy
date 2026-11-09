@@ -221,6 +221,27 @@ class DirectoryService {
     await initialize();
   }
 
+  /// Whether a custom ROMs / emulators folder or a per-emulator path or
+  /// Flatpak override is saved, i.e. something that outlives a layout switch.
+  bool get hasSavedStorageOverrides =>
+      _prefs.getKeys().any((k) =>
+          k == _romsRootPathKey || k == _emulatorsRootPathKey || k.startsWith('emu_path_') || k.startsWith('emu_flatpak_'));
+
+  /// Forgets the saved ROMs / emulators folders and every per-emulator path and
+  /// Flatpak override, so the current layout's own locations apply again. The
+  /// layout choice itself and downloaded files are left alone.
+  Future<void> resetStorageOverrides() async {
+    for (final key in _prefs.getKeys().toList()) {
+      if (key == _romsRootPathKey || key == _emulatorsRootPathKey || key.startsWith('emu_path_') || key.startsWith('emu_flatpak_')) {
+        await _prefs.remove(key);
+      }
+    }
+    _emulatorPathOverrides.clear();
+    _emulatorFlatpakOverrides.clear();
+    _flatpakInstalledCache.clear();
+    await initialize();
+  }
+
   Future<void> setLinuxPresetRoot(String path) async {
     await _prefs.setString(_linuxPresetRootKey, path);
     linuxPresetRootPath = path;
