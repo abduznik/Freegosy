@@ -224,9 +224,8 @@ class DirectoryService {
   /// Whether a custom ROMs / emulators folder or a per-emulator path or
   /// Flatpak override is saved, i.e. something that outlives a layout switch.
   bool get hasSavedStorageOverrides =>
-      _prefs.containsKey(_romsRootPathKey) ||
-      _prefs.containsKey(_emulatorsRootPathKey) ||
-      _prefs.getKeys().any((k) => k.startsWith('emu_path_') || k.startsWith('emu_flatpak_'));
+      _prefs.getKeys().any((k) =>
+          k == _romsRootPathKey || k == _emulatorsRootPathKey || k.startsWith('emu_path_') || k.startsWith('emu_flatpak_'));
 
   /// Forgets the saved ROMs / emulators folders and every per-emulator path and
   /// Flatpak override, so the current layout's own locations apply again. The
