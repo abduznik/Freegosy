@@ -68,12 +68,36 @@ class UpdateService {
   /// different asset digest than [recordedSha]/the installed file counts too:
   /// pre-releases get rebuilt under the same tag. Throws on network/parse failure.
   Future<UpdateInfo?> checkForUpdate(String currentVersion, UpdateChannel channel, {String? recordedSha, bool? runningNightly}) async {
-    final res = await _dio.get<List<dynamic>>(
-      releasesUrl,
-      options: Options(headers: {'Accept': 'application/vnd.github+json'}, responseType: ResponseType.json),
-    );
+    final Response<List<dynamic>> res;
+    try {
+      res = await _dio.get<List<dynamic>>(
+        releasesUrl,
+        options: Options(headers: {'Accept': 'application/vnd.github+json'}, responseType: ResponseType.json),
+      );
+    } on DioException catch (e) {
+      final limited = rateLimitMessage(e.response?.statusCode, e.response?.headers.map);
+      if (limited != null) throw Exception(limited);
+      rethrow;
+    }
     return pickUpdate(res.data ?? const [], currentVersion, channel, installKind,
         installedSha: await installedSha(recordedSha), runningNightly: runningNightly ?? AppConstants.isNightlyBuild);
+  }
+
+  /// A readable message when GitHub refused the request for rate limiting (an
+  /// unauthenticated IP gets 60 requests an hour; a 403 or 429 with no quota left),
+  /// else null. [headers] are the response headers, lower-cased.
+  static String? rateLimitMessage(int? status, Map<String, List<String>>? headers, {DateTime? now}) {
+    if (status != 403 && status != 429) return null;
+    String? header(String name) => headers?[name]?.firstOrNull;
+    final remaining = header('x-ratelimit-remaining');
+    final retryAfter = int.tryParse(header('retry-after') ?? '');
+    if (remaining != '0' && retryAfter == null && status != 429) return null;
+    final reset = int.tryParse(header('x-ratelimit-reset') ?? '');
+    final at = retryAfter != null
+        ? (now ?? DateTime.now()).add(Duration(seconds: retryAfter))
+        : reset != null ? DateTime.fromMillisecondsSinceEpoch(reset * 1000) : null;
+    final when = at == null ? 'in a little while' : 'after ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    return 'GitHub is limiting update checks from this network. Try again $when.';
   }
 
   /// The rolling nightly release is tagged `nightly` (older ones `v<version>-nightly`).

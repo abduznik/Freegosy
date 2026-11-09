@@ -18,6 +18,7 @@ Map<String, dynamic> release(String tag, {bool pre = false, bool draft = false, 
     };
 
 void main() {
+  rateLimitTests();
   group('VersionCompare', () {
     test('orders numerically, not lexically', () {
       expect(VersionCompare.isNewer('v0.10.0', '0.9.9'), isTrue);
@@ -207,6 +208,31 @@ void main() {
       final s = UpdateInstaller.windowsScript(setup: r'C:\t\setup.exe', exe: r'C:\app\freegosy.exe');
       expect(s, contains(r'"C:\t\setup.exe" /VERYSILENT'));
       expect(s, contains(r'start "" "C:\app\freegosy.exe"'));
+    });
+  });
+}
+
+void rateLimitTests() {
+  group('UpdateService.rateLimitMessage', () {
+    test('403 with no quota left is a rate limit', () {
+      final reset = DateTime(2026, 1, 1, 14, 5).millisecondsSinceEpoch ~/ 1000;
+      final msg = UpdateService.rateLimitMessage(403, {
+        'x-ratelimit-remaining': ['0'],
+        'x-ratelimit-reset': ['$reset'],
+      });
+      expect(msg, contains('14:05'));
+    });
+
+    test('a 403 with quota left is not a rate limit', () {
+      expect(UpdateService.rateLimitMessage(403, {'x-ratelimit-remaining': ['12']}), isNull);
+    });
+
+    test('other statuses are ignored', () {
+      expect(UpdateService.rateLimitMessage(500, null), isNull);
+    });
+
+    test('429 without headers still gets a message', () {
+      expect(UpdateService.rateLimitMessage(429, null), contains('Try again'));
     });
   });
 }
