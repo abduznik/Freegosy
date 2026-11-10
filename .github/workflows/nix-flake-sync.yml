@@ -1,0 +1,49 @@
+name: Nix flake sync
+
+# flake.nix pins the AppImage by hash. A release that is re-uploaded after the
+# hash was set leaves every Nix user with a hash mismatch (#203). This compares
+# the flake with what GitHub actually serves and opens a PR when they differ, so
+# the window closes by itself instead of waiting for a bug report.
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_run:
+    workflows: ['Build and Release']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync flake.nix with the latest release
+    if: github.repository == 'abduznik/Freegosy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Compare with the published release
+        id: sync
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash tool/nix_flake_sync.sh | tee -a "$GITHUB_OUTPUT"
+      - name: Open a PR with the corrected flake.nix
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.sync.outputs.tag }}
+        run: |
+          BRANCH="chore/flake-sync"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add flake.nix
+          git commit -m "chore: sync flake.nix with the published $TAG AppImage"
+          git push --force origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: sync flake.nix with the published $TAG AppImage" \
+            --body "flake.nix did not match the AppImage published for $TAG (it was re-uploaded after the hash was set). Corrected from the digest GitHub reports for the asset." \
+            || gh pr view "$BRANCH" --json url -q .url
