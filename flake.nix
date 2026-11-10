@@ -26,7 +26,7 @@
           default = pkgs.appimageTools.wrapType2 rec {
             inherit pname version src;
 
-            extraPkgs = pkgs: [ pkgs.webkitgtk_4_1 pkgs.libepoxy ];
+            extraPkgs = pkgs: [ pkgs.webkitgtk_4_1 pkgs.libepoxy pkgs.libgcrypt pkgs.libgpg-error ];
 
             extraInstallCommands = ''
               mkdir -p $out/share/applications
