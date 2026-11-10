@@ -79,13 +79,10 @@ jobs:
           # refused to even start the process there - no window, instant
           # exit. Bundle it so AppRun's LD_LIBRARY_PATH picks it up instead
           # of relying on the host to have it.
-          SECRET_LIB=$(ldconfig -p | grep -F 'libsecret-1.so.0' | awk '{print $NF}' | head -n 1)
-          if [ -n "$SECRET_LIB" ] ; then
-            cp -L "$SECRET_LIB" build/linux/x64/release/bundle/lib/libsecret-1.so.0
-          else
-            echo "::error::libsecret-1.so.0 not found on the build image; cannot bundle it"
-            exit 1
-          fi
+          # libsecret's own dependencies (libgcrypt, libgpg-error on Ubuntu) go
+          # with it: bundling it alone left them to the host, and NixOS has
+          # neither (#219).
+          bash tool/bundle_lib_with_deps.sh build/linux/x64/release/bundle libsecret-1.so.0
 
           # libzstandard_linux_plugin.so itself needs libzstandard_linux.so
           # (the native zstd wrapper it dlopen-links against), but the
